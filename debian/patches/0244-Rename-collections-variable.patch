@@ -1,0 +1,27 @@
+From 348e03f20ab699b4872ee72d9b2388eb56b6a813 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Fri, 9 Dec 2016 00:22:29 -0500
+Subject: [PATCH 244/268] Rename collections variable
+
+Leftover cleanup from "Address GitLab issue #197: ntpq and packet.py require
+python2.7+"
+---
+ pylib/packet.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 2b33dac..ba4331b 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -1400,7 +1400,7 @@ class ControlSession:
+                 stanza = int(stanza)
+                 if stanza > len(stanzas) - 1:
+                     for i in range(len(stanzas), stanza + 1):
+-                        stanzas.append(collections.OrderedDict())
++                        stanzas.append(ntp.util.OrderedDict())
+                 stanzas[stanza][stem] = value
+         return stanzas
+ 
+-- 
+2.7.4
+

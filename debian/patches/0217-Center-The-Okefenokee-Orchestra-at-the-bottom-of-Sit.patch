@@ -1,0 +1,25 @@
+From b3a1d68f2de60824174ebec85fb95a5461423ace Mon Sep 17 00:00:00 2001
+From: Chris Mayo <aklhfex@gmail.com>
+Date: Wed, 7 Dec 2016 19:59:28 +0000
+Subject: [PATCH 217/268] Center "The Okefenokee Orchestra" at the bottom of
+ Site Map
+
+---
+ docs/sitemap.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docs/sitemap.txt b/docs/sitemap.txt
+index d705495..5db6012 100644
+--- a/docs/sitemap.txt
++++ b/docs/sitemap.txt
+@@ -27,6 +27,6 @@ include::includes/external.txt[]
+ 
+ '''''
+ 
+-image:pic/tribeb.gif[]
++image::pic/tribeb.gif[align="center"]
+ 
+ include::includes/footer.txt[]
+-- 
+2.7.4
+

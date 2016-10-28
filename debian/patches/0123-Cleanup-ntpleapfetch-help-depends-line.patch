@@ -1,0 +1,26 @@
+From f238a4a41dbdd65bf4dd8c93343d951516df5db2 Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Fri, 2 Dec 2016 17:23:11 -0600
+Subject: [PATCH 123/268] Cleanup ntpleapfetch --help depends line
+
+This looks a little nicer.
+---
+ ntpleapfetch/ntpleapfetch | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ntpleapfetch/ntpleapfetch b/ntpleapfetch/ntpleapfetch
+index 0858789..7d9868e 100755
+--- a/ntpleapfetch/ntpleapfetch
++++ b/ntpleapfetch/ntpleapfetch
+@@ -107,7 +107,7 @@ need not be run more frequently than about once every three weeks.
+ 
+ For cron-friendly behavior, define CRONJOB=1 in the crontab.
+ 
+-This script depends on$REQUIREDCMDS
++This script depends on:$REQUIREDCMDS
+ 
+ Version $VERSION
+ EOF
+-- 
+2.7.4
+

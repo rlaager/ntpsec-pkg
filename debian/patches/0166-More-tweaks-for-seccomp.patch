@@ -1,0 +1,35 @@
+From 89666d13f7e74319adf18fcb9396d902d750089a Mon Sep 17 00:00:00 2001
+From: Hal Murray <murray@hgm.example.com>
+Date: Sat, 3 Dec 2016 17:21:45 -0800
+Subject: [PATCH 166/268] More tweaks for seccomp
+
+---
+ ntpd/ntp_sandbox.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/ntpd/ntp_sandbox.c b/ntpd/ntp_sandbox.c
+index d0e6b72..e703919 100644
+--- a/ntpd/ntp_sandbox.c
++++ b/ntpd/ntp_sandbox.c
+@@ -375,6 +375,9 @@ int scmp_sc[] = {
+         SCMP_SYS(shmat),
+ #endif
+ 
++	SCMP_SYS(fcntl64),
++	SCMP_SYS(fstat64),
++
+ #ifdef __x86_64__
+ 	SCMP_SYS(mmap),
+ #endif
+@@ -382,8 +385,6 @@ int scmp_sc[] = {
+ 	SCMP_SYS(_newselect),
+ 	SCMP_SYS(_llseek),
+ 	SCMP_SYS(mmap2),
+-	SCMP_SYS(fcntl64),
+-	SCMP_SYS(fstat64),
+ 	SCMP_SYS(stat64),
+ #endif
+ };
+-- 
+2.7.4
+

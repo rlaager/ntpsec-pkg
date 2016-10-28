@@ -1,0 +1,134 @@
+--- a/ntpstats/ntpviz
++++ b/ntpstats/ntpviz
+@@ -290,14 +290,14 @@
+ 
+     # can be 30% faster to write to a tmp file than to pipe to gnuplot
+     # bonus, we can keep the plot file for debug.
+-    tmp_file, tmp_filename = tempfile.mkstemp( suffix='.plt')
++    tmp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.plt', delete=False)
+     # note that tmp_file is a file handle, it is not a file object
+-    os.write( tmp_file, template)
+-    os.close(tmp_file)
++    tmp_file.write(template)
++    tmp_file.close()
+ 
+     # shell=True is a security hazard, do not use
+     try:
+-        rcode = subprocess.call( ['gnuplot', tmp_filename], stdout=out)
++        rcode = subprocess.call( ['gnuplot', tmp_file.name], stdout=out)
+     except OSError as e:
+         if e.errno == os.errno.ENOENT:
+             # gnuplot not found
+@@ -309,12 +309,12 @@
+ 
+     if 0 != rcode:
+         sys.stderr.write("ntpviz: WARNING: plot returned %s\n" % rcode)
+-        sys.stderr.write("ntpviz: WARNING: plot file %s\n" % tmp_filename)
++        sys.stderr.write("ntpviz: WARNING: plot file %s\n" % tmp_file.name)
+     elif 2 <= args.debug_level:
+-        sys.stderr.write("ntpviz: INFO: plot file %s\n" % tmp_filename)
++        sys.stderr.write("ntpviz: INFO: plot file %s\n" % tmp_file.name)
+     else:
+         # remove tmp file
+-        os.remove(tmp_filename)
++        os.remove(tmp_file.name)
+ 
+     return rcode
+ 
+@@ -442,10 +442,9 @@
+             return ''
+ 
+         tempsmap = self.tempssplit()
+-        tempslist = tempsmap.keys()
++        tempslist = list(tempsmap.keys())
+         tempslist.sort()
+         if not len( tempsmap) or not len( tempslist):
+-            sys.stderr.write("ntpviz: WARNING: no temps to graph\n")
+             return ''
+ 
+         # speed up by only sending gnuplot the data it will actually use
+@@ -523,11 +522,10 @@
+         "Generate GNUPLOT code graphing local temperature statistics"
+         sitename = self.sitename
+         tempsmap = self.tempssplit()
+-        tempslist = tempsmap.keys()
++        tempslist = list(tempsmap.keys())
+         tempslist.sort()
+ 
+         if not len( tempsmap) or not len( tempslist):
+-            sys.stderr.write("ntpviz: WARNING: no temps to graph\n")
+             return ''
+ 
+         stats = []
+@@ -574,7 +572,7 @@
+         "Generate GNUPLOT code graphing local gps statistics"
+         sitename = self.sitename
+         gpsmap = self.gpssplit()
+-        gpslist = gpsmap.keys()
++        gpslist = list(gpsmap.keys())
+         gpslist.sort()
+ 
+         if not len( gpsmap) or not len( gpslist):
+@@ -756,7 +754,7 @@
+ 
+         peerdict = self.peersplit()
+         if not peerlist:
+-            peerlist = peerdict.keys()
++            peerlist = list(peerdict.keys())
+         if not len( peerlist):
+             sys.stderr.write("ntpviz: WARNING: no peer data to graph\n")
+             return ''
+@@ -1459,13 +1457,13 @@
+     # if no ntpsec favicon.ico, write one.
+     ico_filename = os.path.join(args.outdir, "favicon.ico")
+     if not os.path.lexists( ico_filename ):
+-        with open( ico_filename, "w" ) as wp:
++        with open( ico_filename, "wb" ) as wp:
+             wp.write(binascii.a2b_base64(ntpsec_ico))
+ 
+     # if no ntpsec logo, write one.
+     logo_filename = os.path.join(args.outdir, "ntpsec-logo.png")
+     if not os.path.lexists( logo_filename ):
+-        with open( logo_filename, "w" ) as wp:
++        with open( logo_filename, "wb" ) as wp:
+             wp.write(binascii.a2b_base64(ntpsec_logo))
+ 
+     report_time = datetime.datetime.utcnow() # the time now is...
+@@ -1643,7 +1641,7 @@
+             ("peer-offsets", stats.peer_offsets_gnuplot()),
+         ]
+ 
+-        peerlist = stats.peersplit().keys()
++        peerlist = list(stats.peersplit().keys())
+         # sort for output order stability
+         peerlist.sort()
+         for key in peerlist:
+@@ -1712,12 +1710,12 @@
+ 
+     # and send the file buffer
+     index_filename = os.path.join(args.outdir, "index.html")
+-    with open(index_filename + ".tmp", "wb") as ifile:
++    with open(index_filename + ".tmp", "w") as ifile:
+         ifile.write(index_buffer)
+ 
+     # create csv file, as a tmp file
+     csv_filename = os.path.join(args.outdir, "summary.csv")
+-    with open( csv_filename + ".tmp", "wb" ) as csv_file:
++    with open( csv_filename + ".tmp", "w" ) as csv_file:
+         csv_ob = csv.writer(csv_file)
+         csv_ob.writerow(VizStats.csv_head)
+         for row in csvs:
+--- a/pylib/statfiles.py
++++ b/pylib/statfiles.py
+@@ -87,9 +87,9 @@
+                     if starttime > os.path.getmtime(logpart):
+                         continue
+                     if logpart.endswith("gz"):
+-                        lines += gzip.open(logpart, 'rb').readlines()
++                        lines += gzip.open(logpart, 'r').readlines()
+                     else:
+-                        lines += open(logpart, 'rb').readlines()
++                        lines += open(logpart, 'r').readlines()
+             except IOError:
+                 sys.stderr.write("ntpviz: WARNING: could not read %s\n" \
+                      % logpart)

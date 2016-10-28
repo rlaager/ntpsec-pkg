@@ -1,0 +1,26 @@
+From 07ee64f5d4e2110898fda3787cff27ea5c9f298f Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Fri, 9 Dec 2016 18:32:42 -0500
+Subject: [PATCH 253/268] Address GitLab issue #199: Python3: traceback with
+ ntpq reslist
+
+---
+ pylib/packet.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 142ea69..2a8b917 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -1452,7 +1452,7 @@ class Authenticator:
+     @staticmethod
+     def compute_mac(payload, keyid, keytype, passwd):
+         hasher = hashlib.new(keytype)
+-        hasher.update(passwd)
++        hasher.update(polybytes(passwd))
+         hasher.update(payload)
+         if hasher.digest_size == 0:
+             return None
+-- 
+2.7.4
+

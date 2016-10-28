@@ -1,0 +1,26 @@
+From ca643ac749f8f042a9eb51f5ccb57c8bd9f5b845 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Sat, 26 Nov 2016 11:06:59 -0500
+Subject: [PATCH 018/268] Fix mrulist sort=avgint
+
+Use self, not e, since e is not in scope here
+---
+ pylib/packet.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index cad03db..9e0f409 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -643,7 +643,7 @@ class MRUEntry:
+         self.mv = None		# mode and version
+         self.rs = None		# restriction mask (RES_* bits)
+     def avgint(self):
+-        return (e.last - e.first) / e.ct
++        return (self.last - self.first) / self.ct
+     def __repr__(self):
+         return "<MRUentry: " + repr(self.__dict__)[1:-1] + ">"
+ 
+-- 
+2.7.4
+

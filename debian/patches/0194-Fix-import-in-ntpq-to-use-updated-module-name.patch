@@ -1,0 +1,27 @@
+From 9c10b9b3765b83f73a51bdfa02ee82c0db26b4cb Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Tue, 6 Dec 2016 09:00:18 -0500
+Subject: [PATCH 194/268] Fix import in ntpq to use updated module name
+
+Import cleanup was missed in "Python namespace cleanup.  No actual code
+changes."
+---
+ ntpq/ntpq | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ntpq/ntpq b/ntpq/ntpq
+index cc28398..b2706b4 100755
+--- a/ntpq/ntpq
++++ b/ntpq/ntpq
+@@ -19,7 +19,7 @@ try:
+     import ntp.util
+     import ntp.ntpc
+     import ntp.version
+-    import ntp.ntp_control
++    import ntp.control
+ except ImportError as e:
+     sys.stderr.write("ntpq: can't find Python NTP library -- check PYTHONPATH.\n")
+     sys.stderr.write("%s\n" % e)
+-- 
+2.7.4
+

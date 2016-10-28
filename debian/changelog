@@ -1,0 +1,11 @@
+ntpsec (0.9.5+dfsg1-1) UNRELEASED; urgency=medium
+
+  * Initial release. (Closes: #819806)
+    Packaging forked from ntp_4.2.8p8+dfsg.
+    Ubuntu changes to split out:
+    + debian/rules, debian/ntp.dirs, debian/source_ntp.py: Add apport hook.
+    + debian/ntp.conf, debian/ntpdate.default: Change default server to
+      ntp.ubuntu.com.
+    + debian/README.Debian: Add a PPS section to the README.Debian
+
+ -- Richard Laager <rlaager@wiktel.com>  Fri, 28 Oct 2016 07:25:56 -0500

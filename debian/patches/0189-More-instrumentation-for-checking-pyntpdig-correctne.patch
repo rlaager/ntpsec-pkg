@@ -1,0 +1,70 @@
+From 622f757e268c12eafb82d0e772ec62efa4ad6a1c Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Tue, 6 Dec 2016 06:21:26 -0500
+Subject: [PATCH 189/268] More instrumentation for checking pyntpdig
+ correctness.
+
+---
+ ntpdig/main.c   | 18 ++++++++++++++----
+ ntpdig/pyntpdig |  2 +-
+ 2 files changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/ntpdig/main.c b/ntpdig/main.c
+index b24a566..c86931e 100644
+--- a/ntpdig/main.c
++++ b/ntpdig/main.c
+@@ -14,6 +14,7 @@
+ #include "log.h"
+ #include "libntp.h"
+ #include "ntp_intres.h"
++#include "timespecops.h"
+ 
+ bool shutting_down;
+ bool time_derived;
+@@ -1510,17 +1511,26 @@ offset_calculation(
+ #ifdef DEBUG
+ 	if (debug > 3) {
+ 		double ftime;
++		struct timespec ts_tmp;
+ 		pkt_output(rpkt, rpktl, stdout);
+ 		printf("ntpdig rootdelay: %f\n", FPTOD(p_rdly));
+ 		printf("ntpdig rootdisp: %f\n", FPTOD(p_rdsp));
+ 		printf("ntpdig syncdist: %f\n", *synch_distance);
+-		printf("ntpdig offset_calculation: ref: ");
++		ts_tmp = lfp_stamp_to_tspec(p_ref, NULL);
++		ftime = ts_tmp.tv_sec + ts_tmp.tv_nsec / 1000000.0;
++		printf("ntpdig offset_calculation: ref: %f ", ftime);
+ 		l_fp_output(&p_ref, stdout);
+-		printf("ntpdig offset_calculation: org: ");
++		ts_tmp = lfp_stamp_to_tspec(p_org, NULL);
++		ftime = ts_tmp.tv_sec + ts_tmp.tv_nsec / 1000000.0;
++		printf("ntpdig offset_calculation: org: %f ", ftime);
+ 		l_fp_output(&p_org, stdout);
+-		printf("ntpdig offset_calculation: rec: ");
++		ts_tmp = lfp_stamp_to_tspec(p_rec, NULL);
++		ftime = ts_tmp.tv_sec + ts_tmp.tv_nsec / 1000000.0;
++		printf("ntpdig offset_calculation: rec: %f ", ftime);
+ 		l_fp_output(&p_rec, stdout);
+-		printf("ntpdig offset_calculation: xmt: ");
++		ts_tmp = lfp_stamp_to_tspec(p_xmt, NULL);
++		ftime = ts_tmp.tv_sec + ts_tmp.tv_nsec / 1000000.0;
++		printf("ntpdig offset_calculation: xmt: %f ", ftime);
+ 		l_fp_output(&p_xmt, stdout);
+ 		ftime = tv_dst->tv_sec + tv_dst->tv_usec / 1000.0;
+ 		printf("ntpdig dst %f\n", ftime);
+diff --git a/ntpdig/pyntpdig b/ntpdig/pyntpdig
+index 45def8a..236fa3f 100755
+--- a/ntpdig/pyntpdig
++++ b/ntpdig/pyntpdig
+@@ -368,7 +368,7 @@ if __name__ == '__main__':
+         print("org t1: %s rec t2: %s" % (hexstamp(pkt.t1()), hexstamp(pkt.t2())))
+         print("xmt t3: %s dst t4: %s" % (hexstamp(pkt.t3()), hexstamp(pkt.t4())))
+         pkt.posixize()
+-        print("xmt t1: %f dst t2: %f" % (pkt.t1(), pkt.t2()))
++        print("org t1: %f rec t2: %f" % (pkt.t1(), pkt.t2()))
+         print("xmt t3: %f dst t4: %f" % (pkt.t3(), pkt.t4()))
+         print("rec-org t21: %f  xmt-dst t34: %f" % (pkt.t2() - pkt.t1(), pkt.t3() - pkt.t4()))
+ 
+-- 
+2.7.4
+

@@ -1,0 +1,46 @@
+From 78ceea028cd6e08eabf4c6b7ea94af4aad03e910 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sat, 10 Dec 2016 11:46:09 -0500
+Subject: [PATCH 262/268] Fix two ntpmon crash bugs.
+
+---
+ ntpclients/ntpmon | 6 ++++--
+ pylib/packet.py   | 1 +
+ 2 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/ntpclients/ntpmon b/ntpclients/ntpmon
+index 92542fb..d1fd1d9 100755
+--- a/ntpclients/ntpmon
++++ b/ntpclients/ntpmon
+@@ -32,12 +32,14 @@ def iso8601(t):
+     "ISO8601 string from Unix time, including fractional second."
+     return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(time.time()))
+ 
+-
+ def statline(_peerlist, _mrulist):
+     "Generate a status line"
+     # We don't use stdversion here because the presence of a date is confusing
+     leader = sysvars['version']
+-    trailer = "Last update: %s" % iso8601(span.entries[0].last)
++    if span.entries:
++        trailer = "Last update: %s" % iso8601(span.entries[0].last)
++    else:
++        trailer = ""
+     spacer = (peer_report.termwidth - len(leader) - len(trailer)) * " "
+     return leader + spacer + trailer
+ 
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 2a8b917..27eed6f 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -866,6 +866,7 @@ class ControlSession:
+         pkt = ControlPacket(self, opcode, associd, qdata)
+ 
+         self.sequence += 1
++        self.sequence %= 65536	# Has to fit in a struct H field
+         pkt.sequence = self.sequence
+ 
+         # If we have data, pad it out to a 32-bit boundary.
+-- 
+2.7.4
+

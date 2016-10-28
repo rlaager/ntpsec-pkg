@@ -1,0 +1,25 @@
+From ed9efa67f865756f5d13b911687b94f43e582a16 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Sun, 27 Nov 2016 14:10:27 -0500
+Subject: [PATCH 049/268] chr() only takes integers
+
+---
+ pylib/packet.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 192bd53..6418914 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -252,7 +252,7 @@ else:  # Python 3
+ 
+     def polychr(c):
+         "Polymorphic chr() function"
+-        if not isinstance(c, str):
++        if isinstance(c, int):
+             return chr(c)
+         else:
+             return c
+-- 
+2.7.4
+

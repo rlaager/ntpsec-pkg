@@ -1,0 +1,43 @@
+From e57947b55f32c5cd3e44f366d71bd0d50f0e5781 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Tue, 29 Nov 2016 14:10:45 -0500
+Subject: [PATCH 070/268] Improved anchot detection in linkcheck.
+
+---
+ devel/linkcheck | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/devel/linkcheck b/devel/linkcheck
+index 0d078be..12bcf17 100755
+--- a/devel/linkcheck
++++ b/devel/linkcheck
+@@ -9,7 +9,7 @@ from __future__ import print_function, division
+ 
+ import os, re
+ 
+-boxanchor_re = re.compile(r"\[\[[a-z0-9_-]*\]\]")
++boxanchor_re = re.compile(r"\[\[([a-z0-9_-]*)\]\]")
+ linkanchor_re = re.compile(r"anchor:([a-z0-9_-]*)\[\]")
+ refanchor_re = re.compile(r"link:([^.]*).html#([a-z0-9_-]*)")
+ 
+@@ -20,12 +20,14 @@ def tabulate(path):
+         for (i, line) in enumerate(rp):
+             #path = path[len(prefix):]
+             m = boxanchor_re.search(line)
+-            html = path[2:].replace(".txt", ".html") 
++            html = path[len(prefix):].replace(".txt", ".html") 
+             if m:
+-                anchors.add("link:" + html + "#" + m.group(0)[2:-2])
++                anchor = "link:" + html + "#" + m.group(1)
++                anchors.add(anchor)
+             m = linkanchor_re.search(line)
+             if m:
+-                anchors.add("link:" + html + "#" + m.group(1))
++                anchor = "link:" + html + "#" + m.group(1)
++                anchors.add(anchor)
+             m = refanchor_re.search(line)
+             if m:
+                 references[m.group(0)] = (path, i+1)
+-- 
+2.7.4
+

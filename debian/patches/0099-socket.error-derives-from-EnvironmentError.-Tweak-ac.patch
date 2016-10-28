@@ -1,0 +1,32 @@
+From d054d6063021b7f784b4ea0430faa021b3d2a3be Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Thu, 1 Dec 2016 21:46:09 -0500
+Subject: [PATCH 099/268] socket.error derives from EnvironmentError.  Tweak
+ accordingly.
+
+---
+ pylib/packet.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 8c5e7f7..002093b 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -794,12 +794,12 @@ class ControlSession:
+             self.sock = socket.socket(family, socktype, protocol)
+         except socket.error as e:
+             raise ControlException("Error opening %s: %s [%d]" \
+-                                   % (hname, e.msg, e.errno))
++                                   % (hname, e.strerror, e.errno))
+         try:
+             self.sock.connect(sockaddr)
+         except socket.error as e:
+             raise ControlException("Error connecting to %s: %s [%d]" \
+-                                   % (hname, e.msg, e.errno))
++                                   % (hname, e.strerror, e.errno))
+         return True
+ 
+     def password(self):
+-- 
+2.7.4
+

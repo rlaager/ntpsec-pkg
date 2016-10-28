@@ -1,0 +1,106 @@
+From c1d7f81f112b837ba56bc930ed6085802e1d933a Mon Sep 17 00:00:00 2001
+From: Chris Mayo <aklhfex@gmail.com>
+Date: Sat, 3 Dec 2016 17:25:00 +0000
+Subject: [PATCH 156/268] Replace sitemap page links in sections with cross
+ references
+
+Rename "Related Links" on Site Map to "Links"
+---
+ docs/includes/external.txt | 1 -
+ docs/includes/hand.txt     | 1 -
+ docs/includes/install.txt  | 1 -
+ docs/includes/misc.txt     | 1 -
+ docs/includes/refclock.txt | 1 -
+ docs/includes/special.txt  | 1 -
+ docs/sitemap.txt           | 8 +++++++-
+ 7 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/docs/includes/external.txt b/docs/includes/external.txt
+index 510c649..1e1e7e4 100644
+--- a/docs/includes/external.txt
++++ b/docs/includes/external.txt
+@@ -13,5 +13,4 @@ On-Wire Protocols]
+ * link:{millshome}/security.html[NTP Security Analysis]
+ * link:{millshome}/ptp.html[IEEE 1588 Precision Time Protocol (PTP)]
+ * link:{millshome}/autocfg.html[Autonomous Configuration]
+-* link:sitemap.html[Site Map]
+ 
+diff --git a/docs/includes/hand.txt b/docs/includes/hand.txt
+index 4525862..fa9a1b9 100644
+--- a/docs/includes/hand.txt
++++ b/docs/includes/hand.txt
+@@ -6,5 +6,4 @@
+ * link:discover.html[Automatic Server Discovery Schemes]
+ * link:rate.html[Rate Management]
+ * link:refclock.html[Reference Clock Support]
+-* link:sitemap.html[Site Map]
+ 
+diff --git a/docs/includes/install.txt b/docs/includes/install.txt
+index f00bf0a..3f53c19 100644
+--- a/docs/includes/install.txt
++++ b/docs/includes/install.txt
+@@ -4,5 +4,4 @@
+ * link:quick.html[Quick Start for Client Configurations]
+ * link:debug.html[NTP Debugging Techniques]
+ * link:bugs.html[NTP Bug Reporting Procedures]
+-* link:sitemap.html[Site Map]
+ 
+diff --git a/docs/includes/misc.txt b/docs/includes/misc.txt
+index b4b4c26..9a917ae 100644
+--- a/docs/includes/misc.txt
++++ b/docs/includes/misc.txt
+@@ -6,5 +6,4 @@
+ * link:msyslog.html[+ntpd+ System Log Messages]
+ * link:kernpps.html[PPSAPI Interface for Precision Time Signals]
+ * link:pps.html[Pulse-per-second (PPS) Signal Interfacing]
+-* link:sitemap.html[Site Map]
+ 
+diff --git a/docs/includes/refclock.txt b/docs/includes/refclock.txt
+index d4cc0d2..b596bce 100644
+--- a/docs/includes/refclock.txt
++++ b/docs/includes/refclock.txt
+@@ -3,5 +3,4 @@
+ * link:driver_howto.html[How to Write a Reference Clock Driver] 
+ * link:generic_howto.html[How to build new generic clocks]
+ * link:refclock.html[Reference Clock Drivers]
+-* link:sitemap.html[Site Map]
+ 
+diff --git a/docs/includes/special.txt b/docs/includes/special.txt
+index b964d94..5103bff 100644
+--- a/docs/includes/special.txt
++++ b/docs/includes/special.txt
+@@ -12,5 +12,4 @@
+ * link:clock.html[Clock State Machine]
+ * link:leap.html[Leap Second Processing]
+ * link:leapsmear.html[Leap Smearing]
+-* link:sitemap.html[Site Map]
+ 
+diff --git a/docs/sitemap.txt b/docs/sitemap.txt
+index 127f418..d705495 100644
+--- a/docs/sitemap.txt
++++ b/docs/sitemap.txt
+@@ -9,14 +9,20 @@ Welcome to the tea party.
+ |==============================
+ 
+ 
+-== Related Links ==
++== Links ==
+ 
+ include::includes/install.txt[]
+ include::includes/manual.txt[]
++xref:_links[Back to Top]
++
+ include::includes/hand.txt[]
+ include::includes/refclock.txt[]
++xref:_links[Back to Top]
++
+ include::includes/misc.txt[]
+ include::includes/special.txt[]
++xref:_links[Back to Top]
++
+ include::includes/external.txt[]
+ 
+ '''''
+-- 
+2.7.4
+

@@ -1,0 +1,188 @@
+#!/usr/bin/make -f
+
+DEB_HOST_ARCH_OS ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+
+CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS) -D_GNU_SOURCE
+CFLAGS   = $(shell dpkg-buildflags --get CFLAGS) -fno-strict-aliasing
+LDFLAGS  = $(shell dpkg-buildflags --get LDFLAGS) -Wl,--as-needed
+
+configure-stamp:
+	dh_testdir
+ifeq (hurd, $(DEB_HOST_ARCH_OS))
+	# hurd does not provided the system calls needed for ntpd to work.
+	exit 1
+endif
+	# Use the packaged version of autorevision:
+	ln -sf /usr/bin/autorevision wafhelpers/autorevision.sh
+
+	# We set MKREPRO_DATE and MKREPRO_TIME to allow for reproducible builds.
+	# See also debian/patches/reproducible-build.patch.
+	#
+	# Only build with refclocks NOT slated for removal.  See also
+	# debian/patches/update-refclock-docs.patch.
+	#
+	# Upstream references:
+	# https://www.ntpsec.org/removal-plan.html
+	# https://www.ntpsec.org/drivers.html
+	#
+	# Also drop modem.  It "requires a Hayes-compatible 1200bps modem,
+	# hardware now 20 years obsolete".
+	CFLAGS='$(CFLAGS) $(CPPFLAGS) -DMKREPRO_DATE="\"Jan 01 2016\"" -DMKREPRO_TIME="\"00:00:00\""' \
+	LDFLAGS='$(LDFLAGS)' \
+		python3 waf configure \
+		--prefix=/usr \
+		--enable-debug-gdb --enable-mssntp --enable-seccomp \
+		--refclock=local,spectracom,generic,arbiter,nmea,pps,hpgps,shm,trimble,oncore,jjy,zyfer,neoclock,gpsd \
+		--enable-doc --htmldir=/usr/share/doc/ntpsec/html
+	touch $@
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+	python3 waf build
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+	python3 waf clean || true
+	rm -rf ntpdig/ntp ntpstats/ntp ntpq/ntp ntptrace/ntp ntpwait/ntp ntpsweep/ntp
+	rm -rf build .lock-waf_*_build pylib/version.py pylib/ntp_magic.py pylib/ntp_control.py .waf*
+	find -name "*.pyc" -delete
+	rm -f wafhelpers/autorevision.sh
+	dh_clean
+
+install: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	python3 waf install --destdir=$(CURDIR)/debian/tmp
+	rm -rf debian/tmp/usr/lib/python3/dist-packages/ntp/__pycache__
+
+	install -d debian/tmp/usr/share
+	mv debian/tmp/usr/man debian/tmp/usr/share/man
+
+	install -m 755 \
+		ntpleapfetch/ntpleapfetch \
+		ntptrace/ntptrace \
+		debian/tmp/usr/bin
+	install -m 755 \
+		attic/ntpdate \
+		ntpwait/ntpwait \
+		debian/tmp/usr/sbin
+
+	# move the administrator programs from /usr/bin to /usr/sbin
+	for file in ntptime ntpkeygen; do \
+		mv debian/tmp/usr/bin/$$file debian/tmp/usr/sbin/$$file || exit; \
+	done
+
+	install -D -m 0755 ntpsweep/ntpsweep debian/ntpsec/usr/bin/ntpsweep
+
+	install -d debian/ntpsec-ntpviz/usr/share/doc/ntpsec-ntpviz/examples
+	install -m 0755 \
+		contrib/cpu-temp-log \
+		contrib/gps-log \
+		contrib/smartctl-temp-log \
+		contrib/temper-temp-log \
+		debian/ntpsec-ntpviz/usr/share/doc/ntpsec-ntpviz/examples
+
+	install -D -m 0755 contrib/pi-temp-log \
+		debian/ntpsec-ntpviz/usr/share/ntpsec-ntpviz/zone-temp-log
+
+	install -d debian/ntpsec-ntpviz/usr/share/ntpsec-ntpviz/ntpviz
+	install -m 644 \
+		debian/html/index.html \
+		debian/ntpsec-ntpviz/usr/share/ntpsec-ntpviz/ntpviz
+	install -d debian/ntpsec-ntpviz/etc/ntpviz
+	install -m 644 \
+		debian/html/footer.html \
+		debian/html/header.html \
+		debian/ntpsec-ntpviz/etc/ntpviz
+
+	install -D -m 0644 debian/ntp.dhcp debian/ntpsec/etc/dhcp/dhclient-exit-hooks.d/ntp
+	install -D -m 0755 debian/ntp.networkmanager debian/ntpsec/etc/NetworkManager/dispatcher.d/ntp
+	install -D -m 0644 debian/ntpdate.dhcp debian/ntpsec-ntpdate/etc/dhcp/dhclient-exit-hooks.d/ntpdate
+	install -D -m 0755 debian/ntpdate-debian debian/ntpsec-ntpdate/usr/sbin/ntpdate-debian
+
+	install -D -m 0644 debian/ntp.conf debian/ntpsec/etc/ntp.conf
+
+	# install apparmor profile
+	install -D -m 0644 debian/apparmor-profile debian/ntpsec/etc/apparmor.d/usr.sbin.ntpd
+	install -D -m 0644 debian/apparmor-profile.tunable debian/ntpsec/etc/apparmor.d/tunables/ntpd
+	dh_link -pntpsec etc/apparmor.d/usr.sbin.ntpd etc/apparmor/init/network-interface-security/usr.sbin.ntpd
+
+	# install apport hook
+	install -D -m 644 debian/source_ntp.py debian/ntpsec/usr/share/apport/package-hooks/source_ntp.py
+
+	dh_link
+	dh_install
+
+binary-indep: build install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installdocs -i
+	dh_installexamples -i
+	dh_installman -i
+	dh_installcron -i
+	dh_installlogcheck -i
+	dh_installchangelogs -i
+	dh_installifupdown -i
+	dh_apache2 -i
+	dh_perl -i
+	dh_python3 -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build install
+	dh_testdir -a
+	dh_testroot -a
+	dh_installdocs -a
+	dh_installexamples -a
+	dh_installman -a
+	dh_installinit -pntpsec --name=ntp --error-handler=installinit_error
+	dh_installinit -pntpsec-ntpdate
+	mv debian/ntpsec-ntpdate/etc/default/ntpsec-ntpdate \
+		debian/ntpsec-ntpdate/etc/default/ntpdate
+	dh_apparmor --profile-name=usr.sbin.ntpd -pntpsec
+	dh_installcron -a
+	dh_installlogcheck -a
+	mv debian/ntpsec-ntpdate/etc/logcheck/ignore.d.server/ntpsec-ntpdate \
+		debian/ntpsec-ntpdate/etc/logcheck/ignore.d.server/ntpdate
+	dh_installchangelogs -a
+	dh_installifupdown -a
+	mv debian/ntpsec-ntpdate/etc/network/if-up.d/ntpsec-ntpdate \
+		debian/ntpsec-ntpdate/etc/network/if-up.d/ntpdate
+	dh_apache2 -a
+	dh_perl -a
+	dh_python3 -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+
+PKD  = $(abspath $(dir $(MAKEFILE_LIST)))
+PKG  = $(word 2,$(shell dpkg-parsechangelog -l$(PKD)/changelog --show-field=Source))
+VER ?= $(shell dpkg-parsechangelog -l$(PKD)/changelog | perl -ne 'print $$1 if m{^Version:\s+(?:\d+:)?(\d.*)(?:\-\d+.*)};')
+
+.PHONY: get-orig-source
+## http://wiki.debian.org/onlyjob/get-orig-source
+get-orig-source:  $(info I: $(PKG)_$(VER))
+	@echo "# Downloading..."
+	uscan --noconf --verbose --rename --destdir=$(CURDIR) --check-dirname-level=0 --force-download --download-version $(VER) $(PKD)
+
+.PHONY: build build-arch build-indep clean binary-indep binary-arch binary install get-orig-source

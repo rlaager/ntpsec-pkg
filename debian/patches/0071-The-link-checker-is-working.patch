@@ -1,0 +1,98 @@
+From 4d905a3eb24fd4f0f58af8e34d8a842ca5620c78 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Tue, 29 Nov 2016 15:57:30 -0500
+Subject: [PATCH 071/268] The link checker is working.
+
+As a demonstration, this commit includes one fix for a glitch found using it.
+---
+ devel/linkcheck                | 55 ++++++++++++++++++++++++++++--------------
+ docs/includes/misc-options.txt |  1 +
+ 2 files changed, 38 insertions(+), 18 deletions(-)
+
+diff --git a/devel/linkcheck b/devel/linkcheck
+index 12bcf17..805099b 100755
+--- a/devel/linkcheck
++++ b/devel/linkcheck
+@@ -16,30 +16,49 @@ refanchor_re = re.compile(r"link:([^.]*).html#([a-z0-9_-]*)")
+ prefix = "docs/"
+ 
+ def tabulate(path):
+-    with open(path) as rp:
+-        for (i, line) in enumerate(rp):
+-            #path = path[len(prefix):]
+-            m = boxanchor_re.search(line)
+-            html = path[len(prefix):].replace(".txt", ".html") 
+-            if m:
+-                anchor = "link:" + html + "#" + m.group(1)
+-                anchors.add(anchor)
+-            m = linkanchor_re.search(line)
+-            if m:
+-                anchor = "link:" + html + "#" + m.group(1)
+-                anchors.add(anchor)
+-            m = refanchor_re.search(line)
+-            if m:
+-                references[m.group(0)] = (path, i+1)
+-        
++    iostack.append((0, open(path)))
++    linecount = 0
++    while True:
++        line = iostack[-1][1].readline()
++        linecount += 1
++        if line == "":
++            iostack[-1][1].close()
++            (linecount, _) = iostack.pop()
++            if not iostack:
++                return
++            else:
++                continue
++        if line.startswith("include::"):
++            filestem = line.strip()[9:][:-2]
++            iostack.append((linecount, open(os.path.join(prefix, filestem))))
++            continue
++        # Ordinary processing 
++        # This is the tricky part. Because we're reference-checking the
++        # generated HTML, the file part of a stored anchor name needs to be
++        # the original path from the top of the include stack, not
++        # whatever inclusion we might be walking through now.
++        html = path[len(prefix):].replace(".txt", ".html") 
++        m = boxanchor_re.search(line)
++        if m:
++            anchor = "link:" + html + "#" + m.group(1)
++            anchors.add(anchor)
++        m = linkanchor_re.search(line)
++        if m:
++            anchor = "link:" + html + "#" + m.group(1)
++            anchors.add(anchor)
++        m = refanchor_re.search(line)
++        if m:
++            references[m.group(0)] = (iostack[-1][1].name, linecount)
+ 
+ if __name__ == '__main__':
++    iostack = []
+     references = {}
+     anchors = set([])
+     for dirpath, dnames, fnames in os.walk(prefix):
+         for f in fnames:
+-            if f.endswith(".txt"):
+-                tabulate(os.path.join(dirpath, f))
++            fullpath = os.path.join(dirpath, f)
++            if fullpath.endswith(".txt") and not "includes" in fullpath:
++                tabulate(fullpath)
+     #print("References: %s" % references)
+     #print("Anchors: %s" % anchors)
+     hanging = []
+diff --git a/docs/includes/misc-options.txt b/docs/includes/misc-options.txt
+index ea61fc3..f05852f 100644
+--- a/docs/includes/misc-options.txt
++++ b/docs/includes/misc-options.txt
+@@ -218,6 +218,7 @@ and so on is suppressed.
+   peer variables and the +clock_var_list+ holds the names of the reference
+   clock variables.
+ 
++[[tinker]]
+ +tinker+ [+allan+ _allan_ | +dispersion+ _dispersion_ | +freq+ _freq_ | +huffpuff+ _huffpuff_ | +panic+ _panic_ | +step+ _step_ | +stepback+ _stepback_ | +stepfwd+ _stepfwd_ | +stepout+ _stepout_]::
+   This command can be used to alter several system variables in very
+   exceptional circumstances. It should occur in the configuration file
+-- 
+2.7.4
+

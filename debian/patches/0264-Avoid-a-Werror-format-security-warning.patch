@@ -1,0 +1,25 @@
+From 7abd42b9f84221828513ca0904f345369d5be487 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sat, 10 Dec 2016 14:30:59 -0500
+Subject: [PATCH 264/268] Avoid a -Werror=format-security warning.
+
+---
+ ntptime/ntptime.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ntptime/ntptime.c b/ntptime/ntptime.c
+index 7289ac9..3d6b8fe 100644
+--- a/ntptime/ntptime.c
++++ b/ntptime/ntptime.c
+@@ -356,7 +356,7 @@ main(
+ #if defined(STRUCT_NTPTIMEVAL_HAS_TAI)
+ 		printf(json ? jfmt5 : ofmt5, (long)ntv.tai);
+ #else
+-		printf(json ? jfmt6 : ofmt6);
++		fputs(json ? jfmt6 : ofmt6, stdout);
+ #endif /* STRUCT_NTPTIMEVAL_HAS_TAI */
+ 	}
+ 	status = ntp_adjtime_ns(&ntx);
+-- 
+2.7.4
+

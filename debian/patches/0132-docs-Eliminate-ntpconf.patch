@@ -1,0 +1,31 @@
+From d1af860c0284a7590ac5e1a378471179f8cc9f9b Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Fri, 2 Dec 2016 17:48:31 -0600
+Subject: [PATCH 132/268] docs: Eliminate {ntpconf}
+
+This is not expanding for me.
+---
+ ntpd/ntp.conf-man.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ntpd/ntp.conf-man.txt b/ntpd/ntp.conf-man.txt
+index 7e1e33c..320d35e 100644
+--- a/ntpd/ntp.conf-man.txt
++++ b/ntpd/ntp.conf-man.txt
+@@ -5,11 +5,11 @@
+ ntp.conf - Network Time Protocol (NTP) daemon configuration file format
+ 
+ == SYNOPSIS ==
+-/etc/{ntpconf}
++/etc/ntp.conf
+ 
+ == DESCRIPTION ==
+ 
+-The `{ntpconf}` configuration file is read at initial startup by the
++The `ntp.conf` configuration file is read at initial startup by the
+ {ntpdman} daemon in order to specify the synchronization
+ sources, modes and other related information. Usually, it is installed
+ in the `/etc` directory, but could be installed elsewhere (see the
+-- 
+2.7.4
+

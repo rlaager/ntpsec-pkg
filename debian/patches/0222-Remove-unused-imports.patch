@@ -1,0 +1,25 @@
+From 955151f26a4c1efe9a9bb1536824cedf3c7fa859 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Thu, 8 Dec 2016 00:30:28 -0500
+Subject: [PATCH 222/268] Remove unused imports
+
+---
+ ntpclients/ntpdig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ntpclients/ntpdig b/ntpclients/ntpdig
+index d19e3ec..0805477 100755
+--- a/ntpclients/ntpdig
++++ b/ntpclients/ntpdig
+@@ -38,7 +38,7 @@ from __future__ import print_function, division
+ #
+ # The one new option in this version is -p, borrowed from ntpdate.
+ 
+-import sys, socket, select, struct, time, getopt, datetime, math
++import sys, socket, select, time, getopt, math
+ 
+ try:
+     import ntp.packet
+-- 
+2.7.4
+

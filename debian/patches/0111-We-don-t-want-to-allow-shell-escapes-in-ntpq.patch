@@ -1,0 +1,29 @@
+From c7407d17326a2ff3116b8ccba3dc316a7f9cabb6 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Fri, 2 Dec 2016 02:06:07 -0500
+Subject: [PATCH 111/268] We don't want to allow shell escapes in ntpq
+
+Fixes GitLab issue #181
+---
+ ntpq/ntpq | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/ntpq/ntpq b/ntpq/ntpq
+index 76fad4b..c5e1771 100755
+--- a/ntpq/ntpq
++++ b/ntpq/ntpq
+@@ -223,6 +223,11 @@ class Ntpq(cmd.Cmd):
+                     return
+         cmd.Cmd.do_help(self, arg)
+ 
++    def do_shell(self, line):
++        "Called when a line that starts with ! is entered in response to the prompt."
++        self.warn("***Command `!%s' unknown\n" % line)
++        return
++
+     def say(self, msg):
+         sys.stdout.write(polystr(msg))
+         sys.stdout.flush()	# In case we're piping the output
+-- 
+2.7.4
+

@@ -1,0 +1,26 @@
+From 8a93384a3b9130d5c308b8881df8c0b8d3219005 Mon Sep 17 00:00:00 2001
+From: Chris Mayo <aklhfex@gmail.com>
+Date: Sat, 3 Dec 2016 14:34:55 +0000
+Subject: [PATCH 147/268] Add link to sitemap text in index.txt
+
+---
+ docs/index.txt | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/docs/index.txt b/docs/index.txt
+index 0a7c1e3..fef9f3f 100644
+--- a/docs/index.txt
++++ b/docs/index.txt
+@@ -269,7 +269,8 @@ redistributable as open source.
+ 
+ A good deal of tutorial and directive information is available on the
+ handbook pages. These should be read in conjunction with the command and
+-option information available on the pages listed on the sitemap page.
++option information available on the pages listed on the
++link:sitemap.html[Site Map] page.
+ 
+ link:quick.html[Quick start for client configurations]::
+   Basic configuration for 99% of client installations.  Introduces
+-- 
+2.7.4
+

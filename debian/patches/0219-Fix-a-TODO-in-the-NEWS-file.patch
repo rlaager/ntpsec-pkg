@@ -1,0 +1,25 @@
+From 48597b1c10e3b482d30979a9c31f3d49b052b8fc Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Wed, 7 Dec 2016 20:42:50 -0600
+Subject: [PATCH 219/268] Fix a TODO in the NEWS file
+
+---
+ NEWS | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/NEWS b/NEWS
+index fbee92b..f520bd6 100644
+--- a/NEWS
++++ b/NEWS
+@@ -1,6 +1,7 @@
+ = NTPsec project news =
+ 
+-For historic news from NTP Classic, see devel/TODO in the distribution.
++For historic news from NTP Classic, see devel/HISTORIC-NEWS in the
++distribution.
+ 
+ Much of the traditional function of a news file is now better addressed
+ by browsing the comments in the revision history.  This file will focus
+-- 
+2.7.4
+

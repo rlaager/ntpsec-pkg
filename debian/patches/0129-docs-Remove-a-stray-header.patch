@@ -1,0 +1,26 @@
+From 49be09051f8c7767d9506ba2aa410b682e5af045 Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Fri, 2 Dec 2016 17:44:31 -0600
+Subject: [PATCH 129/268] docs: Remove a stray header
+
+Nothing comes after this "Historical note".
+---
+ docs/includes/ntpkeygen-body.txt | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/docs/includes/ntpkeygen-body.txt b/docs/includes/ntpkeygen-body.txt
+index 9fa6489..2dde8ef 100644
+--- a/docs/includes/ntpkeygen-body.txt
++++ b/docs/includes/ntpkeygen-body.txt
+@@ -23,8 +23,6 @@ itself. Besides the keys used for ordinary NTP associations,
+ additional keys can be defined as passwords for the
+ link:ntpq.html[+ntpq+] utility program.
+ 
+-Historical note: 
+-
+ [[cmd]]
+ == Command Line Options ==
+ 
+-- 
+2.7.4
+

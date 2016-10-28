@@ -1,0 +1,37 @@
+From 94cd3ce2eb36b6e6fdf0b3124b91e8e32ad01b52 Mon Sep 17 00:00:00 2001
+From: Sanjeev Gupta <ghane0@gmail.com>
+Date: Sat, 3 Dec 2016 22:15:43 +0800
+Subject: [PATCH 157/268] Document that ntpkeygen producses SHA1 keys
+
+... independent of OpenSSL or need
+---
+ docs/includes/ntpkeygen-body.txt | 13 ++++++-------
+ 1 file changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/docs/includes/ntpkeygen-body.txt b/docs/includes/ntpkeygen-body.txt
+index 2b7cb00..8e6fdf2 100644
+--- a/docs/includes/ntpkeygen-body.txt
++++ b/docs/includes/ntpkeygen-body.txt
+@@ -15,13 +15,12 @@ key cryptography.
+ 
+ The program produces a file containing ten pseudo-random printable
+ ASCII strings suitable for the MD5 message digest algorithm included
+-in the distribution. If the OpenSSL library is installed, it produces
+-an additional ten hex-encoded random bit strings suitable for the SHA1
+-and other message digest algorithms. The message digest keys file must
+-be distributed and stored using secure means beyond the scope of NTP
+-itself. Besides the keys used for ordinary NTP associations,
+-additional keys can be defined as passwords for the
+-link:ntpq.html[+ntpq+] utility program.
++in the distribution.  It also produces an additional ten hex-encoded
++random bit strings suitable for the SHA1 and other message digest
++algorithms. The message digest keys file must be distributed and
++stored using secure means beyond the scope of NTP itself. Besides
++the keys used for ordinary NTP associations, additional keys can be
++defined as passwords for the link:ntpq.html[+ntpq+] utility program.
+ 
+ [[cmd]]
+ == Command Line Options ==
+-- 
+2.7.4
+

@@ -1,0 +1,147 @@
+From b2063e93f1c652e2db00fe810a76cc030758cacf Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Thu, 8 Dec 2016 00:10:11 -0500
+Subject: [PATCH 221/268] Remove remaining references to libevent2
+
+---
+ INSTALL                       |  2 +-
+ devel/release.nix             |  2 +-
+ devel/tour.txt                | 13 ---------
+ docs/includes/ntpdig-body.txt |  2 --
+ wafhelpers/check_libevent2.py | 61 -------------------------------------------
+ 5 files changed, 2 insertions(+), 78 deletions(-)
+ delete mode 100644 wafhelpers/check_libevent2.py
+
+diff --git a/INSTALL b/INSTALL
+index ebfee40..58ebfc3 100644
+--- a/INSTALL
++++ b/INSTALL
+@@ -229,7 +229,7 @@ operates.
+ == Cross-compiling ==
+ 
+ Set up a cross-compile environment for the target architecture.  At minimum
+-it will need its own binaries for the OpenSSL and libevent2 libraries.
++it will need its own binaries for the OpenSSL library.
+ 
+ Configure NTPSec with:
+ 
+diff --git a/devel/release.nix b/devel/release.nix
+index 4dbd212..74de545 100644
+--- a/devel/release.nix
++++ b/devel/release.nix
+@@ -51,7 +51,7 @@ in with derivationOptions; rec {
+       name = "ntpsec";
+       src = tarball;
+ 
+-      buildInputs = with pkgs; [ python27 bison libevent openssl asciidoc ];
++      buildInputs = with pkgs; [ python27 bison openssl asciidoc ];
+ 
+       configurePhase = ''
+         runHook preConfigure
+diff --git a/devel/tour.txt b/devel/tour.txt
+index 79545b8..d401c8f 100644
+--- a/devel/tour.txt
++++ b/devel/tour.txt
+@@ -315,19 +315,6 @@ The process everything step sorts the contents of the FIFO, then discards
+ outliers, roughly 1/3 of the samples, and then figures out the average and
+ injects that into the peer buffer for the refclock.
+ 
+-== ntpdig and libevent2 ==
+-
+-You may notice that ntpdig is written in a different style than the
+-rest of the suite, and has a dependency on libevent2 that the rest of
+-the code does not use.  This is because ntpdig, back when it was
+-called sntp, was written separately from the rest of the NTP suite
+-and incorporated wholesale after the fact.
+-
+-The libevent API provides a mechanism to execute a callback function
+-when a specific event occurs on a file descriptor or after a timeout
+-has been reached.  Other NTP programs, notably ntpd and ntpq, could
+-use it, but would require serious rewrites to do so.
+-
+ == Asynchronous DNS lookup ==
+ 
+ There are great many complications in the code that arise from wanting
+diff --git a/docs/includes/ntpdig-body.txt b/docs/includes/ntpdig-body.txt
+index 71a6def..ea450f3 100644
+--- a/docs/includes/ntpdig-body.txt
++++ b/docs/includes/ntpdig-body.txt
+@@ -222,8 +222,6 @@ One of the following exit values will be returned:
+   Successful program execution.
+ 1 (EXIT_FAILURE)::
+   The operation failed or the command syntax was not valid.
+-2::
+-  Internal error - libevent failed to initialize properly.
+ 
+ == AUTHORS ==
+ 
+diff --git a/wafhelpers/check_libevent2.py b/wafhelpers/check_libevent2.py
+deleted file mode 100644
+index 9a7a90f..0000000
+--- a/wafhelpers/check_libevent2.py
++++ /dev/null
+@@ -1,61 +0,0 @@
+-from __future__ import print_function
+-
+-from waflib.Logs import pprint
+-from wafhelpers.tool import check_sanity
+-
+-LIBEVENT2_FRAG = """
+-#include <event2/thread.h>
+-#include <event2/event.h>
+-
+-int main(void) {
+-	struct event_config *   evcfg;
+-
+-	evthread_use_pthreads();
+-	evcfg = event_config_new();
+-	return 0;
+-}
+-"""
+-
+-
+-def check_libevent2_header(ctx):
+-	ctx.check(header_name="event2/event.h", includes=ctx.env.PLATFORM_INCLUDES, mandatory=False, comment="libevent2 main header")
+-	ctx.check(header_name="event2/thread.h", includes=ctx.env.PLATFORM_INCLUDES, mandatory=False, comment="libevent2 thread support")
+-
+-	# XXX: On some systems (NetBSD) event_core doesn't exist.  libevent is pulled in with event_pthreads.
+-	#      This results in a warning from check_sanity()
+-	ctx.check(feature="c cshlib", lib="event_core", libpath=ctx.env.PLATFORM_LIBPATH, uselib_store="LIBEVENT_CORE", mandatory=False, comment="libevent core library")
+-	ctx.check(feature="c cshlib", lib="event_pthreads", libpath=ctx.env.PLATFORM_LIBPATH, uselib_store="LIBEVENT_PTHREADS", use="LIBEVENT_CORE", mandatory=False, comment="libevent pthread library")
+-
+-	if ctx.get_define("HAVE_EVENT2_THREAD_H") and ctx.get_define("HAVE_EVENT2_EVENT_H") and ctx.env.LIB_LIBEVENT_PTHREADS and ctx.env.LIB_LIBEVENT_CORE:
+-		ctx.env.EVENT2_HEADER = True
+-
+-def check_libevent2_run(ctx):
+-	if ctx.env.ENABLE_CROSS:
+-		if ctx.env.EVENT2_HEADER: # XXX Remove when variant builds exist
+-			ctx.define("HAVE_LIBEVENT2", 1, comment="libevent2 support")
+-			ctx.env.LIBEVENT2_ENABLE = True
+-		return
+-
+-	ctx.check(
+-		fragment	= LIBEVENT2_FRAG,
+-		define_name = "HAVE_LIBEVENT2",
+-		features	= "c",
+-		use			= "LIBEVENT, LIBEVENT_CORE, LIBEVENT_PTHREADS",
+-		msg         = "Checking if libevent2 works",
+-		includes        = ctx.env.PLATFORM_INCLUDES,
+-		export_includes = ctx.env.PLATFORM_INCLUDES,
+-		mandatory	= False,
+-		comment		= "libevent2 support"
+-	)
+-
+-	check_sanity(ctx, ctx.env.EVENT2_HEADER, "libevent2")
+-
+-	if not ctx.get_define("HAVE_LIBEVENT2"):
+-		print("")
+-		pprint("RED", "Warning libevent2 does not work")
+-		pprint("RED", "This means ntpdig will not be built")
+-		pprint("RED", "While not necessary you will lose 'ntpdate' functionality.")
+-		print("")
+-	else:
+-		ctx.env.LIBEVENT2_ENABLE = True
+-		ctx.define("HAVE_LIBEVENT2", 1, comment="libevent2 support")
+-- 
+2.7.4
+

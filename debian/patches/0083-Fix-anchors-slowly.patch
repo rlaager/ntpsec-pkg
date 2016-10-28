@@ -1,0 +1,41 @@
+From 185665bea4d3860e2b85d1cfa35f57b6859f8db5 Mon Sep 17 00:00:00 2001
+From: Sanjeev Gupta <ghane0@gmail.com>
+Date: Thu, 1 Dec 2016 01:38:00 +0800
+Subject: [PATCH 083/268] Fix anchors, slowly
+
+Signed-off-by: Sanjeev Gupta <ghane0@gmail.com>
+---
+ docs/includes/ntpq-body.txt | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/docs/includes/ntpq-body.txt b/docs/includes/ntpq-body.txt
+index 16961e1..936d226 100644
+--- a/docs/includes/ntpq-body.txt
++++ b/docs/includes/ntpq-body.txt
+@@ -199,6 +199,7 @@ the server and expect a single response message. The exceptions are the
+ +peers+ command, which sends a series of messages, and the +mreadlist+
+ and +mreadvar+ commands, which iterate over a range of associations.
+ 
++[[as]]
+ +associations+::
+   Display a list of mobilized associations in the form
+ +
+@@ -325,6 +326,7 @@ which could not be verified in parentheses.
+   Perform the same function as the +associations command+, except that
+   it uses previously stored data rather than making a new query.
+ 
++[[pe]]
+ +peers+::
+   Display a list of peers in the form
+ +
+@@ -365,6 +367,7 @@ displayed.
+ +pstats+ _assocID_::
+   Show the statistics for the peer with the given _assocID_.
+ 
++[[rv]]
+ +readvar+ 'assocID' [ 'name' ] [,...]::
+ +rv+ 'assocID' [ 'name' ] [,...]::
+   Display the specified variables. If +assocID+ is zero, the variables
+-- 
+2.7.4
+

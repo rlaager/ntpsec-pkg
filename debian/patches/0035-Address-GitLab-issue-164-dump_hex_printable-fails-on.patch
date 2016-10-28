@@ -1,0 +1,48 @@
+From 07cacd918501a5539bbea8a9bf3f86b988605faa Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sun, 27 Nov 2016 00:05:31 -0500
+Subject: [PATCH 035/268] Address GitLab issue #164: dump_hex_printable fails
+ on Python3
+
+---
+ pylib/packet.py | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 509c3d5..63a3219 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -214,6 +214,7 @@ master_encoding = 'latin-1'
+ if str is bytes:  # Python 2
+     polystr = str
+     polybytes = bytes
++    polyord = ord
+ 
+     def string_escape(s):
+         return s.decode('string_escape')
+@@ -240,6 +241,13 @@ else:  # Python 3
+             return bytes(s)
+         return bytes(s, encoding=master_encoding)
+ 
++    def polyord(c):
++        "Polymorphic ord() function"
++        if isinstance(c, str):
++            return ord(c)
++        else:
++            return c
++
+     def string_escape(s):
+         "Polymorphic string_escape/unicode_escape"
+         # This hack is necessary because Unicode strings in Python 3 don't
+@@ -625,7 +633,7 @@ def dump_hex_printable(xdata):
+         i = restart
+         for idx in range(rowlen):
+             # Do not use curses.isprint(), netbsd base doesn't install curses
+-            if ord(xdata[i]) >= 32 and ord(xdata[i]) < 127:
++            if polyord(xdata[i]) >= 32 and polyord(xdata[i]) < 127:
+                 sys.stdout.write(xdata[i])
+             else:
+                 sys.stdout.write('.')
+-- 
+2.7.4
+

@@ -1,0 +1,36 @@
+From 856f082dab11aa61d5435b1007baecebd0580b7a Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Fri, 25 Nov 2016 19:42:16 -0500
+Subject: [PATCH 013/268] Python3: Use tabs instead of space to match the rest
+ of the file
+
+Fixes GitLab issue #161
+---
+ wscript | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/wscript b/wscript
+index 176850a..485f31f 100644
+--- a/wscript
++++ b/wscript
+@@ -196,7 +196,7 @@ def build(ctx):
+ 	ctx.recurse("attic")
+ 	ctx.recurse("tests")
+ 
+-        scripts = ["ntpleapfetch/ntpleapfetch"] + python_scripts
++	scripts = ["ntpleapfetch/ntpleapfetch"] + python_scripts
+ 
+ 	ctx(
+ 		features    = "subst",
+@@ -213,7 +213,7 @@ def build(ctx):
+ 	ctx.manpage(1, "ntpstats/ntpviz-man.txt")
+ 	ctx.manpage(8, "ntpwait/ntpwait-man.txt")
+ 	ctx.manpage(1, "ntpsweep/ntpsweep-man.txt")
+-        ctx.manpage(8, "ntpkeygen/ntpkeygen-man.txt")
++	ctx.manpage(8, "ntpkeygen/ntpkeygen-man.txt")
+ 
+ 	# Skip running unit tests on a cross compile build
+ 	if not ctx.env.ENABLE_CROSS:
+-- 
+2.7.4
+

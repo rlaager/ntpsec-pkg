@@ -1,0 +1,24 @@
+From 58a58bec36be8485b72eeffe5c508e6629eff838 Mon Sep 17 00:00:00 2001
+From: "Gary E. Miller" <gem@rellim.com>
+Date: Tue, 6 Dec 2016 12:45:12 -0800
+Subject: [PATCH 187/268] Release: document scp tp ftp site.
+
+---
+ devel/release | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/devel/release b/devel/release
+index ea57d1a..00566d1 100755
+--- a/devel/release
++++ b/devel/release
+@@ -39,6 +39,6 @@ $do gpg -u ${K} -a --output ntpsec-${V}.tar.gz.sum.asc ntpsec-${V}.tar.gz.sum
+   
+ # Copy the release tarball, GPG detached signature of the release
+ # tarball, and the signed sha256sum file to the ftp artifact server.
+-#$do scp ntpsec-${V}.tar* releasemanager@hostname.ntpsec.org:ftp
++$do scp ntpsec-${V}.tar* markatwood@service1.ntpsec.org:/usr/local/jail/ftp.ntpsec.org/data/ftp/pub/releases/
+ 
+ # end
+-- 
+2.7.4
+

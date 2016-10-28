@@ -1,0 +1,740 @@
+From 765281897cb1f6ebe17d0a2562e2efe360469981 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Fri, 9 Dec 2016 17:14:44 -0500
+Subject: [PATCH 250/268] Removal of broadscact client and multicast modes.
+
+---
+ include/ntp_config.h          |   2 -
+ include/ntpd.h                |   3 +-
+ ntpd/keyword-gen.c            |   1 -
+ ntpd/ntp_config.c             |  49 +-----
+ ntpd/ntp_io.c                 | 338 +-----------------------------------------
+ ntpd/ntp_parser.y             |  19 +--
+ ntpd/ntp_peer.c               |  15 --
+ ntpd/ntp_proto.c              |   3 +-
+ wafhelpers/check_multicast.py |  15 --
+ wafhelpers/configure.py       |   3 -
+ 10 files changed, 16 insertions(+), 432 deletions(-)
+ delete mode 100644 wafhelpers/check_multicast.py
+
+diff --git a/include/ntp_config.h b/include/ntp_config.h
+index c928b70..befc633 100644
+--- a/include/ntp_config.h
++++ b/include/ntp_config.h
+@@ -200,8 +200,6 @@ struct config_tree_tag {
+ 	unpeer_fifo *	unpeers;
+ 
+ 	/* Other Modes */
+-	address_fifo *	manycastserver;
+-
+ 	attr_val_fifo *	orphan_cmds;	/* s/b renamed tos_options */
+ 
+ 	/* Monitoring Configuration */
+diff --git a/include/ntpd.h b/include/ntpd.h
+index cff89d9..a407b97 100644
+--- a/include/ntpd.h
++++ b/include/ntpd.h
+@@ -108,7 +108,6 @@ extern	endpt *	select_peerinterface	(struct peer *, sockaddr_u *,
+ extern	endpt *	findinterface		(sockaddr_u *);
+ extern	endpt *	findbcastinter		(sockaddr_u *);
+ extern	void	enable_broadcast	(endpt *, sockaddr_u *);
+-extern	void	enable_multicast_if	(endpt *, sockaddr_u *);
+ extern	void	interface_update	(interface_receiver_t, void *);
+ extern  void    io_handler              (void);
+ extern	void	init_io 	(void);
+@@ -185,7 +184,7 @@ extern	void	clear		(struct peer *);
+ extern	void	clock_filter	(struct peer *, double, double, double);
+ extern	void	init_proto	(const bool);
+ extern	void	set_sys_tick_precision(double);
+-extern	void	proto_config	(int, u_long, double, sockaddr_u *);
++extern	void	proto_config	(int, u_long, double);
+ extern	void	proto_clr_stats (void);
+ extern  void    proto_dump(FILE *);
+ 
+diff --git a/ntpd/keyword-gen.c b/ntpd/keyword-gen.c
+index 0882e7c..cd10344 100644
+--- a/ntpd/keyword-gen.c
++++ b/ntpd/keyword-gen.c
+@@ -41,7 +41,6 @@ struct key_tok ntp_keywords[] = {
+ { "leapsmearinterval",	T_Leapsmearinterval,	FOLLBY_TOKEN },
+ { "logconfig",		T_Logconfig,		FOLLBY_STRINGS_TO_EOC },
+ { "logfile",		T_Logfile,		FOLLBY_STRING },
+-{ "manycastserver",	T_Manycastserver,	FOLLBY_STRINGS_TO_EOC },
+ { "mem",		T_Mem,			FOLLBY_TOKEN },
+ { "path",		T_Path,			FOLLBY_STRING },
+ { "peer",		T_Peer,			FOLLBY_STRING },
+diff --git a/ntpd/ntp_config.c b/ntpd/ntp_config.c
+index 81a86dd..7b54bfe 100644
+--- a/ntpd/ntp_config.c
++++ b/ntpd/ntp_config.c
+@@ -213,7 +213,6 @@ static void free_config_fudge(config_tree *);
+ static void free_config_logconfig(config_tree *);
+ static void free_config_monitor(config_tree *);
+ static void free_config_nic_rules(config_tree *);
+-static void free_config_other_modes(config_tree *);
+ static void free_config_peers(config_tree *);
+ static void free_config_phone(config_tree *);
+ static void free_config_reset_counters(config_tree *);
+@@ -291,7 +290,6 @@ static void config_logfile(config_tree *);
+ static void config_vars(config_tree *);
+ 
+ static void config_ntpd(config_tree *, bool input_from_file);
+-static void config_other_modes(config_tree *);
+ static void config_auth(config_tree *);
+ static void config_access(config_tree *);
+ static void config_mdnstries(config_tree *);
+@@ -387,7 +385,6 @@ free_config_tree(
+ 	if (ptree->source.value.s != NULL)
+ 		free(ptree->source.value.s);
+ 
+-	free_config_other_modes(ptree);
+ 	free_config_auth(ptree);
+ 	free_config_tos(ptree);
+ 	free_config_monitor(ptree);
+@@ -1141,28 +1138,6 @@ create_addr_opts_node(
+  */
+ 
+ static void
+-config_other_modes(
+-	config_tree *	ptree
+-	)
+-{
+-	sockaddr_u	addr_sock;
+-	address_node *	addr_node;
+-
+-	addr_node = HEAD_PFIFO(ptree->manycastserver);
+-	while (addr_node != NULL) {
+-		ZERO_SOCK(&addr_sock);
+-		AF(&addr_sock) = addr_node->type;
+-		if (1 == getnetnum(addr_node->address, &addr_sock, 1,
+-				   t_UNK)) {
+-			proto_config(PROTO_MULTICAST_ADD,
+-				     0, 0., &addr_sock);
+-			sys_manycastserver = 1;
+-		}
+-		addr_node = addr_node->link;
+-	}
+-}
+-
+-static void
+ destroy_address_fifo(
+ 	address_fifo *	pfifo
+ 	)
+@@ -1182,15 +1157,6 @@ destroy_address_fifo(
+ 
+ 
+ static void
+-free_config_other_modes(
+-	config_tree *ptree
+-	)
+-{
+-	FREE_ADDRESS_FIFO(ptree->manycastserver);
+-}
+-
+-
+-static void
+ config_auth(
+ 	config_tree *ptree
+ 	)
+@@ -1362,7 +1328,7 @@ config_tos(
+ 			item = PROTO_BEACON;
+ 			break;
+ 		}
+-		proto_config(item, 0, val, NULL);
++		proto_config(item, 0, val);
+ 	}
+ }
+ 
+@@ -2247,27 +2213,27 @@ apply_enable_disable(
+ 			break;
+ 
+ 		case T_Auth:
+-			proto_config(PROTO_AUTHENTICATE, enable, 0., NULL);
++			proto_config(PROTO_AUTHENTICATE, enable, 0.);
+ 			break;
+ 
+ 		case T_Calibrate:
+-			proto_config(PROTO_CAL, enable, 0., NULL);
++			proto_config(PROTO_CAL, enable, 0.);
+ 			break;
+ 
+ 		case T_Kernel:
+-			proto_config(PROTO_KERNEL, enable, 0., NULL);
++			proto_config(PROTO_KERNEL, enable, 0.);
+ 			break;
+ 
+ 		case T_Monitor:
+-			proto_config(PROTO_MONITOR, enable, 0., NULL);
++			proto_config(PROTO_MONITOR, enable, 0.);
+ 			break;
+ 
+ 		case T_Ntp:
+-			proto_config(PROTO_NTP, enable, 0., NULL);
++			proto_config(PROTO_NTP, enable, 0.);
+ 			break;
+ 
+ 		case T_Stats:
+-			proto_config(PROTO_FILEGEN, enable, 0., NULL);
++			proto_config(PROTO_FILEGEN, enable, 0.);
+ 			break;
+ 
+ 		}
+@@ -3320,7 +3286,6 @@ config_ntpd(
+ 
+ 	io_open_sockets();
+ 
+-	config_other_modes(ptree);
+ 	config_peers(ptree);
+ 	config_unpeers(ptree);
+ 	config_fudge(ptree);
+diff --git a/ntpd/ntp_io.c b/ntpd/ntp_io.c
+index 0f57fc0..10d0102 100644
+--- a/ntpd/ntp_io.c
++++ b/ntpd/ntp_io.c
+@@ -218,8 +218,6 @@ static void init_async_notifications (void);
+ 
+ static	bool	addr_eqprefix	(const sockaddr_u *, const sockaddr_u *,
+ 				 int);
+-static  bool	addr_samesubnet	(const sockaddr_u *, const sockaddr_u *,
+-				 const sockaddr_u *, const sockaddr_u *);
+ static	int	create_sockets	(u_short);
+ static	void	set_reuseaddr	(int);
+ static	bool	socket_broadcast_enable	 (endpt *, SOCKET, sockaddr_u *);
+@@ -606,48 +604,6 @@ addr_eqprefix(
+ }
+ 
+ 
+-static bool
+-addr_samesubnet(
+-	const sockaddr_u *	a,
+-	const sockaddr_u *	a_mask,
+-	const sockaddr_u *	b,
+-	const sockaddr_u *	b_mask
+-	)
+-{
+-	const uint32_t *	pa;
+-	const uint32_t *	pa_limit;
+-	const uint32_t *	pb;
+-	const uint32_t *	pm;
+-	size_t		loops;
+-
+-	NTP_REQUIRE(AF(a) == AF(a_mask));
+-	NTP_REQUIRE(AF(b) == AF(b_mask));
+-	/*
+-	 * With address and mask families verified to match, comparing
+-	 * the masks also validates the address's families match.
+-	 */
+-	if (!SOCK_EQ(a_mask, b_mask))
+-		return false;
+-
+-	if (IS_IPV6(a)) {
+-		loops = sizeof(NSRCADR6(a)) / sizeof(*pa);
+-		pa = (const void *)&NSRCADR6(a);
+-		pb = (const void *)&NSRCADR6(b);
+-		pm = (const void *)&NSRCADR6(a_mask);
+-	} else {
+-		loops = sizeof(NSRCADR(a)) / sizeof(*pa);
+-		pa = (const void *)&NSRCADR(a);
+-		pb = (const void *)&NSRCADR(b);
+-		pm = (const void *)&NSRCADR(a_mask);
+-	}
+-	for (pa_limit = pa + loops; pa < pa_limit; pa++, pb++, pm++)
+-		if ((*pa & *pm) != (*pb & *pm))
+-			return false;
+-
+-	return true;
+-}
+-
+-
+ /*
+  * Code to tell if we have an IP address
+  * If we have then return the sockaddr structure
+@@ -798,167 +754,11 @@ add_interface(
+ 	endpt *	ep
+ 	)
+ {
+-	endpt **	pmclisthead;
+-	endpt *		scan;
+-	endpt *		scan_next;
+-	endpt *		unlinked;
+-	sockaddr_u *	addr;
+-	bool		ep_local;
+-	bool		scan_local;
+-	bool		same_subnet;
+-	bool		ep_univ_iid;	/* iface ID from MAC address */
+-	bool		scan_univ_iid;	/* see RFC 4291 */
+-	bool		ep_privacy;	/* random local iface ID */
+-	bool		scan_privacy;	/* see RFC 4941 */
+-	int		rc;
+-
+ 	/* Calculate the refid */
+ 	ep->addr_refid = addr2refid(&ep->sin);
+ 	/* link at tail so ntpq -c ifstats index increases each row */
+ 	LINK_TAIL_SLIST(ep_list, ep, elink, endpt);
+ 	ninterfaces++;
+-#ifdef MCAST
+-	/* the rest is for enabled multicast-capable addresses only */
+-	if (ep->ignore_packets || !(INT_MULTICAST & ep->flags) ||
+-	    INT_LOOPBACK & ep->flags)
+-		return;
+-# ifndef USE_IPV6_MULTICAST_SUPPORT
+-	if (AF_INET6 == ep->family)
+-		return;
+-# endif
+-	pmclisthead = (AF_INET == ep->family)
+-			 ? &mc4_list
+-			 : &mc6_list;
+-
+-	if (AF_INET6 == ep->family) {
+-		ep_local =
+-		    IN6_IS_ADDR_LINKLOCAL(PSOCK_ADDR6(&ep->sin)) ||
+-		    IN6_IS_ADDR_SITELOCAL(PSOCK_ADDR6(&ep->sin));
+-		ep_univ_iid = IS_IID_UNIV(&ep->sin);
+-		ep_privacy = !!(INT_PRIVACY & ep->flags);
+-	} else {
+-		ep_local = false;
+-		ep_univ_iid = false;
+-		ep_privacy = false;
+-	}
+-	DPRINTF(4, ("add_interface mcast-capable %s%s%s%s\n",
+-		    socktoa(&ep->sin),
+-		    (ep_local) ? " link/scope-local" : "",
+-		    (ep_univ_iid) ? " univ-IID" : "",
+-		    (ep_privacy) ? " privacy" : ""));
+-	/*
+-	 * If we have multiple local addresses on the same network
+-	 * interface, and some are link- or site-local, do not multicast
+-	 * out from the link-/site-local addresses by default, to avoid
+-	 * duplicate manycastclient associations between v6 peers using
+-	 * link-local and global addresses.  link-local can still be
+-	 * chosen using "nic ignore myv6globalprefix::/64".
+-	 * Similarly, if we have multiple global addresses from the same
+-	 * prefix on the same network interface, multicast from one,
+-	 * preferring EUI-64, then static, then least RFC 4941 privacy
+-	 * addresses.
+-	 */
+-	for (scan = *pmclisthead; scan != NULL; scan = scan_next) {
+-		scan_next = scan->mclink;
+-		if (ep->family != scan->family)
+-			continue;
+-		if (strcmp(ep->name, scan->name))
+-			continue;
+-		same_subnet = addr_samesubnet(&ep->sin, &ep->mask,
+-					      &scan->sin, &scan->mask);
+-		if (AF_INET6 == ep->family) {
+-			addr = &scan->sin;
+-			scan_local =
+-			    IN6_IS_ADDR_LINKLOCAL(PSOCK_ADDR6(addr)) ||
+-			    IN6_IS_ADDR_SITELOCAL(PSOCK_ADDR6(addr));
+-			scan_univ_iid = IS_IID_UNIV(addr);
+-			scan_privacy = !!(INT_PRIVACY & scan->flags);
+-		} else {
+-			scan_local = false;
+-			scan_univ_iid = false;
+-			scan_privacy = false;
+-		}
+-		DPRINTF(4, ("add_interface mcast-capable scan %s%s%s%s\n",
+-			    socktoa(&scan->sin),
+-			    (scan_local) ? " link/scope-local" : "",
+-			    (scan_univ_iid) ? " univ-IID" : "",
+-			    (scan_privacy) ? " privacy" : ""));
+-		if ((ep_local && !scan_local) || (same_subnet &&
+-		    ((ep_privacy && !scan_privacy) ||
+-		     (!ep_univ_iid && scan_univ_iid)))) {
+-			DPRINTF(4, ("did not add %s to %s of IPv6 multicast-capable list which already has %s\n",
+-				socktoa(&ep->sin),
+-				(ep_local)
+-				    ? "tail"
+-				    : "head",
+-				socktoa(&scan->sin)));
+-			return;
+-		}
+-		if ((scan_local && !ep_local) || (same_subnet &&
+-		    ((scan_privacy && !ep_privacy) ||
+-		     (!scan_univ_iid && ep_univ_iid)))) {
+-			UNLINK_SLIST(unlinked, *pmclisthead,
+-				     scan, mclink, endpt);
+-			DPRINTF(4, ("%s %s from IPv6 multicast-capable list to add %s\n",
+-				(unlinked != scan)
+-				    ? "Failed to remove"
+-				    : "removed",
+-				socktoa(&scan->sin), socktoa(&ep->sin)));
+-		}
+-	}
+-	/*
+-	 * Add link/site local at the tail of the multicast-
+-	 * capable unicast interfaces list, so that ntpd will
+-	 * send from global addresses before link-/site-local
+-	 * ones.
+-	 */
+-	if (ep_local)
+-		LINK_TAIL_SLIST(*pmclisthead, ep, mclink, endpt);
+-	else
+-		LINK_SLIST(*pmclisthead, ep, mclink);
+-	DPRINTF(4, ("added %s to %s of IPv%s multicast-capable unicast local address list\n",
+-		socktoa(&ep->sin),
+-		(ep_local)
+-		    ? "tail"
+-		    : "head",
+-		(AF_INET == ep->family)
+-		    ? "4"
+-		    : "6"));
+-
+-	if (INVALID_SOCKET == ep->fd)
+-		return;
+-
+-	/*
+-	 * select the local address from which to send to multicast.
+-	 */
+-	switch (AF(&ep->sin)) {
+-
+-	case AF_INET :
+-		rc = setsockopt(ep->fd, IPPROTO_IP,
+-				IP_MULTICAST_IF,
+-				(void *)&NSRCADR(&ep->sin),
+-				sizeof(NSRCADR(&ep->sin)));
+-		if (rc)
+-			msyslog(LOG_ERR,
+-				"setsockopt IP_MULTICAST_IF %s fails: %m",
+-				socktoa(&ep->sin));
+-		break;
+-
+-# ifdef USE_IPV6_MULTICAST_SUPPORT
+-	case AF_INET6 :
+-		rc = setsockopt(ep->fd, IPPROTO_IPV6,
+-				 IPV6_MULTICAST_IF,
+-				 (void *)&ep->ifindex,
+-				 sizeof(ep->ifindex));
+-		/* do not complain if bound addr scope is ifindex */
+-		if (rc && ep->ifindex != SCOPE(&ep->sin))
+-			msyslog(LOG_ERR,
+-				"setsockopt IPV6_MULTICAST_IF %u for %s fails: %m",
+-				ep->ifindex, socktoa(&ep->sin));
+-		break;
+-# endif
+-	}
+-#endif	/* MCAST */
+ }
+ 
+ 
+@@ -1131,14 +931,6 @@ create_wildcards(
+ 
+ 		wildif->flags = INT_BROADCAST | INT_UP | INT_WILDCARD;
+ 		wildif->ignore_packets = (ACTION_DROP == action);
+-#if defined(MCAST)
+-		/*
+-		 * enable multicast reception on the broadcast socket
+-		 */
+-		AF(&wildif->bcast) = AF_INET;
+-		SET_ADDR4N(&wildif->bcast, INADDR_ANY);
+-		SET_PORT(&wildif->bcast, port);
+-#endif /* MCAST */
+ 		wildif->fd = open_socket(&wildif->sin, 0, 1, wildif);
+ 
+ 		if (wildif->fd != INVALID_SOCKET) {
+@@ -2212,74 +2004,6 @@ socket_broadcast_disable(
+ #endif /* OPEN_BCAST_SOCKET */
+ 
+ /*
+- * Multicast servers need to set the appropriate Multicast interface
+- * socket option in order for it to know which interface to use for
+- * send the multicast packet.
+- */
+-void
+-enable_multicast_if(
+-	endpt *	iface,
+-	sockaddr_u *		maddr
+-	)
+-{
+-#ifdef MCAST
+-#ifdef IP_MULTICAST_LOOP
+-	TYPEOF_IP_MULTICAST_LOOP off = 0;
+-#endif
+-#if defined(USE_IPV6_MULTICAST_SUPPORT) && defined(IPV6_MULTICAST_LOOP)
+-	u_int off6 = 0;
+-#endif
+-
+-	NTP_REQUIRE(AF(maddr) == AF(&iface->sin));
+-
+-	switch (AF(&iface->sin)) {
+-
+-	case AF_INET:
+-#ifdef IP_MULTICAST_LOOP
+-		/*
+-		 * Don't send back to itself, but allow failure to set
+-		 */
+-		if (setsockopt(iface->fd, IPPROTO_IP,
+-			       IP_MULTICAST_LOOP,
+-			       SETSOCKOPT_ARG_CAST &off,
+-			       sizeof(off))) {
+-#ifndef __COVERITY__
+-			msyslog(LOG_ERR,
+-				"setsockopt IP_MULTICAST_LOOP failed: %m on socket %d, addr %s for multicast address %s",
+-				iface->fd, socktoa(&iface->sin),
+-				socktoa(maddr));
+-#endif /* __COVERITY__ */
+-		}
+-#endif
+-		break;
+-
+-	case AF_INET6:
+-#ifdef USE_IPV6_MULTICAST_SUPPORT
+-#ifdef IPV6_MULTICAST_LOOP
+-		/*
+-		 * Don't send back to itself, but allow failure to set
+-		 */
+-		if (setsockopt(iface->fd, IPPROTO_IPV6,
+-			       IPV6_MULTICAST_LOOP,
+-			       (char *) &off6, sizeof(off6))) {
+-#ifndef __COVERITY__
+-			msyslog(LOG_ERR,
+-				"setsockopt IPV6_MULTICAST_LOOP failed: %m on socket %d, addr %s for multicast address %s",
+-				iface->fd, socktoa(&iface->sin),
+-				socktoa(maddr));
+-#endif /* __COVERITY__ */
+-		}
+-#endif
+-		break;
+-#else
+-		return;
+-#endif	/* USE_IPV6_MULTICAST_SUPPORT */
+-	}
+-	return;
+-#endif
+-}
+-
+-/*
+  * open_socket - open a socket, returning the file descriptor
+  */
+ 
+@@ -2470,71 +2194,22 @@ sendpkt(
+ 	)
+ {
+ 	endpt *	src;
+-	int	ismcast;
+ 	int	cc;
+-	int	rc;
+-	uint8_t	cttl;
+-
+-	ismcast = IS_MCAST(dest);
+-	if (!ismcast)
+-		src = ep;
+-	else
+-		src = (IS_IPV4(dest))
+-			  ? mc4_list
+-			  : mc6_list;
+ 
++	src = ep;
+ 	if (NULL == src) {
+ 		/*
+ 		 * unbound peer - drop request and wait for better
+ 		 * network conditions
+ 		 */
+-		DPRINTF(2, ("%ssendpkt(dst=%s, ttl=%d, len=%d): no interface - IGNORED\n",
+-			    ismcast ? "\tMCAST\t***** " : "",
++		DPRINTF(2, ("sendpkt(dst=%s, ttl=%d, len=%d): no interface - IGNORED\n",
+ 			    socktoa(dest), ttl, len));
+ 		return;
+ 	}
+ 
+ 	do {
+-		DPRINTF(2, ("%ssendpkt(%d, dst=%s, src=%s, ttl=%d, len=%d)\n",
+-			    ismcast ? "\tMCAST\t***** " : "", src->fd,
+-			    socktoa(dest), socktoa(&src->sin), ttl, len));
+-#ifdef MCAST
+-		/*
+-		 * for the moment we use the bcast option to set multicast ttl
+-		 */
+-		if (ismcast && ttl > 0 && ttl != src->last_ttl) {
+-			/*
+-			 * set the multicast ttl for outgoing packets
+-			 */
+-			switch (AF(&src->sin)) {
+-
+-			case AF_INET :
+-				cttl = (uint8_t)ttl;
+-				rc = setsockopt(src->fd, IPPROTO_IP,
+-						IP_MULTICAST_TTL,
+-						(void *)&cttl,
+-						sizeof(cttl));
+-				break;
+-
+-			case AF_INET6 :
+-				rc = setsockopt(src->fd, IPPROTO_IPV6,
+-						 IPV6_MULTICAST_HOPS,
+-						 (void *)&ttl,
+-						 sizeof(ttl));
+-				break;
+-
+-			default:
+-				rc = 0;
+-			}
+-
+-			if (!rc)
+-				src->last_ttl = ttl;
+-			else
+-				msyslog(LOG_ERR,
+-					"setsockopt IP_MULTICAST_TTL/IPV6_MULTICAST_HOPS fails on address %s: %m",
+-					socktoa(&src->sin));
+-		}
+-#endif	/* MCAST */
++		DPRINTF(2, ("sendpkt(%d, dst=%s, src=%s, ttl=%d, len=%d)\n",
++			    src->fd, socktoa(dest), socktoa(&src->sin), ttl, len));
+ 
+ 		cc = sendto(src->fd, pkt, (u_int)len, 0,
+ 			    &dest->sa, SOCKLEN(dest));
+@@ -2545,9 +2220,8 @@ sendpkt(
+ 			src->sent++;
+ 			packets_sent++;
+ 		}
+-		if (ismcast)
+-			src = src->mclink;
+-	} while (ismcast && src != NULL);
++		src = src->mclink;
++	} while (src != NULL);
+ }
+ 
+ 
+diff --git a/ntpd/ntp_parser.y b/ntpd/ntp_parser.y
+index 7673ab3..1ff4cd9 100644
+--- a/ntpd/ntp_parser.y
++++ b/ntpd/ntp_parser.y
+@@ -126,7 +126,6 @@
+ %token	<Integer>	T_Logconfig
+ %token	<Integer>	T_Logfile
+ %token	<Integer>	T_Loopstats
+-%token	<Integer>	T_Manycastserver
+ %token	<Integer>	T_Mask
+ %token	<Integer>	T_Maxage
+ %token	<Integer>	T_Maxclock
+@@ -235,7 +234,6 @@
+ %type	<Int_fifo>	ac_flag_list
+ %type	<Address_node>	address
+ %type	<Integer>	address_fam
+-%type	<Address_fifo>	address_list
+ %type	<Integer>	boolean
+ %type	<Integer>	client_type
+ %type	<Integer>	counter_set_keyword
+@@ -510,9 +508,7 @@ unpeer_keyword
+  */
+ 
+ other_mode_command
+-	:	T_Manycastserver address_list
+-			{ CONCAT_G_FIFOS(cfgt.manycastserver, $2); }
+-	|	T_Mdnstries T_Integer
++	:	T_Mdnstries T_Integer
+ 			{ cfgt.mdnstries = $2; }
+ 	;
+ 
+@@ -1441,19 +1437,6 @@ string_list
+ 		}
+ 	;
+ 
+-address_list
+-	:	address_list address
+-		{
+-			$$ = $1;
+-			APPEND_G_FIFO($$, $2);
+-		}
+-	|	address
+-		{
+-			$$ = NULL;
+-			APPEND_G_FIFO($$, $1);
+-		}
+-	;
+-
+ boolean
+ 	:	T_Integer
+ 		{
+diff --git a/ntpd/ntp_peer.c b/ntpd/ntp_peer.c
+index 5e40452..337568e 100644
+--- a/ntpd/ntp_peer.c
++++ b/ntpd/ntp_peer.c
+@@ -604,13 +604,6 @@ peer_refresh_interface(
+ 		if (p->dstadr != piface && !(MDF_ACAST & p->cast_flags)
+ 		    && MODE_BROADCAST != p->pmode)
+ 		    peer_clear(p, "XFAC", false);
+-
+-		/*
+-		 * Multicast needs the socket interface enabled for
+-		 * multicast
+-		 */
+-		if (MDF_MCAST & p->cast_flags)
+-			enable_multicast_if(p->dstadr, &p->srcadr);
+ 	}
+ }
+ 
+@@ -764,12 +757,6 @@ newpeer(
+ 	if ((MDF_BCAST & cast_flags) && peer->dstadr != NULL)
+ 		enable_broadcast(peer->dstadr, srcadr);
+ 
+-	/*
+-	 * Multicast needs the socket interface enabled for multicast
+-	 */
+-	if ((MDF_MCAST & cast_flags) && peer->dstadr != NULL)
+-		enable_multicast_if(peer->dstadr, srcadr);
+-
+ 	peer->ttl = ttl;
+ 	peer->keyid = key;
+ 	peer->precision = sys_precision;
+@@ -778,8 +765,6 @@ newpeer(
+ 		peer_clear(peer, "ACST", initializing);
+ 	else if (cast_flags & MDF_POOL)
+ 		peer_clear(peer, "POOL", initializing);
+-	else if (cast_flags & MDF_MCAST)
+-		peer_clear(peer, "MCST", initializing);
+ 	else if (cast_flags & MDF_BCAST)
+ 		peer_clear(peer, "BCST", initializing);
+ 	else
+diff --git a/ntpd/ntp_proto.c b/ntpd/ntp_proto.c
+index 6c91ca0..16c36ef 100644
+--- a/ntpd/ntp_proto.c
++++ b/ntpd/ntp_proto.c
+@@ -2816,8 +2816,7 @@ void
+ proto_config(
+ 	int	item,
+ 	u_long	value,
+-	double	dvalue,
+-	sockaddr_u *svalue
++	double	dvalue
+ 	)
+ {
+ 	/*
+diff --git a/wafhelpers/check_multicast.py b/wafhelpers/check_multicast.py
+deleted file mode 100644
+index d0cb497..0000000
+--- a/wafhelpers/check_multicast.py
++++ /dev/null
+@@ -1,15 +0,0 @@
+-def check_multicast(ctx):
+-        "Probe for IP multicast capability."
+-        ctx.check_cc(
+-                fragment="""
+-#include <netinet/in.h>
+-int main(void) {
+-        struct ip_mreq ipmr;
+-        ipmr.imr_interface.s_addr = 0;
+-        return 0;
+-}
+-""",
+-                define_name="MCAST",
+-                msg = "Checking for multicast capability",
+-                mandatory = False,
+-                comment = "IP multicast capability")
+diff --git a/wafhelpers/configure.py b/wafhelpers/configure.py
+index cb28567..d2c0c70 100644
+--- a/wafhelpers/configure.py
++++ b/wafhelpers/configure.py
+@@ -282,9 +282,6 @@ def cmd_configure(ctx, config):
+         ctx.define("GETSOCKNAME_SOCKLEN_TYPE", "socklen_t", quote=False, comment="socklen type")
+         ctx.define("DFLT_RLIMIT_STACK", 50, comment="Default stack size")
+ 
+-        from wafhelpers.check_multicast import check_multicast
+-        check_multicast(ctx)
+-
+         ctx.define("TYPEOF_IP_MULTICAST_LOOP", "u_char", quote=False, comment="Multicast loop type") #XXX: check for mcast type
+ 
+         # These are helpful and don't break Linux or *BSD
+-- 
+2.7.4
+

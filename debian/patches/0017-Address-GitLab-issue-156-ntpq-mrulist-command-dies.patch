@@ -1,0 +1,25 @@
+From c21258a693a5620067d1e176f67e7951443d9934 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sat, 26 Nov 2016 10:35:56 -0500
+Subject: [PATCH 017/268] Address GitLab issue #156: ntpq: mrulist command dies
+
+---
+ pylib/packet.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 91c376a..cad03db 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -1243,7 +1243,7 @@ class ControlSession:
+                             limit = min(limit, ntpd_row_limit)
+                             if self.debug:
+                                 warn("Row limit reduced to %d following CERR_BADVALUE.\n" % limit)
+-                    elif e.errorcode in (ERR_INCOMPLETE, ERR_TIMEOUT):
++                    elif e.errorcode in (SERR_INCOMPLETE, SERR_TIMEOUT):
+                         # Reduce the number of rows/frags requested by
+                         # half to recover from lost response fragments.
+                         if cap_frags:
+-- 
+2.7.4
+

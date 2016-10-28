@@ -1,0 +1,24 @@
+From 17f1dd8f932cabfc8a9021176ec9b8504c81070a Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Tue, 6 Dec 2016 03:32:57 -0500
+Subject: [PATCH 183/268] Address GitLab issue #193: ntpq rv has debug output.
+
+---
+ ntpq/ntpq | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/ntpq/ntpq b/ntpq/ntpq
+index 84d8ca4..9cbb2dc 100755
+--- a/ntpq/ntpq
++++ b/ntpq/ntpq
+@@ -521,7 +521,6 @@ usage: help [ command ]
+     def __dolist(self, varlist, associd, op, type, quiet=False):
+         "List variables associated with a specified peer."
+         try:
+-            print("Qerying %d" % associd)
+             variables = self.session.readvar(associd, varlist, op)
+         except ntp.packet.ControlException as e:
+             self.warn(e.message + "\n")
+-- 
+2.7.4
+

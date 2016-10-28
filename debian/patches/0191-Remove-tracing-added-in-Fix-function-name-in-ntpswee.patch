@@ -1,0 +1,26 @@
+From 31895e50978d7e75373887ffb3a84da640f22d72 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Mon, 5 Dec 2016 21:24:52 -0500
+Subject: [PATCH 191/268] Remove tracing added in "Fix function name in
+ ntpsweep"
+
+---
+ ntpq/ntpq | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/ntpq/ntpq b/ntpq/ntpq
+index becfcad..cc28398 100755
+--- a/ntpq/ntpq
++++ b/ntpq/ntpq
+@@ -348,8 +348,6 @@ usage: help [ command ]
+         if not self.__dogetassoc():
+             return
+         if self.showhostnames:
+-            print("HELLO")
+-            print(ntp.util.termsize())
+             termwidth = ntp.util.termsize().width
+         else:
+             termwidth = None	# Default width
+-- 
+2.7.4
+

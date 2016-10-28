@@ -1,0 +1,52 @@
+From e6f97e1a557ecb9401163aa7b9a6fae1f3583474 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sat, 10 Dec 2016 11:33:54 -0500
+Subject: [PATCH 261/268] Documentation polishing.
+
+---
+ docs/asciidoc.conf            | 1 +
+ docs/includes/ntpmon-body.txt | 2 +-
+ docs/includes/ntpq-body.txt   | 2 ++
+ 3 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/docs/asciidoc.conf b/docs/asciidoc.conf
+index d4b67b6..46d2d5b 100644
+--- a/docs/asciidoc.conf
++++ b/docs/asciidoc.conf
+@@ -17,6 +17,7 @@ ntpfrobman=ntpfrob(8)
+ ntpkeygenman=ntpkeygen(8)
+ ntpkeysman=ntp.keys(5)
+ ntpdman=ntpd(8)
++ntpmonman=ntpmon(1)
+ ntpleapfetch=ntpleapfetch(8)
+ ntpqman=ntpq(1)
+ ntptimeman=ntptime(8)
+diff --git a/docs/includes/ntpmon-body.txt b/docs/includes/ntpmon-body.txt
+index e254fb2..3cd474e 100644
+--- a/docs/includes/ntpmon-body.txt
++++ b/docs/includes/ntpmon-body.txt
+@@ -18,7 +18,7 @@ soon as they occur.
+ adjusts itself to poll at twice the frequency of the shortest
+ polling interval reported in the last peers response.)
+ 
+-The status bar includes the version steing of the server being
++The status bar includes the version string of the server being
+ watched and the (local) time at which it was last updated).
+ 
+ ^C cleanly terminates the program.
+diff --git a/docs/includes/ntpq-body.txt b/docs/includes/ntpq-body.txt
+index 3b4bba7..3adec54 100644
+--- a/docs/includes/ntpq-body.txt
++++ b/docs/includes/ntpq-body.txt
+@@ -45,6 +45,8 @@ while a +-6+ qualifier forces DNS resolution to the IPv6 namespace.
+ For examples and usage, see the link:debug.html[NTP Debugging
+ Techniques] page.
+ 
++For a simpler near-real-time monitor, see {ntpmonman}.
++
+ == Options ==
+ 
+ Command line options are described following. Specifying a command line
+-- 
+2.7.4
+

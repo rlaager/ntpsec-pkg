@@ -1,0 +1,25 @@
+From 53af4abf76a968ec35d1c7cc0eb96b1d432af74b Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Thu, 1 Dec 2016 00:35:05 -0500
+Subject: [PATCH 090/268] Typo in docs
+
+---
+ docs/discover.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docs/discover.txt b/docs/discover.txt
+index b06948b..00998f1 100644
+--- a/docs/discover.txt
++++ b/docs/discover.txt
+@@ -177,7 +177,7 @@ equal to or lower than the manycast client, it replies with an ordinary
+ unicast server message.
+ 
+ The client sends ordinary client mode messages, but to one of
+-these muticast addresses rather than a unicast address, and sends
++these multicast addresses rather than a unicast address, and sends
+ only if less than +maxclock+ associations remain and then only at the
+ minimum feasible rate and minimum feasible time-to-live (TTL)
+ hops. The polling strategy is designed to reduce as much as possible
+-- 
+2.7.4
+

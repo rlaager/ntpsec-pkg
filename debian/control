@@ -1,0 +1,145 @@
+Source: ntpsec
+Section: net
+Priority: optional
+Maintainer: Richard Laager <rlaager@wiktel.com>
+Build-Depends: asciidoc,
+               autorevision (>= 1.18),
+               bison,
+               debhelper (>= 6),
+               dh-apache2,
+               dh-apparmor,
+               dh-python,
+               docbook-xsl,
+               libcap2-dev [linux-any],
+               libevent-dev,
+               libseccomp-dev,
+               libsodium-dev,
+               libssl-dev (>= 1.0.0e-1),
+               pps-tools [linux-any],
+               python3 (>= 3.3),
+               python3-all-dev,
+               python3-dev (>= 3.3),
+               xsltproc
+X-Python3-Version: >= 3.3
+Build-Conflicts: libavahi-compat-libdnssd-dev,
+                 libwww-dev,
+                 libwww-ssl-dev
+Standards-Version: 3.9.8
+Homepage: https://www.ntpsec.org
+
+Package: ntpsec
+Architecture: any
+Depends: adduser,
+         lsb-base (>= 3.2-13),
+         netbase,
+         python3 (>= 3.3),
+         tzdata (>= 2015d-1),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Pre-Depends: dpkg (>= 1.15.7.2)
+Suggests: apparmor (>= 2.1+1075-0ubuntu6),
+          ntpsec-doc,
+          ntpsec-ntpviz
+Breaks: apparmor (<< 2.3.1+1403-0ubuntu10),
+        apparmor-profiles (<< 2.3.1+1403-0ubuntu10),
+        apparmor-profiles-extra (<< 1.8),
+        dhcp3-client (<< 4.1.0-1)
+Conflicts: ntp,
+           time-daemon
+Provides: time-daemon
+Replaces: apparmor (<< 2.3.1+1403-0ubuntu10),
+          apparmor-profiles (<< 2.3.1+1403-0ubuntu10),
+          ntp,
+          time-daemon
+Description: Network Time Protocol daemon and utility programs
+ NTP, the Network Time Protocol, is used to keep computer clocks
+ accurate by synchronizing them over the Internet or a local network,
+ or by following an accurate hardware receiver that interprets GPS,
+ DCF-77, or similar time signals.
+ .
+ This package contains the NTP daemon and utility programs.  An NTP
+ daemon needs to be running on each host that is to have its clock
+ accuracy controlled by NTP.  The same NTP daemon is also used to
+ provide NTP service to other hosts.
+ .
+ This is the NTPsec version of NTP.  NTPsec is a secure, hardened,
+ and improved implementation derived from the original NTP project.
+ .
+ For more information about the NTP protocol and NTP server
+ configuration and operation, install the package "ntpsec-doc".
+
+Package: ntpsec-ntpdate
+Architecture: any
+Depends: netbase,
+         ${misc:Depends},
+         ${shlibs:Depends}
+Conflicts: ntpdate
+Replaces: ntpdate
+Pre-Depends: dpkg (>= 1.15.7.2)
+Breaks: dhcp3-client (<< 4.1.0-1)
+Description: client for setting system time from NTP servers
+ NTP, the Network Time Protocol, is used to keep computer clocks
+ accurate by synchronizing them over the Internet or a local network,
+ or by following an accurate hardware receiver that interprets GPS,
+ DCF-77, or similar time signals.
+ .
+ ntpdate is a simple NTP client that sets a system's clock to match
+ the time obtained by communicating with one or more NTP servers.  It
+ is not sufficient, however, for maintaining an accurate clock in the
+ long run.  ntpdate by itself is useful for occasionally setting the
+ time on machines that do not have full-time network access, such as
+ laptops.
+ .
+ This is the NTPsec version of ntpdate.  NTPsec is a secure, hardened,
+ and improved implementation derived from the original NTP project.
+ .
+ If the full NTP daemon from the package "ntpsec" is installed, then
+ ntpsec-ntpdate is not necessary.
+
+Package: ntpsec-ntpviz
+Architecture: any
+Depends: fonts-liberation,
+         gnuplot,
+         python3 (>= 3.3),
+         python3-ntp,
+         ${misc:Depends}
+Recommends: ntpsec,
+            psutils,
+            ${misc:Recommends}
+Suggests: lm-sensors,
+          python-gps
+Description: NTP statistics graphing utility
+ NTP, the Network Time Protocol, is used to keep computer clocks
+ accurate by synchronizing them over the Internet or a local network,
+ or by following an accurate hardware receiver that interprets GPS,
+ DCF-77, or similar time signals.
+ .
+ ntpviz analyzes NTP log files and generates statistical plots from
+ them.  The output is in the form of HTML with images.  If Apache is
+ installed, it will be served at: /ntpviz
+
+Package: ntpsec-doc
+Architecture: all
+Depends: ${misc:Depends}
+Section: doc
+Description: Network Time Protocol documentation
+ NTP, the Network Time Protocol, is used to keep computer clocks
+ accurate by synchronizing them over the Internet or a local network,
+ or by following an accurate hardware receiver that interprets GPS,
+ DCF-77, or similar time signals.
+ .
+ This package contains HTML documentation for the ntpsec packages (ntpsec,
+ ntpsec-ntpdate).  Since there are no substantive man pages for ntpsec's
+ programs and configuration files, this package is desirable for any
+ setup beyond the simple default configuration.
+
+Package: python3-ntp
+Architecture: any
+Depends: python3 (>= 3.3),
+         ${misc:Depends},
+         ${python3:Depends},
+         ${shlibs:Depends}
+Provides: ${python3:Provides}
+Description: Python 3 NTP Helper Classes
+ This contains the Python "ntp" module, which contains helper classes for
+ NTP utilities written in Python.

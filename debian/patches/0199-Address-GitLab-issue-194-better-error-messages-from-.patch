@@ -1,0 +1,27 @@
+From f58442bff1463f43bd6adf0c1bbabe28ebb45e3f Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Tue, 6 Dec 2016 22:15:13 -0500
+Subject: [PATCH 199/268] Address GitLab issue #194: better error messages from
+ ntpsweep...
+
+...for non-existent host
+---
+ pylib/packet.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 45ec630..5e38256 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -617,7 +617,7 @@ SERR_TIMEOUT = "***Request timed out\n"
+ SERR_INCOMPLETE = "***Response from server was incomplete\n"
+ SERR_TOOMUCH = "***Buffer size exceeded for returned data\n"
+ SERR_SELECT = "***Select call failed\n"
+-SERR_NOHOST = "***No host open, use `host' command\n"
++SERR_NOHOST = "***No host open\n"
+ SERR_BADLENGTH = "***Response length should have been a multiple of 4"
+ SERR_BADKEY = "***Invalid key identifier"
+ SERR_INVPASS = "***Invalid password"
+-- 
+2.7.4
+

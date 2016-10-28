@@ -1,0 +1,33 @@
+- ntpviz
+  - Deal with gps logging. Can we make this a service that runs if both gpsd
+    and ntpd are installed?  It would ship in the ntpsec-ntpviz package.
+  - Deal with temp logging.
+
+- Rework init script?
+  - For sysvinit, run `ntpd -g`.
+  - For systemd, run `ntpd -g` on a service that does *not* restart.
+    - Set OnFailure to point to *a second* service that runs `ntpd` and
+      *does* restart on failures.
+    - This way, if an attacker sends a bad offset, `ntpd -g` will panic, but
+      the replacement `ntpd` will not accept bad offsets.
+    - OR, just have systemd not restart ntpd either, and run `ntpd -g`.
+  - Test with suspend/resume on a laptop.
+    - We may need:
+      [Unit]
+      Conflicts=sleep.target
+      Before=sleep.target
+      + an ntpsec-resume.service unit with:
+      [Unit]
+      After=systemd-suspend.service systemd-hibernate.service systemd-hybrid-sleep.service
+      [Service]
+      ExecStart=/bin/systemctl --no-block --fail start ntpsec.service
+      [Install]
+      WantedBy=sleep.target
+      ---- Discussion here: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=744753
+  - Test with suspend/resume on a VM.
+  - Then, drop all of ntpdate entirely.  Move ntpdig to the ntpsec package
+
+- Document libsodium, libisc, and libjsmn in debian/copyright
+  - Probably change it to machine-readable as well
+
+- Use system libjsmn (which means libjsmn needs packaging)

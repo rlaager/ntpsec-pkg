@@ -1,0 +1,25 @@
+From 2d4ecb91ea673ea0278545b670c3a990c686b7fa Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Tue, 29 Nov 2016 20:35:07 -0500
+Subject: [PATCH 077/268] Fix link target
+
+---
+ docs/debug.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docs/debug.txt b/docs/debug.txt
+index f73550c..74c7672 100644
+--- a/docs/debug.txt
++++ b/docs/debug.txt
+@@ -85,7 +85,7 @@ in the +select+ field of the link:decode.html#peer[peer status word].
+ 
+ The link:ntpq.html#as[+as+] command displays a list of associations and
+ association identifiers. Note the +condition+ column, which reflects the
+-tally code. The link:ntpq.html#pe[+rv+] command displays the
++tally code. The link:ntpq.html#rv[+rv+] command displays the
+ link:ntpq.html#system[system variables] billboard, including the
+ link:decode.html#sys[system status word]. The
+ link:ntpq.html#rv[+rv assocID+] command, where +assocID+ is the
+-- 
+2.7.4
+

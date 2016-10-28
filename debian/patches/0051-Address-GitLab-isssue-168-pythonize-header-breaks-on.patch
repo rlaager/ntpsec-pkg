@@ -1,0 +1,58 @@
+From 25009b640f7eb50088cfd5b6f9e30a725696ac74 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Mon, 28 Nov 2016 05:53:15 -0500
+Subject: [PATCH 051/268] Address GitLab isssue #168: pythonize-header breaks
+ on header guards
+
+---
+ include/ntp_control.h       | 3 +++
+ include/ntpd.h              | 1 +
+ wafhelpers/pythonize-header | 2 +-
+ 3 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/include/ntp_control.h b/include/ntp_control.h
+index 5d0a290..0216c00 100644
+--- a/include/ntp_control.h
++++ b/include/ntp_control.h
+@@ -1,6 +1,8 @@
+ /*
+  * ntp_control.h - definitions related to NTP mode 6 control messages
+  */
++#ifndef GUARD_NTP_CONTROL_H
++#define GUARD_NTP_CONTROL_H
+ 
+ #include "ntp_types.h"
+ 
+@@ -158,3 +160,4 @@ struct ntp_control {
+ #define	IFSTATS_FIELDS	12
+ #define	RESLIST_FIELDS	4
+ 
++#endif /* GUARD_NTP_CONTROL_H */
+diff --git a/include/ntpd.h b/include/ntpd.h
+index be9f996..c8fd6f5 100644
+--- a/include/ntpd.h
++++ b/include/ntpd.h
+@@ -15,6 +15,7 @@
+ #include "ntp_syslog.h"
+ #include "ntp_malloc.h"
+ #include "ntp_refclock.h"
++#include "ntp_control.h"
+ #include "ntp_intres.h"
+ #include "recvbuff.h"
+ 
+diff --git a/wafhelpers/pythonize-header b/wafhelpers/pythonize-header
+index b6d0ce8..203ecd0 100755
+--- a/wafhelpers/pythonize-header
++++ b/wafhelpers/pythonize-header
+@@ -18,7 +18,7 @@ patterns = (
+     (re.compile(r"^/\*"), r"#"),
+     (re.compile(r"^ *\*/"), r"#"),
+     (re.compile(r"^ \*"), r"#"),
+-    (re.compile(r"^#define\s+([A-Z0-9_]+\s+)(.*)"), r"\1= \2"), 
++    (re.compile(r"^#define\s+([A-Z0-9_]+[ \t]+)(.*)"), r"\1= \2"), 
+     (re.compile(r"^#define\s+([A-Z0-9_]+)\(([a-z_, ]*)\)"),
+      r"def \1(\2): return"), 
+     )
+-- 
+2.7.4
+

@@ -1,0 +1,38 @@
+From a1e28f6c9236bb8c5b51db2d43a061c39d75e7b1 Mon Sep 17 00:00:00 2001
+From: Sanjeev Gupta <ghane0@gmail.com>
+Date: Sat, 3 Dec 2016 23:51:22 +0800
+Subject: [PATCH 159/268] Document Python random generator, and range
+
+---
+ docs/includes/ntpkeygen-body.txt | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/docs/includes/ntpkeygen-body.txt b/docs/includes/ntpkeygen-body.txt
+index 919aed8..8cd3578 100644
+--- a/docs/includes/ntpkeygen-body.txt
++++ b/docs/includes/ntpkeygen-body.txt
+@@ -72,8 +72,8 @@ later on this page.
+ [[random]]
+ == Random Seed File ==
+ 
+-All key generation schemes must have means to
+-randomize the entropy seed used to initialize the internal pseudo-random
++All key generation schemes must have means to randomize the 
++entropy seed used to initialize the internal pseudo-random 
+ number generator used by the library routines.
+ 
+ It is important to understand that entropy must be evolved for each
+@@ -82,6 +82,10 @@ predictable. Various means dependent on external events, such as
+ keystroke intervals, can be used to do this and some systems have
+ built-in entropy sources.
+ 
++This implementation uses Python's PRNG, seeded with a combination
++of the system time and the current process ID.  The core of this
++is based on the Mersenne Twister, with a period of 2^19937^-1.
++
+ [[crypto]]
+ == Cryptographic Data Files ==
+ 
+-- 
+2.7.4
+

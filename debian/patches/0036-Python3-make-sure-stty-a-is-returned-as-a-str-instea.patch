@@ -1,0 +1,27 @@
+From 1c7af70bad933803ec1ad83b2d6b2589283355d3 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Sun, 27 Nov 2016 00:08:47 -0500
+Subject: [PATCH 036/268] Python3: make sure stty -a is returned as a str,
+ instead of bytes
+
+Fixes GitLab issue #166
+---
+ pylib/util.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pylib/util.py b/pylib/util.py
+index 87b5d43..104eb14 100644
+--- a/pylib/util.py
++++ b/pylib/util.py
+@@ -65,7 +65,7 @@ def termsize():
+     # Alternatives at http://stackoverflow.com/questions/566746/how-to-get-console-window-width-in-python
+     import shlex, subprocess, re
+     try:
+-        output = subprocess.check_output(shlex.split('/bin/stty -a'))
++        output = subprocess.check_output(shlex.split('/bin/stty -a'), universal_newlines=True)
+     except (OSError, subprocess.CalledProcessError, AttributeError):
+         return (24, 80)
+     for pattern in ('rows\D+(\d+); columns\D+(\d+);', '\s+(\d+)\D+rows;\s+(\d+)\D+columns;'):
+-- 
+2.7.4
+

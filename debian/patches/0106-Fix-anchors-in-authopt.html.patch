@@ -1,0 +1,52 @@
+From a431714b1b53cc6dde3806120d37e972fdf405e4 Mon Sep 17 00:00:00 2001
+From: Sanjeev Gupta <ghane0@gmail.com>
+Date: Fri, 2 Dec 2016 00:49:55 +0800
+Subject: [PATCH 106/268] Fix anchors in authopt.html
+
+---
+ docs/includes/auth-commands.txt | 3 +++
+ docs/includes/authopt.txt       | 1 -
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/docs/includes/auth-commands.txt b/docs/includes/auth-commands.txt
+index fcfdb14..105a3ae 100644
+--- a/docs/includes/auth-commands.txt
++++ b/docs/includes/auth-commands.txt
+@@ -1,5 +1,6 @@
+ // Authentication commands - included twice
+ 
++[[controlkey]]
+ +controlkey+ _key_::
+   Specifies the key identifier to use with the
+   {ntpqman} utility, which uses the standard protocol defined in
+@@ -54,6 +55,7 @@
+     the link _ntpkey_sign_hostname_ in the keys directory. If this file
+     is not found, the host key is also the sign key.
+ 
++[[keys]]
+ +keys+ _keyfile_::
+   Specifies the complete path and location of the MD5 key file
+   containing the keys and key identifiers used by {ntpdman},
+@@ -64,6 +66,7 @@
+   This command specifies the default directory path for cryptographic
+   keys, parameters and certificates. The default is +/usr/local/etc/+.
+ 
++[[trustedkey]]
+ +trustedkey+ _key..._ ::
+   Specifies the key identifiers which are trusted for the purposes of
+   authenticating peers with symmetric key cryptography, as well as keys
+diff --git a/docs/includes/authopt.txt b/docs/includes/authopt.txt
+index 5a7a6e9..0114da2 100644
+--- a/docs/includes/authopt.txt
++++ b/docs/includes/authopt.txt
+@@ -1,7 +1,6 @@
+ === Authentication Commands and Options ===
+ * link:authopt.html#controlkey[controlkey - specify control key ID]
+ * link:authopt.html#keys[keys - specify symmetric keys filename]
+-* link:authopt.html#requestkey[requestkey - specify request key ID]
+ * link:authopt.html#trustedkey[trustedkey - specify trusted key IDs]
+ * link:comdex.html[Command Index]
+ 
+-- 
+2.7.4
+

@@ -1,0 +1,28 @@
+From 19ed871680df1bd442a069fcbbef281db80e82b8 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sat, 10 Dec 2016 11:27:30 -0500
+Subject: [PATCH 260/268] Polish ntpmon documentation.
+
+---
+ docs/includes/ntpmon-body.txt | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/docs/includes/ntpmon-body.txt b/docs/includes/ntpmon-body.txt
+index 6d0a412..e254fb2 100644
+--- a/docs/includes/ntpmon-body.txt
++++ b/docs/includes/ntpmon-body.txt
+@@ -18,6 +18,11 @@ soon as they occur.
+ adjusts itself to poll at twice the frequency of the shortest
+ polling interval reported in the last peers response.)
+ 
++The status bar includes the version steing of the server being
++watched and the (local) time at which it was last updated).
++
++^C cleanly terminates the program.
++
+ == Options ==
+ 
+ Command line options are described following.
+-- 
+2.7.4
+

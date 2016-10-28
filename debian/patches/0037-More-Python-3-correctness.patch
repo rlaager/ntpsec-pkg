@@ -1,0 +1,34 @@
+From 5b8a226f393aa4cad6388accd1a80417242dc14b Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sun, 27 Nov 2016 04:47:54 -0500
+Subject: [PATCH 037/268] More Python 3 correctness.
+
+---
+ pylib/packet.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 63a3219..082c82d 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -626,7 +626,7 @@ def dump_hex_printable(xdata):
+         restart = i
+         for idx in range(16):
+             if idx < llen:
+-                sys.stdout.write("%02x " % ord(xdata[i]))
++                sys.stdout.write("%02x " % polyord(xdata[i]))
+                 i += 1
+             else:
+                 sys.stdout.write("   ")
+@@ -1105,7 +1105,7 @@ class ControlSession:
+         # in reslist responses.
+         response = ""
+         for c in self.response:
+-            if ord(c) > 0 and ord(c) < 127:
++            if polyord(c) > 0 and polyord(c) < 127:
+                 response += c
+         response = response.rstrip()
+         items = []
+-- 
+2.7.4
+

@@ -1,0 +1,192 @@
+From 462e3f9eba8df1287332562e271244a0193673a7 Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Fri, 2 Dec 2016 17:30:30 -0600
+Subject: [PATCH 125/268] Reference ISO standards consistently
+
+The only changes needed were ISO8601 -> ISO 8601.
+---
+ NEWS                          | 2 +-
+ devel/hacking.txt             | 4 ++--
+ docs/includes/ntpdig-body.txt | 2 +-
+ docs/includes/ntpviz-body.txt | 2 +-
+ docs/index.txt                | 2 +-
+ docs/warp.txt                 | 2 +-
+ libntp/humandate.c            | 2 +-
+ libntp/ntp_calendar.c         | 4 ++--
+ ntpd/refclock_gpsd.c          | 2 +-
+ ntpstats/ntpviz               | 4 ++--
+ pylib/statfiles.py            | 4 ++--
+ 11 files changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/NEWS b/NEWS
+index 9661ea6..f310045 100644
+--- a/NEWS
++++ b/NEWS
+@@ -282,7 +282,7 @@ Initial NTPsec beta release.
+ * The deprecated 'ntpdate' program has been replaced with a shell
+   wrapper around 'ntpdig'.
+ 
+-* Log timestamps look a little different; they are now in ISO8601 format.
++* Log timestamps look a little different; they are now in ISO 8601 format.
+ 
+ * Autokey is not supported in this release.
+ 
+diff --git a/devel/hacking.txt b/devel/hacking.txt
+index ac1db2c..437ccf8 100644
+--- a/devel/hacking.txt
++++ b/devel/hacking.txt
+@@ -246,9 +246,9 @@ You can read about JSON at http://www.json.org/
+ Be aware that if you present a tool design with a messy output format
+ and no JSON option it is quite likely to be rejected.
+ 
+-Our preferred format for dates is RFC 3339 (a version of ISO8601 for
++Our preferred format for dates is RFC 3339 (a version of ISO 8601 for
+ UTC with some options frozen; full year required, medial T required,
+-explicit Zulu timezone). Local times should be expressed in ISO8601,
++explicit Zulu timezone). Local times should be expressed in ISO 8601,
+ always with full 4-digit year.
+ 
+ === Copyrights and licenses ===
+diff --git a/docs/includes/ntpdig-body.txt b/docs/includes/ntpdig-body.txt
+index e49f366..2979dee 100644
+--- a/docs/includes/ntpdig-body.txt
++++ b/docs/includes/ntpdig-body.txt
+@@ -51,7 +51,7 @@ JSON record:
+ 	 "stratum":2,"leap":"noleap","adjusted":false}
+ ---------------------------------------------------------------------------------
+ 
+-In the JSON format, time is in ISO8601 format; precision is the synch
++In the JSON format, time is in ISO 8601 format; precision is the synch
+ distance, with an unknown synch distance is reported as 0.  Host and
+ IP are always emitted even if duplicate. The "adjusted" boolean
+ reports whether ntpdig adjusted the time.
+diff --git a/docs/includes/ntpviz-body.txt b/docs/includes/ntpviz-body.txt
+index 5897069..95f7a85 100644
+--- a/docs/includes/ntpviz-body.txt
++++ b/docs/includes/ntpviz-body.txt
+@@ -64,7 +64,7 @@ subset of comparative plots for multiple directories.
+ 
+ -e TIME or --endtime TIME::
+     With -s and -e you set the start and end times.  TIME is either numeric
+-    POSIX time (sconds since the start of the epoch) or ISO8601-style
++    POSIX time (sconds since the start of the epoch) or ISO 8601-style
+     timestamps (yyyy-mmm-ddThh:mm:ss). +
+     The default end time is the last logfile entry timestamp.   +
+     The default start time is computed as the end time minus DAYS. +
+diff --git a/docs/index.txt b/docs/index.txt
+index 49e036b..0a7c1e3 100644
+--- a/docs/index.txt
++++ b/docs/index.txt
+@@ -206,7 +206,7 @@ few will be user-visible.
+ * The ntpsnmpd daemon, incomplete and not conformant with RFC 5907,
+   has been removed.
+ 
+-* Log timestamps look a little different; they are now in ISO8601 format.
++* Log timestamps look a little different; they are now in ISO 8601 format.
+   The code can be built in a strict NTP Classic compatibility mode
+   that restores the old format.
+ 
+diff --git a/docs/warp.txt b/docs/warp.txt
+index ba89be9..20366b4 100644
+--- a/docs/warp.txt
++++ b/docs/warp.txt
+@@ -100,7 +100,7 @@ Figure 1. NTP Timestamp format
+ Figure 1 shows the timestamp format used in packet headers exchanged
+ between clients and servers.  Ordinarily, this timestamp format is not
+ seen by application programs, which converts it to native formats such
+-as ISO8601 or RFC 822-style Gregorian-calendar dates.
++as ISO 8601 or RFC 822-style Gregorian-calendar dates.
+ 
+ The timestamp format spans 136 years, called an _era_. Conceptually,
+ it is helpful to think of an absolute dates as being a tuple of one of
+diff --git a/libntp/humandate.c b/libntp/humandate.c
+index b99180d..a1dc8f5 100644
+--- a/libntp/humandate.c
++++ b/libntp/humandate.c
+@@ -36,7 +36,7 @@ humanlogtime(void)
+ 		 tm->tm_mday, months[tm->tm_mon],
+ 		 tm->tm_hour, tm->tm_min, tm->tm_sec);
+ #else
+-	/* ISO8601 is a better format, sort order equals time order */
++	/* ISO 8601 is a better format, sort order equals time order */
+ 	snprintf(bp, LIB_BUFLENGTH, "%02d-%02dT%02d:%02d:%02d",
+ 		 tm->tm_mon+1, tm->tm_mday,
+ 		 tm->tm_hour, tm->tm_min, tm->tm_sec);
+diff --git a/libntp/ntp_calendar.c b/libntp/ntp_calendar.c
+index 5316579..a8b0c18 100644
+--- a/libntp/ntp_calendar.c
++++ b/libntp/ntp_calendar.c
+@@ -1227,11 +1227,11 @@ ntpcal_weekday_lt(
+  *
+  * ISO week-calendar conversions
+  *
+- * The ISO8601 calendar defines a calendar of years, weeks and weekdays.
++ * The ISO 8601 calendar defines a calendar of years, weeks and weekdays.
+  * It is related to the Gregorian calendar, and a ISO year starts at the
+  * Monday closest to Jan,1st of the corresponding Gregorian year.  A ISO
+  * calendar year has always 52 or 53 weeks, and like the Grogrian
+- * calendar the ISO8601 calendar repeats itself every 400 years, or
++ * calendar the ISO 8601 calendar repeats itself every 400 years, or
+  * 146097 days, or 20871 weeks.
+  *
+  * While it is possible to write ISO calendar functions based on the
+diff --git a/ntpd/refclock_gpsd.c b/ntpd/refclock_gpsd.c
+index 9b20353..0fae357 100644
+--- a/ntpd/refclock_gpsd.c
++++ b/ntpd/refclock_gpsd.c
+@@ -2030,7 +2030,7 @@ clamped_precision(
+ }
+ 
+ /* -------------------------------------------------------------------
+- * Convert a GPSD timestamp (ISO8601 Format) to an l_fp
++ * Convert a GPSD timestamp (ISO 8601 Format) to an l_fp
+  */
+ static bool
+ convert_ascii_time(
+diff --git a/ntpstats/ntpviz b/ntpstats/ntpviz
+index 12c0564..a3da517 100755
+--- a/ntpstats/ntpviz
++++ b/ntpstats/ntpviz
+@@ -1176,7 +1176,7 @@ Python by ESR, concept and GNUPLOT code by Dan Drown.
+     parser.add_argument('-e', '--endtime',
+                 default=None,
+                 dest='endtime',
+-                help="End time in POSIX (seconds) or ISO8601",
++                help="End time in POSIX (seconds) or ISO 8601",
+                 type=str)
+     parser.add_argument('-g', '--generate',
+                 action="store_true",
+@@ -1201,7 +1201,7 @@ Python by ESR, concept and GNUPLOT code by Dan Drown.
+     parser.add_argument('-s', '--starttime',
+                 default=None,
+                 dest='starttime',
+-                help="Start time in POSIX (seconds) or ISO8601",
++                help="Start time in POSIX (seconds) or ISO 8601",
+                 type=str)
+     parser.add_argument('-w', '--width',
+                 choices=['s', 'm', 'l'],
+diff --git a/pylib/statfiles.py b/pylib/statfiles.py
+index 439de2f..941e71b 100644
+--- a/pylib/statfiles.py
++++ b/pylib/statfiles.py
+@@ -202,7 +202,7 @@ class NTPStats:
+         return key      # Someday, be smarter than this.
+ 
+ def iso_to_posix(s):
+-    "Accept timestamps in ISO8661 format or numeric POSIX time. UTC only."
++    "Accept timestamps in ISO 8661 format or numeric POSIX time. UTC only."
+     if s.isdigit():
+         return int(s)
+     else:
+@@ -212,7 +212,7 @@ def iso_to_posix(s):
+         return  calendar.timegm(t)
+ 
+ def posix_to_iso(t):
+-    "ISO8601 string from Unix time."
++    "ISO 8601 string from Unix time."
+     return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(t))
+ 
+ # end
+-- 
+2.7.4
+

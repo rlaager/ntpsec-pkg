@@ -1,0 +1,25 @@
+From 66332ff2fea0f7db45a928664b33f87b0e56929c Mon Sep 17 00:00:00 2001
+From: Chris Mayo <aklhfex@gmail.com>
+Date: Sun, 4 Dec 2016 18:38:54 +0000
+Subject: [PATCH 172/268] Fix link to Access Control Support page in accopt.txt
+
+---
+ docs/accopt.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docs/accopt.txt b/docs/accopt.txt
+index 1634a5f..52adcd5 100644
+--- a/docs/accopt.txt
++++ b/docs/accopt.txt
+@@ -18,7 +18,7 @@ include::includes/accopt.txt[]
+ == Commands and Options ==
+ 
+ Unless noted otherwise, further information about these commands is on
+-the link:accopt.html[Access Control Support] page.
++the link:access.html[Access Control Support] page.
+ 
+ include::includes/access-commands.txt[]
+ 
+-- 
+2.7.4
+

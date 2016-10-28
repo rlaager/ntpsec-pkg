@@ -1,0 +1,39 @@
+From 2ff849dc046f9bb49da24c0f6f070ed8559e78ba Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Thu, 8 Dec 2016 02:01:28 -0500
+Subject: [PATCH 227/268] Typos
+
+---
+ include/ntp_syscall.h | 2 +-
+ ntpclients/ntpmon     | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/include/ntp_syscall.h b/include/ntp_syscall.h
+index 763a109..b8c3951 100644
+--- a/include/ntp_syscall.h
++++ b/include/ntp_syscall.h
+@@ -30,7 +30,7 @@ int ntp_gettime(struct ntptimeval *);
+ 
+ /*
+  * The units of the maxerror and esterror fields vary by platform.  If
+- * STA_NANO is defined, they're in nanoseconds;, otherwise in
++ * STA_NANO is defined, they're in nanoseconds; otherwise in
+  * microseconds. Hide the difference by normalizing everything to
+  * float seconds.
+  */
+diff --git a/ntpclients/ntpmon b/ntpclients/ntpmon
+index c27d0ce..479002e 100755
+--- a/ntpclients/ntpmon
++++ b/ntpclients/ntpmon
+@@ -84,7 +84,7 @@ if __name__ == '__main__':
+                     except IOError as e:
+                         raise Fatal(e.strerror)
+                     except IndexError:
+-                        raise Fatal("no 'hpoll' variabe in peer response")
++                        raise Fatal("no 'hpoll' variable in peer response")
+                     if not variables:
+                         continue
+                     stdscr.addstr(peer_report.summary(session.rstatus,
+-- 
+2.7.4
+

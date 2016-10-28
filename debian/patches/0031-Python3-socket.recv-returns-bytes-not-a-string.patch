@@ -1,0 +1,25 @@
+From 3aefb058e3137a6118ec51814014b4c52650506f Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Sat, 26 Nov 2016 23:03:00 -0500
+Subject: [PATCH 031/268] Python3: socket.recv() returns bytes, not a string
+
+---
+ pylib/packet.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 7c6c289..bc44463 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -924,7 +924,7 @@ class ControlSession:
+ 
+             if self.debug:
+                 warn("At %s, socket read begins\n" % time.asctime())
+-            rawdata = polystr(self.sock.recv(4096))
++            rawdata = polybytes(self.sock.recv(4096))
+             if self.debug:
+                 warn("Received %d octets\n" % len(rawdata))
+             rpkt = ControlPacket(self)
+-- 
+2.7.4
+

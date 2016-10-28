@@ -1,0 +1,25 @@
+From 3cc76b4df420fc4c297002f33d402e0e5ab1d75e Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Mon, 28 Nov 2016 14:11:18 -0500
+Subject: [PATCH 056/268] Address GitLab issue #170: Python3: mrulist fails
+
+---
+ pylib/packet.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 6418914..4ebf43b 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -1170,7 +1170,7 @@ class ControlSession:
+     def fetch_nonce(self):
+         "Receive a nonce that can be replayed - combats source address spoofing"
+         self.doquery(opcode=CTL_OP_REQ_NONCE)
+-        if not self.response.startswith("nonce="):
++        if not self.response.startswith(polybytes("nonce=")):
+             raise ControlException(SERR_BADNONCE)
+         return self.response.strip()
+ 
+-- 
+2.7.4
+

@@ -1,0 +1,11 @@
+*.debhelper
+*.debhelper.log
+*.substvars
+debhelper-build-stamp
+files
+ntpsec
+ntpsec-doc
+ntpsec-ntpdate
+ntpsec-ntpviz
+python3-ntp
+tmp

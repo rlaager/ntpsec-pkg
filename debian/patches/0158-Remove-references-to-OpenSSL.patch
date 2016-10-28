@@ -1,0 +1,79 @@
+From 194cfd88757e44180d298ef7563a238dc3e39cda Mon Sep 17 00:00:00 2001
+From: Sanjeev Gupta <ghane0@gmail.com>
+Date: Sat, 3 Dec 2016 23:39:16 +0800
+Subject: [PATCH 158/268] Remove references to OpenSSL
+
+It is neither used nor required by ntpkeygen
+---
+ docs/includes/ntpkeygen-body.txt | 35 +++++------------------------------
+ 1 file changed, 5 insertions(+), 30 deletions(-)
+
+diff --git a/docs/includes/ntpkeygen-body.txt b/docs/includes/ntpkeygen-body.txt
+index 8e6fdf2..919aed8 100644
+--- a/docs/includes/ntpkeygen-body.txt
++++ b/docs/includes/ntpkeygen-body.txt
+@@ -10,8 +10,8 @@
+ [[descrip]]
+ == Description ==
+ 
+-This program generates the MD5 message digest keys used in NTP's symmetric
+-key cryptography.
++This program generates the keys used in NTP's symmetric key
++cryptography.
+ 
+ The program produces a file containing ten pseudo-random printable
+ ASCII strings suitable for the MD5 message digest algorithm included
+@@ -36,13 +36,6 @@ The safest way to run the +ntpkeygen+ program is logged in directly as
+ root. The recommended procedure is change to the keys directory, usually
+ +/usr/local/etc+, then run the program.
+ 
+-Running the program as other than root and using the Unix _su_ command
+-to assume root may not work properly, since by default the OpenSSL
+-library looks for the random seed file +.rnd+ in the user home
+-directory. However, there should be only one +.rnd+, most conveniently
+-in the root directory, so it is convenient to define the _$RANDFILE_
+-environment variable used by the OpenSSL library as the path to +/.rnd+.
+-
+ Installing the keys as root might not work in NFS-mounted shared file
+ systems, as NFS clients may not be able to write to the shared keys
+ directory, even as root. In this case, NFS clients can specify the files
+@@ -79,33 +72,15 @@ later on this page.
+ [[random]]
+ == Random Seed File ==
+ 
+-All cryptographically sound key generation schemes must have means to
++All key generation schemes must have means to
+ randomize the entropy seed used to initialize the internal pseudo-random
+-number generator used by the library routines. The OpenSSL library uses
+-a designated random seed file for this purpose. The file must be
+-available when starting the NTP daemon and +ntpkeygen+ program. If a
+-site supports OpenSSL or its companion OpenSSH, it is very likely that
+-means to do this are already available.
++number generator used by the library routines.
+ 
+ It is important to understand that entropy must be evolved for each
+ generation, for otherwise the random number sequence would be
+ predictable. Various means dependent on external events, such as
+ keystroke intervals, can be used to do this and some systems have
+-built-in entropy sources. Suitable means are described in the OpenSSL
+-software documentation, but are outside the scope of this page.
+-
+-The entropy seed used by the OpenSSL library is contained in a file,
+-usually called +.rnd+, which must be available when starting the NTP
+-daemon or the +ntpkeygen+ program. The NTP daemon will first look for
+-the file using the path specified by the _randfile_ subcommand of the
+-_crypto_ configuration command. If not specified in this way, or when
+-starting the +ntpkeygen+ program, the OpenSSL library will look for the
+-file using the path specified by the RANDFILE environment variable in
+-the user home directory, whether root or some other user. If the
+-RANDFILE environment variable is not present, the library will look for
+-the +.rnd+ file in the user home directory. If the file is not available
+-or cannot be written, the daemon exits with a message to the system log
+-and the program exits with a suitable error message.
++built-in entropy sources.
+ 
+ [[crypto]]
+ == Cryptographic Data Files ==
+-- 
+2.7.4
+

@@ -1,0 +1,25 @@
+From 337590497957124f563a7feb57e9d6e14b378d0c Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Mon, 5 Dec 2016 21:27:44 -0500
+Subject: [PATCH 192/268] Spelling
+
+---
+ docs/includes/ntpkeygen-body.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docs/includes/ntpkeygen-body.txt b/docs/includes/ntpkeygen-body.txt
+index 6cf4038..2980d36 100644
+--- a/docs/includes/ntpkeygen-body.txt
++++ b/docs/includes/ntpkeygen-body.txt
+@@ -99,7 +99,7 @@ automated means on the other subnet hosts. This file is needed to
+ authenticate some remote configuration commands used by the {ntpqman}
+ utility.
+ 
+-Comments may appear in the file, and are preceeded with the +#+
++Comments may appear in the file, and are preceded with the +#+
+ character.  
+ 
+ Following any headers the keys are entered one per line in the
+-- 
+2.7.4
+

@@ -1,0 +1,25 @@
+From 5756d6c0cdfaeeba12daf1a3d1ad8f16d0ae90a1 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sat, 26 Nov 2016 19:27:09 -0500
+Subject: [PATCH 029/268] Fix a bug in wide-node display in ntpq.
+
+---
+ pylib/util.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pylib/util.py b/pylib/util.py
+index cc2c9bd..977779c 100644
+--- a/pylib/util.py
++++ b/pylib/util.py
+@@ -248,7 +248,7 @@ class PeerSummary:
+             clock_name = srcadr
+         if self.wideremote and len(clock_name) > self.namewidth:
+             line += ("%c%s\n" % (c, clock_name))
+-            line + (" " * (self.namewidth + 2))
++            line += (" " * (self.namewidth + 2))
+         else:
+             line += ("%c%-*.*s " % \
+                              (c, self.namewidth, self.namewidth, clock_name[:self.namewidth]))
+-- 
+2.7.4
+

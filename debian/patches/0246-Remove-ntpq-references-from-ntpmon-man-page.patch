@@ -1,0 +1,38 @@
+From 364df24f8d53b246ec91116ac3258c2946c7f294 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Fri, 9 Dec 2016 00:29:09 -0500
+Subject: [PATCH 246/268] Remove ntpq references from ntpmon man page
+
+Also document long options in the synopsis
+---
+ docs/includes/ntpmon-body.txt | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/docs/includes/ntpmon-body.txt b/docs/includes/ntpmon-body.txt
+index 953f419..6d0a412 100644
+--- a/docs/includes/ntpmon-body.txt
++++ b/docs/includes/ntpmon-body.txt
+@@ -4,7 +4,7 @@
+ 
+ == Synopsis ==
+ 
+-+ntpmon+ [-a] [-n] [-w] [hostname]
+++ntpmon+ [-a | --all] [-n | --numeric] [-w | --wide] [hostname]
+ 
+ == Description ==
+ 
+@@ -20,10 +20,7 @@ polling interval reported in the last peers response.)
+ 
+ == Options ==
+ 
+-Command line options are described following. Specifying a command line
+-option other than +-i+ or +-n+ will cause the specified query (queries)
+-to be sent to the indicated host(s) immediately. Otherwise, +ntpq+ will
+-attempt to read interactive format commands from the standard input.
++Command line options are described following.
+ 
+ +-a+, +--all+::
+   Show all hosts, not just reachable ones.
+-- 
+2.7.4
+

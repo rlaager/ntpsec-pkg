@@ -1,0 +1,25 @@
+From 57e8b0ee48972cb38b346a02ebc24ebd85c64d20 Mon Sep 17 00:00:00 2001
+From: Sanjeev Gupta <ghane0@gmail.com>
+Date: Tue, 29 Nov 2016 16:41:28 +0800
+Subject: [PATCH 060/268] HOPF reorganised its website, correct to new location
+
+---
+ docs/driver_generic.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docs/driver_generic.txt b/docs/driver_generic.txt
+index fedd045..9d6b8f7 100644
+--- a/docs/driver_generic.txt
++++ b/docs/driver_generic.txt
+@@ -232,7 +232,7 @@ image:pic/pd_om006.gif[http://www.trimble.com/cgi/omprod.cgi/pd_om006.html]
+ 
+ * *refclock generic subtype 12*
+ +
+-*http://www.hopf-time.com[HOPF] http://hopf.com/manuals/english/pdf_6---/e6021gps_0601.pdf[Funkuhr 6021]*
++*http://www.hopf-time.com[HOPF] http://www.hopf.com/downloads/manuals/6021gps_v0601_en.pdf[Funkuhr 6021]*
+ +
+ image:pic/fg6021.gif[http://www.hopf-time.com/engl/kart6021.html]
+ 
+-- 
+2.7.4
+

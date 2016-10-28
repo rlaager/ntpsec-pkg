@@ -1,0 +1,352 @@
+From e86e0e7e26ea2f41264ea8971fe6d3160f601b54 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Fri, 9 Dec 2016 14:48:51 -0500
+Subject: [PATCH 249/268] Remove documentation references to multicast client
+ and server operation.
+
+---
+ docs/assoc.txt                      | 23 ++++++++++-------------
+ docs/authentic.txt                  | 24 +-----------------------
+ docs/confopt.txt                    | 11 ++++-------
+ docs/decode.txt                     |  1 -
+ docs/discover.txt                   | 34 ++++++++--------------------------
+ docs/includes/assoc-auxcommands.txt | 10 ----------
+ docs/includes/assoc-commands.txt    | 19 ++++++-------------
+ docs/includes/assoc-options.txt     |  4 ++--
+ docs/includes/ntpq-body.txt         |  3 +--
+ docs/index.txt                      | 13 ++++++++-----
+ docs/mode6.txt                      |  6 ++----
+ 11 files changed, 42 insertions(+), 106 deletions(-)
+
+diff --git a/docs/assoc.txt b/docs/assoc.txt
+index 17488b4..e76ec68 100644
+--- a/docs/assoc.txt
++++ b/docs/assoc.txt
+@@ -39,12 +39,12 @@ discovery packet. They are are demobilized by timeout or when preempted
+ by a "better" server, as described on the link:discover.html[Automatic
+ Server Discovery Schemes] page.
+ 
+-There are three principal modes of operation in NTP: client/server,
+-symmetric active/passive and broadcast/multicast. There are three
+-automatic server discovery schemes in NTP: broadcast/multicast, manycast
+-and pool described on the link:discover.html[Automatic Server Discovery
+-Schemes] page. In addition, the link:#burst[burst options] and
+-link:orphan.html[orphan mode] can be used in appropriate cases.
++There are two principal modes of operation in NTP: client/server and
++broadcast. There are three automatic server discovery schemes in NTP:
++broadcast and pool described on the link:discover.html[Automatic
++Server Discovery Schemes] page. In addition, the link:#burst[burst
++options] and link:orphan.html[orphan mode] can be used in appropriate
++cases.
+ 
+ Following is a summary of the operations in each mode. Note that
+ reference to option applies to the commands described on the
+@@ -117,17 +117,14 @@ NTPsec.  Client-mode support has been removed; server-side support
+ is retained for backward compatibility but may be removed in a
+ future release.
+ 
+-NTP broadcast and multicast modes are intended for configurations
++NTP broadcast modes are intended for configurations
+ involving one or a few servers and a possibly very large client
+ population. Broadcast mode can be used with Ethernet, FDDI and WiFi
+ spans interconnected by hubs or switches. Ordinarily, broadcast packets
+-do not extend beyond a level-3 router. Where service is intended beyond
+-a level-3 router, multicast mode can be used. Additional information is
+-on the link:discover.html[Automatic NTP Configuration Options] page.
++do not extend beyond a level-3 router.
+ 
+-A server is configured to send broadcast or multicast messages using
+-the +broadcast+ command and specifying the subnet address for
+-broadcast or the multicast group address for multicast.
++A server is configured to send broadcast messages using the
+++broadcast+ command and specifying the subnet address for broadcast.
+ 
+ [[many]]
+ == Manycast and Pool Modes ==
+diff --git a/docs/authentic.txt b/docs/authentic.txt
+index 6d29064..a96269a 100644
+--- a/docs/authentic.txt
++++ b/docs/authentic.txt
+@@ -56,23 +56,6 @@ message digest. If the packet has been modified in any way or replayed
+ by an intruder, it will fail one or more of these checks and be
+ discarded.
+ 
+-The +auth+ flag controls whether new associations or remote
+-configuration commands require cryptographic authentication. This flag
+-can be set or reset by the +enable+ and +disable+ commands and also by
+-remote configuration commands sent by a {ntpqman} program running in
+-another machine. If this flag is enabled, which is the default case,
+-new broadcast client and symmetric passive associations and remote
+-configuration commands must be cryptographically authenticated. If
+-this flag is disabled, these operations are effective even if not
+-cryptographic authenticated. It should be understood that operating
+-with the +auth+ flag disabled invites a significant vulnerability
+-where a cracker can masquerade as a falseticker and seriously disrupt
+-system timekeeping. It is important to note that this flag has no
+-purpose other than to allow or disallow a new association in response
+-to new broadcast and symmetric active messages and remote
+-configuration commands and, in particular, the flag has no effect on
+-the authentication process itself.
+-
+ The security model and protocol schemes for symmetric key
+ are summarized below.
+ 
+@@ -195,12 +178,7 @@ various authentication schemes.
+ By default, the client sends non-authenticated packets and the server
+ responds with non-authenticated packets. If the client sends
+ authenticated packets, the server responds with authenticated packets if
+-correct, or a crypto-NAK packet if not. In the case of unsolicited
+-packets which might consume significant resources, such as broadcast or
+-symmetric mode packets, authentication is required, unless overridden
+-by a +disable auth+ command. In the current climate of targeted
+-broadcast or "letterbomb" attacks, defeating this requirement would be
+-decidedly dangerous. In any case, the +notrust +flag, described on the
++correct, or a crypto-NAK packet if not. The +notrust +flag, described on the
+ link:authopt.html[Access Control Options] page, can be used to disable
+ access to all but correctly authenticated clients.
+ 
+diff --git a/docs/confopt.txt b/docs/confopt.txt
+index 928397a..7945a4f 100644
+--- a/docs/confopt.txt
++++ b/docs/confopt.txt
+@@ -33,11 +33,8 @@ various related operations.
+ The various modes described on the link:assoc.html[Association
+ Management] page are determined by the command keyword and the DNS
+ name or IP address. Addresses are classed by type as (s) a remote
+-server or peer (IPv4 class A, B and C or IPv6), (b) the IPv4 broadcast
+-address of a local interface, or (m) a multicast address (IPv4 class D
+-or IPv6). For multicast addresses the IANA has assigned the multicast
+-group address IPv4 224.0.1.1 and IPv6 ff05::101 (site local)
+-exclusively to NTP, but other nonconflicting addresses can be used.
++server or peer (IPv4 class A, B and C or IPv6), or (b) the IPv4 broadcast
++address of a local interface.
+ 
+ If the Basic Socket Interface Extensions for IPv6 (RFC 2553) is
+ detected, support for the IPv6 address family is generated in addition
+@@ -70,8 +67,8 @@ include::includes/assoc-options.txt[]
+ [[aux]]
+ == Auxiliary Commands ==
+ 
+-Information on authentication for broadcast, manycast, and
+-multicast options can be found at link:authopt.html[Authentication Options].
++Information on authentication for broadcast options can be found at
++link:authopt.html[Authentication Options].
+ 
+ include::includes/assoc-auxcommands.txt[]
+ 
+diff --git a/docs/decode.txt b/docs/decode.txt
+index 438f6be..be6c7be 100644
+--- a/docs/decode.txt
++++ b/docs/decode.txt
+@@ -265,7 +265,6 @@ identifier field in +ntpq+ billboards. Following is the current list:
+ | +BCST+ | broadcast server
+ | +DENY+ | access denied by server
+ | +INIT+ | association initialized
+-| +MCST+ | multicast server
+ | +RATE+ | rate exceeded
+ | +TIME+ | association timeout
+ | +STEP+ | step time change
+diff --git a/docs/discover.txt b/docs/discover.txt
+index 4a882e4..6d55a23 100644
+--- a/docs/discover.txt
++++ b/docs/discover.txt
+@@ -26,12 +26,11 @@ include::includes/hand.txt[]
+ == Introduction ==
+ 
+ This page describes the automatic server discovery schemes provided in
+-NTPv4. There are three automatic server discovery schemes:
+-broadcast/multicast, manycast, and server pool, which are described on
+-this page. The broadcast/multicast and many cast schemes utilize the
+-ubiquitous broadcast or one-to-many paradigm native to IPv4 and IPv6.
+-The server pool scheme uses DNS to resolve addresses of multiple
+-volunteer servers scattered throughout the world.
++NTPv4. There are two automatic server discovery schemes: broadcast and
++server pool, which are described on this page. The broadcast scheme
++utilizes the ubiquitous broadcast or one-to-many paradigm native to
++IPv4 and IPv6.  The server pool scheme uses DNS to resolve addresses
++of multiple volunteer servers scattered throughout the world.
+ 
+ All three schemes work in much the same way and might be described as
+ _grab-n'-prune._ Through one means or another they grab a number of
+@@ -63,7 +62,7 @@ on the link:authentic.html[Authentication Support] page.
+ The pruning process uses a set of unreach counters, one for each
+ association created by the configuration or discovery processes. At each
+ poll interval, the counter is increased by one. If an acceptable packet
+-arrives for a persistent (configured) or ephemeral (broadcast/multicast)
++arrives for a persistent (configured) or ephemeral (broadcast)
+ association, the counter is set to zero. If an acceptable packet arrives
+ for a preemptable (manycast, pool) association and survives the
+ selection and clustering algorithms, the counter is set to zero. If the
+@@ -87,8 +86,8 @@ Options] page. See that page for applicability and defaults.
+ 
+ The broadcast/multicast scheme is deprecated in NTPsec due to
+ irreparable security flaws. Client-side support has been removed.
+-Server-side support remains present but may be removed in a future
+-version, and its use is strongly discouraged.
++Server-side support for broadcast only remains present but may be
++removed in a future version, and its use is strongly discouraged.
+ 
+ A broadcast server generates messages continuously at intervals by
+ default 64 s and time-to-live by default 127. These defaults can be
+@@ -115,23 +114,6 @@ more local interfaces are installed with different broadcast addresses,
+ a +broadcast+ command is needed for each address. This provides a way to
+ limit exposure in a firewall, for example.
+ 
+-NTP multicast mode can be used to extend the scope using IPv4 multicast
+-or IPv6 broadcast with defined span. The IANA has assigned IPv4
+-multicast address 224.0.1.1 and IPv6 address FF05::101 (site local) to
+-NTP, but these addresses should be used only where the multicast span
+-can be reliably constrained to protect neighbor networks. In general,
+-administratively scoped IPv4 group addresses should be used, as
+-described in RFC 2365, or GLOP group addresses, as described in
+-RFC 2770.
+-
+-A multicast server is configured using the +broadcast+ command, but
+-specifying a multicast address instead of a broadcast address. Note
+-that there is a subtle distinction between the IPv4 and IPv6 address
+-families. The IPv4 broadcast or multicast mode is determined by the
+-IPv4 class. For IPv6 the same distinction can be made using the
+-link-local prefix FF02 for each interface and site-local prefix FF05
+-for all interfaces.
+-
+ NTPsec permits the use of symmetric authentication with broadcast mode
+ the same way as any other mode; however, it is not effective at
+ providing security because the sessionless, one-way nature of the
+diff --git a/docs/includes/assoc-auxcommands.txt b/docs/includes/assoc-auxcommands.txt
+index e3aa5b5..1c1451b 100644
+--- a/docs/includes/assoc-auxcommands.txt
++++ b/docs/includes/assoc-auxcommands.txt
+@@ -1,15 +1,5 @@
+ // Auxiliary association commands - included twice
+ 
+-+manycastserver+ _address..._::
+-  This command enables reception of manycast client messages to the
+-  multicast group address(es) (type m) specified. At least one address
+-  is required, but the NTP multicast address 224.0.1.1 assigned by the
+-  IANA should NOT be used, unless specific means are taken to limit the
+-  span of the reply and avoid a possibly massive implosion at the
+-  original sender. Note that, in order to avoid accidental or malicious
+-  disruption in this mode, both the server and client should operate
+-  using authentication as described on the "Authentication Options" page.
+-
+ +mdnstries+ _number_::
+   If we are participating in mDNS, after we have synched for the first
+   time we attempt to register with the mDNS system. If that registration
+diff --git a/docs/includes/assoc-commands.txt b/docs/includes/assoc-commands.txt
+index 3e6b331..2c8bd4b 100644
+--- a/docs/includes/assoc-commands.txt
++++ b/docs/includes/assoc-commands.txt
+@@ -46,19 +46,12 @@ link-local IPV6 address with an interface specified in
+   associations cannot be secured.  Broadcast-client mode has been
+   completely removed.
+ +
+-For broadcast and multicast addresses (only), this command mobilizes
+-a persistent broadcast mode association. Multiple commands can be
+-used to specify multiple local broadcast interfaces (subnets) and/or
+-multiple multicast groups. Note that local broadcast messages go
+-only to the interface associated with the subnet specified, but
+-multicast messages go to all interfaces. In broadcast mode the local
+-server sends periodic broadcast messages to a client population at
+-the _address_ specified, which is usually the broadcast address on
+-(one of) the local network(s) or a multicast address assigned to
+-NTP. The IANA has assigned the multicast group address IPv4
+-224.0.1.1 and IPv6 ff05::101 (site local) exclusively to NTP, but
+-other nonconflicting addresses can be used to contain the messages
+-within administrative boundaries.
++For broadcast addresses (only), this command mobilizes a persistent
++broadcast mode association. Multiple commands can be used to specify
++multiple local broadcast interfaces (subnets) In broadcast mode the
++local server sends periodic broadcast messages to a client population
++at the _address_ specified, which is usually the broadcast address on
++(one of) the local network(s).
+ 
+ [[unpeer]]
+ +unpeer+::
+diff --git a/docs/includes/assoc-options.txt b/docs/includes/assoc-options.txt
+index 3195420..cd2a766 100644
+--- a/docs/includes/assoc-options.txt
++++ b/docs/includes/assoc-options.txt
+@@ -57,8 +57,8 @@
+ 
+ +ttl+ _ttl_::
+   This option is used only with broadcast server mode. It specifies
+-  the time-to-live _ttl_ to use on broadcast server and multicast
+-  server and the maximum _ttl_ for the expanding ring search with
++  the time-to-live _ttl_ to use on broadcast server
++  and the maximum _ttl_ for the expanding ring search with
+   manycast client packets. Selection of the proper value, which
+   defaults to 127, is something of a black art and should be
+   coordinated with the network administrator.
+diff --git a/docs/includes/ntpq-body.txt b/docs/includes/ntpq-body.txt
+index ad1dadb..3b4bba7 100644
+--- a/docs/includes/ntpq-body.txt
++++ b/docs/includes/ntpq-body.txt
+@@ -346,8 +346,7 @@ of the link:decode.html#peer[peer status word]
+ |+st+            |stratum
+ |+t+             |
+ +u+: unicast or manycast client,
+-+l+: local (reference clock), +s+: symmetric (peer), +A+: manycast
+-server, +B+: broadcast server, +M+: multicast server
+++l+: local (reference clock), +s+: symmetric (peer), server, +B+: broadcast server,
+ |+when+          |sec/min/hr since last received packet
+ |+poll+          |poll interval (log~2~ s)
+ |+reach+         |reach shift register (octal)
+diff --git a/docs/index.txt b/docs/index.txt
+index 25b301b..f2fa444 100644
+--- a/docs/index.txt
++++ b/docs/index.txt
+@@ -95,9 +95,12 @@ few will be user-visible.
+   just an alias for keyword server.  Incoming peer packets are ignored.
+ 
+ * Broadcast- and multicast client modes, which are impossible to
+-  secure, has been removed. Broadcast and multicast service can still
+-  be enabled, though this is a deprecated mode of operation and may be
+-  removed in a future release.
++  secure, have been removed. Broadcast (but not multicast) service can still
++  be enabled, though this is a deprecated and unsupported mode of
++  operation and may be entirely removed in a future release.
++
++* The authentication requirement for remote configuration commands
++  (e.g., via +ntpq+) can no longer be disabled.
+ 
+ * The deprecated and vulnerability-prone ntpdate program has been
+   replaced with a shell wrapper around ntpdig.  Its -e and -p
+@@ -287,8 +290,8 @@ link:assoc.html[Association Management]::
+   Describes how to configure servers and peers and manage the various
+   options. Includes automatic server discovery schemes.
+ link:discover.html[Automatic Server Discovery Schemes]::
+-  Describes automatic server discovery using broadcast, multicast,
+-  manycast and server pool scheme.
++  Describes automatic server discovery using broadcast
++  and server pool schemes.
+ link:access.html[Access Control Support]::
+   Describes the access control mechanisms that can be used to limit
+   client access to various time and management functions.
+diff --git a/docs/mode6.txt b/docs/mode6.txt
+index 766a95a..8e420f8 100644
+--- a/docs/mode6.txt
++++ b/docs/mode6.txt
+@@ -426,8 +426,6 @@ en.#:: Integer literal. 1 if packets on this interface are processed, 0
+ flags.#:: A hex literal that is a mask of flag bits on.
+           Flag mask values are described in a following table.
+ 
+-mc.#:: Count of multicast transmissions.
+-
+ name.#:: The interface name, such as would occur in an ifconfig listing.
+ 
+ pc.#:: Count of peers using this interface.
+@@ -448,9 +446,9 @@ up.#:: Uptime in seconds.
+ |INT_PPP	| 0x002	| Point-to-point interface
+ |INT_LOOPBACK	| 0x004	| the loopback interface
+ |INT_BROADCAST	| 0x008	| can broadcast out this interface
+-|INT_MULTICAST	| 0x010	| can multicast out this interface
++|INT_MULTICAST	| 0x010	| can multicast out this interface (not used)
+ |INT_BCASTOPEN	| 0x020	| broadcast receive socket is open
+-|INT_MCASTOPEN	| 0x040	| multicasting enabled
++|INT_MCASTOPEN	| 0x040	| multicasting enabled (not used)
+ |INT_WILDCARD	| 0x080	| wildcard interface - usually skipped
+ |INT_MCASTIF	| 0x100	| bound directly to MCAST address
+ |INT_PRIVACY	| 0x200	| RFC 4941 IPv6 privacy address
+-- 
+2.7.4
+

@@ -1,0 +1,22 @@
+From 13a8f8f0568f05db49a86763c5555a95e10d9c02 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Thu, 8 Dec 2016 18:32:27 -0500
+Subject: [PATCH 233/268] Correct a page title.
+
+---
+ docs/ntpmon.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docs/ntpmon.txt b/docs/ntpmon.txt
+index bc5309a..42006e0 100644
+--- a/docs/ntpmon.txt
++++ b/docs/ntpmon.txt
+@@ -1,4 +1,4 @@
+-= ntpmon - standard NTP query program =
++= ntpmon - read-time NTP status monitor =
+ 
+ [cols="10%,90%",frame="none",grid="none",style="verse"]
+ |==============================
+-- 
+2.7.4
+

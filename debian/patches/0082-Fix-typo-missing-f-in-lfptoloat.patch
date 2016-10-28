@@ -1,0 +1,34 @@
+From a67785d989057a88f3213326db1f43816a923672 Mon Sep 17 00:00:00 2001
+From: Hal Murray <murray@hgm.example.com>
+Date: Wed, 30 Nov 2016 03:42:17 -0800
+Subject: [PATCH 082/268] Fix typo: missing f in lfptoloat
+
+---
+ pylib/packet.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 55af511..bfdfaf6 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -1305,7 +1305,7 @@ class ControlSession:
+                 highwater = len(span.entries)
+                 for (tag, val) in variables.items():
+                     if tag =="now":
+-                        span.now = ntp.ntpc.lfptoloat(val)
++                        span.now = ntp.ntpc.lfptofloat(val)
+                         continue
+                     elif tag == "last.newest":
+                         continue
+@@ -1319,7 +1319,7 @@ class ControlSession:
+                             if idx >= len(span.entries):
+                                 span.entries.append(MRUEntry())
+                             if type(val) != type(0) and val.startswith("0x"):
+-                                val = ntp.ntpc.lfptoloat(val)
++                                val = ntp.ntpc.lfptofloat(val)
+                             setattr(span.entries[-1], prefix, val)
+ 
+                 # If we've seen the end sentinel on the span, break out
+-- 
+2.7.4
+

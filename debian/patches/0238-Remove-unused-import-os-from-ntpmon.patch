@@ -1,0 +1,25 @@
+From 28cd12faf6300c6b9db2289cc5a212693f794594 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Thu, 8 Dec 2016 23:54:11 -0500
+Subject: [PATCH 238/268] Remove unused import "os" from ntpmon
+
+---
+ ntpclients/ntpmon | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ntpclients/ntpmon b/ntpclients/ntpmon
+index da6b669..22141e5 100755
+--- a/ntpclients/ntpmon
++++ b/ntpclients/ntpmon
+@@ -5,7 +5,7 @@
+ # SPDX-License-Identifier: BSD-2-clause
+ from __future__ import print_function, division
+ 
+-import os, sys, curses, time, getopt
++import sys, curses, time, getopt
+ 
+ try:
+     import ntp.packet
+-- 
+2.7.4
+

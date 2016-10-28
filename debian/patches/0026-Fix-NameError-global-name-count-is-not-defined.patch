@@ -1,0 +1,33 @@
+From fd1106d7cdcccd90535f05edce88781417e2a9a4 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Sat, 26 Nov 2016 12:08:23 -0500
+Subject: [PATCH 026/268] Fix NameError: global name 'count' is not defined
+
+---
+ pylib/packet.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 107cc42..501ca2b 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -982,14 +982,14 @@ class ControlSession:
+             shouldbesize = (ControlPacket.HEADER_LEN + rpkt.count + 3) & ~3
+             if len(rawdata) < shouldbesize:
+                 warn("Response packet claims %u octets payload, above %d received\n" % \
+-                    (count, len(rawdata) - ControlPacket.HEADER_LEN))
++                    (rpkt.count, len(rawdata) - ControlPacket.HEADER_LEN))
+                 raise ControlException(SERR_INCOMPLETE)
+ 
+             if self.debug > 1:
+                 warn("Got packet, size = %d\n"% len(rawdata))
+             if rpkt.count > (len(rawdata) - ControlPacket.HEADER_LEN):
+                     warn("Received count of %u octets, data in packet is %ld\n"\
+-                                   % (count, len(rawdata) - ControlPacket.HEADER_LEN))
++                                   % (rpkt.count, len(rawdata) - ControlPacket.HEADER_LEN))
+                     continue
+ 
+             # Someday, perhaps, check authentication here
+-- 
+2.7.4
+

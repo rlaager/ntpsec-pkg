@@ -1,0 +1,30 @@
+From d9629868dd67a4355377150533ede75effca28db Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Sat, 3 Dec 2016 11:35:52 -0500
+Subject: [PATCH 190/268] Remove variables that were assigned but never used.
+
+pyflakes reported this as:
+1302: local variable 'last_older' is assigned to but never used
+1303: local variable 'addr_older' is assigned to but never used
+1304: local variable 'highwater' is assigned to but never used
+---
+ pylib/packet.py | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 8040c37..45ec630 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -1299,9 +1299,6 @@ class ControlSession:
+                     rawhook(variables)
+ 
+                 # Analyze the contents of this response into a span structure
+-                last_older = None
+-                addr_older = None
+-                highwater = len(span.entries)
+                 for (tag, val) in variables.items():
+                     if tag =="now":
+                         span.now = ntp.ntpc.lfptofloat(val)
+-- 
+2.7.4
+

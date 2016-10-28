@@ -1,0 +1,27 @@
+From 7246fca066e3890fc991668741a3536de34eb790 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Fri, 2 Dec 2016 00:18:52 -0500
+Subject: [PATCH 100/268] Reverse the MRUlist presentation order in ntpq...
+
+...not in the response processing.
+---
+ ntpq/ntpq | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/ntpq/ntpq b/ntpq/ntpq
+index e5db875..11fcc48 100755
+--- a/ntpq/ntpq
++++ b/ntpq/ntpq
+@@ -1303,7 +1303,8 @@ usage: config_from_file <configuration filename>
+                 formatter = ntp.util.MRUSummary(interpreter.showhostnames)
+                 self.say(ntp.util.MRUSummary.header + "\n")
+                 self.say(("=" * ntp.util.MRUSummary.width) + "\n")
+-                for entry in span.entries:
++                # reversed because we want the most recent entries at the top.
++                for entry in reversed(span.entries):
+                     self.say(formatter.summary(entry) + "\n")
+         except ntp.packet.ControlException as e:
+             # Giving up after 8 restarts from the beginning.
+-- 
+2.7.4
+

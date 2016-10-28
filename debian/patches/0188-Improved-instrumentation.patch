@@ -1,0 +1,52 @@
+From 50995a61cc2dda1386101176ee9475cc60117a61 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Tue, 6 Dec 2016 04:40:39 -0500
+Subject: [PATCH 188/268] Improved instrumentation.
+
+---
+ ntpdig/main.c   |  2 +-
+ ntpdig/pyntpdig | 12 +++++++++---
+ 2 files changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/ntpdig/main.c b/ntpdig/main.c
+index ab36f16..b24a566 100644
+--- a/ntpdig/main.c
++++ b/ntpdig/main.c
+@@ -1514,7 +1514,7 @@ offset_calculation(
+ 		printf("ntpdig rootdelay: %f\n", FPTOD(p_rdly));
+ 		printf("ntpdig rootdisp: %f\n", FPTOD(p_rdsp));
+ 		printf("ntpdig syncdist: %f\n", *synch_distance);
+-		printf("ntpdig offset_calculation: reftime: ");
++		printf("ntpdig offset_calculation: ref: ");
+ 		l_fp_output(&p_ref, stdout);
+ 		printf("ntpdig offset_calculation: org: ");
+ 		l_fp_output(&p_org, stdout);
+diff --git a/ntpdig/pyntpdig b/ntpdig/pyntpdig
+index 2e7b3d1..45def8a 100755
+--- a/ntpdig/pyntpdig
++++ b/ntpdig/pyntpdig
+@@ -359,12 +359,18 @@ if __name__ == '__main__':
+         arguments = ["localhost"]
+ 
+     if replay:
+-        pkt = ntp.packet.SyncPacket(replay.decode("hex"))
+-        print(repr(pkt))
++        (packet, dst) = replay.split(":")
++        pkt = ntp.packet.SyncPacket(packet.decode("hex"))
++        pkt.received = ntp.packet.SyncPacket.posix_to_ntp(float(dst))
++        #print(repr(pkt))
++        def hexstamp(n):
++            return "%08x.%08x" % (n >> 32, n & 0x00000000ffffffff)
++        print("org t1: %s rec t2: %s" % (hexstamp(pkt.t1()), hexstamp(pkt.t2())))
++        print("xmt t3: %s dst t4: %s" % (hexstamp(pkt.t3()), hexstamp(pkt.t4())))
+         pkt.posixize()
++        print("xmt t1: %f dst t2: %f" % (pkt.t1(), pkt.t2()))
+         print("xmt t3: %f dst t4: %f" % (pkt.t3(), pkt.t4()))
+         print("rec-org t21: %f  xmt-dst t34: %f" % (pkt.t2() - pkt.t1(), pkt.t3() - pkt.t4()))
+-        raise SystemExit(0)
+ 
+     returned = []
+     for server in concurrent_hosts:
+-- 
+2.7.4
+

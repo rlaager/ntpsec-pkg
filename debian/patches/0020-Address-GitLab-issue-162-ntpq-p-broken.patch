@@ -1,0 +1,25 @@
+From 9d95f6eecaa3bcede47cf98faf8b2b7ed6cff357 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sat, 26 Nov 2016 15:05:15 -0500
+Subject: [PATCH 020/268] Address GitLab issue #162: ntpq -p broken
+
+---
+ pylib/packet.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 9a302fa..87dd420 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -1014,7 +1014,7 @@ class ControlSession:
+             not_earlier = [frag for frag in fragments \
+                            if frag.offset >= rpkt.offset]
+             if len(not_earlier):
+-                not_earlier = earlier[0]
++                not_earlier = not_earlier[0]
+                 if not_earlier.offset == rpkt.offset:
+                     warn("duplicate %d octets at %d ignored, prior %d at %d\n" % (rpkt.count, rpkt.offset, not_earlier.count, not_earlier.offset))
+                     continue
+-- 
+2.7.4
+

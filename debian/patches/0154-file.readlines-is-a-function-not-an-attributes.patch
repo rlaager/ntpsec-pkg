@@ -1,0 +1,26 @@
+From 7bc500258392d796b9d0266ddaf7516d1beb5a61 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Sat, 3 Dec 2016 10:45:53 -0500
+Subject: [PATCH 154/268] file.readlines() is a function, not an attributes
+
+TypeError: 'builtin_function_or_method' object is not subscriptable
+---
+ ntpsweep/ntpsweep | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ntpsweep/ntpsweep b/ntpsweep/ntpsweep
+index f8a7618..cdc055a 100755
+--- a/ntpsweep/ntpsweep
++++ b/ntpsweep/ntpsweep
+@@ -29,7 +29,7 @@ def ntp_peers(host):
+     "Return a list of peer IP addrs for a specified host, empty list if query failed."
+     try:
+         with os.popen("ntpq -npw " + host) as rp:
+-            hostlines = rp.readlines[2:]	# Drop display header
++            hostlines = rp.readlines()[2:]	# Drop display header
+             # Strip tally mark from first field
+             return [ln.split()[0][1:] for ln in hostlines if ln[0] in " x.-+#*o"]
+     except OSError:
+-- 
+2.7.4
+

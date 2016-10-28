@@ -1,0 +1,48 @@
+From 466fe02d00f7f58877b41275ac919b085783b676 Mon Sep 17 00:00:00 2001
+From: Sanjeev Gupta <ghane0@gmail.com>
+Date: Tue, 29 Nov 2016 17:44:06 +0800
+Subject: [PATCH 063/268] Remove and replace incorrect TOC
+
+The TOC in this document had been copied from quick.txt
+commit 1690b354
+---
+ docs/outside-tools.txt | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/docs/outside-tools.txt b/docs/outside-tools.txt
+index 8706e4f..c0c8fad 100644
+--- a/docs/outside-tools.txt
++++ b/docs/outside-tools.txt
+@@ -15,12 +15,8 @@ include::includes/hand.txt[]
+ == Table of Contents ==
+ 
+ * link:#introduction[Introduction]
+-* link:#basics[Configuration Basics]
+-* link:#pool[Configuring Pool Servers]
+-* link:#howmany[How Many Servers?]
+-* link:#gps[Configuring A Local GPS]
+-* link:#dhcp[Special considerations when using DHCP]
+-* link:#sanity[Sanity-Checking Your Time Service]
++* link:#wireshark[Wireshark]
++* link:#nagios[Nagios]
+ 
+ '''''
+ 
+@@ -32,12 +28,14 @@ who write tools for system administrators frequently have
+ features and plugins designed to help you work with it. This
+ page collects some references that may be useful.
+ 
++[[wireshark]]
+ == Wireshark ==
+ 
+ The https://www.wireshark.org/[Wireshark] protocol analyzer has
+ support for displaying NTP packets with the fields broken out
+ and interpreted.
+ 
++[[nagios]]
+ == Nagios ==
+ 
+ The https://www.nagios.org/[Nagios] monitoring suite has native
+-- 
+2.7.4
+

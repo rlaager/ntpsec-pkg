@@ -1,0 +1,27 @@
+From 030e19a91da262b25c024c7b132710515943af2f Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Fri, 2 Dec 2016 17:22:09 -0600
+Subject: [PATCH 122/268] Fix an uninitialized variable use in ntpleapfetch
+
+The LEAPFILE variable is not set at the time it is used for the
+ntpleapfetch --help output.  We could re-order that, but it is loaded
+from ntp.conf, which is not guaranteed to provide one.
+---
+ ntpleapfetch/ntpleapfetch | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/ntpleapfetch/ntpleapfetch b/ntpleapfetch/ntpleapfetch
+index d910088..0858789 100755
+--- a/ntpleapfetch/ntpleapfetch
++++ b/ntpleapfetch/ntpleapfetch
+@@ -62,7 +62,6 @@ All arguments are optional:  Default (or current value) shown:
+     -p 4|6
+           Prefer IPv4 or IPv6 (as specified) addresses, but use either
+     -d    Specify the filename on the local system
+-          $LEAPFILE
+     -e    Specify how long before expiration the file is to be refreshed
+           Units are required, e.g. "-e 60 days"  Note that larger values
+           imply more frequent refreshes.
+-- 
+2.7.4
+

@@ -1,0 +1,25 @@
+From 711adb169e720f030ab650c61f220bfeadd93fbd Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Fri, 9 Dec 2016 00:05:06 -0500
+Subject: [PATCH 241/268] ntpmon -a needs to set showall to True
+
+---
+ ntpclients/ntpmon | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ntpclients/ntpmon b/ntpclients/ntpmon
+index 722dded..543fe70 100755
+--- a/ntpclients/ntpmon
++++ b/ntpclients/ntpmon
+@@ -72,7 +72,7 @@ if __name__ == '__main__':
+     showall = False
+     for (switch, val) in options:
+         if switch in ("-a", "--all"):
+-            showall = False
++            showall = True
+         elif switch in ("-n", "--numeric"):
+             showhostnames = False
+         elif switch in ("-w", "--wide"):
+-- 
+2.7.4
+

@@ -1,0 +1,42 @@
+From 9148e13297e059accf693b2da1e350cc162c75aa Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Fri, 2 Dec 2016 17:44:56 -0600
+Subject: [PATCH 130/268] docs: Fix some formatting markers
+
+This avoids improperly formatting a bunch of extra text.
+---
+ docs/includes/ntpkeygen-body.txt | 4 ++--
+ ntpd/ntp.conf-man.txt            | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/docs/includes/ntpkeygen-body.txt b/docs/includes/ntpkeygen-body.txt
+index 2dde8ef..30e4268 100644
+--- a/docs/includes/ntpkeygen-body.txt
++++ b/docs/includes/ntpkeygen-body.txt
+@@ -60,8 +60,8 @@ password is the name of the host running the program. If the previous
+ write password is specified as the host name, these files can be read by
+ that host with no explicit password.
+ 
+-File names begin with the prefix _ntpkey__ and end with the postfix
+-__hostname.filestamp_, where _hostname_ is the owner name, usually the
++File names begin with the prefix _ntpkey_ and end with the postfix
++_hostname.filestamp_, where _hostname_ is the owner name, usually the
+ string returned by the Unix gethostname() routine, and _filestamp_ is
+ the NTP seconds when the file was generated, in decimal digits. This
+ both guarantees uniqueness and simplifies maintenance procedures, since
+diff --git a/ntpd/ntp.conf-man.txt b/ntpd/ntp.conf-man.txt
+index 8396082..7e1e33c 100644
+--- a/ntpd/ntp.conf-man.txt
++++ b/ntpd/ntp.conf-man.txt
+@@ -27,7 +27,7 @@ times in seconds) and text strings.
+ The rest of this page describes the configuration and control options.
+ The "Notes on Configuring NTP and Setting up an NTP Subnet" page
+ (available as part of the HTML documentation provided under
+-`/usr/share/doc/ntp) contains an extended discussion of these options.
++`/usr/share/doc/ntp`) contains an extended discussion of these options.
+ In addition to the discussion of general 'Configuration Options',
+ there are sections describing the following supported functionality and
+ the options used to control it:
+-- 
+2.7.4
+

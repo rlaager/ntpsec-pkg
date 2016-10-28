@@ -1,0 +1,25 @@
+From 3675ed7fc74326716b7611f6f8c0461ec17f662d Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Tue, 6 Dec 2016 02:59:17 -0500
+Subject: [PATCH 181/268] Correct some baroque GPG options.
+
+---
+ devel/release | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/devel/release b/devel/release
+index 09733f2..ea57d1a 100755
+--- a/devel/release
++++ b/devel/release
+@@ -29,7 +29,7 @@ $do git push
+ $do git push --tags
+ 
+ # Generate GPG detached signature of the release tarball.
+-$do gpg -u ${K} --output ntpsec-${V}.tar.gz.sig --detach-sig ntpsec-${V}.tar.gz
++$do gpg -u ${K} -a --output ntpsec-${V}.tar.gz.sum.asc --sign ntpsec-${V}.tar.gz.sum
+ 
+ # Generate sha256sum file for the release tarball.
+ $do shasum -a 256 -p ntpsec-${V}.tar.gz >ntpsec-${V}.tar.gz.sum
+-- 
+2.7.4
+

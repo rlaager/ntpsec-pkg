@@ -1,0 +1,39 @@
+From 2cf5a34f2fb2220abdc2f1a8cdcfd36045e36206 Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Fri, 2 Dec 2016 17:42:35 -0600
+Subject: [PATCH 127/268] docs: Split the association lines
+
+Previously, this resulted in one giant, unreadable line.
+---
+ docs/includes/assoc-commands.txt | 15 ++++++++++-----
+ 1 file changed, 10 insertions(+), 5 deletions(-)
+
+diff --git a/docs/includes/assoc-commands.txt b/docs/includes/assoc-commands.txt
+index 2fea603..efb99be 100644
+--- a/docs/includes/assoc-commands.txt
++++ b/docs/includes/assoc-commands.txt
+@@ -7,11 +7,16 @@ a.b.c.d format, (b) an IPV6 address in [a:b:c:d:e:f:g] format, (c) a
+ link-local IPV6 address with an interface specified in
+ [a:b:c:d:e:f:g]%device format, or (d) a DNS hostname.
+ 
+-+pool+ _address_ [+burst+] [+iburst+] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_] [+preempt+]::
+-+server+ _address_ [+key+ _key_] [+burst+] [+iburst+] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_]::
+-+peer+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_]::
+-+broadcast+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+ttl+ _ttl_]::
+-+manycastclient+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_] [+ttl+ _ttl_] [+preempt+]::
+++pool+ _address_ [+burst+] [+iburst+] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_] [+preempt+]
++
+++server+ _address_ [+key+ _key_] [+burst+] [+iburst+] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_]
++
+++peer+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_]
++
+++broadcast+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+ttl+ _ttl_]
++
+++manycastclient+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_] [+ttl+ _ttl_] [+preempt+]
++
+ +unpeer+ ['address' | 'associd']::
+   These six commands specify the time server name or address to be used
+   and the mode in which to operate. The _address_ can be either a DNS
+-- 
+2.7.4
+

@@ -1,0 +1,39 @@
+From f9d84473733a9fe1e3b501278d323317520fdf0c Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sat, 3 Dec 2016 00:01:17 -0500
+Subject: [PATCH 119/268] --path-doc -> --htmldir
+
+---
+ wafhelpers/configure.py | 2 +-
+ wafhelpers/options.py   | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/wafhelpers/configure.py b/wafhelpers/configure.py
+index d9d6092..622cd0d 100644
+--- a/wafhelpers/configure.py
++++ b/wafhelpers/configure.py
+@@ -109,7 +109,7 @@ def cmd_configure(ctx, config):
+                 ctx.env.ASCIIDOC_FLAGS = ["-f", "%s/docs/asciidoc.conf" % ctx.srcnode.abspath()]
+                 ctx.env.ENABLE_DOC_ONLY = ctx.options.enable_doc_only
+                 ctx.env.ENABLE_DOC_USER = ctx.options.enable_doc
+-                ctx.env.HTMLDIR = ctx.options.path_doc
++                ctx.env.HTMLDIR = ctx.options.htmldir
+ 
+         # XXX: conditionally build this with --disable-man?  Should it build without docs enabled?
+         ctx.env.A2X_FLAGS = ["--format", "manpage", "--asciidoc-opts=--conf-file=%s/docs/asciidoc.conf" % ctx.srcnode.abspath()]
+diff --git a/wafhelpers/options.py b/wafhelpers/options.py
+index 6d30d85..6c1a617 100644
+--- a/wafhelpers/options.py
++++ b/wafhelpers/options.py
+@@ -53,7 +53,7 @@ def options_cmd(ctx, config):
+ 	grp.add_option('--enable-doc-only', action='store_true', default=False, help="Only build NTP documentation")
+ 	grp.add_option('--enable-a2x-xmllint', action='store_true', default=False, help="Build NTP documentation with a2x XML lint")
+ 	grp.add_option('--disable-manpage', action='store_true', default=False, help="Disable Manpage building.")
+-	grp.add_option('--path-doc', type='string', action='store', default=None, help="Force HTML installation directory.")
++	grp.add_option('--htmldir', type='string', action='store', default=None, help="Force HTML installation directory.")
+ 	grp.add_option('--mandir', type='string', action='store', default=None, help="Force man page installation directory.")
+ 
+ 	grp = ctx.add_option_group("Not for general use")
+-- 
+2.7.4
+

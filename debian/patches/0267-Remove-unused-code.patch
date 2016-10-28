@@ -1,0 +1,107 @@
+From e740c210907d8ccb96d033f277eba4bb84cb0b19 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sat, 10 Dec 2016 16:16:11 -0500
+Subject: [PATCH 267/268] Remove unused code.
+
+---
+ libisc/include/isc/netaddr.h |  8 --------
+ libisc/netaddr.c             | 27 ---------------------------
+ libntp/pymodule.c            | 18 ------------------
+ 3 files changed, 53 deletions(-)
+
+diff --git a/libisc/include/isc/netaddr.h b/libisc/include/isc/netaddr.h
+index c406433..e521645 100644
+--- a/libisc/include/isc/netaddr.h
++++ b/libisc/include/isc/netaddr.h
+@@ -27,14 +27,6 @@ struct isc_netaddr {
+ };
+ 
+ bool
+-isc_netaddr_equal(const isc_netaddr_t *a, const isc_netaddr_t *b);
+-
+-/*%<
+- * Compare network addresses 'a' and 'b'.  Return #true if
+- * they are equal, #false if not.
+- */
+-
+-bool
+ isc_netaddr_eqprefix(const isc_netaddr_t *a, const isc_netaddr_t *b,
+ 		     unsigned int prefixlen);
+ /*%<
+diff --git a/libisc/netaddr.c b/libisc/netaddr.c
+index 7ff5fe8..f1fccce 100644
+--- a/libisc/netaddr.c
++++ b/libisc/netaddr.c
+@@ -20,33 +20,6 @@
+ #define ISC_TF(x) ((x) ? true : false)
+ 
+ bool
+-isc_netaddr_equal(const isc_netaddr_t *a, const isc_netaddr_t *b) {
+-	REQUIRE(a != NULL && b != NULL);
+-
+-	if (a->family != b->family)
+-		return (false);
+-
+-	if (a->zone != b->zone)
+-		return (false);
+-
+-	switch (a->family) {
+-	case AF_INET:
+-		if (a->type.in.s_addr != b->type.in.s_addr)
+-			return (false);
+-		break;
+-	case AF_INET6:
+-		if (memcmp(&a->type.in6, &b->type.in6,
+-			   sizeof(a->type.in6)) != 0 ||
+-		    a->zone != b->zone)
+-			return (false);
+-		break;
+-	default:
+-		return (false);
+-	}
+-	return (true);
+-}
+-
+-bool
+ isc_netaddr_eqprefix(const isc_netaddr_t *a, const isc_netaddr_t *b,
+ 		     unsigned int prefixlen)
+ {
+diff --git a/libntp/pymodule.c b/libntp/pymodule.c
+index 20cc875..a50cdb8 100644
+--- a/libntp/pymodule.c
++++ b/libntp/pymodule.c
+@@ -104,22 +104,6 @@ ntpc_lfptofloat(PyObject *self, PyObject *args)
+ }
+ 
+ static PyObject *
+-ntpc_tstofloat(PyObject *self, PyObject *args)
+-{
+-    int64_t ti;
+-    l_fp ts;
+-    struct timespec tt;
+- 
+-    UNUSED_ARG(self);
+-    if (!PyArg_ParseTuple(args, "i", &ti))
+-	return NULL;
+-    ts.l_ui = ti >> 32;
+-    ts.l_uf = ti & 0xFFFFFFFFUL;
+-    tt = lfp_stamp_to_tspec(ts, NULL);
+-    return Py_BuildValue("d", tt.tv_sec + tt.tv_nsec * 1e-9);
+-}
+-
+-static PyObject *
+ ntpc_set_tod(PyObject *self, PyObject *args)
+ {
+     struct timespec ts;
+@@ -169,8 +153,6 @@ static PyMethodDef ntpc_methods[] = {
+      PyDoc_STR("Convert a time stamp to something readable.")},
+     {"lfptofloat",     	ntpc_lfptofloat,  	METH_VARARGS,
+      PyDoc_STR("NTP l_fp to Python-style float time.")},
+-    {"tstofloat",     	ntpc_tstofloat,  	METH_VARARGS,
+-     PyDoc_STR("NTP integral timestamp to Python-style float time.")},
+     {"set_tod",     	ntpc_set_tod,   	METH_VARARGS,
+      PyDoc_STR("Set time to nanosecond precision.")},
+     {"adj_systime",    	ntpc_adj_systime,   	METH_VARARGS,
+-- 
+2.7.4
+

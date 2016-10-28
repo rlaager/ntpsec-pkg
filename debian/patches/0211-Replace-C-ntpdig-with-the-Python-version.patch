@@ -1,0 +1,6246 @@
+From 6cd6e469d55ddc151a8f6f0a4c79c3fe362e9cf3 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Wed, 7 Dec 2016 18:21:09 -0500
+Subject: [PATCH 211/268] Replace C ntpdig with the Python version.
+
+Alao, fix up display of the 'adjusted' bool in Python.
+---
+ INSTALL                                 |   26 -
+ docs/includes/ntpdig-body.txt           |   65 +-
+ ntpdig/crypto.c                         |  196 ----
+ ntpdig/crypto.h                         |   29 -
+ ntpdig/data_formats.h                   |    8 -
+ ntpdig/include/ntp.lic                  |   18 -
+ ntpdig/kod_management.c                 |  295 ------
+ ntpdig/kod_management.h                 |   20 -
+ ntpdig/log.c                            |   38 -
+ ntpdig/log.h                            |   24 -
+ ntpdig/main.c                           | 1744 -------------------------------
+ ntpdig/main.h                           |   25 -
+ ntpdig/networking.c                     |  287 -----
+ ntpdig/networking.h                     |   77 --
+ ntpdig/ntpdig                           |  408 ++++++++
+ ntpdig/ntpdig.c                         |   12 -
+ ntpdig/pyntpdig                         |  407 --------
+ ntpdig/timevalops.h                     |  206 ----
+ ntpdig/utilities.c                      |  230 ----
+ ntpdig/utilities.h                      |   27 -
+ ntpdig/wscript                          |   40 -
+ tests/ntpdig/crypto.c                   |  145 ---
+ tests/ntpdig/data/debug-input-lfp-bin   |    3 -
+ tests/ntpdig/data/debug-input-lfp-dec   |    3 -
+ tests/ntpdig/data/debug-input-pkt       |    8 -
+ tests/ntpdig/data/key-test-ascii        |    2 -
+ tests/ntpdig/data/key-test-comments     |    3 -
+ tests/ntpdig/data/key-test-empty        |    0
+ tests/ntpdig/data/key-test-hex          |    3 -
+ tests/ntpdig/data/key-test-invalid-hex  |    2 -
+ tests/ntpdig/data/kod-expected-multiple |    3 -
+ tests/ntpdig/data/kod-expected-single   |    1 -
+ tests/ntpdig/data/kod-test-blanks       |    6 -
+ tests/ntpdig/data/kod-test-correct      |    2 -
+ tests/ntpdig/data/kod-test-empty        |    0
+ tests/ntpdig/key_file.c                 |  162 ---
+ tests/ntpdig/kod_database.c             |  129 ---
+ tests/ntpdig/kod_file.c                 |  194 ----
+ tests/ntpdig/ntpdigtest.h               |   34 -
+ tests/ntpdig/packet_handling.c          |  289 -----
+ tests/ntpdig/packet_processing.c        |  379 -------
+ tests/ntpdig/utilities.c                |  202 ----
+ tests/wscript                           |   27 -
+ wafhelpers/configure.py                 |    7 -
+ wscript                                 |    3 +-
+ 45 files changed, 437 insertions(+), 5352 deletions(-)
+ delete mode 100644 ntpdig/crypto.c
+ delete mode 100644 ntpdig/crypto.h
+ delete mode 100644 ntpdig/data_formats.h
+ delete mode 100644 ntpdig/include/ntp.lic
+ delete mode 100644 ntpdig/kod_management.c
+ delete mode 100644 ntpdig/kod_management.h
+ delete mode 100644 ntpdig/log.c
+ delete mode 100644 ntpdig/log.h
+ delete mode 100644 ntpdig/main.c
+ delete mode 100644 ntpdig/main.h
+ delete mode 100644 ntpdig/networking.c
+ delete mode 100644 ntpdig/networking.h
+ create mode 100755 ntpdig/ntpdig
+ delete mode 100644 ntpdig/ntpdig.c
+ delete mode 100755 ntpdig/pyntpdig
+ delete mode 100644 ntpdig/timevalops.h
+ delete mode 100644 ntpdig/utilities.c
+ delete mode 100644 ntpdig/utilities.h
+ delete mode 100644 ntpdig/wscript
+ delete mode 100644 tests/ntpdig/crypto.c
+ delete mode 100644 tests/ntpdig/data/debug-input-lfp-bin
+ delete mode 100644 tests/ntpdig/data/debug-input-lfp-dec
+ delete mode 100644 tests/ntpdig/data/debug-input-pkt
+ delete mode 100644 tests/ntpdig/data/key-test-ascii
+ delete mode 100644 tests/ntpdig/data/key-test-comments
+ delete mode 100644 tests/ntpdig/data/key-test-empty
+ delete mode 100644 tests/ntpdig/data/key-test-hex
+ delete mode 100644 tests/ntpdig/data/key-test-invalid-hex
+ delete mode 100644 tests/ntpdig/data/kod-expected-multiple
+ delete mode 100644 tests/ntpdig/data/kod-expected-single
+ delete mode 100644 tests/ntpdig/data/kod-test-blanks
+ delete mode 100644 tests/ntpdig/data/kod-test-correct
+ delete mode 100644 tests/ntpdig/data/kod-test-empty
+ delete mode 100644 tests/ntpdig/key_file.c
+ delete mode 100644 tests/ntpdig/kod_database.c
+ delete mode 100644 tests/ntpdig/kod_file.c
+ delete mode 100644 tests/ntpdig/ntpdigtest.h
+ delete mode 100644 tests/ntpdig/packet_handling.c
+ delete mode 100644 tests/ntpdig/packet_processing.c
+ delete mode 100644 tests/ntpdig/utilities.c
+
+diff --git a/INSTALL b/INSTALL
+index 4043304..633542a 100644
+--- a/INSTALL
++++ b/INSTALL
+@@ -51,18 +51,6 @@ psutils::
+    Ubuntu package: python-psutil or python3-psutil
+    SLES: python-psutil
+ 
+-libevent 2.x::
+-   Optional. Without it, ntpdig won't build. 
+-   Debian: libevent-2.0-5 and libevent-dev
+-   Fedora: libevent and libevent-devel
+-   Gentoo package: dev-libs/libevent
+-   SLES: libevent and libevent-devel
+-
+-   NetBSD: As installed, libevent is broken.  It links, but doesn't run.
+-     Here is a workaround:
+-      # cd /usr/lib
+-      # ln -s /usr/pkg/lib/libevent_core-2.0.so.5 .
+-
+ seccomp::
+    Optional on Linux to support restricting syscalls
+    Debian: libseccomp-dev (gets libseccomp2)
+@@ -122,20 +110,6 @@ All you will require is the Xcode command line tools with no additions.
+ There is currently no support for using Xcode's builder. NTPsec's standard
+ waf based build system is used.
+ 
+-The OS X build of NTPsec requires the OS X port of the libevent2 library:
+-
+-  Site    : libevent.org
+-  Version : 2.0.22-stable
+-  Build:
+-   $ tar zxf libevent-2.0.22-stable.tar.gz
+-   $ cd libevent-2.0.22-stable
+-   $ ./configure --disable-openssl
+-   $ make
+-   $ sudo make install
+-
+-You can use 3rd party packages such as Macports or HomeBrew for
+-this library if you wish and they have it available.
+-
+ == Basic Installation ==
+ 
+ These are generic Unix installation instructions.
+diff --git a/docs/includes/ntpdig-body.txt b/docs/includes/ntpdig-body.txt
+index 2979dee..9be4a56 100644
+--- a/docs/includes/ntpdig-body.txt
++++ b/docs/includes/ntpdig-body.txt
+@@ -5,10 +5,10 @@
+ == SYNOPSIS ==
+ [verse]
+ ntpdig
+-    [--help | -?] [-4 | -6] [-a keynum] [-b bcaddress] [-B bctimeout]
+-    [-c] [-d] [-D debug-level] [-g delay] [-j] [-K kodfile] [-k keyfile]
+-    [-l logfile] [-M steplimit] [-o ntpver] [-r] [-S] [-s]
+-    [-u uctimeout] [--wait] [--no-wait] [--version] [address...]+
++    [--help | -?] [-4 | -6] [-a keynum] [-p samples]
++    [-c] [-d] [-D debug-level] [-g delay] [-j] [-k keyfile]
++    [-l logfile] [-M steplimit] [-S] [-s]
++    [--wait] [--no-wait] [--version] [address...]+
+ 
+ == DESCRIPTION ==
+ 
+@@ -52,9 +52,11 @@ JSON record:
+ ---------------------------------------------------------------------------------
+ 
+ In the JSON format, time is in ISO 8601 format; precision is the synch
+-distance, with an unknown synch distance is reported as 0.  Host and
++distance, with an unknown synch distance being reported as 0.  Host and
+ IP are always emitted even if duplicate. The "adjusted" boolean
+-reports whether ntpdig adjusted the time.
++reports whether ntpdig determined it should slewed or stepped the
++time. This may be shown as true even if time was not actually
++adjusted due to lack of clock-setting privileges.
+ 
+ == OPTIONS ==
+ 
+@@ -84,14 +86,6 @@ argument. The argument of this option is the _keyid_, a number
+ specified in the _keyfile_ as this key's identifier. See the _keyfile_
+ option (+-k+) for more details.
+ 
+-+-b+ _broadcast-address_, +--broadcast+=_broadcast-address_::
+-  Listen to the address specified for broadcast time sync. This option
+-  may appear an unlimited number of times.
+-+
+-If specified +ntpdig+ will listen to the specified address for NTP
+-broadcasts. The default maximum wait time can (and probably should) be
+-modified with +-t+.
+-
+ +-c+ _host-name_, +--concurrent+=_host-name_::
+   Concurrently query all IPs returned for host-name. This option may
+   appear an unlimited number of times.
+@@ -119,9 +113,7 @@ send concurrent queries.  This is appropriate when using a server pool.
+   integer number as its argument. The default _milliseconds_ for this
+   option is 50.
+ +
+-Since we're only going to use the first valid response we get and
+-there is benefit to specifying a good number of servers to query,
+-separate the queries we send out by the specified number of
++Separate the queries we send out by the specified number of
+ milliseconds. A larger _delay_ reduces the query load on the time
+ sources, at the cost of increasing the time to receive a valid
+ response if the first source attempted is slow or unreachable.
+@@ -129,14 +121,6 @@ response if the first source attempted is slow or unreachable.
+ +-j+::
+   Output to stdout in JSON, suppressing syslog messages.
+ 
+-+-K+ _file-name_, +--kod+=_file-name_::
+-  KoD history filename. The default _file-name_ for this option is:
+-  +/var/db/ntp-kod+.
+-+
+-Specifies the filename to be used for the persistent history of KoD
+-responses received from servers. If the file does not exist, a warning
+-message will be displayed. The file will not be created.
+-
+ +-k+ _file-name_, +--keyfile+=_file-name_::
+   Look in this file for the key specified with +-a+.
+ +
+@@ -161,17 +145,9 @@ _clock_settime()_ or local equivalent. The default value is 0, which
+ means all adjustments will be stepped. This is a feature, as different
+ situations demand different values.
+ 
+-+-o+ _number_, +--ntpversion+=_number_::
+-  Send _number_ as our NTP protocol version. This option takes an integer
+-  number as its argument.  Defaults to 4.  Seldom useful.
+-
+-+-r+, +--usereservedport+::
+-  By default, +ntpdig+ uses a UDP source port number selected by the
+-  operating system. When this option is used, the reserved NTP port 123
+-  is used, which most often requires +ntpdig+ be invoked as the superuser
+-  (commonly "root"). This can help identify connectivity failures due to
+-  port-based firewalling which affect +ntpd+, which always uses source
+-  port 123.
+++-p+, +--samples+::
++  Number of samples to take (default 1). The best one (chosen by,
++  among other criteria, sync distance) is selected for display or use.
+ 
+ +-S+, +--step+::
+   By default, +ntpdig+ displays the clock offset but does not attempt to
+@@ -210,7 +186,7 @@ If we are not setting the time, wait for all pending responses.
+ +ntpdig ntpserver.somewhere+::
+   is the simplest use of this program and can be run as an unprivileged
+   command to check the current time and error in the local clock.
+-+ntpdig -Ss -M 128 ntpserver.somewhere+::
+++ntpdig -S -s -M 128 ntpserver.somewhere+::
+   With suitable privilege, run as a command or from a _cron_(8) job,
+   +ntpdig -Ss -M 128 ntpserver.somewhere+ will request the time from the
+   server, and if that server reports that it is synchronized then if the
+@@ -223,6 +199,21 @@ If we are not setting the time, wait for all pending responses.
+   synchronized specified server, like the +ntpdate+ utility from older
+   NTP implementations.
+ 
++== COMPATIBILITY ==
++
++Not all options of the NTP classic sntp(1) utility have been retained;
++don't expect -b, -K, -o, -r, -w, or -W to work.  These have either
++been removed for security reasons or discarded as unnecessary in a modern
++environment.
++
++This version does not log to syslog.  Pipe standard output and
++standard error to logger(1) id you want this behavior.
++
++The synchronization-distance formula used in this version is slightly
++different from that found in sntp(1), tracking the newer formula used
++in {ntpdman}.  Expect offset computations to match but synch-distances
++not to.
++
+ == EXIT STATUS ==
+ 
+ One of the following exit values will be returned:
+diff --git a/ntpdig/crypto.c b/ntpdig/crypto.c
+deleted file mode 100644
+index 3327d0e..0000000
+--- a/ntpdig/crypto.c
++++ /dev/null
+@@ -1,196 +0,0 @@
+-#include <config.h>
+-#include "crypto.h"
+-#include <ctype.h>
+-
+-struct key *key_ptr;
+-size_t key_cnt = 0;
+-
+-int
+-make_mac(
+-	char *pkt_data,
+-	int pkt_size,
+-	int mac_size,
+-	struct key *cmp_key,
+-	char * digest
+-	)
+-{
+-	u_int		len = mac_size;
+-#ifdef HAVE_OPENSSL
+-	int		key_type;
+-#endif
+-	EVP_MD_CTX	ctx;
+-
+-	if (cmp_key->key_len > 64)
+-		return 0;
+-	if (pkt_size % 4 != 0)
+-		return 0;
+-
+-	INIT_SSL();
+-#ifdef HAVE_OPENSSL
+-	key_type = keytype_from_text(cmp_key->type, NULL);
+-#endif
+-	EVP_DigestInit(&ctx, EVP_get_digestbynid(key_type));
+-	EVP_DigestUpdate(&ctx, (uint8_t *)cmp_key->key_seq, (u_int)cmp_key->key_len);
+-	EVP_DigestUpdate(&ctx, (uint8_t *)pkt_data, (u_int)pkt_size);
+-	EVP_DigestFinal(&ctx, (uint8_t *)digest, &len);
+-
+-	return (int)len;
+-}
+-
+-
+-/* Generates a md5 digest of the key specified in keyid concatinated with the
+- * ntp packet (exluding the MAC) and compares this digest to the digest in
+- * the packet's MAC. If they're equal this function returns 1 (packet is
+- * authentic) or else 0 (not authentic).
+- */
+-bool
+-auth_md5(
+-	char *pkt_data,
+-	int pkt_size,
+-	int mac_size,
+-	struct key *cmp_key
+-	)
+-{
+-	int  hash_len;
+-	bool  authentic;
+-	char digest[20];
+-
+-	if (mac_size > (int)sizeof(digest))
+-		return 0;
+-	hash_len = make_mac(pkt_data, pkt_size, sizeof(digest), cmp_key,
+-			    digest);
+-	if (!hash_len)
+-		authentic = false;
+-	else
+-		authentic = !memcmp(digest, pkt_data + pkt_size + 4,
+-				    hash_len);
+-	return authentic;
+-}
+-
+-static int
+-hex_val(
+-	unsigned char x
+-	)
+-{
+-	int val;
+-
+-	if ('0' <= x && x <= '9')
+-		val = x - '0';
+-	else if ('a' <= x && x <= 'f')
+-		val = x - 'a' + 0xa;
+-	else if ('A' <= x && x <= 'F')
+-		val = x - 'A' + 0xA;
+-	else
+-		val = -1;
+-
+-	return val;
+-}
+-
+-/* Load keys from the specified keyfile into the key structures.
+- * Returns -1 if the reading failed, otherwise it returns the
+- * number of keys it read
+- */
+-int
+-auth_init(
+-	const char *keyfile,
+-	struct key **keys
+-	)
+-{
+-	FILE *keyf = fopen(keyfile, "r");
+-	struct key *prev = NULL;
+-	int scan_cnt, line_cnt = 0;
+-	char kbuf[200];
+-	char keystring[129];
+-
+-	if (keyf == NULL) {
+-		if (1 || debug)
+-			printf("ntpdig auth_init: Couldn't open key file %s for reading!\n", keyfile);
+-		return -1;
+-	}
+-	if (feof(keyf)) {
+-		if (1 || debug)
+-			printf("ntpdig auth_init: Key file %s is empty!\n", keyfile);
+-		fclose(keyf);
+-		return -1;
+-	}
+-	key_cnt = 0;
+-	while (!feof(keyf)) {
+-		char * octothorpe;
+-		struct key *act;
+-		bool goodline = false;
+-
+-		if (NULL == fgets(kbuf, sizeof(kbuf), keyf))
+-			continue;
+-
+-		kbuf[sizeof(kbuf) - 1] = '\0';
+-		octothorpe = strchr(kbuf, '#');
+-		if (octothorpe)
+-			*octothorpe = '\0';
+-		act = emalloc(sizeof(*act));
+-		scan_cnt = sscanf(kbuf, "%d %9s %128s", &act->key_id, act->type, keystring);
+-		if (scan_cnt == 3) {
+-			int len = strlen(keystring);
+-			if (len <= 20) {
+-				act->key_len = len;
+-				memcpy(act->key_seq, keystring, len + 1);
+-				goodline = true;
+-			} else if ((len & 1) != 0) {
+-				goodline = false; /* it's bad */
+-			} else {
+-				int j;
+-				goodline = true;
+-				act->key_len = len >> 1;
+-				for (j = 0; j < len; j+=2) {
+-					int val;
+-					val = (hex_val(keystring[j]) << 4) |
+-					       hex_val(keystring[j+1]);
+-					if (val < 0) {
+-						goodline = false; /* it's bad */
+-						break;
+-					}
+-					act->key_seq[j>>1] = (char)val;
+-				}
+-			}
+-		}
+-		if (goodline) {
+-			act->next = NULL;
+-			if (NULL == prev)
+-				*keys = act;
+-			else
+-				prev->next = act;
+-			prev = act;
+-			key_cnt++;
+-		} else {
+-			msyslog(LOG_DEBUG, "auth_init: scanf %d items, skipping line %d.",
+-				scan_cnt, line_cnt);
+-			free(act);
+-		}
+-		line_cnt++;
+-	}
+-	fclose(keyf);
+-
+-	key_ptr = *keys;
+-	return key_cnt;
+-}
+-
+-/* Looks for the key with keyid key_id and sets the d_key pointer to the
+- * address of the key. If no matching key is found the pointer is not touched.
+- */
+-void
+-get_key(
+-	int key_id,
+-	struct key **d_key
+-	)
+-{
+-	struct key *itr_key;
+-
+-	if (key_cnt == 0)
+-		return;
+-	for (itr_key = key_ptr; itr_key; itr_key = itr_key->next) {
+-		if (itr_key->key_id == key_id) {
+-			*d_key = itr_key;
+-			break;
+-		}
+-	}
+-	return;
+-}
+diff --git a/ntpdig/crypto.h b/ntpdig/crypto.h
+deleted file mode 100644
+index 08d06cd..0000000
+--- a/ntpdig/crypto.h
++++ /dev/null
+@@ -1,29 +0,0 @@
+-#ifndef GUARD_CRYPTO_H
+-#define GUARD_CRYPTO_H
+-
+-#include <string.h>
+-#include <stdio.h>
+-#include <stdlib.h>
+-
+-#include <ntp_fp.h>
+-#include <ntp.h>
+-#include <ntp_stdlib.h>
+-#include <ntp_md5.h>	/* provides OpenSSL digest API */
+-#include "utilities.h"
+-
+-#define LEN_PKT_MAC	LEN_PKT_NOMAC + sizeof(uint32_t)
+-
+-struct key {
+-	struct key *next;
+-	int key_id;
+-	int key_len;
+-	char type[10];
+-	char key_seq[64];
+-};
+-
+-int auth_init(const char *keyfile, struct key **keys);
+-void get_key(int key_id, struct key **d_key);
+-int make_mac(char *pkt_data, int pkt_size, int mac_size, struct key *cmp_key, char *digest);
+-bool auth_md5(char *pkt_data, int pkt_size, int mac_size, struct key *cmp_key);
+-
+-#endif
+diff --git a/ntpdig/data_formats.h b/ntpdig/data_formats.h
+deleted file mode 100644
+index c29a405..0000000
+--- a/ntpdig/data_formats.h
++++ /dev/null
+@@ -1,8 +0,0 @@
+-#ifndef GUARD_DATA_FORMATS_H
+-#define GUARD_DATA_FORMATS_H
+-
+-#include <ntp_machine.h>
+-#include <ntp_fp.h>
+-#include <ntp.h>
+-
+-#endif
+diff --git a/ntpdig/include/ntp.lic b/ntpdig/include/ntp.lic
+deleted file mode 100644
+index 69af392..0000000
+--- a/ntpdig/include/ntp.lic
++++ /dev/null
+@@ -1,18 +0,0 @@
+-<PFX>Copyright (C) <years> <owner>, all rights reserved.
+-<PFX>This is free software. It is licensed for use, modification and
+-<PFX>redistribution under the terms of the NTP License, copies of which
+-<PFX>can be seen at:
+-<PFX>  <http://ntp.org/license>
+-<PFX>  <http://opensource.org/licenses/ntp-license.php>
+-
+-<PFX>Permission to use, copy, modify, and distribute this software and its
+-<PFX>documentation for any purpose with or without fee is hereby granted,
+-<PFX>provided that the above copyright notice appears in all copies and that
+-<PFX>both the copyright notice and this permission notice appear in
+-<PFX>supporting documentation, and that the name The University of Delaware not be used in
+-<PFX>advertising or publicity pertaining to distribution of the software
+-<PFX>without specific, written prior permission. <owner> makes no
+-<PFX>representations about the suitability this software for any purpose. It
+-<PFX>is provided "as is" without express or implied warranty.
+-
+-the NTP license, <http://ntp.org/license>
+diff --git a/ntpdig/kod_management.c b/ntpdig/kod_management.c
+deleted file mode 100644
+index a17a2a4..0000000
+--- a/ntpdig/kod_management.c
++++ /dev/null
+@@ -1,295 +0,0 @@
+-#include <config.h>
+-#include <string.h>
+-#include <sys/types.h>
+-#include <sys/stat.h>
+-
+-#include "kod_management.h"
+-#include "log.h"
+-#include "ntp_stdlib.h"
+-#include "ntp_worker.h"
+-#include "ntp_debug.h"
+-
+-int kod_init = 0, kod_db_cnt = 0;
+-const char *kod_db_file;
+-struct kod_entry **kod_db;	/* array of pointers to kod_entry */
+-
+-
+-/*
+- * Search for a KOD entry
+- */
+-int
+-search_entry(
+-	const char *hostname,
+-	struct kod_entry **dst
+-	)
+-{
+-	register int a, b, resc = 0;
+-
+-	for (a = 0; a < kod_db_cnt; a++)
+-		if (!strcmp(kod_db[a]->hostname, hostname))
+-			resc++;
+-
+-	if (!resc) {
+-		*dst = NULL;
+-		return 0;
+-	}
+-
+-	*dst = eallocarray(resc, sizeof(**dst));
+-
+-	b = 0;
+-	for (a = 0; a < kod_db_cnt; a++)
+-		if (!strcmp(kod_db[a]->hostname, hostname)) {
+-			(*dst)[b] = *kod_db[a];
+-			b++;
+-		}
+-
+-	return resc;
+-}
+-
+-
+-void
+-add_entry(
+-	const char *	hostname,
+-	const char *	type	/* 4 bytes not \0 terminated */
+-	)
+-{
+-	int n;
+-	struct kod_entry *pke;
+-
+-	pke = emalloc_zero(sizeof(*pke));
+-	pke->timestamp = time(NULL);
+-	memcpy(pke->type, type, 4);
+-	pke->type[sizeof(pke->type) - 1] = '\0';
+-	strlcpy(pke->hostname, hostname, sizeof(pke->hostname));
+-
+-	/*
+-	 * insert in address ("hostname") order to find duplicates
+-	 */
+-	for (n = 0; n < kod_db_cnt; n++)
+-		if (strcmp(kod_db[n]->hostname, pke->hostname) >= 0)
+-			break;
+-
+-	if (n < kod_db_cnt &&
+-	    0 == strcmp(kod_db[n]->hostname, pke->hostname)) {
+-		kod_db[n]->timestamp = pke->timestamp;
+-		free(pke);
+-		return;
+-	}
+-
+-	kod_db_cnt++;
+-	kod_db = erealloc(kod_db, kod_db_cnt * sizeof(kod_db[0]));
+-	if (n != kod_db_cnt - 1)
+-		memmove(&kod_db[n + 1], &kod_db[n],
+-			sizeof(kod_db[0]) * ((kod_db_cnt - 1) - n));
+-	kod_db[n] = pke;
+-}
+-
+-
+-void
+-delete_entry(
+-	const char *	hostname,
+-	const char *	type
+-	)
+-{
+-	int a;
+-
+-	for (a = 0; a < kod_db_cnt; a++)
+-		if (!strcmp(kod_db[a]->hostname, hostname)
+-		    && !strcmp(kod_db[a]->type, type))
+-			break;
+-
+-	if (a == kod_db_cnt)
+-		return;
+-
+-	free(kod_db[a]);
+-	kod_db_cnt--;
+-
+-	if (a < kod_db_cnt)
+-		memmove(&kod_db[a], &kod_db[a + 1],
+-			(kod_db_cnt - a) * sizeof(kod_db[0]));
+-}
+-
+-
+-void
+-atexit_write_kod_db(void)
+-{
+-	write_kod_db();
+-}
+-
+-
+-int
+-write_kod_db(void)
+-{
+-	FILE *db_s;
+-	char *pch;
+-	int dirmode;
+-
+-	db_s = fopen(kod_db_file, "w");
+-
+-	/*
+-	 * If opening fails, blindly attempt to create each directory
+-	 * in the path first, then retry the open.
+-	 */
+-	if (NULL == db_s && strlen(kod_db_file)) {
+-		dirmode = S_IRUSR | S_IWUSR | S_IXUSR
+-			| S_IRGRP | S_IXGRP
+-			| S_IROTH | S_IXOTH;
+-		pch = strchr(kod_db_file + 1, DIR_SEP);
+-		while (NULL != pch) {
+-			*pch = '\0';
+-			if (-1 == mkdir(kod_db_file, dirmode)
+-			    && errno != EEXIST) {
+-				msyslog(LOG_ERR, "mkdir(%s) failed: %m",
+-					kod_db_file);
+-				return false;
+-			}
+-			*pch = DIR_SEP;
+-			pch = strchr(pch + 1, DIR_SEP);
+-		}
+-		db_s = fopen(kod_db_file, "w");
+-	}
+-
+-	if (NULL == db_s) {
+-		msyslog(LOG_WARNING, "Can't open KoD db file %s for writing: %m",
+-			kod_db_file);
+-
+-		return false;
+-	}
+-
+-	for (register int a = 0; a < kod_db_cnt; a++) {
+-		fprintf(db_s, "%16.16llx %s %s\n", (unsigned long long)
+-			kod_db[a]->timestamp, kod_db[a]->type,
+-			kod_db[a]->hostname);
+-	}
+-
+-	fflush(db_s);
+-	fclose(db_s);
+-
+-	return true;
+-}
+-
+-
+-void
+-kod_init_kod_db(
+-	const char *	db_file,
+-	int		readonly
+-	)
+-{
+-	/*
+-	 * Max. of 254 characters for hostname, 10 for timestamp, 4 for
+-	 * kisscode, 2 for spaces, 1 for \n, and 1 for \0
+-	 */
+-	char fbuf[254+10+4+2+1+1];
+-	FILE *db_s;
+-	int a, b, sepc, len;
+-	unsigned long long ull;
+-	char *str_ptr;
+-	bool error = false;
+-
+-	TRACE(2, ("Initializing KOD DB...\n"));
+-
+-	kod_db_file = estrdup(db_file);
+-
+-	db_s = fopen(db_file, "r");
+-
+-	if (NULL == db_s) {
+-		msyslog(LOG_WARNING, "kod_init_kod_db(): Cannot open KoD db file %s: %m",
+-			db_file);
+-
+-		return;
+-	}
+-
+-	if (debug)
+-		printf("Starting to read KoD file %s...\n", db_file);
+-	/* First let's see how many entries there are and check for right syntax */
+-
+-	while (!feof(db_s) && NULL != fgets(fbuf, sizeof(fbuf), db_s)) {
+-
+-		/* ignore blank lines */
+-		if ('\n' == fbuf[0])
+-			continue;
+-
+-		sepc = 0;
+-		len = strlen(fbuf);
+-		for (a = 0; a < len; a++) {
+-			if (' ' == fbuf[a])
+-				sepc++;
+-
+-			if ('\n' == fbuf[a]) {
+-				if (sepc != 2) {
+-					if (strcmp(db_file, "/dev/null"))
+-						msyslog(LOG_DEBUG,
+-							"Syntax error in KoD db file %s in line %i (missing space)",
+-							db_file,
+-							kod_db_cnt + 1);
+-					fclose(db_s);
+-					return;
+-				}
+-				sepc = 0;
+-				kod_db_cnt++;
+-			}
+-		}
+-	}
+-
+-	if (0 == kod_db_cnt) {
+-		TRACE(2, ("KoD DB %s empty.\n", db_file));
+-		goto wrapup;
+-	}
+-
+-	TRACE(2, ("KoD DB %s contains %d entries, reading...\n", db_file, kod_db_cnt));
+-
+-	rewind(db_s);
+-
+-	kod_db = eallocarray(kod_db_cnt, sizeof(kod_db[0]));
+-
+-	/* Read contents of file */
+-	for (b = 0; 
+-	     !feof(db_s) && !ferror(db_s) && b < kod_db_cnt;
+-	     b++) {
+-
+-		str_ptr = fgets(fbuf, sizeof(fbuf), db_s);
+-		if (NULL == str_ptr) {
+-			error = true;
+-			break;
+-		}
+-
+-		/* ignore blank lines */
+-		if ('\n' == fbuf[0]) {
+-			b--;
+-			continue;
+-		}
+-
+-		kod_db[b] = emalloc(sizeof(*kod_db[b]));
+-
+-		if (3 != sscanf(fbuf, "%llx %4s %254s", &ull,
+-		    kod_db[b]->type, kod_db[b]->hostname)) {
+-
+-			free(kod_db[b]);
+-			kod_db[b] = NULL;
+-			error = true;
+-			break;
+-		}
+-
+-		kod_db[b]->timestamp = (time_t)ull;
+-	}
+-
+-	if (ferror(db_s) || error) {
+-		kod_db_cnt = b;
+-		msyslog(LOG_WARNING, "An error occurred while parsing the KoD db file %s",
+-			db_file);
+-		fclose(db_s);
+-
+-		return;
+-	}
+-
+-    wrapup:
+-	fclose(db_s);
+-	for (a = 0; a < kod_db_cnt; a++)
+-		TRACE(2, ("KoD entry %d: %s at %llx type %s\n", a,
+-			  kod_db[a]->hostname,
+-			  (unsigned long long)kod_db[a]->timestamp,
+-			  kod_db[a]->type));
+-
+-	if (!readonly && write_kod_db())
+-		atexit(&atexit_write_kod_db);
+-}
+diff --git a/ntpdig/kod_management.h b/ntpdig/kod_management.h
+deleted file mode 100644
+index e54c15b..0000000
+--- a/ntpdig/kod_management.h
++++ /dev/null
+@@ -1,20 +0,0 @@
+-#ifndef GUARD_KOD_MANAGEMENT_H
+-#define GUARD_KOD_MANAGEMENT_H
+-
+-#include <time.h>
+-
+-struct kod_entry {
+-	char hostname[255];
+-	time_t timestamp;
+-	char type[5];
+-};
+-
+-int search_entry(const char *hostname, struct kod_entry **dst);
+-void add_entry(const char *hostname, const char *type);
+-void delete_entry(const char *hostname, const char *type);
+-void kod_init_kod_db(const char *db_file, int readonly);
+-int  write_kod_db(void);
+-void atexit_write_kod_db(void);
+-
+-
+-#endif
+diff --git a/ntpdig/log.c b/ntpdig/log.c
+deleted file mode 100644
+index b783773..0000000
+--- a/ntpdig/log.c
++++ /dev/null
+@@ -1,38 +0,0 @@
+-#include <config.h>
+-
+-#include "log.h"
+-
+-char *progname;		/* for msyslog use too */
+-
+-static void cleanup_log(void);
+-
+-void
+-ntpdig_init_logging(
+-	const char *prog
+-	)
+-{
+-	termlogit = false;
+-	init_logging(prog, 0, false);
+-	termlogit_pid = false;
+-	msyslog_include_timestamp = false;
+-}
+-
+-
+-void
+-open_logfile(
+-	const char *logfile
+-	)
+-{
+-	change_logfile(logfile, false);
+-	atexit(cleanup_log);
+-}
+-
+-
+-static void
+-cleanup_log(void)
+-{
+-	syslogit = true;
+-	fflush(syslog_file);
+-	fclose(syslog_file);
+-	syslog_file = NULL;
+-}
+diff --git a/ntpdig/log.h b/ntpdig/log.h
+deleted file mode 100644
+index 0b56fca..0000000
+--- a/ntpdig/log.h
++++ /dev/null
+@@ -1,24 +0,0 @@
+-#ifndef GUARD_LOG_H
+-#define GUARD_LOG_H
+-
+-#include "ntp.h"
+-#include "ntp_stdlib.h"
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <stdarg.h>
+-#include <syslog.h>
+-#include <time.h>
+-
+-/* syslog as ntpd does, even though we are not a daemon */
+-#ifdef LOG_NTP
+-# define OPENLOG_FAC	LOG_NTP
+-#else
+-# define OPENLOG_FAC	LOG_DAEMON
+-#endif
+-
+-void ntpdig_init_logging(const char *program);
+-void open_logfile(const char *logfile);
+-
+-extern char *progname;		/* for msyslog use too */
+-
+-#endif
+diff --git a/ntpdig/main.c b/ntpdig/main.c
+deleted file mode 100644
+index 92aed64..0000000
+--- a/ntpdig/main.c
++++ /dev/null
+@@ -1,1744 +0,0 @@
+-#include <config.h>
+-
+-#include <event2/event.h>
+-
+-#include "ntp_workimpl.h"
+-#ifdef USE_WORK_THREAD
+-# include <event2/thread.h>
+-#endif
+-
+-#include "main.h"
+-#include "kod_management.h"
+-#include "networking.h"
+-#include "utilities.h"
+-#include "log.h"
+-#include "libntp.h"
+-#include "ntp_intres.h"
+-#include "timespecops.h"
+-
+-bool shutting_down;
+-bool time_derived;
+-bool time_adjusted;
+-int n_pending_dns = 0;
+-int n_pending_ntp = 0;
+-int ai_fam_pref = AF_UNSPEC;
+-int ntpver = 4;
+-double steplimit = -1;
+-SOCKET sock4 = -1;		/* Socket for IPv4 */
+-SOCKET sock6 = -1;		/* Socket for IPv6 */
+-/*
+-** BCAST *must* listen on port 123 (by default), so we can only
+-** use the UCST sockets (above) if they too are using port 123
+-*/
+-SOCKET bsock4 = -1;		/* Broadcast Socket for IPv4 */
+-SOCKET bsock6 = -1;		/* Broadcast Socket for IPv6 */
+-struct event_base *base;
+-struct event *ev_sock4;
+-struct event *ev_sock6;
+-struct event *ev_worker_timeout;
+-struct event *ev_xmt_timer;
+-
+-struct dns_ctx {
+-	const char *	name;
+-	int		flags;
+-#define CTX_BCST	0x0001
+-#define CTX_UCST	0x0002
+-#define CTX_xCST	0x0003
+-#define CTX_CONC	0x0004
+-#define CTX_unused	0xfffd
+-	int		key_id;
+-	struct timeval	timeout;
+-	struct key *	key;
+-};
+-
+-typedef struct sent_pkt_tag sent_pkt;
+-struct sent_pkt_tag {
+-	sent_pkt *		link;
+-	struct dns_ctx *	dctx;
+-	sockaddr_u		addr;
+-	time_t			stime;
+-	int			done;
+-	struct pkt		x_pkt;
+-};
+-
+-typedef struct xmt_ctx_tag xmt_ctx;
+-struct xmt_ctx_tag {
+-	xmt_ctx *		link;
+-	SOCKET			sock;
+-	time_t			sched;
+-	sent_pkt *		spkt;
+-};
+-
+-struct timeval	gap;
+-xmt_ctx *	xmt_q;
+-struct key *	keys = NULL;
+-float		response_timeout;
+-struct timeval	response_tv;
+-struct timeval	start_tv;
+-/* check the timeout at least once per second */
+-struct timeval	wakeup_tv = { 0, 888888 };
+-
+-sent_pkt *	fam_listheads[2];
+-#define v4_pkts_list	(fam_listheads[0])
+-#define v6_pkts_list	(fam_listheads[1])
+-
+-static union {
+-	struct pkt pkt;
+-	char   buf[LEN_PKT_NOMAC + NTP_MAXEXTEN + MAX_MAC_LEN];
+-} rbuf;
+-
+-#define r_pkt  rbuf.pkt
+-
+-#ifdef ENABLE_DROPROOT
+-bool droproot;			/* intres imports these */
+-bool root_dropped;
+-#endif
+-u_long current_time;		/* libntp/authkeys.c */
+-
+-void open_sockets(void);
+-void handle_lookup(const char *name, int flags);
+-void ntpdig_addremove_fd(int fd, int is_pipe, int remove_it);
+-void worker_timeout(evutil_socket_t, short, void *);
+-void worker_resp_cb(evutil_socket_t, short, void *);
+-void ntpdig_name_resolved(int, int, void *, const char *, const char *,
+-			const struct addrinfo *,
+-			const struct addrinfo *);
+-void queue_xmt(SOCKET sock, struct dns_ctx *dctx, sent_pkt *spkt,
+-	       u_int xmt_delay);
+-void xmt_timer_cb(evutil_socket_t, short, void *ptr);
+-void xmt(xmt_ctx *xctx);
+-bool check_kod(const struct addrinfo *ai);
+-void timeout_query(sent_pkt *);
+-void timeout_queries(void);
+-void sock_cb(evutil_socket_t, short, void *);
+-void check_exit_conditions(void);
+-void ntpdig_libevent_log_cb(int, const char *);
+-void set_li_vn_mode(struct pkt *spkt, char leap, char version, char mode);
+-int  set_time(double offset);
+-void dec_pending_ntp(const char *, sockaddr_u *);
+-bool libevent_version_ok(void);
+-int  gettimeofday_cached(struct event_base *b, struct timeval *tv);
+-
+-#define ALL_OPTIONS "46a:b:c:dD:g:hjK:k:l:M:o:rSst:VwW"
+-static const struct option longoptions[] = {
+-    { "ipv4",		    0, 0, '4' },
+-    { "ipv6",		    0, 0, '6' },
+-    { "authentication",     1, 0, 'a' },
+-    { "broadcast",	    1, 0, 'b' },
+-    { "concurrent",	    1, 0, 'c' },
+-    { "debug",		    0, 0, 'd' },
+-    { "set-debug-level",    1, 0, 'D' },
+-    { "gap",                1, 0, 'g' },
+-    { "help",               9, 0, 'h' },
+-    { "kod",                1, 0, 'K' },
+-    { "json",               1, 0, 'j' },
+-    { "keyfile",            1, 0, 'k' },
+-    { "logfile",            1, 0, 'l' },
+-    { "steplimit",          1, 0, 'M' },
+-    { "ntpversion",         1, 0, 'o' },
+-    { "usereservedport",    0, 0, 'r' },
+-    { "step",               0, 0, 'S' },
+-    { "slew",               0, 0, 's' },
+-    { "timeout",            0, 0, 't' },
+-    { "version",            0, 0, 'V' },
+-    { "wait",               0, 0, 'w' },
+-    { "nowait",             0, 0, 'W' },
+-    { NULL,                 0, 0, '\0'},
+-};
+-
+-static bool opt_ipv4 = false, opt_ipv6 = false;
+-static char *opt_authkey = NULL;
+-static char *opt_broadcast = NULL;
+-static char *opt_concurrent = NULL;
+-static int opt_gap;
+-static bool opt_json;
+-static char *opt_kodfile = "/var/db/ntp-kod";
+-static char *opt_keyfile = NULL;
+-static char *opt_logfile = NULL;
+-static int opt_steplimit;
+-static int opt_ntpversion = 4;
+-static bool opt_usereservedport;
+-static bool opt_step =false, opt_slew = false;
+-static float opt_timeout = 5.0;
+-static int opt_wait = false;
+-
+-static void ntpdig_usage(void)
+-{
+-#define P(x)	fputs(x, stderr)
+-    P("USAGE:  sntp [ -<flag> [<val>] | --<name>[{=| }<val>] ]...\n");
+-    P("		[ hostname-or-IP ...]\n");
+-    P("  Flg Arg Option-Name    Description\n");
+-    P("   -4 no  ipv4           Force IPv4 DNS name resolution\n");
+-    P("				- prohibits the option 'ipv6'\n");
+-    P("   -6 no  ipv6           Force IPv6 DNS name resolution\n");
+-    P("				- prohibits the option 'ipv4'\n");
+-    P("   -d no  normalverbose  Normal verbose\n");
+-    P("   -K Str kod            KoD history filename\n");
+-    P("   -g yes gap            Set gap between requests\n");
+-    P("   -p no  syslog         Logging with syslog\n");
+-    P("				- prohibits the option 'logfile'\n");
+-    P("   -l Str logfile        Log to specified logfile\n");
+-    P("				- prohibits the option 'syslog'\n");
+-    P("   -s no  settod         Set (step) the time with clock_settime()\n");
+-    P("				- prohibits the option 'slew'\n");
+-    P("   -j no  adjtime        Set (slew) the time with adjtime()\n");
+-    P("				- prohibits the option 'step'\n");
+-    P("   -b Str broadcast      Use broadcasts to the address specified for synchronisation\n");
+-    P("   -t Num timeout        Specify seconds to wait for broadcasts\n");
+-    P("   -a Num authentication Enable authentication with the numbered key\n");
+-    P("   -k Str keyfile        Specify a keyfile. SNTP will look in this file\n");
+-    P("                         for the key specified with -a\n");
+-    P("   -V no version         Output version information and exit\n");
+-    P("   -h no  help           Display extended usage information and exit\n");
+-#undef P
+-}
+-
+-
+-/*
+- * The actual main function.
+- */
+-int
+-ntpdig_main (
+-	int argc,
+-	char **argv,
+-	const char *ntpdigVersion
+-	)
+-{
+-	int			i;
+-	int			exitcode;
+-	int			optct;
+-	int			op;
+-	struct event_config *	evcfg;
+-
+-	/* Initialize logging system - sets up progname */
+-	ntpdig_init_logging(argv[0]);
+-
+-	if (!libevent_version_ok())
+-		exit(2);
+-
+-	init_lib();
+-	init_auth();
+-
+-	while ((op = ntp_getopt_long(argc, argv,
+-				     ALL_OPTIONS, longoptions, NULL)) != -1) {
+-
+-	    switch (op) {
+-	    case '4':
+-		opt_ipv4 = true;
+-		break;
+-	    case '6':
+-		opt_ipv6 = true;
+-		break;
+-	    case 'a':
+-		opt_authkey = ntp_optarg;
+-		break;
+-	    case 'b':
+-		opt_broadcast = ntp_optarg;
+-		break;
+-	    case 'c':
+-		opt_concurrent = ntp_optarg;
+-		break;
+-	    case 'd':
+-#ifdef DEBUG
+-		++debug;
+-#endif
+-		break;
+-	    case 'D':
+-#ifdef DEBUG
+-		debug = atoi(ntp_optarg);
+-#endif
+-		break;
+-	    case 'g':
+-		opt_gap = atoi(ntp_optarg);
+-		if (opt_gap <= 0) {
+-			printf("%s: invalid gap value!\n", progname);
+-			exit(1);
+-		}
+-		break;
+-	    case 'h':
+-		ntpdig_usage();
+-		exit(0);
+-	    case 'j':
+-		opt_json = true;
+-		syslogit = false;
+-		break;
+-	    case 'K':
+-		opt_kodfile = ntp_optarg;
+-		break;
+-	    case 'k':
+-		opt_keyfile = ntp_optarg;
+-		break;
+-	    case 'l':
+-		opt_logfile = ntp_optarg;
+-		break;
+-	    case 'M':
+-		opt_steplimit = atoi(ntp_optarg);
+-		if (opt_steplimit <= 0) {
+-			printf("%s: invalid steplimit value!\n", progname);
+-			exit(1);
+-		}
+-		break;
+-	    case 'r':
+-		opt_usereservedport = true;
+-		break;
+-	    case 'S':
+-		opt_step = true;
+-		break;
+-	    case 's':
+-		opt_slew = true;
+-		break;
+-	    case 't':
+-		opt_timeout = atof(ntp_optarg);
+-		break;
+-	    case 'V':
+-		printf("ntpdig %s\n", ntpdigVersion);
+-		exit(0);
+-	    case 'w':
+-		opt_wait = true;
+-		break;
+-	    case 'W':
+-		opt_wait = false;
+-		break;
+-	    default :
+-		/* chars not in table get converted to ? */
+-		fputs("Unknown command line switch or missing argument.\n", stderr);
+-		ntpdig_usage();
+-		exit(1);
+-	    } /*switch*/
+-	}
+-
+-	optct = ntp_optind;
+-
+-	argc -= optct;
+-	argv += optct;
+-
+-	ntpver = opt_ntpversion;
+-	steplimit = opt_steplimit / 1e3;
+-	gap.tv_usec = max(0, opt_gap * 1000);
+-	gap.tv_usec = min(gap.tv_usec, 999999);
+-
+-	if (opt_logfile)
+-		open_logfile(opt_logfile);
+-
+-	//msyslog(LOG_INFO, "ntpdig %s", ntpdigVersion);
+-
+-	if (0 == argc && !opt_broadcast && !opt_concurrent) {
+-		printf("%s: Must supply at least one of -b hostname, -c hostname, or hostname.\n",
+-		       progname);
+-		exit(1);
+-	}
+-
+-
+-	/*
+-	** Eventually, we probably want:
+-	** - separate bcst and ucst timeouts (why?)
+-	** - multiple --timeout values in the commandline
+-	*/
+-
+-	response_timeout = opt_timeout;
+-	response_tv.tv_sec = (int)response_timeout;
+-	response_tv.tv_usec = (response_timeout - (int)response_timeout) * MICROSECONDS;
+-
+-	/* IPv6 available? */
+-	if (isc_net_probeipv6_bool()) {
+-		ai_fam_pref = AF_INET;
+-		TRACE(1, ("No ipv6 support available, forcing ipv4\n"));
+-	} else {
+-		/* Check for options -4 and -6 */
+-		if (opt_ipv4)
+-			ai_fam_pref = AF_INET;
+-		else if (opt_ipv6)
+-			ai_fam_pref = AF_INET6;
+-	}
+-
+-	/* TODO: Parse config file if declared */
+-
+-	/*
+-	** Init the KOD system.
+-	** For embedded systems with no writable filesystem,
+-	** -K /dev/null can be used to disable KoD storage.
+-	*/
+-	kod_init_kod_db(opt_kodfile, false);
+-
+-	// HMS: Should we use arg-defalt for this too?
+-	if (opt_keyfile)
+-		auth_init(opt_keyfile, &keys);
+-
+-	/*
+-	** Considering employing a variable that prevents functions of doing
+-	** anything until everything is initialized properly
+-	**
+-	** HMS: What exactly does the above mean?
+-	*/
+-	event_set_log_callback(&ntpdig_libevent_log_cb);
+-	if (debug > 0)
+-		event_enable_debug_mode();
+-#ifdef USE_WORK_THREAD
+-	evthread_use_pthreads();
+-	/* we use libevent from main thread only, locks should be academic */
+-	if (debug > 0)
+-		evthread_enable_lock_debuging();
+-#endif
+-	evcfg = event_config_new();
+-	if (NULL == evcfg) {
+-		printf("%s: event_config_new() failed!\n", progname);
+-		return -1;
+-	}
+-	/* all libevent calls are from main thread */
+-	/* event_config_set_flag(evcfg, EVENT_BASE_FLAG_NOLOCK); */
+-	base = event_base_new_with_config(evcfg);
+-	event_config_free(evcfg);
+-	if (NULL == base) {
+-		printf("%s: event_base_new() failed!\n", progname);
+-		return -1;
+-	}
+-
+-	/* wire into intres resolver */
+-	worker_per_query = true;
+-	addremove_io_fd = &ntpdig_addremove_fd;
+-
+-	open_sockets();
+-
+-	if (opt_broadcast != NULL) {
+-		handle_lookup(opt_broadcast, CTX_BCST);
+-	}
+-
+-	if (opt_concurrent != NULL) {
+-		handle_lookup(opt_concurrent, CTX_UCST | CTX_CONC);
+-	}
+-
+-	for (i = 0; i < argc; ++i)
+-		handle_lookup(argv[i], CTX_UCST);
+-
+-	gettimeofday_cached(base, &start_tv);
+-	event_base_dispatch(base);
+-	event_base_free(base);
+-
+-	if (!time_adjusted && (opt_step || opt_slew))
+-		exitcode = 1;
+-	else
+-		exitcode = 0;
+-
+-	return exitcode;
+-}
+-
+-
+-/*
+-** open sockets and make them non-blocking
+-*/
+-void
+-open_sockets(
+-	void
+-	)
+-{
+-	sockaddr_u	name;
+-
+-	if (-1 == sock4) {
+-		sock4 = socket(PF_INET, SOCK_DGRAM, 0);
+-		if (-1 == sock4) {
+-			/* error getting a socket */
+-			msyslog(LOG_ERR, "open_sockets: socket(PF_INET) failed: %m");
+-			exit(1);
+-		}
+-		/* Make it non-blocking */
+-		make_socket_nonblocking(sock4);
+-
+-		/* Let's try using a wildcard... */
+-		ZERO(name);
+-		AF(&name) = AF_INET;
+-		SET_ADDR4N(&name, INADDR_ANY);
+-		SET_PORT(&name, (opt_usereservedport ? 123 : 0));
+-
+-		if (-1 == bind(sock4, &name.sa,
+-			       SOCKLEN(&name))) {
+-			msyslog(LOG_ERR, "open_sockets: bind(sock4) failed: %m");
+-			exit(1);
+-		}
+-
+-		/* Register an NTP callback for recv/timeout */
+-		ev_sock4 = event_new(base, sock4,
+-				     EV_TIMEOUT | EV_READ | EV_PERSIST,
+-				     &sock_cb, NULL);
+-		if (NULL == ev_sock4) {
+-			msyslog(LOG_ERR,
+-				"open_sockets: event_new(base, sock4) failed!");
+-		} else {
+-			event_add(ev_sock4, &wakeup_tv);
+-		}
+-	}
+-
+-	/* We may not always have IPv6... */
+-	if (-1 == sock6 && isc_net_probeipv6_bool()) {
+-		sock6 = socket(PF_INET6, SOCK_DGRAM, 0);
+-		if (-1 == sock6 && isc_net_probeipv6_bool()) {
+-			/* error getting a socket */
+-			msyslog(LOG_ERR, "open_sockets: socket(PF_INET6) failed: %m");
+-			exit(1);
+-		}
+-		/* Make it non-blocking */
+-		make_socket_nonblocking(sock6);
+-
+-		/* Let's try using a wildcard... */
+-		ZERO(name);
+-		AF(&name) = AF_INET6;
+-		SET_ADDR6N(&name, in6addr_any);
+-		SET_PORT(&name, (opt_usereservedport ? 123 : 0));
+-
+-		if (-1 == bind(sock6, &name.sa,
+-			       SOCKLEN(&name))) {
+-			msyslog(LOG_ERR, "open_sockets: bind(sock6) failed: %m");
+-			exit(1);
+-		}
+-		/* Register an NTP callback for recv/timeout */
+-		ev_sock6 = event_new(base, sock6,
+-				     EV_TIMEOUT | EV_READ | EV_PERSIST,
+-				     &sock_cb, NULL);
+-		if (NULL == ev_sock6) {
+-			msyslog(LOG_ERR,
+-				"open_sockets: event_new(base, sock6) failed!");
+-		} else {
+-			event_add(ev_sock6, &wakeup_tv);
+-		}
+-	}
+-	
+-	return;
+-}
+-
+-
+-/*
+-** handle_lookup
+-*/
+-void
+-handle_lookup(
+-	const char *name,
+-	int flags
+-	)
+-{
+-	struct addrinfo	hints;	/* Local copy is OK */
+-	struct dns_ctx *ctx;
+-	long		l;
+-	char *		name_copy;
+-	size_t		name_sz;
+-	size_t		octets;
+-
+-	TRACE(1, ("handle_lookup(%s,%#x)\n", name, flags));
+-
+-	ZERO(hints);
+-	hints.ai_family = ai_fam_pref;
+-	hints.ai_flags = AI_CANONNAME | AI_NUMERICSERV;
+-	/*
+-	** Unless we specify a socktype, we'll get at least two
+-	** entries for each address: one for TCP and one for
+-	** UDP. That's not what we want.
+-	*/
+-	hints.ai_socktype = SOCK_DGRAM;
+-	hints.ai_protocol = IPPROTO_UDP;
+-
+-	name_sz = 1 + strlen(name);
+-	octets = sizeof(*ctx) + name_sz;	// Space for a ctx and the name
+-	ctx = emalloc_zero(octets);		// ctx at ctx[0]
+-	name_copy = (char *)(ctx + 1);		// Put the name at ctx[1]
+-	memcpy(name_copy, name, name_sz);	// copy the name to ctx[1]
+-	ctx->name = name_copy;			// point to it...
+-	ctx->flags = flags;
+-	ctx->timeout = response_tv;
+-
+-	/* The following should arguably be passed in... */
+-	errno = 0;
+-	if (opt_authkey != NULL && (l = strtol(opt_authkey, NULL, 10), errno == 0)) {
+-		ctx->key_id = l;
+-		get_key(ctx->key_id, &ctx->key);
+-	} else {
+-		ctx->key_id = -1;
+-		ctx->key = NULL;
+-	}
+-
+-	++n_pending_dns;
+-	getaddrinfo_sometime(name, "123", &hints, 0,
+-			     &ntpdig_name_resolved, ctx);
+-}
+-
+-
+-/*
+-** DNS Callback:
+-** - For each IP:
+-** - - open a socket
+-** - - increment n_pending_ntp
+-** - - send a request if this is a Unicast callback
+-** - - queue wait for response
+-** - decrement n_pending_dns
+-*/
+-void
+-ntpdig_name_resolved(
+-	int			rescode,
+-	int			gai_errno,
+-	void *			context,
+-	const char *		name,
+-	const char *		service,
+-	const struct addrinfo *	hints,
+-	const struct addrinfo *	addr
+-	)
+-{
+-	struct dns_ctx *	dctx;
+-	sent_pkt *		spkt;
+-	const struct addrinfo *	ai;
+-	SOCKET			sock;
+-	u_int			xmt_delay_v4;
+-	u_int			xmt_delay_v6;
+-	u_int			xmt_delay;
+-	size_t			octets;
+-
+-	UNUSED_ARG(name);
+-	UNUSED_ARG(service);
+-	UNUSED_ARG(hints);
+-
+-	xmt_delay_v4 = 0;
+-	xmt_delay_v6 = 0;
+-	dctx = context;
+-	if (rescode) {
+-#ifdef EAI_SYSTEM
+-		if (EAI_SYSTEM == rescode) {
+-			errno = gai_errno;
+-			mfprintf(stderr, "%s lookup error %m\n",
+-				 dctx->name);
+-		} else
+-#endif
+-			fprintf(stderr, "%s lookup error %s\n",
+-				dctx->name, gai_strerror(rescode));
+-	} else {
+-		TRACE(3, ("%s [%s]\n", dctx->name,
+-			  (addr->ai_canonname != NULL)
+-			      ? addr->ai_canonname
+-			      : ""));
+-
+-		for (ai = addr; ai != NULL; ai = ai->ai_next) {
+-
+-			if (check_kod(ai))
+-				continue;
+-
+-			switch (ai->ai_family) {
+-
+-			case AF_INET:
+-				sock = sock4;
+-				xmt_delay = xmt_delay_v4;
+-				xmt_delay_v4++;
+-				break;
+-
+-			case AF_INET6:
+-				if (!isc_net_probeipv6_bool())
+-					continue;
+-
+-				sock = sock6;
+-				xmt_delay = xmt_delay_v6;
+-				xmt_delay_v6++;
+-				break;
+-
+-			default:
+-				msyslog(LOG_ERR, "ntpdig_name_resolved: unexpected ai_family: %d",
+-					ai->ai_family);
+-				exit(1);
+-				break;
+-			}
+-
+-			/*
+-			** We're waiting for a response for either unicast
+-			** or broadcast, so...
+-			*/
+-			++n_pending_ntp;
+-
+-			/* If this is for a unicast IP, queue a request */
+-			if (dctx->flags & CTX_UCST) {
+-				spkt = emalloc_zero(sizeof(*spkt));
+-				spkt->dctx = dctx;
+-				octets = min(ai->ai_addrlen, sizeof(spkt->addr));
+-				memcpy(&spkt->addr, ai->ai_addr, octets);
+-				queue_xmt(sock, dctx, spkt, xmt_delay);
+-			}
+-		}
+-	}
+-	/* n_pending_dns really should be >0 here... */
+-	--n_pending_dns;
+-	check_exit_conditions();
+-}
+-
+-
+-/*
+-** queue_xmt
+-*/
+-void
+-queue_xmt(
+-	SOCKET			sock,
+-	struct dns_ctx *	dctx,
+-	sent_pkt *		spkt,
+-	u_int			xmt_delay
+-	)
+-{
+-	sockaddr_u *	dest;
+-	sent_pkt **	pkt_listp;
+-	sent_pkt *	match;
+-	xmt_ctx *	xctx;
+-	struct timeval	start_cb;
+-	struct timeval	delay;
+-
+-	UNUSED_ARG(dctx);
+-
+-	dest = &spkt->addr;
+-	if (IS_IPV6(dest))
+-		pkt_listp = &v6_pkts_list;
+-	else
+-		pkt_listp = &v4_pkts_list;
+-
+-	/* reject attempts to add address already listed */
+-	for (match = *pkt_listp; match != NULL; match = match->link) {
+-		if (ADDR_PORT_EQ(&spkt->addr, &match->addr)) {
+-			if (strcasecmp(spkt->dctx->name,
+-				       match->dctx->name))
+-				printf("%s %s duplicate address from %s ignored.\n",
+-				       sockporttoa(&match->addr),
+-				       match->dctx->name,
+-				       spkt->dctx->name);
+-			else
+-				printf("%s %s, duplicate address ignored.\n",
+-				       sockporttoa(&match->addr),
+-				       match->dctx->name);
+-			dec_pending_ntp(spkt->dctx->name, &spkt->addr);
+-			free(spkt);
+-			return;
+-		}
+-	}
+-
+-	LINK_SLIST(*pkt_listp, spkt, link);	
+-
+-	xctx = emalloc_zero(sizeof(*xctx));
+-	xctx->sock = sock;
+-	xctx->spkt = spkt;
+-	gettimeofday_cached(base, &start_cb);
+-	xctx->sched = start_cb.tv_sec + (2 * xmt_delay);
+-
+-	LINK_SORT_SLIST(xmt_q, xctx, (xctx->sched < L_S_S_CUR()->sched),
+-			link, xmt_ctx);
+-	if (xmt_q == xctx) {
+-		/*
+-		 * The new entry is the first scheduled.  The timer is
+-		 * either not active or is set for the second xmt
+-		 * context in xmt_q.
+-		 */
+-		if (NULL == ev_xmt_timer)
+-			ev_xmt_timer = event_new(base, INVALID_SOCKET,
+-						 EV_TIMEOUT,
+-						 &xmt_timer_cb, NULL);
+-		if (NULL == ev_xmt_timer) {
+-			msyslog(LOG_ERR,
+-				"queue_xmt: event_new(base, -1, EV_TIMEOUT) failed!");
+-			exit(1);
+-		}
+-		ZERO(delay);
+-		if (xctx->sched > start_cb.tv_sec)
+-			delay.tv_sec = xctx->sched - start_cb.tv_sec;
+-		event_add(ev_xmt_timer, &delay);
+-		TRACE(2, ("queue_xmt: xmt timer for %u usec\n",
+-			  (u_int)delay.tv_usec));
+-	}
+-}
+-
+-
+-/*
+-** xmt_timer_cb
+-*/
+-void
+-xmt_timer_cb(
+-	evutil_socket_t	fd,
+-	short		what,
+-	void *		ctx
+-	)
+-{
+-	struct timeval	start_cb;
+-	struct timeval	delay;
+-	xmt_ctx *	x;
+-
+-	UNUSED_ARG(fd);
+-	UNUSED_ARG(what);
+-	UNUSED_ARG(ctx);
+-	DEBUG_INSIST(EV_TIMEOUT == what);
+-
+-	if (NULL == xmt_q || shutting_down)
+-		return;
+-	gettimeofday_cached(base, &start_cb);
+-	if (xmt_q->sched <= start_cb.tv_sec) {
+-		UNLINK_HEAD_SLIST(x, xmt_q, link);
+-		TRACE(2, ("xmt_timer_cb: at .%6.6u -> %s\n",
+-			  (u_int)start_cb.tv_usec, socktoa(&x->spkt->addr)));
+-		xmt(x);
+-		free(x);
+-		if (NULL == xmt_q)
+-			return;
+-	}
+-	if (xmt_q->sched <= start_cb.tv_sec) {
+-		event_add(ev_xmt_timer, &gap);
+-		TRACE(2, ("xmt_timer_cb: at .%6.6u gap %6.6u\n",
+-			  (u_int)start_cb.tv_usec,
+-			  (u_int)gap.tv_usec));
+-	} else {
+-		delay.tv_sec = xmt_q->sched - start_cb.tv_sec;
+-		delay.tv_usec = 0;
+-		event_add(ev_xmt_timer, &delay);
+-		TRACE(2, ("xmt_timer_cb: at .%6.6u next %ld seconds\n",
+-			  (u_int)start_cb.tv_usec,
+-			  (long)delay.tv_sec));
+-	}
+-}
+-
+-
+-/*
+-** xmt()
+-*/
+-void
+-xmt(
+-	xmt_ctx *	xctx
+-	)
+-{
+-	SOCKET		sock = xctx->sock;
+-	struct dns_ctx *dctx = xctx->spkt->dctx;
+-	sent_pkt *	spkt = xctx->spkt;
+-	sockaddr_u *	dst = &spkt->addr;
+-	struct timeval	tv_xmt;
+-	struct pkt	x_pkt;
+-	size_t		pkt_len;
+-	int		sent;
+-
+-	if (0 != gettimeofday(&tv_xmt, NULL)) {
+-		msyslog(LOG_ERR,
+-			"xmt: gettimeofday() failed: %m");
+-		exit(1);
+-	}
+-	tv_xmt.tv_sec += JAN_1970;
+-
+-	pkt_len = generate_pkt(&x_pkt, &tv_xmt, dctx->key_id,
+-			       dctx->key);
+-
+-	sent = sendpkt(sock, dst, &x_pkt, pkt_len);
+-	if (sent) {
+-		/* Save the packet we sent... */
+-		memcpy(&spkt->x_pkt, &x_pkt, min(sizeof(spkt->x_pkt),
+-		       pkt_len));
+-		spkt->stime = tv_xmt.tv_sec - JAN_1970;
+-
+-		TRACE(2, ("xmt: %lx.%6.6u %s %s\n", (u_long)tv_xmt.tv_sec,
+-			  (u_int)tv_xmt.tv_usec, dctx->name, socktoa(dst)));
+-	} else {
+-		dec_pending_ntp(dctx->name, dst);
+-	}
+-
+-	return;
+-}
+-
+-
+-/*
+- * timeout_queries() -- give up on unrequited NTP queries
+- */
+-void
+-timeout_queries(void)
+-{
+-	struct timeval	start_cb;
+-	u_int		idx;
+-	sent_pkt *	head;
+-	sent_pkt *	spkt;
+-	sent_pkt *	spkt_next;
+-	long		age;
+-	int didsomething = 0;
+-
+-	TRACE(3, ("timeout_queries: called to check %u items\n",
+-		  (unsigned)COUNTOF(fam_listheads)));
+-
+-	gettimeofday_cached(base, &start_cb);
+-	for (idx = 0; idx < COUNTOF(fam_listheads); idx++) {
+-		head = fam_listheads[idx];
+-		for (spkt = head; spkt != NULL; spkt = spkt_next) {
+-			char xcst;
+-
+-			didsomething = 1;
+-			switch (spkt->dctx->flags & CTX_xCST) {
+-			    case CTX_BCST:
+-				xcst = 'B';
+-				break;
+-
+-			    case CTX_UCST:
+-				xcst = 'U';
+-				break;
+-
+-			    default:
+-				INSIST(!"spkt->dctx->flags neither UCST nor BCST");
+-				break;
+-			}
+-
+-			spkt_next = spkt->link;
+-			if (0 == spkt->stime || spkt->done)
+-				continue;
+-			age = start_cb.tv_sec - spkt->stime;
+-			TRACE(3, ("%s %s %cCST age %ld\n",
+-				  socktoa(&spkt->addr),
+-				  spkt->dctx->name, xcst, age));
+-			if (age > response_timeout)
+-				timeout_query(spkt);
+-		}
+-	}
+-	// Do we care about didsomething?
+-	TRACE(3, ("timeout_queries: didsomething is %d, age is %ld\n",
+-		  didsomething, (long) (start_cb.tv_sec - start_tv.tv_sec)));
+-	if (start_cb.tv_sec - start_tv.tv_sec > response_timeout) {
+-		TRACE(3, ("timeout_queries: bail!\n"));
+-		event_base_loopexit(base, NULL);
+-		shutting_down = true;
+-	}
+-}
+-
+-
+-void dec_pending_ntp(
+-	const char *	name,
+-	sockaddr_u *	server
+-	)
+-{
+-	if (n_pending_ntp > 0) {
+-		--n_pending_ntp;
+-		check_exit_conditions();
+-	} else {
+-		INSIST(0 == n_pending_ntp);
+-		TRACE(1, ("n_pending_ntp was zero before decrement for %s\n",
+-			  hostnameaddr(name, server)));
+-	}
+-}
+-
+-
+-void timeout_query(
+-	sent_pkt *	spkt
+-	)
+-{
+-	sockaddr_u *	server;
+-	char		xcst;
+-
+-
+-	switch (spkt->dctx->flags & CTX_xCST) {
+-	    case CTX_BCST:
+-		xcst = 'B';
+-		break;
+-
+-	    case CTX_UCST:
+-		xcst = 'U';
+-		break;
+-
+-	    default:
+-		INSIST(!"spkt->dctx->flags neither UCST nor BCST");
+-		break;
+-	}
+-	spkt->done = true;
+-	server = &spkt->addr;
+-	msyslog(LOG_INFO, "%s no %cCST response after %f seconds",
+-		hostnameaddr(spkt->dctx->name, server), xcst,
+-		response_timeout);
+-	dec_pending_ntp(spkt->dctx->name, server);
+-	return;
+-}
+-
+-
+-/*
+-** check_kod
+-*/
+-bool
+-check_kod(
+-	const struct addrinfo *	ai
+-	)
+-{
+-	char *hostname;
+-	struct kod_entry *reason;
+-
+-	/* Is there a KoD on file for this address? */
+-	hostname = addrinfo_to_str(ai);
+-	TRACE(2, ("check_kod: checking <%s>\n", hostname));
+-	if (search_entry(hostname, &reason)) {
+-		printf("prior KoD for %s, skipping.\n",
+-			hostname);
+-		free(reason);
+-		free(hostname);
+-
+-		return true;
+-	}
+-	free(hostname);
+-
+-	return false;
+-}
+-
+-
+-/*
+-** Socket readable/timeout Callback:
+-** Read in the packet
+-** Unicast:
+-** - close socket
+-** - decrement n_pending_ntp
+-** - If packet is good, set the time and "exit"
+-** Broadcast:
+-** - If packet is good, set the time and "exit"
+-*/
+-void
+-sock_cb(
+-	evutil_socket_t fd,
+-	short what,
+-	void *ptr
+-	)
+-{
+-	sockaddr_u	sender;
+-	sockaddr_u *	psau;
+-	sent_pkt **	p_pktlist;
+-	sent_pkt *	spkt;
+-	int		rpktl;
+-	int		rc;
+-
+-	UNUSED_ARG(ptr);
+-
+-	INSIST(sock4 == fd || sock6 == fd);
+-
+-	TRACE(3, ("sock_cb: event on sock%s:%s%s%s%s\n",
+-		  (fd == sock6)
+-		      ? "6"
+-		      : "4",
+-		  (what & EV_TIMEOUT) ? " timeout" : "",
+-		  (what & EV_READ)    ? " read" : "",
+-		  (what & EV_WRITE)   ? " write" : "",
+-		  (what & EV_SIGNAL)  ? " signal" : ""));
+-
+-	if (!(EV_READ & what)) {
+-		if (EV_TIMEOUT & what)
+-			timeout_queries();
+-
+-		return;
+-	}
+-
+-	/* Read in the packet */
+-	rpktl = recvdata(fd, &sender, &rbuf, sizeof(rbuf));
+-	if (rpktl < 0) {
+-		msyslog(LOG_DEBUG, "recvfrom error %m");
+-		return;
+-	}
+-
+-	if (sock6 == fd)
+-		p_pktlist = &v6_pkts_list;
+-	else
+-		p_pktlist = &v4_pkts_list;
+-
+-	for (spkt = *p_pktlist; spkt != NULL; spkt = spkt->link) {
+-		psau = &spkt->addr;
+-		if (SOCK_EQ(&sender, psau))
+-			break;
+-	}
+-	if (NULL == spkt) {
+-		msyslog(LOG_WARNING,
+-			"Packet from unexpected source %s dropped",
+-			sockporttoa(&sender));
+-		return;
+-	}
+-
+-	TRACE(1, ("sock_cb: %s %s\n", spkt->dctx->name,
+-		  sockporttoa(&sender)));
+-
+-	rpktl = process_pkt(&r_pkt, &sender, rpktl, MODE_SERVER,
+-			    &spkt->x_pkt, "sock_cb", opt_authkey != NULL);
+-
+-	TRACE(2, ("sock_cb: process_pkt returned %d\n", rpktl));
+-
+-	/* If this is a Unicast packet, one down ... */
+-	if (!spkt->done && (CTX_UCST & spkt->dctx->flags)) {
+-		dec_pending_ntp(spkt->dctx->name, &spkt->addr);
+-		spkt->done = true;
+-	}
+-
+-
+-	/* If the packet is good, set the time and we're all done */
+-	rc = handle_pkt(rpktl, &r_pkt, &spkt->addr, spkt->dctx->name);
+-	if (EXIT_SUCCESS != rc)
+-		TRACE(1, ("sock_cb: handle_pkt() returned %d\n", rc));
+-	check_exit_conditions();
+-}
+-
+-
+-/*
+- * check_exit_conditions()
+- *
+- * If ntpdig has a reply, ask the event loop to stop after this round of
+- * callbacks, unless --wait was used.
+- */
+-void
+-check_exit_conditions(void)
+-{
+-	if ((0 == n_pending_ntp && 0 == n_pending_dns) ||
+-	    (time_derived && !opt_wait)) {
+-		event_base_loopexit(base, NULL);
+-		shutting_down = true;
+-	} else {
+-		TRACE(2, ("%d NTP and %d name queries pending\n",
+-			  n_pending_ntp, n_pending_dns));
+-	}
+-}
+-
+-
+-/*
+- * ntpdig_addremove_fd() is invoked by the intres blocking worker code
+- * to read from a pipe, or to stop same.
+- */
+-void ntpdig_addremove_fd(
+-	int	fd,
+-	int	is_pipe,
+-	int	remove_it
+-	)
+-{
+-	u_int		idx;
+-	blocking_child *c;
+-	struct event *	ev;
+-
+-	if (is_pipe) {
+-		msyslog(LOG_ERR, "fatal: pipes not supported on systems with socketpair()");
+-		exit(1);
+-	}
+-
+-	c = NULL;
+-	for (idx = 0; idx < blocking_children_alloc; idx++) {
+-		c = blocking_children[idx];
+-		if (NULL == c)
+-			continue;
+-		if (fd == c->resp_read_pipe)
+-			break;
+-	}
+-	if (idx == blocking_children_alloc)
+-		return;
+-
+-	if (remove_it) {
+-		ev = c->resp_read_ctx;
+-		c->resp_read_ctx = NULL;
+-		event_del(ev);
+-		event_free(ev);
+-
+-		return;
+-	}
+-
+-	ev = event_new(base, fd, EV_READ | EV_PERSIST,
+-		       &worker_resp_cb, c);
+-	if (NULL == ev) {
+-		msyslog(LOG_ERR,
+-			"ntpdig_addremove_fd: event_new(base, fd) failed!");
+-		return;
+-	}
+-	c->resp_read_ctx = ev;
+-	event_add(ev, NULL);
+-}
+-
+-
+-/*
+- * worker_resp_cb() is invoked when resp_read_pipe is readable.
+- */
+-void
+-worker_resp_cb(
+-	evutil_socket_t	fd,
+-	short		what,
+-	void *		ctx	/* blocking_child * */
+-	)
+-{
+-	blocking_child *	c;
+-
+-	UNUSED_ARG(fd);
+-	UNUSED_ARG(what);
+-	DEBUG_INSIST(EV_READ & what);
+-	c = ctx;
+-	DEBUG_INSIST(fd == c->resp_read_pipe);
+-	process_blocking_resp(c);
+-}
+-
+-
+-/*
+- * intres_timeout_req(s) is invoked in the parent to schedule an idle
+- * timeout to fire in s seconds, if not reset earlier by a call to
+- * intres_timeout_req(0), which clears any pending timeout.  When the
+- * timeout expires, worker_idle_timer_fired() is invoked (again, in the
+- * parent).
+- *
+- * ntpdig and ntpd each provide implementations adapted to their timers.
+- */
+-void
+-intres_timeout_req(
+-	u_int	seconds		/* 0 cancels */
+-	)
+-{
+-	struct timeval	tv_to;
+-
+-	if (NULL == ev_worker_timeout) {
+-		ev_worker_timeout = event_new(base, -1,
+-					      EV_TIMEOUT | EV_PERSIST,
+-					      &worker_timeout, NULL);
+-		DEBUG_INSIST(NULL != ev_worker_timeout);
+-	} else {
+-		event_del(ev_worker_timeout);
+-	}
+-	if (0 == seconds)
+-		return;
+-	tv_to.tv_sec = seconds;
+-	tv_to.tv_usec = 0;
+-	event_add(ev_worker_timeout, &tv_to);
+-}
+-
+-
+-void
+-worker_timeout(
+-	evutil_socket_t	fd,
+-	short		what,
+-	void *		ctx
+-	)
+-{
+-	UNUSED_ARG(fd);
+-#ifndef DEBUG
+-	UNUSED_ARG(what);
+-#endif /* DEBUG */
+-	UNUSED_ARG(ctx);
+-
+-	DEBUG_REQUIRE(EV_TIMEOUT & what);
+-	worker_idle_timer_fired();
+-}
+-
+-
+-void
+-ntpdig_libevent_log_cb(
+-	int		severity,
+-	const char *	msg
+-	)
+-{
+-	int		level;
+-
+-	switch (severity) {
+-
+-	default:
+-	case _EVENT_LOG_DEBUG:
+-		level = LOG_DEBUG;
+-		break;
+-
+-	case _EVENT_LOG_MSG:
+-		level = LOG_NOTICE;
+-		break;
+-
+-	case _EVENT_LOG_WARN:
+-		level = LOG_WARNING;
+-		break;
+-
+-	case _EVENT_LOG_ERR:
+-		level = LOG_ERR;
+-		break;
+-	}
+-
+-	msyslog(level, "%s", msg);
+-}
+-
+-
+-int
+-generate_pkt (
+-	struct pkt *x_pkt,
+-	const struct timeval *tv_xmt,
+-	int key_id,
+-	struct key *pkt_key
+-	)
+-{
+-	l_fp	xmt_fp;
+-	int	pkt_len;
+-	int	mac_size;
+-
+-	pkt_len = LEN_PKT_NOMAC;
+-	ZERO(*x_pkt);
+-	TVTOTS(tv_xmt, &xmt_fp);
+-	HTONL_FP(&xmt_fp, &x_pkt->xmt);
+-	x_pkt->stratum = STRATUM_TO_PKT(STRATUM_UNSPEC);
+-	x_pkt->ppoll = 8;
+-	/* FIXME! Modus broadcast + adr. check -> bdr. pkt */
+-	set_li_vn_mode(x_pkt, LEAP_NOTINSYNC, ntpver, 3);
+-	if (pkt_key != NULL) {
+-		x_pkt->exten[0] = htonl(key_id);
+-		mac_size = 20; /* max room for MAC */
+-		mac_size = make_mac((char *)x_pkt, pkt_len, mac_size,
+-				    pkt_key, (char *)&x_pkt->exten[1]);
+-		if (mac_size > 0)
+-			pkt_len += mac_size + 4;
+-	}
+-	return pkt_len;
+-}
+-
+-
+-int
+-handle_pkt(
+-	int		rpktl,
+-	struct pkt *	rpkt,
+-	sockaddr_u *	host,
+-	const char *	hostname
+-	)
+-{
+-	char		disptxt[32];
+-	const char *	addrtxt;
+-	struct timeval	tv_dst;
+-	int		cnt;
+-	int		sw_case;
+-	int		digits;
+-	int		stratum;
+-	char *		ref;
+-	char *		ts_str;
+-	const char *	leaptxt;
+-	double		offset;
+-	double		precision;
+-	double		synch_distance;
+-	char *		p_NTPDIG_PRETEND_TIME;
+-	time_t		pretend_time;
+-#if NTP_SIZEOF_TIME_T == 8
+-	long long	ll;
+-#else
+-	long		l;
+-#endif
+-
+-	ts_str = NULL;
+-
+-	if (rpktl > 0)
+-		sw_case = 1;
+-	else
+-		sw_case = rpktl;
+-
+-	switch (sw_case) {
+-
+-	case SERVER_UNUSEABLE:
+-		return -1;
+-		break;
+-
+-	case PACKET_UNUSEABLE:
+-		break;
+-
+-	case SERVER_AUTH_FAIL:
+-		break;
+-
+-	case KOD_DEMOBILIZE:
+-		/* Received a DENY or RESTR KOD packet */
+-		addrtxt = socktoa(host);
+-		ref = (char *)&rpkt->refid;
+-		add_entry(addrtxt, ref);
+-		msyslog(LOG_WARNING, "KOD code %c%c%c%c from %s %s",
+-			ref[0], ref[1], ref[2], ref[3], addrtxt, hostname);
+-		break;
+-
+-	case KOD_RATE:
+-		/*
+-		** Hmm...
+-		** We should probably call add_entry() with an
+-		** expiration timestamp of several seconds in the future,
+-		** and back-off even more if we get more RATE responses.
+-		*/
+-		break;
+-
+-	case 1:
+-		TRACE(3, ("handle_pkt: %d bytes from %s %s\n",
+-			  rpktl, socktoa(host), hostname));
+-
+-		gettimeofday_cached(base, &tv_dst);
+-
+-		p_NTPDIG_PRETEND_TIME = getenv("NTPDIG_PRETEND_TIME");
+-		if (p_NTPDIG_PRETEND_TIME) {
+-			pretend_time = 0;
+-#if NTP_SIZEOF_TIME_T == 4
+-			if (1 == sscanf(p_NTPDIG_PRETEND_TIME, "%ld", &l))
+-				pretend_time = (time_t)l;
+-#elif NTP_SIZEOF_TIME_T == 8
+-			if (1 == sscanf(p_NTPDIG_PRETEND_TIME, "%lld", &ll))
+-				pretend_time = (time_t)ll;
+-#else
+-# include "GRONK: unexpected value for SIZEOF_TIME_T"
+-#endif
+-			if (0 != pretend_time)
+-				tv_dst.tv_sec = pretend_time;
+-		}
+-
+-		offset_calculation(rpkt, rpktl, &tv_dst, &offset,
+-				   &precision, &synch_distance);
+-		time_derived = true;
+-
+-		for (digits = 0; (precision *= 10.) < 1.; ++digits)
+-			/* empty */ ;
+-		if (digits > 6)
+-			digits = 6;
+-
+-		ts_str = tv_to_str(&tv_dst, opt_json);
+-		stratum = rpkt->stratum;
+-		if (0 == stratum)
+-				stratum = 16;
+-
+-		if (synch_distance > 0.) {
+-			cnt = snprintf(disptxt, sizeof(disptxt),
+-				       " +/- %f", synch_distance);
+-			if ((size_t)cnt >= sizeof(disptxt))
+-				snprintf(disptxt, sizeof(disptxt),
+-					 "ERROR %d >= %d", cnt,
+-					 (int)sizeof(disptxt));
+-		} else {
+-			disptxt[0] = '\0';
+-		}
+-
+-		switch (PKT_LEAP(rpkt->li_vn_mode)) {
+-		    case LEAP_NOWARNING:
+-		    	leaptxt = "no-leap";
+-			break;
+-		    case LEAP_ADDSECOND:
+-		    	leaptxt = "add-leap";
+-			break;
+-		    case LEAP_DELSECOND:
+-		    	leaptxt = "del-leap";
+-			break;
+-		    case LEAP_NOTINSYNC:
+-		    	leaptxt = "unsync";
+-			break;
+-		    default:
+-		    	leaptxt = "LEAP-ERROR";
+-			break;
+-		}
+-
+-		if (opt_json) {
+-		    printf("{\"time\":\"%s\",\"offset\":%f,\"precision\":%f,",
+-		    	ts_str, offset, synch_distance);
+-		    printf("\"host\":\"%s\",\"ip\":\"%s\",",
+-			   hostname, socktoa(host));
+-		    printf("\"stratum\":%d,\"leap\":\"%s\",\"adjusted\":%s}\n",
+-			   stratum,
+-		    	   leaptxt,
+-		    	   time_adjusted ? "true" : "false");
+-		}
+-		else {
+-		    char msgbuf[132];
+-		    snprintf(msgbuf, sizeof(msgbuf),
+-			    "%s %+.*f%s %s s%d %s%s", ts_str,
+-			    digits, offset, disptxt,
+-			    hostnameaddr(hostname, host), stratum,
+-			    leaptxt,
+-			    time_adjusted ? " [excess]" : "");
+-		    printf("%s\n", msgbuf);
+-		    msyslog(LOG_INFO, "%s", msgbuf);
+-		}
+-		free(ts_str);
+-
+-		if (p_NTPDIG_PRETEND_TIME)
+-			return EXIT_SUCCESS;
+-
+-		if (!time_adjusted && (opt_step || opt_slew))
+-			return set_time(offset);
+-
+-		return EXIT_SUCCESS;
+-	}
+-
+-	return EXIT_FAILURE;
+-}
+-
+-
+-void
+-offset_calculation(
+-	struct pkt *rpkt,
+-	int rpktl,
+-	struct timeval *tv_dst,
+-	double *offset,
+-	double *precision,
+-	double *synch_distance
+-	)
+-{
+-	l_fp p_rec, p_xmt, p_ref, p_org, tmp, dst;
+-	u_fp p_rdly, p_rdsp;
+-	double t21, t34, delta;
+-
+-#ifndef DEBUG
+-	UNUSED_ARG(rpktl);
+-#endif /* DEBUG */
+-
+-	/* Convert timestamps from network to host byte order */
+-	p_rdly = NTOHS_FP(rpkt->rootdelay);
+-	p_rdsp = NTOHS_FP(rpkt->rootdisp);
+-	NTOHL_FP(&rpkt->reftime, &p_ref);
+-	NTOHL_FP(&rpkt->org, &p_org);
+-	NTOHL_FP(&rpkt->rec, &p_rec);
+-	NTOHL_FP(&rpkt->xmt, &p_xmt);
+-
+-	*precision = LOGTOD(rpkt->precision);
+-
+-	TRACE(3, ("offset_calculation: LOGTOD(rpkt->precision): %f\n", *precision));
+-
+-	/* Compute offset etc. */
+-	tmp = p_rec;
+-	L_SUB(&tmp, &p_org);
+-	LFPTOD(&tmp, t21);
+-	TVTOTS(tv_dst, &dst);
+-	dst.l_ui += JAN_1970;
+-	tmp = p_xmt;
+-	L_SUB(&tmp, &dst);
+-	LFPTOD(&tmp, t34);
+-	*offset = (t21 + t34) / 2.;
+-	delta = t21 - t34;
+-
+-	// synch_distance is:
+-	// (peer->delay + peer->rootdelay) / 2 + peer->disp
+-	// + peer->rootdisp + clock_phi * (current_time - peer->update)
+-	// + peer->jitter;
+-	//
+-	// and peer->delay = fabs(peer->offset - p_offset) * 2;
+-	// and peer->offset needs history, so we're left with
+-	// p_offset = (t21 + t34) / 2.;
+-	// peer->disp = 0; (we have no history to augment this)
+-	// clock_phi = 15e-6; 
+-	// peer->jitter = LOGTOD(sys_precision); (we have no history to augment this)
+-	// and ntp_proto.c:set_sys_tick_precision() should get us sys_precision.
+-	//
+-	// so our answer seems to be:
+-	//
+-	// (fabs(t21 + t34) + peer->rootdelay) / 3.
+-	// + 0 (peer->disp)
+-	// + peer->rootdisp
+-	// + 15e-6 (clock_phi)
+-	// + LOGTOD(sys_precision)
+-
+-	INSIST( FPTOD(p_rdly) >= 0. );
+-#if 1
+-	*synch_distance = (fabs(t21 + t34) + FPTOD(p_rdly)) / 3.
+-		+ 0.
+-		+ FPTOD(p_rdsp)
+-		+ 15e-6
+-		+ 0.	/* LOGTOD(sys_precision) when we can get it */
+-		;
+-	INSIST( *synch_distance >= 0. );
+-#else
+-	*synch_distance = (FPTOD(p_rdly) + FPTOD(p_rdsp))/2.0;
+-#endif
+-
+-#ifdef DEBUG
+-	if (debug > 3) {
+-		double ftime;
+-		struct timespec ts_tmp;
+-		pkt_output(rpkt, rpktl, false, stdout);
+-		printf("ntpdig rootdelay: %f\n", FPTOD(p_rdly));
+-		printf("ntpdig rootdisp: %f\n", FPTOD(p_rdsp));
+-		printf("ntpdig syncdist: %f\n", *synch_distance);
+-		ts_tmp = lfp_stamp_to_tspec(p_ref, NULL);
+-		ftime = ts_tmp.tv_sec + ts_tmp.tv_nsec / 1e9;
+-		printf("ntpdig offset_calculation: ref: %f ", ftime);
+-		l_fp_output(&p_ref, stdout);
+-		ts_tmp = lfp_stamp_to_tspec(p_org, NULL);
+-		ftime = ts_tmp.tv_sec + ts_tmp.tv_nsec / 1e9;
+-		printf("ntpdig offset_calculation: org: %f ", ftime);
+-		l_fp_output(&p_org, stdout);
+-		ts_tmp = lfp_stamp_to_tspec(p_rec, NULL);
+-		ftime = ts_tmp.tv_sec + ts_tmp.tv_nsec / 1e9;
+-		printf("ntpdig offset_calculation: rec: %f ", ftime);
+-		l_fp_output(&p_rec, stdout);
+-		ts_tmp = lfp_stamp_to_tspec(p_xmt, NULL);
+-		ftime = ts_tmp.tv_sec + ts_tmp.tv_nsec / 1e9;
+-		printf("ntpdig offset_calculation: xmt: %f ", ftime);
+-		l_fp_output(&p_xmt, stdout);
+-		ftime = tv_dst->tv_sec + tv_dst->tv_usec / 1e6;
+-		printf("ntpdig dst %f\n", ftime);
+-	}
+-#endif
+-
+-	TRACE(3, ("ntpdig offset_calculation:\nrec - org t21: %.6f\t"
+-		  "\txmt - dst t34: %.6f\ndelta: %.6f\toffset: %.6f\n",
+-		  t21, t34, delta, *offset));
+-
+-	return;
+-}
+-
+-
+-
+-/* Compute the 8 bits for li_vn_mode */
+-void
+-set_li_vn_mode (
+-	struct pkt *spkt,
+-	char leap,
+-	char version,
+-	char mode
+-	)
+-{
+-	if (leap > 3) {
+-		msyslog(LOG_DEBUG, "set_li_vn_mode: leap > 3, using max. 3");
+-		leap = 3;
+-	}
+-
+-	if ((unsigned char)version > 7) {
+-		msyslog(LOG_DEBUG, "set_li_vn_mode: version < 0 or > 7, using 4");
+-		version = 4;
+-	}
+-
+-	if (mode > 7) {
+-		msyslog(LOG_DEBUG, "set_li_vn_mode: mode > 7, using client mode 3");
+-		mode = 3;
+-	}
+-
+-	spkt->li_vn_mode  = leap << 6;
+-	spkt->li_vn_mode |= version << 3;
+-	spkt->li_vn_mode |= mode;
+-}
+-
+-
+-/*
+-** set_time applies 'offset' to the local clock.
+-*/
+-int
+-set_time(
+-	double offset
+-	)
+-{
+-	bool rc;
+-
+-	if (time_adjusted)
+-		return EXIT_SUCCESS;
+-
+-	/*
+-	** If we can step but we cannot slew, then step.
+-	** If we can step or slew and and |offset| > steplimit, then step.
+-	*/
+-	if (opt_step &&
+-	    (   !opt_slew
+-	     || (opt_slew && (fabs(offset) > steplimit))
+-	    )) {
+-		rc = step_systime(offset, ntp_set_tod);
+-
+-		/* If there was a problem, can we rely on errno? */
+-		if (1 == rc)
+-			time_adjusted = true;
+-		return (time_adjusted)
+-			   ? EXIT_SUCCESS
+-			   : EXIT_FAILURE;
+-		/*
+-		** In case of error, what should we use?
+-		** EX_UNAVAILABLE?
+-		** EX_OSERR?
+-		** EX_NOPERM?
+-		*/
+-	}
+-
+-	if (opt_slew) {
+-		rc = adj_systime(offset, adjtime);
+-
+-		/* If there was a problem, can we rely on errno? */
+-		if (rc)
+-			time_adjusted = true;
+-		return (time_adjusted)
+-			   ? EXIT_SUCCESS
+-		           : EXIT_FAILURE;
+-		/*
+-		** In case of error, what should we use?
+-		** EX_UNAVAILABLE?
+-		** EX_OSERR?
+-		** EX_NOPERM?
+-		*/
+-	}
+-
+-	return EXIT_FAILURE;
+-}
+-
+-
+-bool
+-libevent_version_ok(void)
+-{
+-	ev_uint32_t v_compile_maj;
+-	ev_uint32_t v_run_maj;
+-
+-	v_compile_maj = LIBEVENT_VERSION_NUMBER & 0xffff0000;
+-	v_run_maj = event_get_version_number() & 0xffff0000;
+-	if (v_compile_maj != v_run_maj) {
+-		fprintf(stderr,
+-			"Incompatible libevent versions: have %s, built with %s\n",
+-			event_get_version(),
+-			LIBEVENT_VERSION);
+-		return false;
+-	}
+-	return true;
+-}
+-
+-/*
+- * gettimeofday_cached()
+- *
+- * Clones the event_base_gettimeofday_cached() interface but ensures the
+- * times are always on the gettimeofday() 1970 scale.  Older libevent 2
+- * sometimes used gettimeofday(), sometimes the since-system-start
+- * clock_gettime(CLOCK_MONOTONIC), depending on the platform.
+- *
+- * It is not cleanly possible to tell which timescale older libevent is
+- * using.
+- *
+- * The strategy involves 1 hour thresholds chosen to be far longer than
+- * the duration of a round of libevent callbacks, which share a cached
+- * start-of-round time.  First compare the last cached time with the
+- * current gettimeofday() time.  If they are within one hour, libevent
+- * is using the proper timescale so leave the offset 0.  Otherwise,
+- * compare libevent's cached time and the current time on the monotonic
+- * scale.  If they are within an hour, libevent is using the monotonic
+- * scale so calculate the offset to add to such times to bring them to
+- * gettimeofday()'s scale.
+- */
+-int
+-gettimeofday_cached(
+-	struct event_base *	b,
+-	struct timeval *	caller_tv
+-	)
+-{
+-	static struct event_base *	cached_b;
+-	static struct timeval		cached;
+-	static struct timeval		adj_cached;
+-	static struct timeval		offset;
+-	static int			offset_ready;
+-	struct timeval			latest;
+-	struct timeval			systemt;
+-	struct timespec			ts;
+-	struct timeval			mono;
+-	struct timeval			diff;
+-	int				cgt_rc;
+-	int				gtod_rc;
+-
+-	event_base_gettimeofday_cached(b, &latest);
+-	if (b == cached_b &&
+-	    !memcmp(&latest, &cached, sizeof(latest))) {
+-		*caller_tv = adj_cached;
+-		return 0;
+-	}
+-	cached = latest;
+-	cached_b = b;
+-	if (!offset_ready) {
+-		cgt_rc = clock_gettime(CLOCK_MONOTONIC, &ts);
+-		gtod_rc = gettimeofday(&systemt, NULL);
+-		if (0 != gtod_rc) {
+-			msyslog(LOG_ERR,
+-				"%s: gettimeofday() error %m",
+-				progname);
+-			exit(1);
+-		}
+-		diff = sub_tval(systemt, latest);
+-		if (debug > 1)
+-			printf("system minus cached %+ld.%06ld\n",
+-			       (long)diff.tv_sec, (long)diff.tv_usec);
+-		if (0 != cgt_rc || labs((long)diff.tv_sec) < 3600) {
+-			/*
+-			 * Either use_monotonic == 0, or this libevent
+-			 * has been repaired.  Leave offset at zero.
+-			 */
+-		} else {
+-			mono.tv_sec = ts.tv_sec;
+-			mono.tv_usec = ts.tv_nsec / 1000;
+-			diff = sub_tval(latest, mono);
+-			if (debug > 1)
+-				printf("cached minus monotonic %+ld.%06ld\n",
+-				       (long)diff.tv_sec, (long)diff.tv_usec);
+-			if (labs((long)diff.tv_sec) < 3600) {
+-				/* older libevent2 using monotonic */
+-				offset = sub_tval(systemt, mono);
+-				TRACE(1, ("%s: Offsetting libevent CLOCK_MONOTONIC times  by %+ld.%06ld\n",
+-					 "gettimeofday_cached",
+-					 (long)offset.tv_sec,
+-					 (long)offset.tv_usec));
+-			}
+-		}
+-		offset_ready = true;
+-	}
+-	adj_cached = add_tval(cached, offset);
+-	*caller_tv = adj_cached;
+-
+-	return 0;
+-}
+-
+diff --git a/ntpdig/main.h b/ntpdig/main.h
+deleted file mode 100644
+index d403f90..0000000
+--- a/ntpdig/main.h
++++ /dev/null
+@@ -1,25 +0,0 @@
+-#ifndef GUARD_MAIN_H
+-#define GUARD_MAIN_H
+-
+-#include <stdio.h>
+-#include <isc/net.h>
+-
+-#include <ntp.h>
+-#include <ntp_stdlib.h>
+-#include <ntp_debug.h>
+-#include "timevalops.h"
+-
+-#include "crypto.h"
+-
+-void	set_li_vn_mode(struct pkt *spkt, char leap, char version, char mode); 
+-extern int ntpdig_main(int argc, char **argv, const char *);
+-int	generate_pkt(struct pkt *x_pkt, const struct timeval *tv_xmt,
+-				  int key_id, struct key *pkt_key);
+-int	handle_pkt(int rpktl, struct pkt *rpkt, sockaddr_u *host,
+-		   const char *hostname);
+-void	offset_calculation(struct pkt *rpkt, int rpktl,
+-			   struct timeval *tv_dst, double *offset,
+-			   double *precision, double *root_dispersion);
+-int	set_time(double offset);
+-
+-#endif /* GUARD_MAIN_H */
+diff --git a/ntpdig/networking.c b/ntpdig/networking.c
+deleted file mode 100644
+index 1143058..0000000
+--- a/ntpdig/networking.c
++++ /dev/null
+@@ -1,287 +0,0 @@
+-#include <config.h>
+-#include "networking.h"
+-#include "ntp_debug.h"
+-
+-
+-/* Send a packet */
+-int
+-sendpkt (
+-	SOCKET rsock,
+-	sockaddr_u *dest,
+-	struct pkt *pkt,
+-	int len
+-	)
+-{
+-	int cc;
+-
+-#ifdef DEBUG
+-	if (debug > 2) {
+-		printf("ntpdig sendpkt: Packet data:\n");
+-		pkt_output(pkt, len, true, stdout);
+-	}
+-#endif
+-	TRACE(1, ("ntpdig sendpkt: Sending packet to %s ...\n",
+-		  sockporttoa(dest)));
+-
+-	cc = sendto(rsock, (void *)pkt, len, 0, &dest->sa, 
+-		    SOCKLEN(dest));
+-	if (cc == SOCKET_ERROR) {
+-		msyslog(LOG_ERR, "Send to %s failed, %m",
+-			sockporttoa(dest));
+-		return false;
+-	}
+-	TRACE(1, ("Packet sent.\n"));
+-
+-	return true;
+-}
+-
+-
+-/* Receive raw data */
+-int
+-recvdata(
+-	SOCKET		rsock,
+-	sockaddr_u *	sender,
+-	void *		rdata,
+-	int		rdata_length
+-	)
+-{
+-	GETSOCKNAME_SOCKLEN_TYPE slen;
+-	int recvc;
+-
+-	slen = sizeof(*sender);
+-	recvc = recvfrom(rsock, rdata, rdata_length, 0,
+-			 &sender->sa, &slen);
+-	if (recvc < 0)
+-		return recvc;
+-#ifdef DEBUG
+-	if (debug > 2) {
+-		printf("Received %d bytes from %s:\n", recvc, sockporttoa(sender));
+-		pkt_output((struct pkt *)rdata, recvc, true, stdout);
+-	}
+-#endif
+-	return recvc;
+-}
+-
+-/* Parsing from a short 'struct pkt' directly is bound to create
+- * coverity warnings. These are hard to avoid, as the formal declaration
+- * does not reflect the true layout in the presence of extension
+- * fields. Parsing and skipping the extension fields of a received packet
+- * until there's only the MAC left is better done in this separate
+- * function.
+- */
+-static void*
+-skip_efields(
+-	uint32_t *head,	/* head of extension chain 	*/
+-	uint32_t *tail	/* tail/end of extension chain	*/
+-	)
+-{
+-	
+-	u_int nlen;	/* next extension length */
+-	while ((tail - head) > 6) {
+-		nlen = ntohl(*head++) & 0xffff;
+-		nlen = (nlen + 3) >> 2;
+-		if (nlen > (u_int)(tail - head) || nlen < 4)
+-			return NULL;	/* Blooper! Inconsistent! */
+-		head += nlen;
+-	}
+-	return head;
+-}
+-
+-/*
+-** Check if it's data for us and whether it's useable or not.
+-**
+-** If not, return a failure code so we can delete this server from our list
+-** and continue with another one.
+-*/
+-int
+-process_pkt (
+-	struct pkt *rpkt,
+-	sockaddr_u *sender,
+-	int pkt_len,
+-	int mode,
+-	struct pkt *spkt,
+-	const char * func_name,
+-	bool authenticate
+-	)
+-{
+-	u_int		key_id;
+-	struct key *	pkt_key;
+-	int		is_authentic;	/* tri-valued */
+-	int		mac_size;
+-	u_int		exten_len;
+-	uint32_t *       exten_end;
+-	uint32_t *       packet_end;
+-	l_fp		sent_xmt;
+-	l_fp		resp_org;
+-
+-	pkt_key = NULL;
+-	is_authentic = authenticate ? 0 : -1;
+-
+-	/*
+-	 * Parse the extension field if present. We figure out whether
+-	 * an extension field is present by measuring the MAC size. If
+-	 * the number of words following the packet header is 0, no MAC
+-	 * is present and the packet is not authenticated. If 1, the
+-	 * packet is a crypto-NAK; if 3, the packet is authenticated
+-	 * with DES; if 5, the packet is authenticated with MD5; if 6,
+-	 * the packet is authenticated with SHA. If 2 or 4, the packet
+-	 * is a runt and discarded forthwith. If greater than 6, an
+-	 * extension field is present, so we subtract the length of the
+-	 * field and go around again.
+-	 */
+-	if (pkt_len < (int)LEN_PKT_NOMAC || (pkt_len & 3) != 0) {
+-		msyslog(LOG_ERR,
+-			"%s: Incredible packet length: %d.  Discarding.",
+-			func_name, pkt_len);
+-		return PACKET_UNUSEABLE;
+-	}
+-	/* Note: pkt_len must be a multiple of 4 at this point! */
+-	packet_end = (uint32_t*)((char*)rpkt + pkt_len);
+-	exten_end = skip_efields(rpkt->exten, packet_end);
+-	if (NULL == exten_end) {
+-		msyslog(LOG_ERR,
+-			"%s: Missing extension field.  Discarding.",
+-			func_name);
+-		return PACKET_UNUSEABLE;
+-	}
+-	/* get size of MAC in cells; can be zero */
+-	exten_len = (u_int)(packet_end - exten_end);
+-
+-	/* deduce action required from remaining length */
+-	switch (exten_len) {
+-
+-	case 0:	/* no MAC at all */
+-		break;
+-
+-	case 1:	/* crypto NAK */		
+-		key_id = ntohl(*exten_end);
+-		printf("Crypto NAK = 0x%08x\n", key_id);
+-		break;
+-
+-	case 3: /* key ID + 3DES MAC -- unsupported! */
+-		msyslog(LOG_ERR,
+-			"%s: Key ID + 3DES MAC is unsupported.  Discarding.",
+-			func_name);
+-		return PACKET_UNUSEABLE;
+-
+-	case 5:	/* key ID + MD5 MAC */
+-	case 6:	/* key ID + SHA MAC */
+-		/*
+-		** Look for the key used by the server in the specified
+-		** keyfile and if existent, fetch it or else leave the
+-		** pointer untouched
+-		*/
+-		key_id = ntohl(*exten_end);
+-		get_key(key_id, &pkt_key);
+-		if (!pkt_key) {
+-			printf("unrecognized key ID = 0x%08x\n", key_id);
+-			break;
+-		}
+-		/*
+-		** Seems like we've got a key with matching keyid.
+-		**
+-		** Generate a md5sum of the packet with the key from our
+-		** keyfile and compare those md5sums.
+-		*/
+-		mac_size = exten_len << 2;
+-		if (!auth_md5((char *)rpkt, pkt_len - mac_size,
+-			      mac_size - 4, pkt_key)) {
+-			is_authentic = 0;
+-			break;
+-		}
+-		/* Yay! Things worked out! */
+-		is_authentic = 1;
+-		TRACE(1, ("ntpdig %s: packet from %s authenticated using key id %d.\n",
+-			  func_name, socktoa(sender), key_id));
+-		break;
+-
+-	default:
+-		msyslog(LOG_ERR,
+-			"%s: Unexpected extension length: %d.  Discarding.",
+-			func_name, exten_len);
+-		return PACKET_UNUSEABLE;
+-	}
+-
+-	switch (is_authentic) {
+-
+-	case -1:	/* unknown */
+-		break;
+-
+-	case 0:		/* not authentic */
+-		return SERVER_AUTH_FAIL;
+-		break;
+-
+-	case 1:		/* authentic */
+-		break;
+-
+-	default:	/* error */
+-		break;
+-	}
+-
+-	/* Check for server's ntp version */
+-	if (PKT_VERSION(rpkt->li_vn_mode) < NTP_OLDVERSION ||
+-		PKT_VERSION(rpkt->li_vn_mode) > NTP_VERSION) {
+-		msyslog(LOG_ERR,
+-			"%s: Packet shows wrong version (%d)",
+-			func_name, PKT_VERSION(rpkt->li_vn_mode));
+-		return SERVER_UNUSEABLE;
+-	} 
+-	/* We want a server to sync with */
+-	if (PKT_MODE(rpkt->li_vn_mode) != mode &&
+-	    PKT_MODE(rpkt->li_vn_mode) != MODE_PASSIVE) {
+-		msyslog(LOG_ERR,
+-			"%s: mode %d stratum %d", func_name, 
+-			PKT_MODE(rpkt->li_vn_mode), rpkt->stratum);
+-		return SERVER_UNUSEABLE;
+-	}
+-	/* Stratum is unspecified (0) check what's going on */
+-	if (STRATUM_PKT_UNSPEC == rpkt->stratum) {
+-		char *ref_char;
+-
+-		TRACE(1, ("%s: Stratum unspecified, going to check for KOD (stratum: %d)\n", 
+-			  func_name, rpkt->stratum));
+-		ref_char = (char *) &rpkt->refid;
+-		TRACE(1, ("%s: Packet refid: %c%c%c%c\n", func_name,
+-			  ref_char[0], ref_char[1], ref_char[2], ref_char[3]));
+-		/* If it's a KOD packet we'll just use the KOD information */
+-		if (ref_char[0] != 'X') {
+-			if (strncmp(ref_char, "DENY", 4) == 0)
+-				return KOD_DEMOBILIZE;
+-			if (strncmp(ref_char, "RSTR", 4) == 0)
+-				return KOD_DEMOBILIZE;
+-			if (strncmp(ref_char, "RATE", 4) == 0)
+-				return KOD_RATE;
+-			/*
+-			** There are other interesting kiss codes which
+-			** might be interesting for authentication.
+-			*/
+-		}
+-	}
+-	/* If the server is not synced it's not really useable for us */
+-	if (LEAP_NOTINSYNC == PKT_LEAP(rpkt->li_vn_mode)) {
+-		msyslog(LOG_ERR,
+-			"%s: %s not in sync, skipping this server",
+-			func_name, socktoa(sender));
+-		return SERVER_UNUSEABLE;
+-	}
+-
+-	/*
+-	 * Decode the org timestamp and make sure we're getting a response
+-	 * to our last request, but only if we're not in broadcast mode.
+-	 */
+-	if (MODE_BROADCAST == mode)
+-		return pkt_len;
+-
+-	if (!L_ISEQU(&rpkt->org, &spkt->xmt)) {
+-		NTOHL_FP(&rpkt->org, &resp_org);
+-		NTOHL_FP(&spkt->xmt, &sent_xmt);
+-		msyslog(LOG_ERR,
+-			"%s response org expected to match sent xmt",
+-			socktoa(sender));
+-		msyslog(LOG_ERR, "resp org: %s", prettydate(&resp_org));
+-		msyslog(LOG_ERR, "sent xmt: %s", prettydate(&sent_xmt));
+-		return PACKET_UNUSEABLE;
+-	}
+-
+-	return pkt_len;
+-}
+diff --git a/ntpdig/networking.h b/ntpdig/networking.h
+deleted file mode 100644
+index c2223c1..0000000
+--- a/ntpdig/networking.h
++++ /dev/null
+@@ -1,77 +0,0 @@
+-#ifndef GUARD_NETWORKING_H
+-#define GUARD_NETWORKING_H
+-
+-#include <arpa/inet.h>
+-#include <netinet/in.h>
+-
+-#include <strings.h>	
+-#include <errno.h>
+-#include <config.h>
+-#include <netdb.h>
+-#include <unistd.h>
+-#include <sys/types.h>
+-#include <sys/socket.h>
+-
+-#include <ntp_stdlib.h>
+-#include <ntp_machine.h>
+-#include <ntp_fp.h>
+-#include <ntp.h>
+-
+-#include "crypto.h"
+-#include "log.h"
+-#include "utilities.h"
+-
+-/* FIXME To be replaced by the constants in ntp.h */
+-#define SERVER_UNUSEABLE -1 /* Skip server */
+-#define PACKET_UNUSEABLE -2 /* Discard packet and try to get a useable packet again if not tried too often */
+-#define SERVER_AUTH_FAIL -3 /* Authentication failed, act upon settings */
+-#define KOD_DEMOBILIZE -4   /* KOD packet with code DENY or RSTR, stop all communication and save KOD information */
+-#define KOD_RATE -5	    /* KOD packet with code RATE, reduce poll intervall */
+-#define BROADCAST_FAILED -6
+-
+-/* prototypes */
+-int sendpkt(SOCKET rsock, sockaddr_u *dest, struct pkt *pkt, int len);
+-int recvdata(SOCKET rsock, sockaddr_u *sender, void *rdata,
+-	     int rdata_len);
+-int recvpkt(SOCKET rsock, struct pkt *rpkt, unsigned int rsize,
+-	    struct pkt *spkt);
+-int process_pkt(struct pkt *rpkt, sockaddr_u *sas, int pkt_len,
+-		int mode, struct pkt *spkt, const char *func_name,
+-		bool authenticate);
+-
+-/* Shortened peer structure. Not absolutely necessary yet */
+-struct speer {
+-	struct speer *next;
+-	sockaddr_u srcadr;
+-	uint8_t version;
+-	uint8_t hmode;
+-	uint8_t hpoll;
+-	uint8_t minpoll;
+-	uint8_t maxpoll;
+-	u_int flags;
+-	uint8_t num_events;
+-	uint8_t ttl;
+-	uint8_t leap;
+-	uint8_t pmode;
+-	uint8_t stratum;
+-	uint8_t ppoll;
+-	uint8_t precision;	/* should be int8_t */
+-	uint32_t refid;
+-	l_fp reftime;
+-	keyid_t keyid;
+-
+-#define clear_to_zero status
+-	
+-	l_fp	rec;		/* receive time stamp */
+-	l_fp	xmt;		/* transmit time stamp */
+-	l_fp	dst;		/* destination timestamp */
+-	l_fp	org;		/* origin timestamp */
+-	double	offset;		/* peer clock offset */
+-	double	delay;		/* peer roundtrip delay */
+-};
+-
+-
+-
+-
+-
+-#endif
+diff --git a/ntpdig/ntpdig b/ntpdig/ntpdig
+new file mode 100755
+index 0000000..d19e3ec
+--- /dev/null
++++ b/ntpdig/ntpdig
+@@ -0,0 +1,408 @@
++#!/usr/bin/python
++"""
++ntpdig - simple SNTP client
++
++"""
++# SPDX-License-Identifier: BSD-2-clause
++# This code runs identically under Python 2 and Python 3. Keep it that way!
++from __future__ import print_function, division
++
++# This code is somewhat stripped down from the legacy C version.  It
++# does however have one additional major feature; it can filter
++# out falsetickers from multiple samples, like the ntpdate of old,
++# rather than just taking the first reply it gets.
++#
++# Listening to broadcast addresses is not implemented because that is
++# impossible to secure. KOD recording is also not implemented, as it
++# can too easily be spammed.  Thus, the options -b and -K are not
++# implemented.
++#
++# There are no version 3 NTP servers left, so the -o version for setting
++# NTP version has been omitted.
++#
++# Because ntpdig doesn't use symmetric-peer mode (it never did, and NTPsec has
++# abolished that mode because it was a security hazard), there's no need to
++# set the packet source port, so -r/--usereservedport has been dropped.
++# If this option ever needs to be reinstated, the magic is described here:
++# http://stackoverflow.com/questions/2694212/socket-set-source-port-number
++# and would be s.bind(('', 123)) right after the socket creation.
++#
++# The -w/--wait and -W/--nowait options only made sense with asynchronous
++# DNS.  Asynchronous DNS was absurd overkill for this application, we are
++# not looking up 20,000 hosts here.  It has not been implemented, so neither
++# have these options.
++#
++# Finally, logging to syslog by default was a design error, violating
++# Unix principles, that has been fixed. To get this behavior when
++# running in a script, redirect standard error to logger(1). 
++#
++# The one new option in this version is -p, borrowed from ntpdate.
++
++import sys, socket, select, struct, time, getopt, datetime, math
++
++try:
++    import ntp.packet
++    import ntp.util
++    import ntp.magic
++except:
++    sys.stderr.write("ntpdig: can't find Python NTP library -- check PYTHONPATH.\n")
++    sys.exit(1)
++
++def queryhost(server, concurrent, timeout=5, port=123):
++    "Query IP addresses associated with a specified host."
++    try:
++        iptuples = socket.getaddrinfo(server, port,
++                                      af, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
++    except socket.gaierror as e:
++        log("lookup of %s failed, errno %d = %s" % (server, e[0], e[1]))
++        return []
++    sockets = []
++    packets = []
++    request = ntp.packet.SyncPacket()
++    request.transmit_timestamp = ntp.packet.SyncPacket.posix_to_ntp(time.time())
++    packet = request.flatten()
++    for (family, socktype, proto, canonname, sockaddr) in iptuples:
++        if debug:
++            log("querying %s (%s)" % (sockaddr[0], server))
++        s = socket.socket(family, socktype)
++        if keyid and keytype and passwd:
++            if debug:
++                log("authenticating with %s key %d" % (keytype, keyid))
++            mac = ntp.packet.Authenticator.compute_mac(packet,
++                                                       keyid, keytype, passwd)
++            if mac is None:
++                log("MAC generation failed while querying %s" % server)
++                raise SystemExit(1)
++            else:
++                packet += mac
++        try:
++            s.sendto(packet, sockaddr)
++        except socket.error as e:
++            log("socket error on transmission: %s" % e)
++            raise SystemExit(1)
++        if debug >= 2:
++            log("Sent to %s:" % (sockaddr[0],))
++            ntp.packet.dump_hex_printable(packet)
++        def read_append(s, packets):
++            d, a = s.recvfrom(1024)
++            if debug >= 2:
++                ntp.packet.dump_hex_printable(d)
++            if credentials:
++                if not ntp.packet.Authenticator.have_mac(d):
++                    if debug:
++                        log("no MAC on reply from %s" % packet.hostname)
++                if not credentials.verify_mac(d):
++                    packet.trusted = False
++                    log("MAC verification on reply from %s failed" % sockaddr[0])
++                elif debug:
++                    log("MAC verification on reply from %s succeeded" % sockaddr[0])
++            pkt = ntp.packet.SyncPacket(d)
++            pkt.hostname = server
++            pkt.resolved = sockaddr[0]
++            packets.append(pkt)
++            time.sleep(gap)
++        if concurrent:
++            sockets.append(s)
++        else:
++            r, _, _ = select.select([s], [], [], timeout)
++            if not r:
++                return []
++            read_append(s, packets)
++    if concurrent:
++        while sockets:
++            r, _, _ = select.select(sockets, [], [], timeout)
++            if not r:
++                return packets
++            for s in sockets:
++                read_append(s, packets)
++                sockets.remove(s)
++    return packets
++
++def clock_select(packets):
++    "Select the pick-of-the-litter clock from the samples we've got."
++    # This is a slightly simplified version of the filter ntpdate used
++    NTP_INFIN     = 15		# max stratum, infinity a la Bellman-Ford 
++    NTP_MAXAGE    = 86400	# one day in seconds
++
++    # This first chunk of code is supposed to go through all
++    # servers we know about to find the servers that
++    # are most likely to succeed. We run through the list
++    # doing the sanity checks and trying to insert anyone who
++    # looks okay. We are at all times aware that we should
++    # only keep samples from the top two strata.
++    # 
++    nlist = 0	# none yet
++    filtered = []
++    for response in packets:
++        def drop(msg):
++            log("%s: Response dropped: %s" % (response.hostname, msg))
++        if response.stratum > NTP_INFIN:
++            drop("stratum too high")
++            continue
++        if response.version() < ntp.magic.NTP_OLDVERSION:
++            drop("response version %d is too old" % response.version())
++            continue
++        if response.mode() != ntp.magic.MODE_SERVER:
++            drop("unexpected response mode %d" % response.mode())
++            continue
++        if response.version() > ntp.magic.NTP_VERSION:
++            drop("response version %d is too new" % response.version())
++            continue
++        if response.stratum == 0:
++            # FIXME: Do some kind of semi-useful diagnostic dump here
++            drop("stratum 0, probable KOD packet")
++            continue
++        if response.leap() == "unsync":
++            drop("leap not in sync")
++            continue
++        if not response.trusted:
++            drop("request was authenticated but server is untrusted")
++            continue
++        # Bypass this test if we ever support broadcast-client mode again 
++        if response.origin_timestamp == 0:
++            drop("unexpected response timestamp")
++            continue
++        filtered.append(response)
++
++    if len(filtered) <= 1:
++        return filtered
++
++    # Sort by stratum and other figures of merit
++    filtered.sort(key=lambda s: (s.stratum, s.synchd(), s.root_delay))
++
++    # Return the best
++    return filtered[:1]
++
++def report(packet, json):
++    "Report on the SNTP packet selected for display, and its adjustment."
++    say = sys.stdout.write
++
++    packet.posixize()
++
++    # Cheesy way to get local timezone offset
++    gmt_time = int(time.time())
++    local_time = int(time.mktime(time.gmtime(gmt_time)))
++    tmoffset = (local_time - gmt_time) // 60	# In minutes
++
++    # The server's idea of the time
++    t = time.localtime(int(packet.transmit_timestamp))
++    ms = int(packet.transmit_timestamp * 1000000) % 1000000
++
++    # Number of decimal digits of precision indicated by the precision field
++    digits = min(6, -int(math.log10(2**packet.precision)))
++
++    date = time.strftime("%Y-%m-%d", t)
++    tod = time.strftime("%T", t) + (".%*d" % (digits, ms))
++    sgn = ("%+d" % tmoffset)[0]
++    tz = "%s%02d%02d" % (sgn, tmoffset // 60, tmoffset % 60)
++
++    if json:
++        say('{"time":"%sT%s%s","offset":%f,"precision":%f,"host":"%s",ip:"%s","stratum":%s,"leap":"%s","adjusted":%s}\n' % \
++            (date, tod, tz,
++             packet.adjust(), packet.synchd(),
++             packet.hostname, packet.resolved or packet.hostname,
++             packet.stratum, packet.leap(),
++             "true" if adjusted else "false"))
++    else:
++        say("%s %s (%s) %+f +/- %f %s" % \
++            (date, tod, tz,
++             packet.adjust(), packet.synchd(),
++             packet.hostname))
++        if packet.resolved and packet.resolved != packet.hostname:
++            say(" " + packet.resolved)
++        say(" s%d %s\n" % (packet.stratum, packet.leap()))
++
++usage = """
++USAGE:  sntp [ -<flag> [<val>] | --<name>[{=| }<val>] ]...
++		[ hostname-or-IP ...]
++  Flg Arg Option-Name     Description
++   -4 no  ipv4           Force IPv4 DNS name resolution
++				- prohibits the option 'ipv6'
++   -6 no  ipv6           Force IPv6 DNS name resolution
++				- prohibits the option 'ipv4'
++   -a Num authentication  Enable authentication with the numbered key
++   -c yes concurrent      Hosts to be queried concurrently
++   -d no  debug           Increase debug verbosity
++   -D yes set-debug-level Set debug verbosity
++   -g yes gap             Set gap between requests
++   -j no  json            Use JSON output format
++   -l Str logfile         Log to specified logfile
++				 - prohibits the option 'syslog'
++   -p yes samples         Number of samples to take (default 1) 
++   -S no  step            Set (step) the time with clock_settime()
++				 - prohibits the option 'step'
++   -s no  slew            Set (slew) the time with adjtime()
++				 - prohibits the option 'slew'
++   -t Num timeout         Request timeout in seconds (default 5)
++   -k Str keyfile         Specify a keyfile. SNTP will look in this file
++                          for the key specified with -a
++   -V no version          Output version information and exit
++   -h no  help            Display extended usage information and exit
++"""
++
++if __name__ == '__main__':
++    try:
++        (options, arguments) = getopt.getopt(sys.argv[1:],
++                                             "46a:c:dD:g:hjk:l:M:o:p:r:Sst:wWV",
++                                             ["ipv4","ipv6",
++                                              "authentication=",
++                                              "concurrent=",
++                                              "gap=", "help", "json",
++                                              "keyfile=", "logfile=",
++                                              "replay=",
++                                              "samples=", "steplimit=",
++                                              "step", "slew",
++                                              "timeout=",
++                                              "debug", "set-debug-level=",
++                                              "version"])
++    except getopt.GetoptError as e:
++        print(e)
++        raise SystemExit(1)
++    progname = sys.argv[0]
++
++    logfp = sys.stderr
++    log = lambda m: logfp.write("ntpdig: %s\n" % m)
++
++    af = socket.AF_UNSPEC
++    authkey = None
++    concurrent_hosts = []
++    debug = 0
++    gap = 50
++    json = False
++    keyfile = None
++    steplimit = 0	# Default is intentionally zero
++    samples = 1
++    step = False
++    slew = False
++    timeout = 5
++    replay = None
++    try:
++        for (switch, val) in options:
++            if switch in ("-4", "--ipv4"):
++                af = socket.AF_INET
++            elif switch in ("-6", "--ipv6"):
++                af = socket.AF_INET6
++            elif switch in ("-a", "--authentication"):
++                authkey = int(val)
++            elif switch in ("-c", "--concurrent"):
++                concurrent_hosts.append(val)
++            elif switch in ("-d", "--debug"):
++                debug += 1
++            elif switch in ("-D", "--set-debug-level"):
++                debug = int(val)
++            elif switch in ("-j", "--json"):
++                json = True
++            elif switch in ("-k", "--keyfile"):
++                keyfile = val
++            elif switch in ("-l", "--logfile"):
++                try:
++                    logfp = open(val, "w")
++                except OSError:
++                    sys.stderr.write("logfile open of %s failed.\n" % val)
++                    raise SystemExit(1)
++            elif switch in ("-M", "--steplimit"):
++                steplimit = int(val)
++            elif switch in ("-p", "--samples"):
++                samples = int(val)
++            elif switch in ('-r', "--replay"):
++                replay = val
++            elif switch in ("-S", "--step"):
++                step = True
++            elif switch in ("-s", "--slew"):
++                slew = True
++            elif switch in ("-t", "--timeout"):
++                timeout = int(val)
++            elif switch in ("-h", "--help"):
++                print(usage)
++                raise SystemExit(0)
++            elif switch in ("-V", "--version"):
++                print(ntp.util.stdversion())
++                raise SystemExit(0)
++            else:
++                sys.stderr.write("Unknown command line switch or missing argument.\n")
++                sys.stderr.write(usage)
++                raise SystemExit(1)
++    except ValueError:
++        sys.stderr.write("Invalid argument.\n")
++        sys.stderr.write(usage)
++        raise SystemExit(1)
++
++    credentials = keyid = keytype = passwd = None
++    try:
++        credentials = ntp.packet.Authenticator(keyfile)
++    except (OSError, IOError):
++        pass
++    if credentials:
++        try:
++            (keyid, keytype, passwd) = credentials.control(authkey)
++        except ValueError:
++            # There are no trusted keys.  Barf.
++            log("cannot get authentication key")
++            raise SystemExit(1)
++
++    if not credentials and authkey and keyfile is None:
++        self.warn("-a option requires -k.\n")
++        raise SystemExit(1)
++
++    gap /= 1000	# Scale gap to milliseconds
++
++    if not arguments:
++        arguments = ["localhost"]
++
++    if replay:
++        (pkt, dst) = replay.split(":")
++        packet = ntp.packet.SyncPacket(pkt.decode("hex"))
++        packet.received = ntp.packet.SyncPacket.posix_to_ntp(float(dst))
++        returned = [packet]
++    else:
++        returned = []
++        for server in concurrent_hosts:
++            try:
++                returned += queryhost(server=server, concurrent=True, timeout=timeout)
++            except ntp.packet.SyncException as e:
++                log(e.message)
++                continue
++            if len(returned) >= samples:
++                break
++        for server in arguments:
++            try:
++                returned += queryhost(server=server, concurrent=False, timeout=timeout)
++            except ntp.packet.SyncException as e:
++                log(e.message)
++                continue
++            if len(returned) >= samples:
++                break
++        returned = clock_select(returned)
++
++    if returned:
++        pkt = returned[0]
++        if debug:
++            #print(repr(pkt))
++            def hexstamp(n):
++                return "%08x.%08x" % (n >> 32, n & 0x00000000ffffffff)
++            print("org t1: %s rec t2: %s" % (hexstamp(pkt.t1()), hexstamp(pkt.t2())))
++            print("xmt t3: %s dst t4: %s" % (hexstamp(pkt.t3()), hexstamp(pkt.t4())))
++            pkt.posixize()
++            print("org t1: %f rec t2: %f" % (pkt.t1(), pkt.t2()))
++            print("xmt t3: %f dst t4: %f" % (pkt.t3(), pkt.t4()))
++            print("rec-org t21: %f  xmt-dst t34: %f" % (pkt.t2() - pkt.t1(), pkt.t3() - pkt.t4()))
++        adjusted = step and (not slew or (slew and (abs(offset) > steplimit)))
++        report(pkt, json)
++	# If we can step but we cannot slew, then step.
++	# If we can step or slew and and |offset| > steplimit, then step.
++        rc = True
++        offset = pkt.adjust()
++        ntp.ntpc.setprogname("ntpdig")
++        if adjusted:
++		rc = ntp.ntpc.step_systime(offset)
++	elif slew:
++		rc = ntp.ntpc.adj_systime(offset)
++        if rc:
++            raise SystemExit(0)
++        else:
++            raise SystemExit(1)
++    else:
++        log("no eligible servers")
++        raise SystemExit(1)
++
++#end
+diff --git a/ntpdig/ntpdig.c b/ntpdig/ntpdig.c
+deleted file mode 100644
+index 883d1ca..0000000
+--- a/ntpdig/ntpdig.c
++++ /dev/null
+@@ -1,12 +0,0 @@
+-#include <config.h>
+-
+-#include "main.h"
+-
+-int 
+-main (
+-	int	argc,
+-	char **	argv
+-	) 
+-{
+-	return ntpdig_main(argc, argv, Version);
+-}
+diff --git a/ntpdig/pyntpdig b/ntpdig/pyntpdig
+deleted file mode 100755
+index 2458e21..0000000
+--- a/ntpdig/pyntpdig
++++ /dev/null
+@@ -1,407 +0,0 @@
+-#!/usr/bin/python
+-"""
+-ntpdig - simple SNTP client
+-
+-"""
+-# SPDX-License-Identifier: BSD-2-clause
+-# This code runs identically under Python 2 and Python 3. Keep it that way!
+-from __future__ import print_function, division
+-
+-# This code is somewhat stripped down from the legacy C version.  It
+-# does however have one additional major feature; it can filter
+-# out falsetickers from multiple samples, like the ntpdate of old,
+-# rather than just taking the first reply it gets.
+-#
+-# Listening to broadcast addresses is not implemented because that is
+-# impossible to secure. KOD recording is also not implemented, as it
+-# can too easily be spammed.  Thus, the options -b and -K are not
+-# implemented.
+-#
+-# There are no version 3 NTP servers left, so the -o version for setting
+-# NTP version has been omitted.
+-#
+-# Because ntpdig doesn't use symmetric-peer mode (it never did, and NTPsec has
+-# abolished that mode because it was a security hazard), there's no need to
+-# set the packet source port, so -r/--usereservedport has been dropped.
+-# If this option ever needs to be reinstated, the magic is described here:
+-# http://stackoverflow.com/questions/2694212/socket-set-source-port-number
+-# and would be s.bind(('', 123)) right after the socket creation.
+-#
+-# The -w/--wait and -W/--nowait options only made sense with asynchronous
+-# DNS.  Asynchronous DNS was absurd overkill for this application, we are
+-# not looking up 20,000 hosts here.  It has not been implemented, so neither
+-# have these options.
+-#
+-# Finally, logging to syslog by default was a design error, violating
+-# Unix principles, that has been fixed. To get this behavior when
+-# running in a script, redirect standard error to logger(1). 
+-#
+-# The one new option in this version is -p, borrowed from ntpdate.
+-
+-import sys, socket, select, struct, time, getopt, datetime, math
+-
+-try:
+-    import ntp.packet
+-    import ntp.util
+-    import ntp.magic
+-except:
+-    sys.stderr.write("ntpdig: can't find Python NTP library -- check PYTHONPATH.\n")
+-    sys.exit(1)
+-
+-def queryhost(server, concurrent, timeout=5, port=123):
+-    "Query IP addresses associated with a specified host."
+-    try:
+-        iptuples = socket.getaddrinfo(server, port,
+-                                      af, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+-    except socket.gaierror as e:
+-        log("lookup of %s failed, errno %d = %s" % (server, e[0], e[1]))
+-        return []
+-    sockets = []
+-    packets = []
+-    request = ntp.packet.SyncPacket()
+-    request.transmit_timestamp = ntp.packet.SyncPacket.posix_to_ntp(time.time())
+-    packet = request.flatten()
+-    for (family, socktype, proto, canonname, sockaddr) in iptuples:
+-        if debug:
+-            log("querying %s (%s)" % (sockaddr[0], server))
+-        s = socket.socket(family, socktype)
+-        if keyid and keytype and passwd:
+-            if debug:
+-                log("authenticating with %s key %d" % (keytype, keyid))
+-            mac = ntp.packet.Authenticator.compute_mac(packet,
+-                                                       keyid, keytype, passwd)
+-            if mac is None:
+-                log("MAC generation failed while querying %s" % server)
+-                raise SystemExit(1)
+-            else:
+-                packet += mac
+-        try:
+-            s.sendto(packet, sockaddr)
+-        except socket.error as e:
+-            log("socket error on transmission: %s" % e)
+-            raise SystemExit(1)
+-        if debug >= 2:
+-            log("Sent to %s:" % (sockaddr[0],))
+-            ntp.packet.dump_hex_printable(packet)
+-        def read_append(s, packets):
+-            d, a = s.recvfrom(1024)
+-            if debug >= 2:
+-                ntp.packet.dump_hex_printable(d)
+-            if credentials:
+-                if not ntp.packet.Authenticator.have_mac(d):
+-                    if debug:
+-                        log("no MAC on reply from %s" % packet.hostname)
+-                if not credentials.verify_mac(d):
+-                    packet.trusted = False
+-                    log("MAC verification on reply from %s failed" % sockaddr[0])
+-                elif debug:
+-                    log("MAC verification on reply from %s succeeded" % sockaddr[0])
+-            pkt = ntp.packet.SyncPacket(d)
+-            pkt.hostname = server
+-            pkt.resolved = sockaddr[0]
+-            packets.append(pkt)
+-            time.sleep(gap)
+-        if concurrent:
+-            sockets.append(s)
+-        else:
+-            r, _, _ = select.select([s], [], [], timeout)
+-            if not r:
+-                return []
+-            read_append(s, packets)
+-    if concurrent:
+-        while sockets:
+-            r, _, _ = select.select(sockets, [], [], timeout)
+-            if not r:
+-                return packets
+-            for s in sockets:
+-                read_append(s, packets)
+-                sockets.remove(s)
+-    return packets
+-
+-def clock_select(packets):
+-    "Select the pick-of-the-litter clock from the samples we've got."
+-    # This is a slightly simplified version of the filter ntpdate used
+-    NTP_INFIN     = 15		# max stratum, infinity a la Bellman-Ford 
+-    NTP_MAXAGE    = 86400	# one day in seconds
+-
+-    # This first chunk of code is supposed to go through all
+-    # servers we know about to find the servers that
+-    # are most likely to succeed. We run through the list
+-    # doing the sanity checks and trying to insert anyone who
+-    # looks okay. We are at all times aware that we should
+-    # only keep samples from the top two strata.
+-    # 
+-    nlist = 0	# none yet
+-    filtered = []
+-    for response in packets:
+-        def drop(msg):
+-            log("%s: Response dropped: %s" % (response.hostname, msg))
+-        if response.stratum > NTP_INFIN:
+-            drop("stratum too high")
+-            continue
+-        if response.version() < ntp.magic.NTP_OLDVERSION:
+-            drop("response version %d is too old" % response.version())
+-            continue
+-        if response.mode() != ntp.magic.MODE_SERVER:
+-            drop("unexpected response mode %d" % response.mode())
+-            continue
+-        if response.version() > ntp.magic.NTP_VERSION:
+-            drop("response version %d is too new" % response.version())
+-            continue
+-        if response.stratum == 0:
+-            # FIXME: Do some kind of semi-useful diagnostic dump here
+-            drop("stratum 0, probable KOD packet")
+-            continue
+-        if response.leap() == "unsync":
+-            drop("leap not in sync")
+-            continue
+-        if not response.trusted:
+-            drop("request was authenticated but server is untrusted")
+-            continue
+-        # Bypass this test if we ever support broadcast-client mode again 
+-        if response.origin_timestamp == 0:
+-            drop("unexpected response timestamp")
+-            continue
+-        filtered.append(response)
+-
+-    if len(filtered) <= 1:
+-        return filtered
+-
+-    # Sort by stratum and other figures of merit
+-    filtered.sort(key=lambda s: (s.stratum, s.synchd(), s.root_delay))
+-
+-    # Return the best
+-    return filtered[:1]
+-
+-def report(packet, json):
+-    "Report on the SNTP packet selected for display, and its adjustment."
+-    say = sys.stdout.write
+-
+-    packet.posixize()
+-
+-    # Cheesy way to get local timezone offset
+-    gmt_time = int(time.time())
+-    local_time = int(time.mktime(time.gmtime(gmt_time)))
+-    tmoffset = (local_time - gmt_time) // 60	# In minutes
+-
+-    # The server's idea of the time
+-    t = time.localtime(int(packet.transmit_timestamp))
+-    ms = int(packet.transmit_timestamp * 1000000) % 1000000
+-
+-    # Number of decimal digits of precision indicated by the precision field
+-    digits = min(6, -int(math.log10(2**packet.precision)))
+-
+-    date = time.strftime("%Y-%m-%d", t)
+-    tod = time.strftime("%T", t) + (".%*d" % (digits, ms))
+-    sgn = ("%+d" % tmoffset)[0]
+-    tz = "%s%02d%02d" % (sgn, tmoffset // 60, tmoffset % 60)
+-
+-    if json:
+-        say('{"time":"%sT%s%s","offset":%f,"precision":%f,"host":"%s",ip:"%s","stratum":%s,"leap":"%s","adjusted":%s}' % \
+-            (date, tod, tz,
+-             packet.adjust(), packet.synchd(),
+-             packet.hostname, packet.resolved or packet.hostname,
+-             packet.stratum, packet.leap(),
+-             "true" if adjusted else "false"))
+-    else:
+-        say("%s %s (%s) %+f +/- %f %s" % \
+-            (date, tod, tz,
+-             packet.adjust(), packet.synchd(),
+-             packet.hostname))
+-        if packet.resolved and packet.resolved != packet.hostname:
+-            say(" " + packet.resolved)
+-        say(" s%d %s\n" % (packet.stratum, packet.leap()))
+-
+-usage = """
+-USAGE:  sntp [ -<flag> [<val>] | --<name>[{=| }<val>] ]...
+-		[ hostname-or-IP ...]
+-  Flg Arg Option-Name     Description
+-   -4 no  ipv4           Force IPv4 DNS name resolution
+-				- prohibits the option 'ipv6'
+-   -6 no  ipv6           Force IPv6 DNS name resolution
+-				- prohibits the option 'ipv4'
+-   -a Num authentication  Enable authentication with the numbered key
+-   -c yes concurrent      Hosts to be queried concurrently
+-   -d no  debug           Increase debug verbosity
+-   -D yes set-debug-level Set debug verbosity
+-   -g yes gap             Set gap between requests
+-   -j no  json            Use JSON output format
+-   -l Str logfile         Log to specified logfile
+-				 - prohibits the option 'syslog'
+-   -p yes samples         Number of samples to take (default 1) 
+-   -S no  step            Set (step) the time with clock_settime()
+-				 - prohibits the option 'step'
+-   -s no  slew            Set (slew) the time with adjtime()
+-				 - prohibits the option 'slew'
+-   -t Num timeout         Request timeout in seconds (default 5)
+-   -k Str keyfile         Specify a keyfile. SNTP will look in this file
+-                          for the key specified with -a
+-   -V no version          Output version information and exit
+-   -h no  help            Display extended usage information and exit
+-"""
+-
+-if __name__ == '__main__':
+-    try:
+-        (options, arguments) = getopt.getopt(sys.argv[1:],
+-                                             "46a:c:dD:g:hjk:l:M:o:p:r:Sst:wWV",
+-                                             ["ipv4","ipv6",
+-                                              "authentication=",
+-                                              "concurrent=",
+-                                              "gap=", "help", "json",
+-                                              "keyfile=", "logfile=",
+-                                              "replay=",
+-                                              "samples=", "steplimit=",
+-                                              "step", "slew",
+-                                              "timeout=",
+-                                              "debug", "set-debug-level=",
+-                                              "version"])
+-    except getopt.GetoptError as e:
+-        print(e)
+-        raise SystemExit(1)
+-    progname = sys.argv[0]
+-
+-    logfp = sys.stderr
+-    log = lambda m: logfp.write("ntpdig: %s\n" % m)
+-
+-    af = socket.AF_UNSPEC
+-    authkey = None
+-    concurrent_hosts = []
+-    debug = 0
+-    gap = 50
+-    json = False
+-    keyfile = None
+-    steplimit = 0	# Default is intentionally zero
+-    samples = 1
+-    step = False
+-    slew = False
+-    timeout = 5
+-    replay = None
+-    try:
+-        for (switch, val) in options:
+-            if switch in ("-4", "--ipv4"):
+-                af = socket.AF_INET
+-            elif switch in ("-6", "--ipv6"):
+-                af = socket.AF_INET6
+-            elif switch in ("-a", "--authentication"):
+-                authkey = int(val)
+-            elif switch in ("-c", "--concurrent"):
+-                concurrent_hosts.append(val)
+-            elif switch in ("-d", "--debug"):
+-                debug += 1
+-            elif switch in ("-D", "--set-debug-level"):
+-                debug = int(val)
+-            elif switch in ("-j", "--json"):
+-                json = True
+-            elif switch in ("-k", "--keyfile"):
+-                keyfile = val
+-            elif switch in ("-l", "--logfile"):
+-                try:
+-                    logfp = open(val, "w")
+-                except OSError:
+-                    sys.stderr.write("logfile open of %s failed.\n" % val)
+-                    raise SystemExit(1)
+-            elif switch in ("-M", "--steplimit"):
+-                steplimit = int(val)
+-            elif switch in ("-p", "--samples"):
+-                samples = int(val)
+-            elif switch in ('-r', "--replay"):
+-                replay = val
+-            elif switch in ("-S", "--step"):
+-                step = True
+-            elif switch in ("-s", "--slew"):
+-                slew = True
+-            elif switch in ("-t", "--timeout"):
+-                timeout = int(val)
+-            elif switch in ("-h", "--help"):
+-                print(usage)
+-                raise SystemExit(0)
+-            elif switch in ("-V", "--version"):
+-                print(ntp.util.stdversion())
+-                raise SystemExit(0)
+-            else:
+-                sys.stderr.write("Unknown command line switch or missing argument.\n")
+-                sys.stderr.write(usage)
+-                raise SystemExit(1)
+-    except ValueError:
+-        sys.stderr.write("Invalid argument.\n")
+-        sys.stderr.write(usage)
+-        raise SystemExit(1)
+-
+-    credentials = keyid = keytype = passwd = None
+-    try:
+-        credentials = ntp.packet.Authenticator(keyfile)
+-    except (OSError, IOError):
+-        pass
+-    if credentials:
+-        try:
+-            (keyid, keytype, passwd) = credentials.control(authkey)
+-        except ValueError:
+-            # There are no trusted keys.  Barf.
+-            log("cannot get authentication key")
+-            raise SystemExit(1)
+-
+-    if not credentials and authkey and keyfile is None:
+-        self.warn("-a option requires -k.\n")
+-        raise SystemExit(1)
+-
+-    gap /= 1000	# Scale gap to milliseconds
+-
+-    if not arguments:
+-        arguments = ["localhost"]
+-
+-    if replay:
+-        (pkt, dst) = replay.split(":")
+-        packet = ntp.packet.SyncPacket(pkt.decode("hex"))
+-        packet.received = ntp.packet.SyncPacket.posix_to_ntp(float(dst))
+-        returned = [packet]
+-    else:
+-        returned = []
+-        for server in concurrent_hosts:
+-            try:
+-                returned += queryhost(server=server, concurrent=True, timeout=timeout)
+-            except ntp.packet.SyncException as e:
+-                log(e.message)
+-                continue
+-            if len(returned) >= samples:
+-                break
+-        for server in arguments:
+-            try:
+-                returned += queryhost(server=server, concurrent=False, timeout=timeout)
+-            except ntp.packet.SyncException as e:
+-                log(e.message)
+-                continue
+-            if len(returned) >= samples:
+-                break
+-        returned = clock_select(returned)
+-
+-    if returned:
+-        pkt = returned[0]
+-        if debug:
+-            #print(repr(pkt))
+-            def hexstamp(n):
+-                return "%08x.%08x" % (n >> 32, n & 0x00000000ffffffff)
+-            print("org t1: %s rec t2: %s" % (hexstamp(pkt.t1()), hexstamp(pkt.t2())))
+-            print("xmt t3: %s dst t4: %s" % (hexstamp(pkt.t3()), hexstamp(pkt.t4())))
+-            pkt.posixize()
+-            print("org t1: %f rec t2: %f" % (pkt.t1(), pkt.t2()))
+-            print("xmt t3: %f dst t4: %f" % (pkt.t3(), pkt.t4()))
+-            print("rec-org t21: %f  xmt-dst t34: %f" % (pkt.t2() - pkt.t1(), pkt.t3() - pkt.t4()))
+-        report(pkt, json)
+-	# If we can step but we cannot slew, then step.
+-	# If we can step or slew and and |offset| > steplimit, then step.
+-        rc = True
+-        offset = pkt.adjust()
+-        ntp.ntpc.setprogname("ntpdig")
+-        if step and (not slew or (slew and (abs(offset) > steplimit))):
+-		rc = ntp.ntpc.step_systime(offset)
+-	elif slew:
+-		rc = ntp.ntpc.adj_systime(offset)
+-        if rc:
+-            raise SystemExit(0)
+-        else:
+-            raise SystemExit(1)
+-    else:
+-        log("no eligible servers")
+-        raise SystemExit(1)
+-
+-#end
+diff --git a/ntpdig/timevalops.h b/ntpdig/timevalops.h
+deleted file mode 100644
+index 8db7ac4..0000000
+--- a/ntpdig/timevalops.h
++++ /dev/null
+@@ -1,206 +0,0 @@
+-/*
+- * timevalops.h -- calculations on 'struct timeval' values
+- *
+- * Written by Juergen Perlinger <perlinger@ntp.org> for the NTP project.
+- *
+- * For a rationale look at 'timespecops.h'; we do the same here, but the
+- * normalisation keeps the microseconds in [0 .. 10^6], of course.
+- * NTPsec implements fewer operations here as we are trying to do as
+- * much arithmetic as possible in nanoseconds for code-hygiene reasons.
+- *
+- * Copyright 2015 by the NTPsec project contributors
+- * SPDX-License-Identifier: NTP
+- */
+-#ifndef GUARD_TIMEVALOPS_H
+-#define GUARD_TIMEVALOPS_H
+-
+-#include <sys/types.h>
+-#include <stdio.h>
+-
+-#include "ntp.h"
+-#include "ntp_calendar.h"
+-
+-/* microseconds per second */
+-#define MICROSECONDS 1000000
+-
+-/*
+- * Convert usec to a time stamp fraction.
+- */
+-# define TVUTOTSF(tvu, tsf)						\
+-	((tsf) = (uint32_t)						\
+-		 ((((uint64_t)(tvu) << 32) + MICROSECONDS / 2) /		\
+-		  MICROSECONDS))
+-
+-/*
+- * Convert a time stamp fraction to microseconds.  The time stamp
+- * fraction is assumed to be unsigned.
+- */
+-# define TSFTOTVU(tsf, tvu)						\
+-	 ((tvu) = (int32_t)						\
+-		  (((uint64_t)(tsf) * MICROSECONDS + 0x80000000) >> 32))
+-
+-/*
+- * Convert a struct timeval to a time stamp.
+- */
+-#define TVTOTS(tv, ts) \
+-	do { \
+-		(ts)->l_ui = (u_long)(tv)->tv_sec; \
+-		TVUTOTSF((tv)->tv_usec, (ts)->l_uf); \
+-	} while (false)
+-
+-#define sTVTOTS(tv, ts) \
+-	do { \
+-		bool isneg = false; \
+-		long usec; \
+-		(ts)->l_ui = (tv)->tv_sec; \
+-		usec = (tv)->tv_usec; \
+-		if (((tv)->tv_sec < 0) || ((tv)->tv_usec < 0)) { \
+-			usec = -usec; \
+-			(ts)->l_ui = -(ts)->l_ui; \
+-			isneg = true; \
+-		} \
+-		TVUTOTSF(usec, (ts)->l_uf); \
+-		if (isneg) { \
+-			L_NEG((ts)); \
+-		} \
+-	} while (false)
+-
+-/*
+- * Convert a time stamp to a struct timeval.  The time stamp
+- * has to be positive.
+- */
+-#define	TSTOTV(ts, tv) \
+-	do { \
+-		(tv)->tv_sec = (ts)->l_ui; \
+-		TSFTOTVU((ts)->l_uf, (tv)->tv_usec); \
+-		if ((tv)->tv_usec == MICROSECONDS) { \
+-			(tv)->tv_sec++; \
+-			(tv)->tv_usec = 0; \
+-		} \
+-	} while (false)
+-
+-
+-/* make sure microseconds are in nominal range */
+-static inline struct timeval
+-normalize_tval(
+-	struct timeval	x
+-	)
+-{
+-	long		z;
+-
+-	/*
+-	 * If the fraction becomes excessively denormal, we use division
+-	 * to do first partial normalisation. The normalisation loops
+-	 * following will do the remaining cleanup. Since the size of
+-	 * tv_usec has a peculiar definition by the standard the range
+-	 * check is coded manually. And labs() is intentionally not used
+-	 * here: it has implementation-defined behaviour when applied
+-	 * to LONG_MIN.
+-	 */
+-	if (x.tv_usec < -3l * MICROSECONDS ||
+-	    x.tv_usec >  3l * MICROSECONDS  ) {
+-		z = x.tv_usec / MICROSECONDS;
+-		x.tv_usec -= z * MICROSECONDS;
+-		x.tv_sec += z;
+-	}
+-
+-	/*
+-	 * Do any remaining normalisation steps in loops. This takes 3
+-	 * steps max, and should outperform a division even if the
+-	 * mul-by-inverse trick is employed. (It also does the floor
+-	 * division adjustment if the above division was executed.)
+-	 */
+-	if (x.tv_usec < 0)
+-		do {
+-			x.tv_usec += MICROSECONDS;
+-			x.tv_sec--;
+-		} while (x.tv_usec < 0);
+-	else if (x.tv_usec >= MICROSECONDS)
+-		do {
+-			x.tv_usec -= MICROSECONDS;
+-			x.tv_sec++;
+-		} while (x.tv_usec >= MICROSECONDS);
+-
+-	return x;
+-}
+-
+-/* x = a + b */
+-static inline struct timeval
+-add_tval(
+-	struct timeval	a,
+-	struct timeval	b
+-	)
+-{
+-	struct timeval	x;
+-
+-	x = a;
+-	x.tv_sec += b.tv_sec;
+-	x.tv_usec += b.tv_usec;
+-
+-	return normalize_tval(x);
+-}
+-
+-/* x = a - b */
+-static inline struct timeval
+-sub_tval(
+-	struct timeval	a,
+-	struct timeval	b
+-	)
+-{	
+-	struct timeval	x;
+-
+-	x = a;
+-	x.tv_sec -= b.tv_sec;
+-	x.tv_usec -= b.tv_usec;
+-
+-	return normalize_tval(x);
+-}
+-
+-/* x = abs(a) */
+-static inline struct timeval
+-abs_tval(
+-	struct timeval	a
+-	)
+-{
+-	struct timeval	c;
+-
+-	c = normalize_tval(a);
+-	if (c.tv_sec < 0) {
+-		if (c.tv_usec != 0) {
+-			c.tv_sec = -c.tv_sec - 1;
+-			c.tv_usec = MICROSECONDS - c.tv_usec;
+-		} else {
+-			c.tv_sec = -c.tv_sec;
+-		}
+-	}
+-
+-	return c;
+-}
+-
+-/* convert to l_fp type, relative signed/unsigned and absolute */
+-static inline struct timeval
+-lfp_intv_to_tval(
+-	l_fp		x
+-	)
+-{
+-	struct timeval	out;
+-	l_fp		absx;
+-	int		neg;
+-	
+-	neg = L_ISNEG(&x);
+-	absx = x;
+-	if (neg) {
+-		L_NEG(&absx);	
+-	}
+-	TSFTOTVU(absx.l_uf, out.tv_usec);
+-	out.tv_sec = absx.l_i;
+-	if (neg) {
+-		out.tv_sec = -out.tv_sec;
+-		out.tv_usec = -out.tv_usec;
+-		out = normalize_tval(out);
+-	}
+-
+-	return out;
+-}
+-
+-#endif	/* GUARD_TIMEVALOPS_H */
+diff --git a/ntpdig/utilities.c b/ntpdig/utilities.c
+deleted file mode 100644
+index e470ab4..0000000
+--- a/ntpdig/utilities.c
++++ /dev/null
+@@ -1,230 +0,0 @@
+-#include <config.h>
+-#include "utilities.h"
+-#include <assert.h>
+-
+-/* Display a NTP packet in hex with leading address offset 
+- * e.g. offset: value, 0: ff 1: fe ... 255: 00
+- */ 
+-void 
+-pkt_output (
+-		struct pkt *dpkg,
+-		int pkt_length,
+-		bool longform,
+-		FILE *output
+-	   )
+-{
+-	register int a;
+-	uint8_t *pkt;
+-
+-	pkt = (uint8_t *)dpkg;
+-
+-	if (longform) {
+-	    fprintf(output, HLINE);
+-
+-	    for (a = 0; a < pkt_length; a++) {
+-		    if (a > 0 && a % 8 == 0)
+-		        fprintf(output, "\n");
+-
+-		    fprintf(output, "%d: %x \t", a, pkt[a]);
+-	    }
+-
+-	    fprintf(output, "\n");
+-	    fprintf(output, HLINE);
+-	}
+-	else
+-	{
+-		for (a = 0; a < pkt_length; a++) {
+-		    fprintf(output, "%02x", pkt[a]);
+-		}
+-		fprintf(output, "\n");
+-	}
+-
+-}
+-
+-/* Output a long floating point value in hex in the style described above 
+- */
+-void
+-l_fp_output(
+-	l_fp *	ts,
+-	FILE *	output
+-	)
+-{
+-	fprintf(output, "%s\n", prettydate(ts));
+-}
+-
+-/* Output a long floating point value in binary in the style described above
+- */
+-void 
+-l_fp_output_bin (
+-		l_fp *ts,
+-		FILE *output
+-		)
+-{
+-	register int a, b;
+-
+-	fprintf(output, HLINE);
+-
+-	for(a=0; a<8; a++) {
+-		short tmp = ((unsigned char *) ts)[a];
+-		tmp++;
+-
+-		fprintf(output, "%i: ", a);
+-
+-		for(b=7; b>=0; b--) {
+-			int texp = (int) pow(2, b);
+-
+-			if(tmp - texp > 0) {
+-				fprintf(output, "1");
+-				tmp -= texp;
+-			}
+-			else {
+-				fprintf(output, "0");
+-			}
+-		}
+-
+-		fprintf(output, " ");
+-	}
+-
+-	fprintf(output, "\n");
+-	fprintf(output, HLINE);
+-}
+-
+-/* Output a long floating point value in decimal in the style described above
+- */
+-void
+-l_fp_output_dec (
+-		l_fp *ts,
+-		FILE *output
+-	    )
+-{
+-	register int a;
+-
+-	fprintf(output, HLINE);
+-
+-	for(a=0; a<8; a++) 
+-		fprintf(output, "%i: %i \t", a, ((unsigned char *) ts)[a]);
+-
+-	fprintf(output, "\n");
+-	fprintf(output, HLINE);
+-
+-}
+-
+-/* Convert a struct addrinfo to a string containing the address in style
+- * of inet_ntoa
+- */
+-char *
+-addrinfo_to_str (
+-	const struct addrinfo *addr
+-	)
+-{
+-	sockaddr_u	s;
+-	
+-	ZERO(s);
+-	memcpy(&s, addr->ai_addr, min(sizeof(s), addr->ai_addrlen));
+-
+-	return ss_to_str(&s);
+-}
+-
+-
+-/* Convert a sockaddr_u to a string containing the address in
+- * style of inet_ntoa
+- * Why not switch callers to use stoa from libntp?  No free() needed
+- * in that case.
+- */
+-char *
+-ss_to_str(
+-	sockaddr_u *saddr
+-	)
+-{
+-	return estrdup(socktoa(saddr));
+-}
+-
+-
+-/*
+- * Converts a struct tv to a date string
+- */
+-char *
+-tv_to_str(
+-	const struct timeval *tv,
+-	const bool json
+-	)
+-{
+-	const size_t bufsize = 48;
+-	char *buf;
+-	time_t gmt_time, local_time;
+-	struct tm tmbuf, tmbuf2, *p_tm_local;
+-	int hh, mm, lto;
+-	const char *oldstyle = "%d-%.2d-%.2d %.2d:%.2d:%.2d.%.6d (%+03d%02d)";
+-	const char *jsonstyle = "%d-%.2d-%.2dT%.2d:%.2d:%.2d.%.6d%+03d%02d";
+-
+-	/*
+-	 * convert to struct tm in UTC, then intentionally feed
+-	 * that tm to mktime() which expects local time input, to
+-	 * derive the offset from UTC to local time.
+-	 */
+-	gmt_time = tv->tv_sec;
+-	local_time = mktime(gmtime_r(&gmt_time, &tmbuf));
+-	p_tm_local = localtime_r(&gmt_time, &tmbuf2);
+-
+-	/* Local timezone offsets should never cause an overflow.  Yeah. */
+-	lto = difftime(local_time, gmt_time);
+-	lto /= 60;
+-	hh = lto / 60;
+-	mm = abs(lto % 60);
+-
+-	buf = emalloc(bufsize);
+-
+-	/* should never happen - here to appease Coverity */
+-	if (p_tm_local == NULL) {
+-	    strlcpy(buf, "tv_to_str(): invalid date", bufsize);
+-	    return buf;
+-	}
+-
+-	snprintf(buf, bufsize,
+-		 json ? jsonstyle : oldstyle,
+-		 p_tm_local->tm_year + 1900,
+-		 p_tm_local->tm_mon + 1,
+-		 p_tm_local->tm_mday,
+-		 p_tm_local->tm_hour,
+-		 p_tm_local->tm_min,
+-		 p_tm_local->tm_sec,
+-		 (int)tv->tv_usec,
+-		 hh,
+-		 mm);
+-
+-	return buf;
+-}
+-
+-
+-/*
+- *
+- * hostnameaddr()
+- *
+- * Formats the hostname and resulting numeric IP address into a string,
+- * avoiding duplication if the "hostname" was in fact a numeric address.
+- *
+- */
+-const char *
+-hostnameaddr(
+-	const char *		hostname,
+-	const sockaddr_u *	addr
+-	)
+-{
+-	const char *	addrtxt;
+-	char *		result;
+-	int		cnt;
+-
+-	addrtxt = socktoa(addr);
+-	LIB_GETBUF(result);
+-	if (strcmp(hostname, addrtxt))
+-		cnt = snprintf(result, LIB_BUFLENGTH, "%s %s",
+-			       hostname, addrtxt);
+-	else
+-		cnt = snprintf(result, LIB_BUFLENGTH, "%s", addrtxt);
+-	if (cnt >= LIB_BUFLENGTH)
+-		snprintf(result, LIB_BUFLENGTH,
+-			 "hostnameaddr ERROR have %d (%d needed)",
+-			 LIB_BUFLENGTH, cnt + 1);
+-
+-	return result;
+-}
+diff --git a/ntpdig/utilities.h b/ntpdig/utilities.h
+deleted file mode 100644
+index 99877c5..0000000
+--- a/ntpdig/utilities.h
++++ /dev/null
+@@ -1,27 +0,0 @@
+-#ifndef GUARD_UTILITIES_H
+-#define GUARD_UTILITIES_H
+-
+-#include <math.h>
+-#include <stdio.h>
+-#include <stdlib.h>
+-
+-#include "ntp.h"
+-#include "ntp_stdlib.h"
+-#include "lib_strbuf.h"
+-
+-#define HLINE "--------------------------------------------------------------------------------\n"
+-#define PHLINE fprintf(output, HLINE);
+-#define STDLINE printf(HLINE);
+-
+-
+-void pkt_output(struct pkt *dpkg, int pkt_length, bool longform, FILE *output);
+-void l_fp_output(l_fp *ts, FILE *output);
+-void l_fp_output_bin(l_fp *ts, FILE *output);
+-void l_fp_output_dec(l_fp *ts, FILE *output);
+-
+-char *addrinfo_to_str(const struct addrinfo *addr);
+-char *ss_to_str(sockaddr_u *saddr);
+-char *tv_to_str(const struct timeval *tv, const bool json);
+-const char * hostnameaddr(const char *, const sockaddr_u *);
+-
+-#endif	/* GUARD_UTILITIES_H */
+diff --git a/ntpdig/wscript b/ntpdig/wscript
+deleted file mode 100644
+index e241ff4..0000000
+--- a/ntpdig/wscript
++++ /dev/null
+@@ -1,40 +0,0 @@
+-def build(ctx):
+-	bldnode = ctx.bldnode.make_node('ntpdig')
+-
+-	ntpdig_obj_source = [
+-		"crypto.c",
+-		"kod_management.c",
+-		"log.c",
+-		"main.c",
+-		"networking.c",
+-		"utilities.c"
+-	]
+-
+-	ctx(
+-		target		= "ntpdig_obj",
+-		features	= "c bld_include src_include libisc_include",
+-		use		= "ntp isc M PTHREAD LIBEVENT_CORE LIBEVENT_PTHREADS RT CRYPTO",
+-		source		= ntpdig_obj_source,
+-		cwd             = bldnode,
+-		includes	= [
+-					bldnode,
+-				] + ctx.env.PLATFORM_INCLUDES, # XXX: Hack needs to use libevent_inc or something else.
+-	)
+-
+-	ntpdig_source = [
+-		"ntpdig.c",
+-	]
+-
+-	ctx(
+-		target		= "ntpdig",
+-		features	= "c cprogram bld_include src_include libisc_include ntp_version",
+-		use		= "ntp isc ntpdig_obj M PTHREAD ntpdig_obj LIBEVENT_CORE LIBEVENT_PTHREADS RT CRYPTO",
+-		source		= ntpdig_source,
+-		cwd             = bldnode,
+-		includes	= [
+-					bldnode
+-				] + ctx.env.PLATFORM_INCLUDES, # XXX: Hack needs to use libevent_inc or something else.
+-		install_path= "${PREFIX}/bin/",
+-	)
+-
+-	ctx.manpage(1, "ntpdig-man.txt")
+diff --git a/tests/ntpdig/crypto.c b/tests/ntpdig/crypto.c
+deleted file mode 100644
+index 9b76e5a..0000000
+--- a/tests/ntpdig/crypto.c
++++ /dev/null
+@@ -1,145 +0,0 @@
+-#include "unity.h"
+-#include "unity_fixture.h"
+-
+-TEST_GROUP(crypto);
+-
+-TEST_SETUP(crypto) {}
+-
+-TEST_TEAR_DOWN(crypto) {}
+-
+-#include "ntpdigtest.h"
+-
+-#include "crypto.h"
+-
+-#define MD5_LENGTH 16
+-#define SHA1_LENGTH 20
+-
+-TEST(crypto, MakeMd5Mac) {
+-
+-	const char* PKT_DATA = "abcdefgh0123";
+-	const int PKT_LEN = strlen(PKT_DATA);
+-	const char* EXPECTED_DIGEST =
+-		"\x52\x6c\xb8\x38\xaf\x06\x5a\xfb\x6c\x98\xbb\xc0\x9b\x0a\x7a\x1b";
+-	char actual[MD5_LENGTH];
+-
+-	struct key md5;
+-	md5.next = NULL;
+-	md5.key_id = 10;
+-	md5.key_len = 6;
+-	memcpy(&md5.key_seq, "md5seq", md5.key_len);
+-	memcpy(&md5.type, "MD5", 4);
+-
+-	TEST_ASSERT_EQUAL(MD5_LENGTH,
+-			make_mac((char*)PKT_DATA, PKT_LEN, MD5_LENGTH, &md5, actual));
+-
+-	TEST_ASSERT_TRUE(memcmp(EXPECTED_DIGEST, actual, MD5_LENGTH) == 0);
+-}
+-
+-#ifdef HAVE_OPENSSL
+-TEST(crypto, MakeSHA1Mac) {
+-	const char* PKT_DATA = "abcdefgh0123";
+-	const int PKT_LEN = strlen(PKT_DATA);
+-	const char* EXPECTED_DIGEST =
+-		"\x17\xaa\x82\x97\xc7\x17\x13\x6a\x9b\xa9"
+-		"\x63\x85\xb4\xce\xbe\x94\xa0\x97\x16\x1d";
+-	char actual[SHA1_LENGTH];
+-
+-	struct key sha1;
+-	sha1.next = NULL;
+-	sha1.key_id = 20;
+-	sha1.key_len = 7;
+-	memcpy(&sha1.key_seq, "sha1seq", sha1.key_len);
+-	memcpy(&sha1.type, "SHA1", 5);
+-
+-	TEST_ASSERT_EQUAL(SHA1_LENGTH,
+-			  make_mac((char*)PKT_DATA, PKT_LEN, SHA1_LENGTH, &sha1, actual));
+-
+-	TEST_ASSERT_TRUE(memcmp(EXPECTED_DIGEST, actual, SHA1_LENGTH) == 0);
+-}
+-#endif	/* HAVE_OPENSSL */
+-
+-TEST(crypto, VerifyCorrectMD5) {
+-	const char* PKT_DATA =
+-		"sometestdata"		// Data
+-		"\0\0\0\0"			// Key-ID (unused)
+-		"\xc7\x58\x99\xdd\x99\x32\x0f\x71" // MAC
+-		"\x2b\x7b\xfe\x4f\xa2\x32\xcf\xac";
+-	const int PKT_LEN = 12;
+-
+-	struct key md5;
+-	md5.next = NULL;
+-	md5.key_id = 0;
+-	md5.key_len = 6;
+-	memcpy(&md5.key_seq, "md5key", md5.key_len);
+-	memcpy(&md5.type, "MD5", 4);
+-
+-	TEST_ASSERT_TRUE(auth_md5((char*)PKT_DATA, PKT_LEN, MD5_LENGTH, &md5));
+-}
+-
+-#ifdef HAVE_OPENSSL
+-TEST(crypto, VerifySHA1) {
+-	const char* PKT_DATA =
+-		"sometestdata"		// Data
+-		"\0\0\0\0"			// Key-ID (unused)
+-		"\xad\x07\xde\x36\x39\xa6\x77\xfa\x5b\xce" // MAC
+-		"\x2d\x8a\x7d\x06\x96\xe6\x0c\xbc\xed\xe1";
+-	const int PKT_LEN = 12;
+-
+-	struct key sha1;
+-	sha1.next = NULL;
+-	sha1.key_id = 0;
+-	sha1.key_len = 7;
+-	memcpy(&sha1.key_seq, "sha1key", sha1.key_len);
+-	memcpy(&sha1.type, "SHA1", 5);
+-
+-	TEST_ASSERT_TRUE(auth_md5((char*)PKT_DATA, PKT_LEN, SHA1_LENGTH, &sha1));
+-}
+-#endif	/* HAVE_OPENSSL */
+-
+-TEST(crypto, VerifyFailure) {
+-	/* We use a copy of the MD5 verification code, but modify
+-	 * the last bit to make sure verification fails. */
+-	const char* PKT_DATA =
+-		"sometestdata"		// Data
+-		"\0\0\0\0"			// Key-ID (unused)
+-		"\xc7\x58\x99\xdd\x99\x32\x0f\x71"	// MAC
+-		"\x2b\x7b\xfe\x4f\xa2\x32\xcf\x00"; // Last byte is wrong!
+-	const int PKT_LEN = 12;
+-
+-	struct key md5;
+-	md5.next = NULL;
+-	md5.key_id = 0;
+-	md5.key_len = 6;
+-	memcpy(&md5.key_seq, "md5key", md5.key_len);
+-	memcpy(&md5.type, "MD5", 4);
+-
+-	TEST_ASSERT_FALSE(auth_md5((char*)PKT_DATA, PKT_LEN, MD5_LENGTH, &md5));
+-}
+-
+-TEST(crypto, PacketSizeNotMultipleOfFourBytes) {
+-	const char* PKT_DATA = "123456";
+-	const int PKT_LEN = 6;
+-	char actual[MD5_LENGTH];
+-
+-	struct key md5;
+-	md5.next = NULL;
+-	md5.key_id = 10;
+-	md5.key_len = 6;
+-	memcpy(&md5.key_seq, "md5seq", md5.key_len);
+-	memcpy(&md5.type, "MD5", 4);
+-
+-	TEST_ASSERT_EQUAL(0, make_mac((char*)PKT_DATA, PKT_LEN, MD5_LENGTH, &md5, actual));
+-}
+-
+-TEST_GROUP_RUNNER(crypto) {
+-	RUN_TEST_CASE(crypto, MakeMd5Mac);
+-#ifdef HAVE_OPENSSL
+-	RUN_TEST_CASE(crypto, MakeSHA1Mac);
+-#endif	/* HAVE_OPENSSL */
+-	RUN_TEST_CASE(crypto, VerifyCorrectMD5);
+-#ifdef HAVE_OPENSSL
+-	RUN_TEST_CASE(crypto, VerifySHA1);
+-#endif	/* HAVE_OPENSSL */
+-	RUN_TEST_CASE(crypto, VerifyFailure);
+-	RUN_TEST_CASE(crypto, PacketSizeNotMultipleOfFourBytes);
+-}
+diff --git a/tests/ntpdig/data/debug-input-lfp-bin b/tests/ntpdig/data/debug-input-lfp-bin
+deleted file mode 100644
+index 99d559c..0000000
+--- a/tests/ntpdig/data/debug-input-lfp-bin
++++ /dev/null
+@@ -1,3 +0,0 @@
+---------------------------------------------------------------------------------
+-0: 00000000 1: 00000000 2: 00000000 3: 00111111 4: 00000000 5: 00000000 6: 00000000 7: 01111111 
+---------------------------------------------------------------------------------
+diff --git a/tests/ntpdig/data/debug-input-lfp-dec b/tests/ntpdig/data/debug-input-lfp-dec
+deleted file mode 100644
+index 6e81c85..0000000
+--- a/tests/ntpdig/data/debug-input-lfp-dec
++++ /dev/null
+@@ -1,3 +0,0 @@
+---------------------------------------------------------------------------------
+-0: 0 	1: 0 	2: 24 	3: 166 	4: 0 	5: 4 	6: 181 	7: 22 	
+---------------------------------------------------------------------------------
+diff --git a/tests/ntpdig/data/debug-input-pkt b/tests/ntpdig/data/debug-input-pkt
+deleted file mode 100644
+index ff61b75..0000000
+--- a/tests/ntpdig/data/debug-input-pkt
++++ /dev/null
+@@ -1,8 +0,0 @@
+---------------------------------------------------------------------------------
+-0: 24 	1: 0 	2: 0 	3: 0 	4: 0 	5: 0 	6: 0 	7: 0 	
+-8: 0 	9: 0 	10: 0 	11: 0 	12: 0 	13: 0 	14: 0 	15: 0 	
+-16: 0 	17: 0 	18: 0 	19: 0 	20: 0 	21: 0 	22: 0 	23: 0 	
+-24: 0 	25: 0 	26: 0 	27: 0 	28: 0 	29: 0 	30: 0 	31: 0 	
+-32: 0 	33: 0 	34: 0 	35: 0 	36: 0 	37: 0 	38: 0 	39: 0 	
+-40: 0 	41: 0 	42: 0 	43: 8 	44: 7f 	45: ff 	46: ff 	47: ff 	
+---------------------------------------------------------------------------------
+diff --git a/tests/ntpdig/data/key-test-ascii b/tests/ntpdig/data/key-test-ascii
+deleted file mode 100644
+index 9240c81..0000000
+--- a/tests/ntpdig/data/key-test-ascii
++++ /dev/null
+@@ -1,2 +0,0 @@
+-50 MD5 asciikeyOne
+-40 MD5 asciikeyTwo
+diff --git a/tests/ntpdig/data/key-test-comments b/tests/ntpdig/data/key-test-comments
+deleted file mode 100644
+index 437049e..0000000
+--- a/tests/ntpdig/data/key-test-comments
++++ /dev/null
+@@ -1,3 +0,0 @@
+-# This is an initial comment, this file should contain 2 keys.
+-34 MD5 xyz #This is a comment after an ASCII key.
+-10 MD5 010101010101010101010101010101 #Comment after hex key.
+diff --git a/tests/ntpdig/data/key-test-empty b/tests/ntpdig/data/key-test-empty
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/tests/ntpdig/data/key-test-hex b/tests/ntpdig/data/key-test-hex
+deleted file mode 100644
+index fb704c5..0000000
+--- a/tests/ntpdig/data/key-test-hex
++++ /dev/null
+@@ -1,3 +0,0 @@
+-10 MD5 0123456789abcdef0123456789
+-20 MD5 111111111111111111111111111111
+-30 MD5 01010101010101010101010101
+diff --git a/tests/ntpdig/data/key-test-invalid-hex b/tests/ntpdig/data/key-test-invalid-hex
+deleted file mode 100644
+index 0933ed0..0000000
+--- a/tests/ntpdig/data/key-test-invalid-hex
++++ /dev/null
+@@ -1,2 +0,0 @@
+-30 MD5 0101010101010101010101010101gh
+-10 MD5 010101010101010101010101010101
+diff --git a/tests/ntpdig/data/kod-expected-multiple b/tests/ntpdig/data/kod-expected-multiple
+deleted file mode 100644
+index c6ba292..0000000
+--- a/tests/ntpdig/data/kod-expected-multiple
++++ /dev/null
+@@ -1,3 +0,0 @@
+-000000000000abcd DENY 192.0.2.1
+-000000000000abcd RSTR 192.0.2.5
+-000000000000abcd RATE example.com
+diff --git a/tests/ntpdig/data/kod-expected-single b/tests/ntpdig/data/kod-expected-single
+deleted file mode 100644
+index 8ad3c7c..0000000
+--- a/tests/ntpdig/data/kod-expected-single
++++ /dev/null
+@@ -1 +0,0 @@
+-0000000000000001 DENY host1
+diff --git a/tests/ntpdig/data/kod-test-blanks b/tests/ntpdig/data/kod-test-blanks
+deleted file mode 100644
+index 5c20e72..0000000
+--- a/tests/ntpdig/data/kod-test-blanks
++++ /dev/null
+@@ -1,6 +0,0 @@
+-
+-0000000012345678 DENY 192.0.2.5
+-
+-0000000000000fff RSTR 192.0.2.100
+-000000000000abcd DENY example.com
+-
+diff --git a/tests/ntpdig/data/kod-test-correct b/tests/ntpdig/data/kod-test-correct
+deleted file mode 100644
+index 8a3e230..0000000
+--- a/tests/ntpdig/data/kod-test-correct
++++ /dev/null
+@@ -1,2 +0,0 @@
+-0000000012345678 DENY 192.0.2.5
+-0000000000000fff RSTR 192.0.2.100
+diff --git a/tests/ntpdig/data/kod-test-empty b/tests/ntpdig/data/kod-test-empty
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/tests/ntpdig/key_file.c b/tests/ntpdig/key_file.c
+deleted file mode 100644
+index 8672f0a..0000000
+--- a/tests/ntpdig/key_file.c
++++ /dev/null
+@@ -1,162 +0,0 @@
+-#include "config.h"
+-
+-#include "unity.h"
+-#include "unity_fixture.h"
+-
+-#include "ntp_stdlib.h"
+-#include <file_handling.h>
+-
+-#include "crypto.h"
+-
+-TEST_GROUP(keyFile);
+-
+-TEST_SETUP(keyFile) {}
+-
+-TEST_TEAR_DOWN(keyFile) {}
+-
+-static bool CompareKeys(struct key* expected, struct key* actual) {
+-	if (expected->key_id != actual->key_id) {
+-		printf("Expected key_id: %d but was: %d",
+-		       expected->key_id, actual->key_id);
+-		return false;
+-	}
+-	if (expected->key_len != actual->key_len) {
+-		printf("Expected key_len: %d but was: %d",
+-		       expected->key_len, actual->key_len);
+-		return false;
+-	}
+-	if (strcmp(expected->type, actual->type) != 0) {
+-		printf("Expected key_type: %s but was: %s",
+-		       expected->type,  actual->type);
+-		return false;
+-	}
+-	if (memcmp(expected->key_seq, actual->key_seq, expected->key_len) != 0) {
+-		printf("Key seq mismatch!\n");
+-		return false;
+-	}
+-	return true;
+-}
+-
+-static bool CompareKey(int key_id,
+-		       int key_len,
+-		       const char* type,
+-		       const char* key_seq,
+-		       struct key* actual) {
+-	struct key temp;
+-
+-	temp.key_id = key_id;
+-	temp.key_len = key_len;
+-	strlcpy(temp.type, type, sizeof(temp.type));
+-	memcpy(temp.key_seq, key_seq, key_len);
+-
+-	return CompareKeys(&temp, actual);
+-}
+-
+-TEST(keyFile, ReadEmptyKeyFile) {
+-	const char* path;
+-	struct key* keys = NULL;
+-	path = CreatePath("key-test-empty", INPUT_DIR);
+-	TEST_ASSERT_EQUAL(0, auth_init(path, &keys));
+-	free((void*) path);
+-	TEST_ASSERT_TRUE(keys == NULL);
+-}
+-
+-TEST(keyFile, ReadASCIIKeys) {
+-	const char* path;
+-	struct key* keys = NULL;
+-	struct key* result = NULL;
+-	path = CreatePath("key-test-ascii", INPUT_DIR);
+-	TEST_ASSERT_EQUAL(2, auth_init(path, &keys));
+-	free((void*) path);
+-	TEST_ASSERT_TRUE(keys != NULL);
+-	get_key(40, &result);
+-	TEST_ASSERT_TRUE(result != NULL);
+-	TEST_ASSERT_TRUE(CompareKey(40, 11, "MD5", "asciikeyTwo", result));
+-	result = NULL;
+-	get_key(50, &result);
+-	TEST_ASSERT_TRUE(result != NULL);
+-	TEST_ASSERT_TRUE(CompareKey(50, 11, "MD5", "asciikeyOne", result));
+-}
+-
+-TEST(keyFile, ReadHexKeys) {
+-	const char* path;
+-	struct key* keys = NULL;
+-	struct key* result = NULL;
+-	char data[15];
+-
+-	path = CreatePath("key-test-hex", INPUT_DIR);
+-	TEST_ASSERT_EQUAL(3, auth_init(path, &keys));
+-	free((void*) path);
+-
+-	TEST_ASSERT_TRUE(keys != NULL);
+-
+-	get_key(10, &result);
+-	TEST_ASSERT_TRUE(result != NULL);
+-	TEST_ASSERT_TRUE(CompareKey(10, 13, "MD5",
+-		 "\x01\x23\x45\x67\x89\xab\xcd\xef\x01\x23\x45\x67\x89", result));
+-
+-	result = NULL;
+-	get_key(20, &result);
+-	TEST_ASSERT_TRUE(result != NULL);
+-	memset(data, 0x11, 15);
+-	TEST_ASSERT_TRUE(CompareKey(20, 15, "MD5", data, result));
+-
+-	result = NULL;
+-	get_key(30, &result);
+-	TEST_ASSERT_TRUE(result != NULL);
+-	memset(data, 0x01, 13);
+-	TEST_ASSERT_TRUE(CompareKey(30, 13, "MD5", data, result));
+-}
+-
+-TEST(keyFile, ReadKeyFileWithComments) {
+-	const char* path;
+-	struct key* keys = NULL;
+-	struct key* result = NULL;
+-	char data[15];
+-
+-	path = CreatePath("key-test-comments", INPUT_DIR);
+-	TEST_ASSERT_EQUAL(2, auth_init(path, &keys));
+-	free((void*) path);
+-
+-	TEST_ASSERT_TRUE(keys != NULL);
+-
+-	get_key(10, &result);
+-	TEST_ASSERT_TRUE(result != NULL);
+-	memset(data, 0x01, 15);
+-	TEST_ASSERT_TRUE(CompareKey(10, 15, "MD5", data, result));
+-
+-	result = NULL;
+-	get_key(34, &result);
+-	TEST_ASSERT_TRUE(result != NULL);
+-	TEST_ASSERT_TRUE(CompareKey(34, 3, "MD5", "xyz", result));
+-}
+-
+-TEST(keyFile, ReadKeyFileWithInvalidHex) {
+-	const char* path;
+-	struct key* keys = NULL;
+-	struct key* result = NULL;
+-	char data[15];
+-
+-	path = CreatePath("key-test-invalid-hex", INPUT_DIR);
+-	TEST_ASSERT_EQUAL(1, auth_init(path, &keys));
+-	free((void*) path);
+-
+-	TEST_ASSERT_TRUE(keys != NULL);
+-
+-	get_key(10, &result);
+-	TEST_ASSERT_TRUE(result != NULL);
+-	memset(data, 0x01, 15);
+-	TEST_ASSERT_TRUE(CompareKey(10, 15, "MD5", data, result));
+-
+-	result = NULL;
+-	get_key(30, &result); /* Should not exist, and result should remain NULL. */
+-	TEST_ASSERT_TRUE(result == NULL);
+-}
+-
+-TEST_GROUP_RUNNER(keyFile) {
+-	RUN_TEST_CASE(keyFile, ReadEmptyKeyFile);
+-	RUN_TEST_CASE(keyFile, ReadASCIIKeys);
+-	RUN_TEST_CASE(keyFile, ReadHexKeys);
+-	RUN_TEST_CASE(keyFile, ReadKeyFileWithComments);
+-	RUN_TEST_CASE(keyFile, ReadKeyFileWithInvalidHex);
+-}
+diff --git a/tests/ntpdig/kod_database.c b/tests/ntpdig/kod_database.c
+deleted file mode 100644
+index 2ecd42e..0000000
+--- a/tests/ntpdig/kod_database.c
++++ /dev/null
+@@ -1,129 +0,0 @@
+-#include <unistd.h>
+-
+-#include "unity.h"
+-#include "unity_fixture.h"
+-
+-#include "ntpdigtest.h"
+-
+-#include "kod_management.h"
+-
+-TEST_GROUP(kodDatabase);
+-
+-TEST_SETUP(kodDatabase) {}
+-
+-TEST_TEAR_DOWN(kodDatabase) {}
+-
+-TEST(kodDatabase, SingleEntryHandling) {
+-	char HOST[] = "192.0.2.5";
+-	char REASON[] = "DENY";
+-
+-	struct kod_entry* result;
+-
+-	add_entry(HOST, REASON);
+-
+-	TEST_ASSERT_EQUAL(1, search_entry(HOST, &result));
+-	TEST_ASSERT_EQUAL_STRING(HOST, result->hostname);
+-	TEST_ASSERT_EQUAL_STRING(REASON, result->type);
+-}
+-
+-TEST(kodDatabase, MultipleEntryHandling) {
+-	char HOST1[] = "192.0.2.3";
+-	char REASON1[] = "DENY";
+-
+-	char HOST2[] = "192.0.5.5";
+-	char REASON2[] = "RATE";
+-
+-	char HOST3[] = "192.0.10.1";
+-	char REASON3[] = "DENY";
+-
+-	struct kod_entry* result;
+-
+-	add_entry(HOST1, REASON1);
+-	add_entry(HOST2, REASON2);
+-	add_entry(HOST3, REASON3);
+-
+-	TEST_ASSERT_EQUAL(1, search_entry(HOST1, &result));
+-	TEST_ASSERT_EQUAL_STRING(HOST1, result->hostname);
+-	TEST_ASSERT_EQUAL_STRING(REASON1, result->type);
+-
+-	TEST_ASSERT_EQUAL(1, search_entry(HOST2, &result));
+-	TEST_ASSERT_EQUAL_STRING(HOST2, result->hostname);
+-	TEST_ASSERT_EQUAL_STRING(REASON2, result->type);
+-
+-	TEST_ASSERT_EQUAL(1, search_entry(HOST3, &result));
+-	TEST_ASSERT_EQUAL_STRING(HOST3, result->hostname);
+-	TEST_ASSERT_EQUAL_STRING(REASON3, result->type);
+-
+-	free(result);
+-}
+-
+-TEST(kodDatabase, NoMatchInSearch) {
+-	char HOST_ADD[] = "192.0.2.6";
+-	char HOST_NOTADD[] = "192.0.6.1";
+-	char REASON[] = "DENY";
+-
+-	struct kod_entry* result;
+-
+-	add_entry(HOST_ADD, REASON);
+-
+-	TEST_ASSERT_EQUAL(0, search_entry(HOST_NOTADD, &result));
+-	TEST_ASSERT_TRUE(result == NULL);
+-}
+-
+-TEST(kodDatabase, AddDuplicate) {
+-	char HOST[] = "192.0.2.3";
+-	char REASON1[] = "RATE";
+-	char REASON2[] = "DENY";
+-	struct kod_entry* result1;
+-	struct kod_entry* result2;
+-
+-	add_entry(HOST, REASON1);
+-	TEST_ASSERT_EQUAL(1, search_entry(HOST, &result1));
+-
+-	/*
+-	 * Sleeps for two seconds since we want to ensure that
+-	 * the timestamp is updated to a new value.
+-	 */
+-	sleep(2);
+-
+-	add_entry(HOST, REASON2);
+-
+-	TEST_ASSERT_EQUAL(1, search_entry(HOST, &result2));
+-
+-	TEST_ASSERT_NOT_EQUAL(result1->timestamp, result2->timestamp);
+-
+-	free(result1);
+-	free(result2);
+-}
+-
+-TEST(kodDatabase, DeleteEntry) {
+-	char HOST1[] = "192.0.2.1";
+-	char HOST2[] = "192.0.2.2";
+-	char HOST3[] = "192.0.2.3";
+-	char REASON[] = "DENY";
+-
+-	struct kod_entry* result;
+-
+-	add_entry(HOST1, REASON);
+-	add_entry(HOST2, REASON);
+-	add_entry(HOST3, REASON);
+-
+-	TEST_ASSERT_EQUAL(1, search_entry(HOST2, &result));
+-	free(result);
+-
+-	delete_entry(HOST2, REASON);
+-
+-	TEST_ASSERT_EQUAL(0, search_entry(HOST2, &result));
+-
+-	// Ensure that the other entry is still there.
+-	TEST_ASSERT_EQUAL(1, search_entry(HOST1, &result));
+-	free(result);
+-}
+-
+-TEST_GROUP_RUNNER(kodDatabase) {
+-	RUN_TEST_CASE(kodDatabase, SingleEntryHandling);
+-//	RUN_TEST_CASE(kodDatabase, MultipleEntryHandling); Buffer overrun detected during free()
+-	RUN_TEST_CASE(kodDatabase, NoMatchInSearch);
+-//	RUN_TEST_CASE(kodDatabase, AddDuplicate); Disable for now due to sleep */
+-//	RUN_TEST_CASE(kodDatabase, DeleteEntry); Buffer overrun detected during free()
+-}
+diff --git a/tests/ntpdig/kod_file.c b/tests/ntpdig/kod_file.c
+deleted file mode 100644
+index 592d81f..0000000
+--- a/tests/ntpdig/kod_file.c
++++ /dev/null
+@@ -1,194 +0,0 @@
+-#include "config.h"
+-
+-#include "unity.h"
+-#include "unity_fixture.h"
+-
+-#include <file_handling.h>
+-
+-#include "ntp_stdlib.h"
+-#include "kod_management.h"
+-
+-/*
+- * We access some parts of the kod database directly, without
+- * going through the public interface
+- */
+-extern int kod_db_cnt;
+-extern struct kod_entry** kod_db;
+-extern char* kod_db_file;
+-
+-TEST_GROUP(kodFile);
+-
+-TEST_SETUP(kodFile) {
+-	kod_db_cnt = 0;
+-	kod_db = NULL;
+-}
+-
+-TEST_TEAR_DOWN(kodFile) {}
+-
+-TEST(kodFile, ReadEmptyFile) {
+-	const char* path;
+-
+-	path = CreatePath("kod-test-empty", INPUT_DIR);
+-	kod_init_kod_db(path, true);
+-	free((void*) path);
+-
+-	TEST_ASSERT_EQUAL(0, kod_db_cnt);
+-}
+-
+-TEST(kodFile, ReadCorrectFile) {
+-	const char* path;
+-	struct kod_entry* res;
+-
+-	path = CreatePath("kod-test-correct", INPUT_DIR);
+-	kod_init_kod_db(path, true);
+-	free((void*) path);
+-
+-	TEST_ASSERT_EQUAL(2, kod_db_cnt);
+-
+-	TEST_ASSERT_EQUAL(1, search_entry("192.0.2.5", &res));
+-	TEST_ASSERT_EQUAL_STRING("DENY", res->type);
+-	TEST_ASSERT_EQUAL_STRING("192.0.2.5", res->hostname);
+-	TEST_ASSERT_EQUAL(0x12345678, res->timestamp);
+-
+-	TEST_ASSERT_EQUAL(1, search_entry("192.0.2.100", &res));
+-	TEST_ASSERT_EQUAL_STRING("RSTR", res->type);
+-	TEST_ASSERT_EQUAL_STRING("192.0.2.100", res->hostname);
+-	TEST_ASSERT_EQUAL(0xfff, res->timestamp);
+-	/* coverity[leaked_storage] */
+-}
+-
+-TEST(kodFile, ReadFileWithBlankLines) {
+-	const char* path;
+-	struct kod_entry* res;
+-
+-	path = CreatePath("kod-test-blanks", INPUT_DIR);
+-	kod_init_kod_db(path, true);
+-	free((void*) path);
+-
+-	TEST_ASSERT_EQUAL(3, kod_db_cnt);
+-
+-	TEST_ASSERT_EQUAL(1, search_entry("192.0.2.5", &res));
+-	TEST_ASSERT_EQUAL_STRING("DENY", res->type);
+-	TEST_ASSERT_EQUAL_STRING("192.0.2.5", res->hostname);
+-	TEST_ASSERT_EQUAL(0x12345678, res->timestamp);
+-
+-	TEST_ASSERT_EQUAL(1, search_entry("192.0.2.100", &res));
+-	TEST_ASSERT_EQUAL_STRING("RSTR", res->type);
+-	TEST_ASSERT_EQUAL_STRING("192.0.2.100", res->hostname);
+-	TEST_ASSERT_EQUAL(0xfff, res->timestamp);
+-
+-	TEST_ASSERT_EQUAL(1, search_entry("example.com", &res));
+-	TEST_ASSERT_EQUAL_STRING("DENY", res->type);
+-	TEST_ASSERT_EQUAL_STRING("example.com", res->hostname);
+-	TEST_ASSERT_EQUAL(0xabcd, res->timestamp);
+-	/* coverity[leaked_storage] */
+-}
+-
+-TEST(kodFile, WriteEmptyFile) {
+-	FILE* is;
+-
+-	kod_db_file = (char*) CreatePath("kod-output-blank", OUTPUT_DIR);
+-
+-	write_kod_db();
+-
+-	/*
+-	 * Open file and ensure that the filesize is 0 bytes.
+-	 */
+-	is = fopen(kod_db_file, "wb");
+-	TEST_ASSERT_NOT_NULL(is);
+-	TEST_ASSERT_FALSE(ferror(is));
+-
+-	TEST_ASSERT_EQUAL(0, GetFileSize(is));
+-
+-	fclose(is);
+-	free((void*) kod_db_file);
+-}
+-
+-TEST(kodFile, WriteFileWithSingleEntry) {
+-	const char* expected_file;
+-	FILE* actual;
+-	FILE* expected;
+-
+-	kod_db_file = (char*) CreatePath("kod-output-single", OUTPUT_DIR);
+-
+-	add_entry("host1", "DENY");
+-
+-	/*
+-	 * Here we must manipulate the timestamps, so they match the one in
+-	 * the expected file.
+-	 */
+-	kod_db[0]->timestamp = 1;
+-
+-	write_kod_db();
+-
+-	/*
+-	 * Open file and compare sizes.
+-	 */
+-	actual = fopen(kod_db_file, "rb");
+-	TEST_ASSERT_NOT_NULL(actual);
+-	TEST_ASSERT_FALSE(ferror(actual));
+-	expected_file = CreatePath("kod-expected-single", INPUT_DIR);;
+-	expected = fopen(expected_file, "rb");
+-	TEST_ASSERT_NOT_NULL(expected);
+-	TEST_ASSERT_FALSE(ferror(expected));
+-
+-	TEST_ASSERT_EQUAL(GetFileSize(expected), GetFileSize(actual));
+-
+-	CompareFileContent(expected, actual);
+-
+-	fclose(expected);
+-	fclose(actual);
+-	free((void*) kod_db_file);
+-	free((void*) expected_file);
+-}
+-
+-TEST(kodFile, WriteFileWithMultipleEntries) {
+-	const char* expected_file;
+-	FILE* actual;
+-	FILE* expected;
+-
+-	kod_db_file = (char*) CreatePath("kod-output-multiple", OUTPUT_DIR);
+-
+-	add_entry("example.com", "RATE");
+-	add_entry("192.0.2.1", "DENY");
+-	add_entry("192.0.2.5", "RSTR");
+-
+-	/*
+-	 * Manipulate timestamps. This is a bit of a hack, ideally these
+-	 * tests should not care about the internal representation.
+-	 */
+-	kod_db[0]->timestamp = 0xabcd;
+-	kod_db[1]->timestamp = 0xabcd;
+-	kod_db[2]->timestamp = 0xabcd;
+-
+-	write_kod_db();
+-
+-	/*
+-	 * Open file and compare sizes and content.
+-	 */
+-	actual = fopen(kod_db_file, "rb");
+-	TEST_ASSERT_NOT_NULL(actual);
+-	TEST_ASSERT_FALSE(ferror(actual));
+-	expected_file = CreatePath("kod-expected-multiple", INPUT_DIR);;
+-	expected = fopen(expected_file, "rb");
+-	TEST_ASSERT_NOT_NULL(expected);
+-	TEST_ASSERT_FALSE(ferror(expected));
+-
+-	TEST_ASSERT_EQUAL(GetFileSize(expected), GetFileSize(actual));
+-
+-	CompareFileContent(expected, actual);
+-
+-	fclose(expected);
+-	fclose(actual);
+-	free((void*) kod_db_file);
+-	free((void*) expected_file);
+-}
+-
+-TEST_GROUP_RUNNER(kodFile) {
+-	RUN_TEST_CASE(kodFile, ReadEmptyFile);
+-	RUN_TEST_CASE(kodFile, ReadCorrectFile);
+-	RUN_TEST_CASE(kodFile, ReadFileWithBlankLines);
+-	RUN_TEST_CASE(kodFile, WriteEmptyFile);
+-	RUN_TEST_CASE(kodFile, WriteFileWithSingleEntry);
+-	RUN_TEST_CASE(kodFile, WriteFileWithMultipleEntries);
+-}
+diff --git a/tests/ntpdig/ntpdigtest.h b/tests/ntpdig/ntpdigtest.h
+deleted file mode 100644
+index 292d67e..0000000
+--- a/tests/ntpdig/ntpdigtest.h
++++ /dev/null
+@@ -1,34 +0,0 @@
+-#ifndef GUARD_NTPDIGTEST_H
+-#define GUARD_NTPDIGTEST_H
+-
+-#include "tests_main.h"
+-
+-#include "ntp_stdlib.h"
+-
+-#if 0
+-class ntpdigtest : public ntptest {
+-protected:
+-	ntpdigtest() {
+-		optionSaveState(&ntpdigOptions);
+-	}
+-
+-	~ntpdigtest() {
+-		optionRestore(&ntpdigOptions);
+-	}
+-
+-	void ActivateOption(const char* option, const char* argument) {
+-		const int ARGV_SIZE = 4;
+-
+-		char* opts[ARGV_SIZE];
+-
+-		opts[0] = estrdup("ntpdigopts");
+-		opts[1] = estrdup(option);
+-		opts[2] = estrdup(argument);
+-		opts[3] = estrdup("127.0.0.1");
+-
+-		optionProcess(&ntpdigOptions, ARGV_SIZE, opts);
+-	}
+-};
+-#endif
+-
+-#endif // GUARD_NTPDIGTEST_H
+diff --git a/tests/ntpdig/packet_handling.c b/tests/ntpdig/packet_handling.c
+deleted file mode 100644
+index 02a722b..0000000
+--- a/tests/ntpdig/packet_handling.c
++++ /dev/null
+@@ -1,289 +0,0 @@
+-#include "unity.h"
+-#include "unity_fixture.h"
+-
+-#include "ntpdigtest.h"
+-
+-#include "kod_management.h"
+-#include "main.h"
+-#include "networking.h"
+-#include "ntp.h"
+-
+-#include <sys/time.h>
+-#include <stdlib.h>
+-
+-
+-#define EXPECT_DOUBLE_EQ(a, b) { \
+-	static const double epsilon = 1e-10; \
+-	TEST_ASSERT_TRUE(fabs(a - b) < epsilon); \
+-}
+-
+-static bool LfpEquality(const l_fp* expected, const l_fp* actual) {
+-	if (L_ISEQU(expected, actual)) {
+-		return true;
+-	} else {
+-		printf(" expected: %s (%u.%u) but was %s (%u.%u)",
+-			   lfptoa(expected, FRACTION_PREC),
+-			   expected->l_ui, expected->l_uf,
+-			   lfptoa(actual, FRACTION_PREC),
+-			   actual->l_ui, actual->l_uf);
+-		return false;
+-	}
+-}
+-
+-TEST_GROUP(packetHandling);
+-
+-TEST_SETUP(packetHandling) {}
+-
+-TEST_TEAR_DOWN(packetHandling) {}
+-
+-TEST(packetHandling, GenerateUnauthenticatedPacket) {
+-
+-	struct pkt testpkt;
+-	struct timeval xmt;
+-	l_fp expected_xmt, actual_xmt;
+-
+-	gettimeofday(&xmt, NULL);
+-	xmt.tv_sec += JAN_1970;
+-
+-	TEST_ASSERT_EQUAL(LEN_PKT_NOMAC,
+-			  generate_pkt(&testpkt, &xmt, 0, NULL));
+-
+-	TEST_ASSERT_EQUAL(LEAP_NOTINSYNC, PKT_LEAP(testpkt.li_vn_mode));
+-	TEST_ASSERT_EQUAL(NTP_VERSION, PKT_VERSION(testpkt.li_vn_mode));
+-	TEST_ASSERT_EQUAL(MODE_CLIENT, PKT_MODE(testpkt.li_vn_mode));
+-
+-	TEST_ASSERT_EQUAL(STRATUM_UNSPEC, PKT_TO_STRATUM(testpkt.stratum));
+-	TEST_ASSERT_EQUAL(8, testpkt.ppoll);
+-
+-	TVTOTS(&xmt, &expected_xmt);
+-	NTOHL_FP(&testpkt.xmt, &actual_xmt);
+-	TEST_ASSERT_TRUE(LfpEquality(&expected_xmt, &actual_xmt));
+-}
+-
+-TEST(packetHandling, GenerateAuthenticatedPacket) {
+-	struct key testkey;
+-	struct pkt testpkt;
+-	struct timeval xmt;
+-	const int EXPECTED_PKTLEN = LEN_PKT_NOMAC + MAX_MD5_LEN;
+-	l_fp expected_xmt, actual_xmt;
+-	char expected_mac[MAX_MD5_LEN];
+-
+-	testkey.next = NULL;
+-	testkey.key_id = 30;
+-	testkey.key_len = 9;
+-	memcpy(testkey.key_seq, "123456789", testkey.key_len);
+-	memcpy(testkey.type, "MD5", 3);
+-
+-	gettimeofday(&xmt, NULL);
+-	xmt.tv_sec += JAN_1970;
+-
+-	TEST_ASSERT_EQUAL(EXPECTED_PKTLEN,
+-			  generate_pkt(&testpkt, &xmt, testkey.key_id, &testkey));
+-
+-	TEST_ASSERT_EQUAL(LEAP_NOTINSYNC, PKT_LEAP(testpkt.li_vn_mode));
+-	TEST_ASSERT_EQUAL(NTP_VERSION, PKT_VERSION(testpkt.li_vn_mode));
+-	TEST_ASSERT_EQUAL(MODE_CLIENT, PKT_MODE(testpkt.li_vn_mode));
+-
+-	TEST_ASSERT_EQUAL(STRATUM_UNSPEC, PKT_TO_STRATUM(testpkt.stratum));
+-	TEST_ASSERT_EQUAL(8, testpkt.ppoll);
+-
+-	TVTOTS(&xmt, &expected_xmt);
+-	NTOHL_FP(&testpkt.xmt, &actual_xmt);
+-	TEST_ASSERT_TRUE(LfpEquality(&expected_xmt, &actual_xmt));
+-
+-	TEST_ASSERT_EQUAL(testkey.key_id, ntohl(testpkt.exten[0]));
+-
+-	TEST_ASSERT_EQUAL(MAX_MD5_LEN - 4, // Remove the key_id, only keep the mac.
+-			  make_mac((char*)&testpkt, LEN_PKT_NOMAC, MAX_MD5_LEN, &testkey, expected_mac));
+-	TEST_ASSERT_TRUE(memcmp(expected_mac, (char*)&testpkt.exten[1], MAX_MD5_LEN -4) == 0);
+-}
+-
+-TEST(packetHandling, OffsetCalculationPositiveOffset) {
+-	struct pkt rpkt;
+-	l_fp reftime;
+-	l_fp tmp;
+-	struct timeval dst;
+-	double offset, precision, synch_distance;
+-
+-	rpkt.precision = -16; // 0,000015259
+-	rpkt.rootdelay = HTONS_FP(DTOUFP(0.125));
+-	rpkt.rootdisp = HTONS_FP(DTOUFP(0.25));
+-	/* Synch Distance: (0.125+0.25)/2.0 == 0.1875 */
+-	get_systime(&reftime);
+-	HTONL_FP(&reftime, &rpkt.reftime);
+-
+-	/* T1 - Originate timestamp */
+-	tmp.l_ui = 1000000000UL;
+-	tmp.l_uf = 0UL;
+-	HTONL_FP(&tmp, &rpkt.org);
+-
+-	/* T2 - Receive timestamp */
+-	tmp.l_ui = 1000000001UL;
+-	tmp.l_uf = 2147483648UL;
+-	HTONL_FP(&tmp, &rpkt.rec);
+-
+-	/* T3 - Transmit timestamp */
+-	tmp.l_ui = 1000000002UL;
+-	tmp.l_uf = 0UL;
+-	HTONL_FP(&tmp, &rpkt.xmt);
+-
+-	/* T4 - Destination timestamp as standard timeval */
+-	tmp.l_ui = 1000000001UL;
+-	tmp.l_uf = 0UL;
+-	TSTOTV(&tmp, &dst);
+-	dst.tv_sec -= JAN_1970;
+-
+-	offset_calculation(&rpkt, LEN_PKT_NOMAC, &dst, &offset, &precision, &synch_distance);
+-
+-	EXPECT_DOUBLE_EQ(1.25, offset);
+-	EXPECT_DOUBLE_EQ(1. / ULOGTOD(16), precision);
+-	/* 1.1250150000000001 ? */
+-	EXPECT_DOUBLE_EQ(1.125015, synch_distance);
+-}
+-
+-TEST(packetHandling, OffsetCalculationNegativeOffset) {
+-	struct pkt rpkt;
+-	struct timeval dst;
+-
+-	rpkt.precision = -1;
+-	rpkt.rootdelay = HTONS_FP(DTOUFP(0.5));
+-	rpkt.rootdisp = HTONS_FP(DTOUFP(0.5));
+-	// Synch Distance is (0.5+0.5)/2.0, or 0.5
+-	l_fp reftime;
+-	get_systime(&reftime);
+-	HTONL_FP(&reftime, &rpkt.reftime);
+-
+-	l_fp tmp;
+-
+-	// T1 - Originate timestamp
+-	tmp.l_ui = 1000000001UL;
+-	tmp.l_uf = 0UL;
+-	HTONL_FP(&tmp, &rpkt.org);
+-
+-	// T2 - Receive timestamp
+-	tmp.l_ui = 1000000000UL;
+-	tmp.l_uf = 2147483648UL;
+-	HTONL_FP(&tmp, &rpkt.rec);
+-
+-	// T3 - Transmit timestamp
+-	tmp.l_ui = 1000000001UL;
+-	tmp.l_uf = 2147483648UL;
+-	HTONL_FP(&tmp, &rpkt.xmt);
+-
+-	// T4 - Destination timestamp as standard timeval
+-	tmp.l_ui = 1000000003UL;
+-	tmp.l_uf = 0UL;
+-	TSTOTV(&tmp, &dst);
+-	dst.tv_sec -= JAN_1970;
+-
+-	double offset, precision, synch_distance;
+-	offset_calculation(&rpkt, LEN_PKT_NOMAC, &dst, &offset, &precision, &synch_distance);
+-
+-	EXPECT_DOUBLE_EQ(-1, offset);
+-	EXPECT_DOUBLE_EQ(1. / ULOGTOD(1), precision);
+-	EXPECT_DOUBLE_EQ(1.3333483333333334, synch_distance);
+-}
+-
+-TEST(packetHandling, HandleUnusableServer) {
+-	struct pkt		rpkt;
+-	sockaddr_u	host;
+-	int		rpktl;
+-
+-	ZERO(rpkt);
+-	ZERO(host);
+-	rpktl = SERVER_UNUSEABLE;
+-	TEST_ASSERT_EQUAL(-1, handle_pkt(rpktl, &rpkt, &host, ""));
+-}
+-
+-TEST(packetHandling, HandleUnusablePacket) {
+-	struct pkt		rpkt;
+-	sockaddr_u	host;
+-	int		rpktl;
+-
+-	ZERO(rpkt);
+-	ZERO(host);
+-	rpktl = PACKET_UNUSEABLE;
+-	TEST_ASSERT_EQUAL(1, handle_pkt(rpktl, &rpkt, &host, ""));
+-}
+-
+-TEST(packetHandling, HandleServerAuthenticationFailure) {
+-	struct pkt		rpkt;
+-	sockaddr_u	host;
+-	int		rpktl;
+-
+-	ZERO(rpkt);
+-	ZERO(host);
+-	rpktl = SERVER_AUTH_FAIL;
+-	TEST_ASSERT_EQUAL(1, handle_pkt(rpktl, &rpkt, &host, ""));
+-}
+-
+-TEST(packetHandling, HandleKodDemobilize) {
+-	const char *	HOSTNAME = "192.0.2.1";
+-	const char *	REASON = "DENY";
+-	struct pkt		rpkt;
+-	sockaddr_u	host;
+-	int		rpktl;
+-	struct kod_entry *	entry;
+-
+-	rpktl = KOD_DEMOBILIZE;
+-	ZERO(rpkt);
+-	memcpy(&rpkt.refid, REASON, 4);
+-	ZERO(host);
+-	host.sa4.sin_family = AF_INET;
+-	host.sa4.sin_addr.s_addr = inet_addr(HOSTNAME);
+-
+-	// Test that the KOD-entry is added to the database.
+-	kod_init_kod_db("/dev/null", true);
+-
+-	TEST_ASSERT_EQUAL(1, handle_pkt(rpktl, &rpkt, &host, HOSTNAME));
+-
+-	TEST_ASSERT_EQUAL(1, search_entry(HOSTNAME, &entry));
+-	TEST_ASSERT_TRUE(memcmp(REASON, entry->type, 4) == 0);
+-	/* coverity[leaked_storage] */
+-}
+-
+-TEST(packetHandling, HandleKodRate) {
+-	struct pkt		rpkt;
+-	sockaddr_u	host;
+-	int		rpktl;
+-
+-	ZERO(rpkt);
+-	ZERO(host);
+-	rpktl = KOD_RATE;
+-	TEST_ASSERT_EQUAL(1, handle_pkt(rpktl, &rpkt, &host, ""));
+-}
+-
+-TEST(packetHandling, HandleCorrectPacket) {
+-	struct pkt		rpkt;
+-	sockaddr_u	host;
+-	int		rpktl;
+-	l_fp		now;
+-
+-	// We don't want our testing code to actually change the system clock.
+-//XXX: needs updating.	TEST_ASSERT_FALSE(ENABLED_OPT(STEP));
+-//XXX: needs updating	TEST_ASSERT_FALSE(ENABLED_OPT(SLEW));
+-
+-	get_systime(&now);
+-	HTONL_FP(&now, &rpkt.reftime);
+-	HTONL_FP(&now, &rpkt.org);
+-	HTONL_FP(&now, &rpkt.rec);
+-	HTONL_FP(&now, &rpkt.xmt);
+-	rpktl = LEN_PKT_NOMAC;
+-	ZERO(host);
+-	AF(&host) = AF_INET;
+-
+-	TEST_ASSERT_EQUAL(0, handle_pkt(rpktl, &rpkt, &host, ""));
+-}
+-
+-TEST_GROUP_RUNNER(packetHandling) {
+-	RUN_TEST_CASE(packetHandling, GenerateUnauthenticatedPacket);
+-	RUN_TEST_CASE(packetHandling, GenerateAuthenticatedPacket);
+-	RUN_TEST_CASE(packetHandling, OffsetCalculationPositiveOffset);
+-	RUN_TEST_CASE(packetHandling, OffsetCalculationNegativeOffset);
+-	RUN_TEST_CASE(packetHandling, HandleUnusableServer);
+-	RUN_TEST_CASE(packetHandling, HandleUnusablePacket);
+-	RUN_TEST_CASE(packetHandling, HandleServerAuthenticationFailure);
+-	RUN_TEST_CASE(packetHandling, HandleKodDemobilize);
+-	RUN_TEST_CASE(packetHandling, HandleKodRate);
+-	RUN_TEST_CASE(packetHandling, HandleCorrectPacket);
+-}
+diff --git a/tests/ntpdig/packet_processing.c b/tests/ntpdig/packet_processing.c
+deleted file mode 100644
+index 2369959..0000000
+--- a/tests/ntpdig/packet_processing.c
++++ /dev/null
+@@ -1,379 +0,0 @@
+-#include "unity.h"
+-#include "unity_fixture.h"
+-
+-//#include "ntpdigtest.h"
+-
+-#include "networking.h"
+-#include "ntp_stdlib.h"
+-
+-#define TEST_ASSERT_LESS_THAN(a, b) TEST_ASSERT_TRUE(a < b)
+-#define TEST_ASSERT_GREATER_THAN(a, b) TEST_ASSERT_TRUE(a > b)
+-
+-// Hacks into the key database.
+-extern struct key* key_ptr;
+-extern int key_cnt;
+-
+-struct pkt testpkt;
+-struct pkt testspkt;
+-sockaddr_u testsock;
+-bool restoreKeyDb;
+-
+-TEST_GROUP(packetProcessing);
+-
+-TEST_SETUP(packetProcessing) {
+-	restoreKeyDb = false;
+-
+-	/* Initialize the test packet and socket,
+-	 * so they contain at least some valid data. */
+-	testpkt.li_vn_mode = PKT_LI_VN_MODE(LEAP_NOWARNING, NTP_VERSION,
+-										MODE_SERVER);
+-	testpkt.stratum = STRATUM_REFCLOCK;
+-	memcpy(&testpkt.refid, "GPS\0", 4);
+-
+-	/* Set the origin timestamp of the received packet to the
+-	 * same value as the transmit timestamp of the sent packet. */
+-	l_fp tmp;
+-	tmp.l_ui = 1000UL;
+-	tmp.l_uf = 0UL;
+-
+-	HTONL_FP(&tmp, &testpkt.org);
+-	HTONL_FP(&tmp, &testspkt.xmt);
+-}
+-
+-TEST_TEAR_DOWN(packetProcessing) {
+-	if (restoreKeyDb) {
+-		key_cnt = 0;
+-		key_ptr = NULL;
+-	}
+-}
+-
+-/*
+-void PrepareAuthenticationTest(int key_id,
+-							   int key_len,
+-							   const char* type,
+-							   const void* key_seq) {
+-
+-	char key_id_buf[20];
+-	snprintf(key_id_buf, 20, "%d", key_id);
+-
+-	ActivateOption("-a", key_id_buf);
+-
+-	key_cnt = 1;
+-	key_ptr = *key;
+-	key_ptr->next = NULL;
+-	key_ptr->key_id = key_id;
+-	key_ptr->key_len = key_len;
+-	memcpy(key_ptr->type, "MD5", 3);
+-
+-	TEST_ASSERT_TRUE(key_len < sizeof(key_ptr->key_seq));
+-
+-	memcpy(key_ptr->key_seq, key_seq, key_ptr->key_len);
+-	restoreKeyDb = true;
+-}
+-
+-void PrepareAuthenticationTest(int key_id,
+-							   int key_len,
+-							   const void* key_seq) {
+-	PrepareAuthenticationTest(key_id, key_len, "MD5", key_seq);
+-}
+-
+-*/
+-TEST(packetProcessing, TooShortLength) {
+-	TEST_ASSERT_EQUAL(PACKET_UNUSEABLE,
+-			  process_pkt(&testpkt, &testsock, LEN_PKT_NOMAC - 1,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-	TEST_ASSERT_EQUAL(PACKET_UNUSEABLE,
+-			  process_pkt(&testpkt, &testsock, LEN_PKT_NOMAC - 1,
+-						  MODE_BROADCAST, &testspkt, "UnitTest", true));
+-}
+-
+-TEST(packetProcessing, LengthNotMultipleOfFour) {
+-	TEST_ASSERT_EQUAL(PACKET_UNUSEABLE,
+-			  process_pkt(&testpkt, &testsock, LEN_PKT_NOMAC + 6,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-	TEST_ASSERT_EQUAL(PACKET_UNUSEABLE,
+-			  process_pkt(&testpkt, &testsock, LEN_PKT_NOMAC + 3,
+-						  MODE_BROADCAST, &testspkt, "UnitTest", true));
+-}
+-
+-TEST(packetProcessing, TooShortExtensionFieldLength) {
+-	/* The lower 16-bits are the length of the extension field.
+-	 * This lengths must be multiples of 4 bytes, which gives
+-	 * a minimum of 4 byte extension field length. */
+-/* warning: array index 7 is past the end of the array (which contains 6 elements) [-Warray-bounds] */
+-#ifdef __clang__
+-#pragma clang diagnostic push
+-#pragma clang diagnostic ignored "-Warray-bounds"
+-#endif
+-	/* coverity[overrun-local] */
+-	testpkt.exten[7] = htonl(3); // 3 bytes is too short.
+-#ifdef __clang__
+-#pragma clang diagnostic pop
+-#endif
+-
+-	/* We send in a pkt_len of header size + 4 byte extension
+-	 * header + 24 byte MAC, this prevents the length error to
+-	 * be caught at an earlier stage */
+-	int pkt_len = LEN_PKT_NOMAC + 4 + 24;
+-
+-	TEST_ASSERT_EQUAL(PACKET_UNUSEABLE,
+-			  process_pkt(&testpkt, &testsock, pkt_len,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-
+-/*
+-TEST(packetProcessing, UnauthenticatedPacketReject) {
+-	// Activate authentication option
+-	ActivateOption("-a", "123");
+-	TEST_ASSERT_TRUE(ENABLED_OPT(AUTHENTICATION));
+-
+-	int pkt_len = LEN_PKT_NOMAC;
+-
+-	// We demand authentication, but no MAC header is present.
+-	TEST_ASSERT_EQUAL(SERVER_AUTH_FAIL,
+-			  process_pkt(&testpkt, &testsock, pkt_len,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-
+-TEST(packetProcessing, CryptoNAKPacketReject) {
+-	// Activate authentication option
+-	ActivateOption("-a", "123");
+-	TEST_ASSERT_TRUE(ENABLED_OPT(AUTHENTICATION));
+-
+-	int pkt_len = LEN_PKT_NOMAC + 4; // + 4 byte MAC = Crypto-NAK
+-
+-	TEST_ASSERT_EQUAL(SERVER_AUTH_FAIL,
+-			  process_pkt(&testpkt, &testsock, pkt_len,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-
+-TEST(packetProcessing, AuthenticatedPacketInvalid) {
+-	// Activate authentication option
+-	PrepareAuthenticationTest(50, 9, "123456789");
+-	TEST_ASSERT_TRUE(ENABLED_OPT(AUTHENTICATION));
+-
+-	// Prepare the packet.
+-	int pkt_len = LEN_PKT_NOMAC;
+-
+-	testpkt.exten[0] = htonl(50);
+-	int mac_len = make_mac((char*)&testpkt, pkt_len,
+-						   MAX_MD5_LEN, key_ptr,
+-						   (char*)&testpkt.exten[1]);
+-
+-	pkt_len += 4 + mac_len;
+-
+-	// Now, alter the MAC so it becomes invalid.
+-	testpkt.exten[1] += 1;
+-
+-	TEST_ASSERT_EQUAL(SERVER_AUTH_FAIL,
+-			  process_pkt(&testpkt, &testsock, pkt_len,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-
+-TEST(packetProcessing, AuthenticatedPacketUnknownKey) {
+-	// Activate authentication option
+-	PrepareAuthenticationTest(30, 9, "123456789");
+-	TEST_ASSERT_TRUE(ENABLED_OPT(AUTHENTICATION));
+-
+-	// Prepare the packet. Observe that the Key-ID expected is 30,
+-	// but the packet has a key id of 50.
+-	int pkt_len = LEN_PKT_NOMAC;
+-
+-	testpkt.exten[0] = htonl(50);
+-	int mac_len = make_mac((char*)&testpkt, pkt_len,
+-						   MAX_MD5_LEN, key_ptr,
+-						   (char*)&testpkt.exten[1]);
+-	pkt_len += 4 + mac_len;
+-
+-	TEST_ASSERT_EQUAL(SERVER_AUTH_FAIL,
+-			  process_pkt(&testpkt, &testsock, pkt_len,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-*/
+-
+-TEST(packetProcessing, ServerVersionTooOld) {
+-//	TEST_ASSERT_FALSE(ENABLED_OPT(AUTHENTICATION));
+-
+-	testpkt.li_vn_mode = PKT_LI_VN_MODE(LEAP_NOWARNING,
+-										NTP_OLDVERSION - 1,
+-										MODE_CLIENT);
+-	TEST_ASSERT_LESS_THAN(PKT_VERSION(testpkt.li_vn_mode), NTP_OLDVERSION);
+-
+-	int pkt_len = LEN_PKT_NOMAC;
+-
+-	TEST_ASSERT_EQUAL(SERVER_UNUSEABLE,
+-			  process_pkt(&testpkt, &testsock, pkt_len,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-
+-TEST(packetProcessing, ServerVersionTooNew) {
+-//	TEST_ASSERT_FALSE(ENABLED_OPT(AUTHENTICATION));
+-
+-	testpkt.li_vn_mode = PKT_LI_VN_MODE(LEAP_NOWARNING,
+-										NTP_VERSION + 1,
+-										MODE_CLIENT);
+-	TEST_ASSERT_GREATER_THAN(PKT_VERSION(testpkt.li_vn_mode), NTP_VERSION);
+-
+-	int pkt_len = LEN_PKT_NOMAC;
+-
+-	TEST_ASSERT_EQUAL(SERVER_UNUSEABLE,
+-			  process_pkt(&testpkt, &testsock, pkt_len,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-
+-TEST(packetProcessing, NonWantedMode) {
+-//	TEST_ASSERT_FALSE(ENABLED_OPT(AUTHENTICATION));
+-
+-	testpkt.li_vn_mode = PKT_LI_VN_MODE(LEAP_NOWARNING,
+-										NTP_VERSION,
+-										MODE_CLIENT);
+-
+-	// The packet has a mode of MODE_CLIENT, but process_pkt expects MODE_SERVER
+-
+-	TEST_ASSERT_EQUAL(SERVER_UNUSEABLE,
+-			  process_pkt(&testpkt, &testsock, LEN_PKT_NOMAC,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-
+-/* Tests bug 1597 */
+-TEST(packetProcessing, KoDRate) {
+-//	TEST_ASSERT_FALSE(ENABLED_OPT(AUTHENTICATION));
+-
+-	testpkt.stratum = STRATUM_PKT_UNSPEC;
+-	memcpy(&testpkt.refid, "RATE", 4);
+-
+-	TEST_ASSERT_EQUAL(KOD_RATE,
+-			  process_pkt(&testpkt, &testsock, LEN_PKT_NOMAC,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-
+-TEST(packetProcessing, KoDDeny) {
+-//	TEST_ASSERT_FALSE(ENABLED_OPT(AUTHENTICATION));
+-
+-	testpkt.stratum = STRATUM_PKT_UNSPEC;
+-	memcpy(&testpkt.refid, "DENY", 4);
+-
+-	TEST_ASSERT_EQUAL(KOD_DEMOBILIZE,
+-			  process_pkt(&testpkt, &testsock, LEN_PKT_NOMAC,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-
+-TEST(packetProcessing, RejectUnsyncedServer) {
+-//	TEST_ASSERT_FALSE(ENABLED_OPT(AUTHENTICATION));
+-
+-	testpkt.li_vn_mode = PKT_LI_VN_MODE(LEAP_NOTINSYNC,
+-										NTP_VERSION,
+-										MODE_SERVER);
+-
+-	TEST_ASSERT_EQUAL(SERVER_UNUSEABLE,
+-			  process_pkt(&testpkt, &testsock, LEN_PKT_NOMAC,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-
+-TEST(packetProcessing, RejectWrongResponseServerMode) {
+-//	TEST_ASSERT_FALSE(ENABLED_OPT(AUTHENTICATION));
+-
+-	l_fp tmp;
+-	tmp.l_ui = 1000UL;
+-	tmp.l_uf = 0UL;
+-	HTONL_FP(&tmp, &testpkt.org);
+-
+-	tmp.l_ui = 2000UL;
+-	tmp.l_uf = 0UL;
+-	HTONL_FP(&tmp, &testspkt.xmt);
+-
+-	TEST_ASSERT_EQUAL(PACKET_UNUSEABLE,
+-			  process_pkt(&testpkt, &testsock, LEN_PKT_NOMAC,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-
+-TEST(packetProcessing, AcceptNoSentPacketBroadcastMode) {
+-//	TEST_ASSERT_FALSE(ENABLED_OPT(AUTHENTICATION));
+-
+-	testpkt.li_vn_mode = PKT_LI_VN_MODE(LEAP_NOWARNING,
+-					    NTP_VERSION,
+-					    MODE_BROADCAST);
+-
+-	TEST_ASSERT_EQUAL(LEN_PKT_NOMAC,
+-		  process_pkt(&testpkt, &testsock, LEN_PKT_NOMAC,
+-			      MODE_BROADCAST, NULL, "UnitTest", true));
+-}
+-
+-TEST(packetProcessing, CorrectUnauthenticatedPacket) {
+-//	TEST_ASSERT_FALSE(ENABLED_OPT(AUTHENTICATION));
+-
+-	TEST_ASSERT_EQUAL(LEN_PKT_NOMAC,
+-			  process_pkt(&testpkt, &testsock, LEN_PKT_NOMAC,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-
+-/*
+-TEST(packetProcessing, CorrectAuthenticatedPacketMD5) {
+-	PrepareAuthenticationTest(10, 15, "123456789abcdef");
+-	TEST_ASSERT_TRUE(ENABLED_OPT(AUTHENTICATION));
+-
+-	int pkt_len = LEN_PKT_NOMAC;
+-
+-	// Prepare the packet.
+-	testpkt.exten[0] = htonl(10);
+-	int mac_len = make_mac((char*)&testpkt, pkt_len,
+-						   MAX_MD5_LEN, key_ptr,
+-						   (char*)&testpkt.exten[1]);
+-
+-	pkt_len += 4 + mac_len;
+-
+-	TEST_ASSERT_EQUAL(pkt_len,
+-			  process_pkt(&testpkt, &testsock, pkt_len,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-
+-}
+-
+-TEST(packetProcessing, CorrectAuthenticatedPacketSHA1) {
+-	PrepareAuthenticationTest(20, 15, "SHA1", "abcdefghijklmno");
+-	TEST_ASSERT_TRUE(ENABLED_OPT(AUTHENTICATION));
+-
+-	int pkt_len = LEN_PKT_NOMAC;
+-
+-	// Prepare the packet.
+-	testpkt.exten[0] = htonl(20);
+-	int mac_len = make_mac((char*)&testpkt, pkt_len,
+-						   MAX_MAC_LEN, key_ptr,
+-						   (char*)&testpkt.exten[1]);
+-
+-	pkt_len += 4 + mac_len;
+-
+-	TEST_ASSERT_EQUAL(pkt_len,
+-			  process_pkt(&testpkt, &testsock, pkt_len,
+-						  MODE_SERVER, &testspkt, "UnitTest", true));
+-}
+-*/
+-
+-TEST_GROUP_RUNNER(packetProcessing) {
+-	RUN_TEST_CASE(packetProcessing, TooShortLength);
+-	RUN_TEST_CASE(packetProcessing, LengthNotMultipleOfFour);
+-	RUN_TEST_CASE(packetProcessing, TooShortExtensionFieldLength);
+-
+-//	Need to inject opt_authkey in ntpdig/main.c
+-//	RUN_TEST_CASE(packetProcessing, UnauthenticatedPacketReject);
+-//	RUN_TEST_CASE(packetProcessing, CryptoNAKPacketReject);
+-//	RUN_TEST_CASE(packetProcessing, AuthenticatedPacketInvalid);
+-//	RUN_TEST_CASE(packetProcessing, AuthenticatedPacketUnknownKey);
+-
+-/*
+-These tests are failing with SERVER_UNUSEABLE (-1) != SERVER_AUTH_FAIL (-3)
+-
+-	RUN_TEST_CASE(packetProcessing, ServerVersionTooOld);
+-	RUN_TEST_CASE(packetProcessing, ServerVersionTooNew);
+-	RUN_TEST_CASE(packetProcessing, NonWantedMode);
+-	RUN_TEST_CASE(packetProcessing, KoDRate);
+-	RUN_TEST_CASE(packetProcessing, KoDDeny);
+-	RUN_TEST_CASE(packetProcessing, RejectUnsyncedServer);
+-	RUN_TEST_CASE(packetProcessing, RejectWrongResponseServerMode);
+-	RUN_TEST_CASE(packetProcessing, AcceptNoSentPacketBroadcastMode);
+-	RUN_TEST_CASE(packetProcessing, CorrectUnauthenticatedPacket);
+-*/
+-
+-//	Need to inject opt_authkey in ntpdig/main.c
+-//	RUN_TEST_CASE(packetProcessing, CorrectAuthenticatedPacketMD5);
+-//	RUN_TEST_CASE(packetProcessing, CorrectAuthenticatedPacketSHA1);
+-}
+diff --git a/tests/ntpdig/utilities.c b/tests/ntpdig/utilities.c
+deleted file mode 100644
+index 131ccd8..0000000
+--- a/tests/ntpdig/utilities.c
++++ /dev/null
+@@ -1,202 +0,0 @@
+-#include "unity.h"
+-#include "unity_fixture.h"
+-
+-TEST_GROUP(utilities);
+-
+-TEST_SETUP(utilities) {}
+-
+-TEST_TEAR_DOWN(utilities) {}
+-
+-#include "ntpdigtest.h"
+-#include "file_handling.h"
+-
+-#include "main.h"
+-#include "utilities.h"
+-
+-#include "sockaddrtest.h"
+-
+-const char * Version = "stub unit test Version string";
+-
+-
+-struct addrinfo CreateAddrinfo(sockaddr_u* sock) {
+-	struct addrinfo a;
+-	memset(&a, '\0', sizeof(struct addrinfo));
+-	a.ai_family = sock->sa.sa_family;
+-	a.ai_addrlen = SIZEOF_SOCKADDR(a.ai_family);
+-	a.ai_addr = &sock->sa;
+-	return a;
+-}
+-
+-
+-bool outputFileOpened;
+-FILE* outputFile;
+-
+-//	debugUtilitiesTest() : outputFileOpened(false) {}
+-
+-void InitDebugTest(const char *filename) {
+-	// Clear the contents of the current file.
+-	// Open the output file
+-	outputFile = fopen(filename, "w+");
+-	TEST_ASSERT_TRUE(outputFile != NULL);
+-	outputFileOpened = true;
+-}
+-
+-// Closes outputFile, and compare contents.
+-void FinishDebugTest(const char *expected,
+-					 const char *actual) {
+-	FILE* fp_a;
+-	FILE* fp_e;
+-
+-	if (outputFileOpened) {
+-		fclose(outputFile);
+-	}
+-
+-	fp_a = fopen(actual, "rb");
+-	fp_e = fopen(expected, "rb");
+-
+-	if (fp_a != NULL && fp_e != NULL)
+-	    CompareFileContent(fp_e, fp_a);
+-	else
+-	    fprintf(stderr,
+-		    "FinishDebugTest: file pointer unexpectedly null.\n");
+-
+-	if (fp_a)
+-	    fclose(fp_a);
+-	if (fp_e)
+-	    fclose(fp_e);
+-
+-	free((void*) expected);
+-	free((void*) actual);
+-}
+-
+-
+-/*
+- * These tests are essentially a copy of the tests for socktoa()
+- * in libntp. If ntpdig switches to using that functions, these
+- * tests can be removed.
+- */
+-
+-TEST(utilities, IPv4Address) {
+-	const char* ADDR = "192.0.2.10";
+-
+-	sockaddr_u input = CreateSockaddr4(ADDR, 123);
+-	struct addrinfo inputA = CreateAddrinfo(&input);
+-
+-	/* coverity[leaked_storage] */
+-	TEST_ASSERT_EQUAL_STRING(ADDR, ss_to_str(&input));
+-	/* coverity[leaked_storage] */
+-	TEST_ASSERT_EQUAL_STRING(ADDR, addrinfo_to_str(&inputA));
+-	/* coverity[leaked_storage] */
+-}
+-
+-TEST(utilities, IPv6Address) {
+-	const struct in6_addr address = {{{
+-						0x20, 0x01, 0x0d, 0xb8,
+-						0x85, 0xa3, 0x08, 0xd3,
+-						0x13, 0x19, 0x8a, 0x2e,
+-						0x03, 0x70, 0x73, 0x34
+-					}}};
+-	const char *expected = "2001:db8:85a3:8d3:1319:8a2e:370:7334";
+-	sockaddr_u	input;
+-	struct addrinfo	inputA;
+-
+-	memset(&input, 0, sizeof(input));
+-	input.sa6.sin6_family = AF_INET6;
+-	input.sa6.sin6_addr = address;
+-	/* coverity[leaked_storage] */
+-	TEST_ASSERT_EQUAL_STRING(expected, ss_to_str(&input));
+-
+-	inputA = CreateAddrinfo(&input);
+-	/* coverity[leaked_storage] */
+-TEST_ASSERT_EQUAL_STRING(expected, addrinfo_to_str(&inputA));
+-}
+-
+-TEST(utilities, SetLiVnMode1) {
+-	struct pkt expected;
+-	expected.li_vn_mode = PKT_LI_VN_MODE(LEAP_NOWARNING,
+-					     NTP_VERSION,
+-					     MODE_SERVER);
+-
+-	struct pkt actual;
+-	set_li_vn_mode(&actual, LEAP_NOWARNING, NTP_VERSION,
+-				   MODE_SERVER);
+-
+-	TEST_ASSERT_EQUAL(expected.li_vn_mode, actual.li_vn_mode);
+-}
+-
+-TEST(utilities, SetLiVnMode2) {
+-	struct pkt expected;
+-	expected.li_vn_mode = PKT_LI_VN_MODE(LEAP_NOTINSYNC,
+-										 NTP_OLDVERSION,
+-										 MODE_BROADCAST);
+-
+-	struct pkt actual;
+-	set_li_vn_mode(&actual, LEAP_NOTINSYNC, NTP_OLDVERSION,
+-				   MODE_BROADCAST);
+-
+-	TEST_ASSERT_EQUAL(expected.li_vn_mode, actual.li_vn_mode);
+-}
+-
+-/* Debug utilities tests */
+-
+-TEST(utilities, DebugPktOutput) {
+-	const char *filename = CreatePath("debug-output-pkt", OUTPUT_DIR);
+-	InitDebugTest(filename);
+-
+-	struct pkt testpkt;
+-	memset(&testpkt, 0, sizeof(struct pkt));
+-	testpkt.li_vn_mode = PKT_LI_VN_MODE(LEAP_NOWARNING,
+-										NTP_VERSION,
+-										MODE_SERVER);
+-
+-	l_fp test;
+-	test.l_ui = 8;
+-	test.l_uf = 2147483647; // Lots of ones.
+-	HTONL_FP(&test, &testpkt.xmt);
+-
+-	pkt_output(&testpkt, LEN_PKT_NOMAC, true, outputFile);
+-
+-	FinishDebugTest(CreatePath("debug-input-pkt", INPUT_DIR), filename);
+-}
+-
+-TEST(utilities, DebugLfpOutputBinaryFormat) {
+-	const char *filename = CreatePath("debug-output-lfp-bin", OUTPUT_DIR);
+-	InitDebugTest(filename);
+-
+-	l_fp test;
+-	test.l_ui = 63;  // 00000000 00000000 00000000 00111111
+-	test.l_uf = 127; // 00000000 00000000 00000000 01111111
+-
+-	l_fp network;
+-	HTONL_FP(&test, &network);
+-
+-	l_fp_output_bin(&network, outputFile);
+-
+-	FinishDebugTest(CreatePath("debug-input-lfp-bin", INPUT_DIR), filename);
+-}
+-
+-TEST(utilities, DebugLfpOutputDecimalFormat) {
+-	const char *filename = CreatePath("debug-output-lfp-dec", OUTPUT_DIR);
+-	InitDebugTest(filename);
+-
+-	l_fp test;
+-	test.l_ui = 6310; // 0x000018A6
+-	test.l_uf = 308502; // 0x00004B516
+-
+-	l_fp network;
+-	HTONL_FP(&test, &network);
+-
+-	l_fp_output_dec(&network, outputFile);
+-
+-	FinishDebugTest(CreatePath("debug-input-lfp-dec", INPUT_DIR), filename);
+-}
+-
+-TEST_GROUP_RUNNER(utilities) {
+-	RUN_TEST_CASE(utilities, IPv4Address);
+-	RUN_TEST_CASE(utilities, IPv6Address);
+-	RUN_TEST_CASE(utilities, SetLiVnMode1);
+-	RUN_TEST_CASE(utilities, SetLiVnMode2);
+-	RUN_TEST_CASE(utilities, DebugPktOutput);
+-	RUN_TEST_CASE(utilities, DebugLfpOutputBinaryFormat);
+-	RUN_TEST_CASE(utilities, DebugLfpOutputDecimalFormat);
+-}
+diff --git a/tests/wscript b/tests/wscript
+index c6af4e5..fe3e642 100644
+--- a/tests/wscript
++++ b/tests/wscript
+@@ -25,33 +25,6 @@ def build(ctx):
+ 		"common/file_handling.c"
+ 	]
+ 
+-	ntpdig_source = [
+-		"ntpdig/crypto.c",
+-		"ntpdig/key_file.c",
+-		"ntpdig/kod_database.c",
+-		"ntpdig/kod_file.c",
+-		"ntpdig/packet_handling.c",
+-		"ntpdig/packet_processing.c",
+-		"ntpdig/utilities.c",
+-	] + common_source
+-
+-	# ntpdig/
+-	if ctx.env.LIBEVENT2_ENABLE:
+-		ctx.ntp_test(
+-			features	= "c cprogram bld_include src_include libisc_include test",
+-	        	target		= "test_ntpdig",
+-			install_path	= None,
+-			defines		= unity_config + ["TEST_NTPDIG=1"],
+-			includes	= [
+-						"%s/tests/unity/" % srcnode,
+-						"%s/tests/common/" % srcnode,
+-						"%s/ntpdig/" % srcnode
+-			],
+-			use		= "unity ntpdig_obj ntp",
+-	        	source		= ntpdig_source,
+-			test_args	= ["%s/tests/ntpdig/data/" % srcnode, "%s/tests/ntpdig/" % bldnode]
+-		)
+-
+ 	# libntp/
+ 	libntp_source = [
+ 		"libntp/a_md5encrypt.c",
+diff --git a/wafhelpers/configure.py b/wafhelpers/configure.py
+index 4968dd1..cb28567 100644
+--- a/wafhelpers/configure.py
++++ b/wafhelpers/configure.py
+@@ -490,9 +490,6 @@ def cmd_configure(ctx, config):
+         from wafhelpers.check_seccomp import check_seccomp
+         check_seccomp(ctx)
+ 
+-        from wafhelpers.check_libevent2 import check_libevent2_header
+-        check_libevent2_header(ctx)
+-
+         from wafhelpers.check_pthread import check_pthread_header_lib
+         check_pthread_header_lib(ctx)
+ 
+@@ -500,10 +497,6 @@ def cmd_configure(ctx, config):
+                 from wafhelpers.check_mdns import check_mdns_header
+                 check_mdns_header(ctx)
+ 
+-        # Run checks
+-        from wafhelpers.check_libevent2 import check_libevent2_run
+-        check_libevent2_run(ctx)
+-
+         if not ctx.options.disable_dns_retry:
+             from wafhelpers.check_pthread import check_pthread_run
+             check_pthread_run(ctx)
+diff --git a/wscript b/wscript
+index 7197635..64bf896 100644
+--- a/wscript
++++ b/wscript
+@@ -142,6 +142,7 @@ python_scripts = [
+         "ntpwait/ntpwait",
+         "ntpsweep/ntpsweep",
+         "ntpkeygen/ntpkeygen",
++        "ntpdig/ntpdig",
+ ]
+ 
+ def build(ctx):
+@@ -173,8 +174,6 @@ def build(ctx):
+         if ctx.env.REFCLOCK_GENERIC: # Only required by the generic refclock
+                 ctx.recurse("libparse")
+         ctx.recurse("libntp")
+-        if ctx.env.LIBEVENT2_ENABLE:
+-                ctx.recurse("ntpdig")
+         ctx.recurse("libsodium")
+         ctx.recurse("ntpd")
+         ctx.recurse("ntpfrob")
+-- 
+2.7.4
+

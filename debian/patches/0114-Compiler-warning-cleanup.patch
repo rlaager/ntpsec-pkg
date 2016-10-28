@@ -1,0 +1,49 @@
+From ecd8ad163606162664756efb33231570c02555dd Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Thu, 1 Dec 2016 23:44:54 -0500
+Subject: [PATCH 114/268] Compiler warning cleanup
+
+warning: passing 'const char [11]' to parameter of type 'char *' discards qualifiers [-Wincompatible-pointer-types-discards-qualifiers]
+---
+ tests/libntp/refidsmear.c | 4 ++--
+ tests/ntpd/restrict.c     | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/tests/libntp/refidsmear.c b/tests/libntp/refidsmear.c
+index 5dc477c..66b9809 100644
+--- a/tests/libntp/refidsmear.c
++++ b/tests/libntp/refidsmear.c
+@@ -33,7 +33,7 @@ TEST_TEAR_DOWN(refidsmear) {}
+  */
+ 
+ static void
+-rtol(uint32_t r, char *es)
++rtol(uint32_t r, const char *es)
+ {
+ 	l_fp l;
+ 	char *as;
+@@ -55,7 +55,7 @@ rtol(uint32_t r, char *es)
+ }
+ 
+ static void
+-rtoltor(uint32_t er, char *es)
++rtoltor(uint32_t er, const char *es)
+ {
+ 	l_fp l;
+ 	char *as;
+diff --git a/tests/ntpd/restrict.c b/tests/ntpd/restrict.c
+index 6ba7317..766d39e 100644
+--- a/tests/ntpd/restrict.c
++++ b/tests/ntpd/restrict.c
+@@ -9,7 +9,7 @@
+ /* Helper functions */
+ 
+ static sockaddr_u
+-create_sockaddr_u(unsigned short sin_port, char* ip_addr)
++create_sockaddr_u(unsigned short sin_port, const char* ip_addr)
+ {
+ 	sockaddr_u sockaddr;
+ 
+-- 
+2.7.4
+

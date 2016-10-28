@@ -1,0 +1,36 @@
+From af37667fc8137b1315669b4aa1b0d20d3fee3fd6 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Thu, 8 Dec 2016 23:30:40 -0500
+Subject: [PATCH 237/268] Give a hint about why module import failed in ntpmon,
+ like we do for ntpq and ntpviz
+
+---
+ ntpclients/ntpmon | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/ntpclients/ntpmon b/ntpclients/ntpmon
+index 38a099b..da6b669 100755
+--- a/ntpclients/ntpmon
++++ b/ntpclients/ntpmon
+@@ -14,14 +14,16 @@ try:
+     import ntp.version
+     import ntp.control
+     import ntp.magic
+-except ImportError:
++except ImportError as e:
+     sys.stderr.write("ntpmon: can't find Python NTP library -- check PYTHONPATH.\n")
++    sys.stderr.write("%s\n" % e)
+     sys.exit(1)
+ 
+ try:
+     import curses
+-except ImportError:
++except ImportError as e:
+     sys.stderr.write("ntpmon: can't find Python curses library -- check PYTHONPATH.\n")
++    sys.stderr.write("%s\n" % e)
+     sys.exit(1)
+ 
+ stdscr = None
+-- 
+2.7.4
+

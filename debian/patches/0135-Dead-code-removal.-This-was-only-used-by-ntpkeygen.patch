@@ -1,0 +1,52 @@
+From 2468f88487d90ee4a31f1c47785b31b5c1eda82d Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sat, 3 Dec 2016 00:37:35 -0500
+Subject: [PATCH 135/268] Dead-code removal.  This was only used by ntpkeygen.
+
+---
+ include/ntp_stdlib.h |  1 -
+ libntp/ssl_init.c    | 16 ----------------
+ 2 files changed, 17 deletions(-)
+
+diff --git a/include/ntp_stdlib.h b/include/ntp_stdlib.h
+index 77cb0c5..b7df51f 100644
+--- a/include/ntp_stdlib.h
++++ b/include/ntp_stdlib.h
+@@ -206,7 +206,6 @@ extern pset_tod_using	set_tod_using;
+ /* ssl_init.c */
+ #ifdef HAVE_OPENSSL
+ extern	void	ssl_init		(void);
+-extern	void	ssl_check_version	(void);
+ extern	bool	ssl_init_done;
+ #define	INIT_SSL()				\
+ 	do {					\
+diff --git a/libntp/ssl_init.c b/libntp/ssl_init.c
+index 8402e00..05afc9c 100644
+--- a/libntp/ssl_init.c
++++ b/libntp/ssl_init.c
+@@ -47,22 +47,6 @@ atexit_ssl_cleanup(void)
+ 	EVP_cleanup();
+ 	ERR_free_strings();
+ }
+-
+-
+-void
+-ssl_check_version(void)
+-{
+-	if ((SSLeay() ^ OPENSSL_VERSION_NUMBER) & ~0xff0L) {
+-		msyslog(LOG_WARNING,
+-		    "OpenSSL version mismatch. Built against %lx, you have %lx",
+-		    (u_long)OPENSSL_VERSION_NUMBER, SSLeay());
+-		fprintf(stderr,
+-		    "OpenSSL version mismatch. Built against %lx, you have %lx\n",
+-		    (u_long)OPENSSL_VERSION_NUMBER, SSLeay());
+-	}
+-
+-	INIT_SSL();
+-}
+ #endif	/* HAVE_OPENSSL */
+ 
+ 
+-- 
+2.7.4
+

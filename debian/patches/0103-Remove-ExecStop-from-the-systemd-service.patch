@@ -1,0 +1,32 @@
+From e79465166eaa02c08db1c88d88544bd9f23a4166 Mon Sep 17 00:00:00 2001
+From: Mike Swanson <mikeonthecomputer@gmail.com>
+Date: Thu, 1 Dec 2016 13:35:52 -0800
+Subject: [PATCH 103/268] =?UTF-8?q?Remove=20=E2=80=98ExecStop=E2=80=99=20f?=
+ =?UTF-8?q?rom=20the=20systemd=20service.?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Running killall is entirely unnecessary.  In the absense of an ExecStop
+line, systemd itself will happily send a SIGTERM to all the processes
+started by the service.  If there are any use-cases that somebody may
+run multiple instances of ntpd, this won’t mess those up either.
+---
+ etc/ntpd.service | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/etc/ntpd.service b/etc/ntpd.service
+index ee8a838..2ccecc4 100644
+--- a/etc/ntpd.service
++++ b/etc/ntpd.service
+@@ -7,7 +7,6 @@ Conflicts=systemd-timesyncd.service
+ Type=forking
+ PrivateTmp=true
+ ExecStart=/usr/bin/ntpd -g -u ntp:ntp
+-ExecStop=killall /usr/sbin/ntpd
+ Restart=always
+ RemainAfterExit=yes
+ 
+-- 
+2.7.4
+

@@ -1,0 +1,63 @@
+From 2ab0e14adf3106208cf101dc0ef476cdb18685e5 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Fri, 2 Dec 2016 01:43:18 -0500
+Subject: [PATCH 102/268] Do exact matches for help commands before searching
+ for partial matches
+
+Fixes GitLab issue #182
+---
+ ntpq/ntpq | 32 +++++++++++++++++---------------
+ 1 file changed, 17 insertions(+), 15 deletions(-)
+
+diff --git a/ntpq/ntpq b/ntpq/ntpq
+index 8004cbb..76fad4b 100755
+--- a/ntpq/ntpq
++++ b/ntpq/ntpq
+@@ -198,27 +198,29 @@ class Ntpq(cmd.Cmd):
+ 
+         if cmd == "help" and arg:
+             helptext = 'help_'+arg
+-            argprefixlist = [a[5:] for a in self.get_names() if a.startswith(helptext)]
+-            if len(argprefixlist) == 1:
+-                line = line.replace(arg, argprefixlist.pop())
+-            elif len(argprefixlist) > 1:
+-                self.warn("Command `%s' is ambiguous\n" % arg)
+-                return
+-            elif len(argprefixlist) == 0:
+-                self.warn("Command `%s' is unknown\n" % arg)
+-                return
++            if helptext not in self.get_names():
++                argprefixlist = [a[5:] for a in self.get_names() if a.startswith(helptext)]
++                if len(argprefixlist) == 1:
++                    line = line.replace(arg, argprefixlist.pop())
++                elif len(argprefixlist) > 1:
++                    self.warn("Command `%s' is ambiguous\n" % arg)
++                    return
++                elif len(argprefixlist) == 0:
++                    self.warn("Command `%s' is unknown\n" % arg)
++                    return
+ 
+         self.onecmd(line)
+ 
+     def do_help(self, arg):
+         if arg:
+             helptext = 'help_'+arg
+-            argprefixlist = [a[5:] for a in self.get_names() if a.startswith(helptext)]
+-            if len(argprefixlist) == 1:
+-                arg = argprefixlist.pop()
+-            elif len(argprefixlist) > 1:
+-                self.warn("Command `%s' is ambiguous\n" % arg)
+-                return
++            if helptext not in self.get_names():
++                argprefixlist = [a[5:] for a in self.get_names() if a.startswith(helptext)]
++                if len(argprefixlist) == 1:
++                    arg = argprefixlist.pop()
++                elif len(argprefixlist) > 1:
++                    self.warn("Command `%s' is ambiguous\n" % arg)
++                    return
+         cmd.Cmd.do_help(self, arg)
+ 
+     def say(self, msg):
+-- 
+2.7.4
+

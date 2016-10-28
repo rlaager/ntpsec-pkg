@@ -1,0 +1,83 @@
+#!/bin/sh
+# Repack an upstream tarball, unpacking waf files inside it.
+#
+# Meant to be run by uscan(1) as the "command param", after repacking
+# (if any) by mk-origtargz. So you shouldn't give "repacksuffix" to
+# debian/watch; instead you should set it below; however this should
+# still match the dversionmangle in that file.
+#
+# Notes from Richard Laager <rlaager@wiktel.com>:
+#
+# On 11/27/2016 08:28 PM, Ximin Luo wrote:
+# > Richard Laager:
+# >> > I believe you wrote the repack-waf script linked from here:
+# >> > https://wiki.debian.org/UnpackWaf
+# >> > 
+# >> > What is the license on that?
+# >> > 
+# > Hi Richard, I don't think that is even copyrightable, but in case it is,
+# > I say it's CC0-Licensed. Enjoy!
+# > 
+# > X
+#
+# This version of repack-waf has been modified to call waf using python3.
+# If we use python here (explicitly or implicitly) when python is python2.7,
+# we end up with a version of waf that raises SyntaxError on python3. If we
+# use python3 here, the result runs in both Python 3 and Python 2.7.
+#
+# Also, this version detects whether the upstream tarball extracts 1) into
+# a PACKAGE-VERSION directory, 2) a PACKAGE directory, or 3) the current
+# directory.  It normalizes that to PACKAGE-VERSION when repacking.
+
+repacksuffix="+dfsg1"
+unwaf_paths=.
+
+# You shouldn't need to change anything below here.
+
+USAGE="Usage: $0 --upstream-version version filename"
+
+test "$1" = "--upstream-version" || { echo >&2 "$USAGE"; exit 2; }
+upstream="$2"
+filename="$3"
+
+source="$(dpkg-parsechangelog -SSource)"
+newups="${upstream}${repacksuffix}"
+basedir="$(dirname "$filename")"
+
+unpack_waf() {
+	local olddir="$PWD"
+	cd "$1"
+	test -x ./waf || return 1
+	python3 waf --help > /dev/null
+	mv .waf3-*/* .
+	sed -i '/^#==>$/,$d' waf
+	rmdir .waf3-*
+	find waf* -name "*.pyc" -delete
+	cd "$olddir"
+}
+
+set -e
+
+rm -rf "${source}-${upstream}"
+mkdir "${source}-${upstream}"
+tar -xzf "$basedir/${source}_${upstream}.orig.tar.gz" -C "${source}-${upstream}"
+cd "${source}-${upstream}"
+subdir=
+if [ -d "${source}-${upstream}" ]; then
+	subdir="${source}-${upstream}"
+elif [ -d "${source}" ]; then
+	subdir="${source}"
+fi
+if [ -n "${subdir}" ]; then
+	cd ..
+	mv "${source}-${upstream}" "${source}-${upstream}-tmp"
+	mv "${source}-${upstream}-tmp/${subdir}" "${source}-${upstream}"
+	rmdir "${source}-${upstream}-tmp"
+	cd "${source}-${upstream}"
+fi
+
+for i in $unwaf_paths; do unpack_waf "$i"; done
+cd ..
+mv "${source}-${upstream}" "${source}-${newups}"
+GZIP="-9fn" tar -czf "$basedir/${source}_${newups}.orig.tar.gz" "${source}-${newups}"
+rm -rf "${source}-${newups}"

@@ -1,0 +1,53 @@
+From 82220634479a5356533b41e597b8525220e88c94 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sun, 27 Nov 2016 05:38:24 -0500
+Subject: [PATCH 039/268] In pyntpdig, make repr() for packets work.
+
+---
+ pylib/packet.py | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 082c82d..043e24f 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -180,9 +180,10 @@ A Mode 6 packet cannot have extension fields.
+ """
+ # SPDX-License-Identifier: BSD-2-clause
+ from __future__ import print_function, division
+-import sys, socket, select, struct, collections
++import sys, socket, select, struct, collections, string
+ import getpass, hashlib, time
+ from ntp.ntpc import lfptofloat
++import ntp.util
+ 
+ # General notes on Python 2/3 compatibility:
+ #
+@@ -478,7 +479,7 @@ class SyncPacket(Packet):
+ 
+     def refid_as_string(self):
+         "Sometimes it's a clock name or KOD type"
+-        return polystr(struct.pack("BBBB" % self.refid_octets()))
++        return polystr(struct.pack(*(("BBBB",) + self.refid_octets())))
+ 
+     def refid_as_address(self):
+         "Sometimes it's an IPV4 address."
+@@ -495,11 +496,11 @@ class SyncPacket(Packet):
+ 
+     def __repr__(self):
+         "Represent a posixized sync packet in an eyeball-friendly format."
+-        r = "<NTP:%s:%d%:%d" % (self.leap(), self.version(), self.mode())
+-        r += "%f:%f:" % (self.root_delay, self.root_dispersion)
++        r = "<NTP:%s:%d:%d" % (self.leap(), self.version(), self.mode())
++        r += "%f:%f" % (self.root_delay, self.root_dispersion)
+         rs = self.refid_as_string()
+-        if not rs.isprint():
+-            rd = self.refid_as_address()
++        if not all(c in string.printable for c in rs):
++            rs = self.refid_as_address()
+         r += ":" + rs 
+         r += ":" + ntp.util.rfc3339(SyncPacket.ntp_to_posix(self.reference_timestamp))
+         r += ":" + ntp.util.rfc3339(SyncPacket.ntp_to_posix(self.origin_timestamp))
+-- 
+2.7.4
+

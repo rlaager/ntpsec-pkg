@@ -1,0 +1,25 @@
+From 143c3fae8ea87420069a09e60c4e7334b28cd845 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Thu, 1 Dec 2016 22:33:34 -0500
+Subject: [PATCH 108/268] Typo in comment
+
+---
+ pylib/statfiles.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pylib/statfiles.py b/pylib/statfiles.py
+index 865385c..439de2f 100644
+--- a/pylib/statfiles.py
++++ b/pylib/statfiles.py
+@@ -208,7 +208,7 @@ def iso_to_posix(s):
+     else:
+         t = time.strptime(s, "%Y-%m-%dT%H:%M:%S")
+         t.m_isdst = 0
+-        # don't use time.mktime() as taht is local tz
++        # don't use time.mktime() as that is local tz
+         return  calendar.timegm(t)
+ 
+ def posix_to_iso(t):
+-- 
+2.7.4
+

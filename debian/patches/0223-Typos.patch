@@ -1,0 +1,31 @@
+From a7fed66fb5589cece0ada542d9f0de30bb5c61c4 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Thu, 8 Dec 2016 00:42:45 -0500
+Subject: [PATCH 223/268] Typos
+
+---
+ docs/includes/ntpmon-body.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/docs/includes/ntpmon-body.txt b/docs/includes/ntpmon-body.txt
+index ac4a4b9..c51e698 100644
+--- a/docs/includes/ntpmon-body.txt
++++ b/docs/includes/ntpmon-body.txt
+@@ -9,12 +9,12 @@
+ == Description ==
+ 
+ This program is a real-time status monitor for NTP.  It presents the
+-same informartion as the 'peers' and 'mrulist' commands of {ntpqman},
++same information as the 'peers' and 'mrulist' commands of {ntpqman},
+ but using a split-window display that also includes a status summary
+ bar, and updates at intervals guaranteed to show status changes as
+ soon as they occur.
+ 
+-(Specifically, the display begins updating once per seconds and
++(Specifically, the display begins updating once per second and
+ adjusts itself to poll at twice the frequency of the shortest
+ polling interval reported in the last peers response.)
+ 
+-- 
+2.7.4
+

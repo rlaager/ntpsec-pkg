@@ -1,0 +1,33 @@
+Description: Document disabled refclocks
+ The Debian package disables refclocks which were already deprecated when the
+ package was initially created.
+ 
+ Also, the modem refclock is disabled. It "requires a Hayes-compatible 1200bps
+ modem, hardware now 20 years obsolete".
+ 
+ See also the configure-stamp target in debian/rules.
+Forwarded: not-needed
+Origin: vendor
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2016-11-29
+--- a/docs/refclock.txt
++++ b/docs/refclock.txt
+@@ -169,7 +168,7 @@
+ |link:driver_generic.html[generic]      | T | Generic Reference Driver (Parse)
+ |link:driver_magnavox.html[magnavox]    | D | MX4200 and compatible GPS receivers
+ |link:driver_arbiter.html[arbiter]      | - | Arbiter 1088A/B GPS Receiver
+-|link:driver_modem.html[modem]          | - | NIST/USNO/PTB Modem Time Services
++|link:driver_modem.html[modem]          | d | NIST/USNO/PTB Modem Time Services
+ |link:driver_nmea.html[nmea]            | T | Generic NMEA GPS Receiver
+ |link:driver_pps.html[pps]              | T | PPS Clock Discipline
+ |link:driver_hpgps.html[hpgps]          | T | Hewlett Packard GPS Receivers
+@@ -192,7 +191,8 @@
+ [cols="5%,95%",options="header"]
+ |====================================================================
+ |Flag| Meaning
+-| D | Deprecated.  May be removed in a future release
++| D | Deprecated upstream and disabled in the Debian package
++| d | Disabled in the Debian package.
+ | T | Regularly tested by an active maintainer (some devices/modes)
+ |====================================================================
+ 

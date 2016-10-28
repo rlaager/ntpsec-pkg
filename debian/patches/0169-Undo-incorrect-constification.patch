@@ -1,0 +1,25 @@
+From 66ad001ed60d5e9edccf46f60fde63197f939567 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sun, 4 Dec 2016 10:28:43 -0500
+Subject: [PATCH 169/268] Undo incorrect constification.
+
+---
+ ntpd/refclock_jjy.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ntpd/refclock_jjy.c b/ntpd/refclock_jjy.c
+index a67e1d1..7a40e40 100644
+--- a/ntpd/refclock_jjy.c
++++ b/ntpd/refclock_jjy.c
+@@ -4046,7 +4046,7 @@ static int
+ modem_init_resp00 ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
+ {
+ 
+-	const char	*pCmd, cBuf [ 46 ] ;
++	char	*pCmd, cBuf [ 46 ] ;
+ 	int	iCmdLen ;
+ 	int	iErrorCorrection, iSpeakerSwitch, iSpeakerVolume ;
+ 	int	iNextModemState = STAY_MODEM_STATE ;
+-- 
+2.7.4
+

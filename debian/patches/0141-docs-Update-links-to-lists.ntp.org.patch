@@ -1,0 +1,44 @@
+From 9ad56747efbbbd596c4cafce6687b8d01e8551bb Mon Sep 17 00:00:00 2001
+From: Chris Mayo <aklhfex@gmail.com>
+Date: Sat, 3 Dec 2016 14:34:55 +0000
+Subject: [PATCH 141/268] docs: Update links to lists.ntp.org
+
+---
+ docs/driver_trimble.txt | 4 ++--
+ docs/ntpspeak.txt       | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/docs/driver_trimble.txt b/docs/driver_trimble.txt
+index 36375a9..1ee8045 100644
+--- a/docs/driver_trimble.txt
++++ b/docs/driver_trimble.txt
+@@ -509,11 +509,11 @@ We tried to contact Trimble because there's presumably a firmware update
+ that support it, but we didn't have much luck. Here is a link explaining
+ the situation:*
+ 
+-*link:http://lists.ntp.isc.org/pipermail/hackers/2006-April/002216.html[]*
++*link:https://lists.ntp.org/pipermail/hackers/2006-April/002216.html[]*
+ 
+ == Authors ==
+ 
+-link:http://lists.ntp.isc.org/pipermail/hackers/2006-April/002216.html[*Questions or Comments:*]
++link:https://lists.ntp.org/pipermail/hackers/2006-April/002216.html[*Questions or Comments:*]
+ 
+ mailto:sven_dietrich@trimble.com[*Sven Dietrich*]
+ 
+diff --git a/docs/ntpspeak.txt b/docs/ntpspeak.txt
+index aa2b37d..165f891 100644
+--- a/docs/ntpspeak.txt
++++ b/docs/ntpspeak.txt
+@@ -132,7 +132,7 @@
+    connoisseurs refer to as "Mills-speak"; examples in this glossary
+    include <<falseticker>>, <<proventic>>, and <<truechimer>>.  The
+    close-to-definitive reference is
+-   http://lists.ntp.org/pipermail/questions/2007-December/016592.html[The
++   https://lists.ntp.org/pipermail/questions/2007-December/016592.html[The
+    NTP dictionary], though not all those terms are still in use.
+ 
+ [[mode 6]] mode 6::
+-- 
+2.7.4
+

@@ -1,0 +1,760 @@
+Description: Hardcode python3 path
+ There is no need to use /usr/bin/env, as we know what the path is on Debian.
+ 
+ Also, we want to force the use of python3 even while the default is python2.
+Forwarded: not-needed
+Origin: vendor
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2016-11-29
+--- a/attic/calc_tickadj/calc_tickadj
++++ b/attic/calc_tickadj/calc_tickadj
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ #
+ # drift of 104.8576 -> +1 tick.  Base  of 10000 ticks.
+ #
+--- a/contrib/cpu-temp-log
++++ b/contrib/cpu-temp-log
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # coding: utf-8
+ """\
+ Usage: cpu-temper-log
+--- a/contrib/gps-log
++++ b/contrib/gps-log
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # coding: utf-8
+ 
+ from __future__ import print_function
+--- a/contrib/pi-temp-log
++++ b/contrib/pi-temp-log
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # coding: utf-8
+ """\
+ Usage: zone-temper-log
+--- a/contrib/smartctl-temp-log
++++ b/contrib/smartctl-temp-log
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # coding: utf-8
+ """\
+ Usage: smartctl-temper-log [device]
+--- a/contrib/temper-temp-log
++++ b/contrib/temper-temp-log
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # coding: utf-8
+ """\
+ Usage: temper-temper-log
+--- a/ntpq/ntpq
++++ b/ntpq/ntpq
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ #
+ # ntpq - query an NTP server using mode 6 commands
+ #
+--- a/ntpstats/ntpviz
++++ b/ntpstats/ntpviz
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # coding: utf-8
+ """\
+ ntpviz - logfile visualizer for NTP log files
+--- a/ntpsweep/ntpsweep
++++ b/ntpsweep/ntpsweep
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ """
+ ntpsweep - Print various information about given ntp servers.
+ USAGE: ntpsweep [ -<flag> [<val>] | --<name>[{=| }<val>] ]... [hostfile]
+--- a/ntptrace/ntptrace
++++ b/ntptrace/ntptrace
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ """
+ ntptrace - trace peers of an NTP server
+ 
+--- a/ntpwait/ntpwait
++++ b/ntpwait/ntpwait
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ """\
+ ntpwait - Wait for ntpd to stabilize the system clock.
+ USAGE: ntpwait [-n tries] [-s sleeptime] [-v] [-h]
+--- a/waf
++++ b/waf
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # encoding: ISO8859-1
+ # Thomas Nagy, 2005-2016
+ #
+--- a/waflib/Build.py
++++ b/waflib/Build.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/ConfigSet.py
++++ b/waflib/ConfigSet.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Configure.py
++++ b/waflib/Configure.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Context.py
++++ b/waflib/Context.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Errors.py
++++ b/waflib/Errors.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Logs.py
++++ b/waflib/Logs.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Node.py
++++ b/waflib/Node.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Options.py
++++ b/waflib/Options.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Runner.py
++++ b/waflib/Runner.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Scripting.py
++++ b/waflib/Scripting.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Task.py
++++ b/waflib/Task.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/TaskGen.py
++++ b/waflib/TaskGen.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/__init__.py
++++ b/waflib/Tools/__init__.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/ar.py
++++ b/waflib/Tools/ar.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/asm.py
++++ b/waflib/Tools/asm.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/bison.py
++++ b/waflib/Tools/bison.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/c.py
++++ b/waflib/Tools/c.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/c_aliases.py
++++ b/waflib/Tools/c_aliases.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/c_config.py
++++ b/waflib/Tools/c_config.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/c_osx.py
++++ b/waflib/Tools/c_osx.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/c_preproc.py
++++ b/waflib/Tools/c_preproc.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/c_tests.py
++++ b/waflib/Tools/c_tests.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/ccroot.py
++++ b/waflib/Tools/ccroot.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/clang.py
++++ b/waflib/Tools/clang.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/clangxx.py
++++ b/waflib/Tools/clangxx.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/compiler_c.py
++++ b/waflib/Tools/compiler_c.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/compiler_cxx.py
++++ b/waflib/Tools/compiler_cxx.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/compiler_d.py
++++ b/waflib/Tools/compiler_d.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/compiler_fc.py
++++ b/waflib/Tools/compiler_fc.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/cs.py
++++ b/waflib/Tools/cs.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/cxx.py
++++ b/waflib/Tools/cxx.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/d.py
++++ b/waflib/Tools/d.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/d_config.py
++++ b/waflib/Tools/d_config.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/d_scan.py
++++ b/waflib/Tools/d_scan.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/dbus.py
++++ b/waflib/Tools/dbus.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/dmd.py
++++ b/waflib/Tools/dmd.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/errcheck.py
++++ b/waflib/Tools/errcheck.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/fc.py
++++ b/waflib/Tools/fc.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/fc_config.py
++++ b/waflib/Tools/fc_config.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/fc_scan.py
++++ b/waflib/Tools/fc_scan.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/flex.py
++++ b/waflib/Tools/flex.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/g95.py
++++ b/waflib/Tools/g95.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/gas.py
++++ b/waflib/Tools/gas.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/gcc.py
++++ b/waflib/Tools/gcc.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/gdc.py
++++ b/waflib/Tools/gdc.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/gfortran.py
++++ b/waflib/Tools/gfortran.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/glib2.py
++++ b/waflib/Tools/glib2.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/gnu_dirs.py
++++ b/waflib/Tools/gnu_dirs.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/gxx.py
++++ b/waflib/Tools/gxx.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/icc.py
++++ b/waflib/Tools/icc.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/icpc.py
++++ b/waflib/Tools/icpc.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/ifort.py
++++ b/waflib/Tools/ifort.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/intltool.py
++++ b/waflib/Tools/intltool.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/irixcc.py
++++ b/waflib/Tools/irixcc.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/javaw.py
++++ b/waflib/Tools/javaw.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/ldc2.py
++++ b/waflib/Tools/ldc2.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/lua.py
++++ b/waflib/Tools/lua.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/md5_tstamp.py
++++ b/waflib/Tools/md5_tstamp.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/msvc.py
++++ b/waflib/Tools/msvc.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/nasm.py
++++ b/waflib/Tools/nasm.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/nobuild.py
++++ b/waflib/Tools/nobuild.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/perl.py
++++ b/waflib/Tools/perl.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/python.py
++++ b/waflib/Tools/python.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/qt5.py
++++ b/waflib/Tools/qt5.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/ruby.py
++++ b/waflib/Tools/ruby.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/suncc.py
++++ b/waflib/Tools/suncc.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/suncxx.py
++++ b/waflib/Tools/suncxx.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/tex.py
++++ b/waflib/Tools/tex.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/vala.py
++++ b/waflib/Tools/vala.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/waf_unit_test.py
++++ b/waflib/Tools/waf_unit_test.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/winres.py
++++ b/waflib/Tools/winres.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/xlc.py
++++ b/waflib/Tools/xlc.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Tools/xlcxx.py
++++ b/waflib/Tools/xlcxx.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/Utils.py
++++ b/waflib/Utils.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/__init__.py
++++ b/waflib/__init__.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/ansiterm.py
++++ b/waflib/ansiterm.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/extras/__init__.py
++++ b/waflib/extras/__init__.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/extras/compat15.py
++++ b/waflib/extras/compat15.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/fixpy2.py
++++ b/waflib/fixpy2.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/waflib/processor.py
++++ b/waflib/processor.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ # encoding: utf-8
+ # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
+ 
+--- a/wafhelpers/pythonize-header
++++ b/wafhelpers/pythonize-header
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ """
+ Generate a Python module from a C file of macro definitions.
+ 
+--- a/ntpkeygen/ntpkeygen
++++ b/ntpkeygen/ntpkeygen
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ #
+ # ntpkeygen - program to generate cryptographic keys for ntp clients and servers
+ # 

@@ -1,0 +1,24 @@
+From ed8c9d20f9b513afcbdf86f1177532f26b25ff87 Mon Sep 17 00:00:00 2001
+From: Hal Murray <hmurray@megapathdsl.net>
+Date: Thu, 24 Nov 2016 15:33:42 -0800
+Subject: [PATCH 080/268] Add another syscall to the allowed list
+
+---
+ ntpd/ntp_sandbox.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/ntpd/ntp_sandbox.c b/ntpd/ntp_sandbox.c
+index f61b430..d0e6b72 100644
+--- a/ntpd/ntp_sandbox.c
++++ b/ntpd/ntp_sandbox.c
+@@ -342,6 +342,7 @@ int scmp_sc[] = {
+ 	SCMP_SYS(socket),
+ 	SCMP_SYS(socketcall),	/* old kernels */
+ 	SCMP_SYS(stat),
++	SCMP_SYS(statfs64),	/* from getaddrinfo after lid open */
+ #ifdef __NR_time
+ 	SCMP_SYS(time),		/* not in ARM */
+ #endif
+-- 
+2.7.4
+

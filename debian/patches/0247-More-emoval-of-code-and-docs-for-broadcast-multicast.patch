@@ -1,0 +1,1706 @@
+From 7904a56d132e6e090221d60a4d745a84383b38bc Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Fri, 9 Dec 2016 12:29:17 -0500
+Subject: [PATCH 247/268] More emoval of code and docs for broadcast/multicast
+ client modes.
+
+---
+ NEWS                              |   4 +
+ docs/assoc.txt                    |  18 +-
+ docs/authentic.txt                |  11 +-
+ docs/debug.txt                    |  10 -
+ docs/discover.txt                 | 161 +-----------
+ docs/includes/access-commands.txt |   2 +-
+ docs/includes/assoc-commands.txt  |  52 ++--
+ docs/includes/assoc-options.txt   |  12 +-
+ docs/includes/confopt.txt         |   2 -
+ docs/includes/misc-options.txt    |  18 +-
+ docs/includes/miscopt.txt         |   1 -
+ docs/includes/ntpd-body.txt       |  47 +---
+ docs/includes/ntpq-body.txt       |   2 +-
+ docs/index.txt                    |   5 +
+ include/ntp.h                     |   8 +-
+ include/ntp_config.h              |   2 -
+ include/ntp_io.h                  |   1 -
+ include/ntpd.h                    |   6 -
+ ntpd/keyword-gen.c                |   3 -
+ ntpd/ntp.conf-man.txt             |   4 +-
+ ntpd/ntp_config.c                 |  39 +--
+ ntpd/ntp_control.c                |   8 +-
+ ntpd/ntp_io.c                     | 507 +-------------------------------------
+ ntpd/ntp_parser.y                 |   8 +-
+ ntpd/ntp_peer.c                   |   8 +-
+ ntpd/ntp_proto.c                  |  36 +--
+ ntpd/ntpd.c                       |  23 +-
+ 27 files changed, 80 insertions(+), 918 deletions(-)
+
+diff --git a/NEWS b/NEWS
+index f520bd6..a238628 100644
+--- a/NEWS
++++ b/NEWS
+@@ -24,6 +24,10 @@ of stratum and synch distance.
+ A new tool for time-service operators, ntpmon, supports real-time
+ monitoring of your NTP installation's status.
+ 
++Broadcast-client mode, which is impossible to secure, has been
++removed. Broadcast service can still be enabled, though this is a
++deprecated mode of operation and may be removed in a future release.
++
+ == 2016-11-23: 0.9.5 ==
+ 
+ This release includes a substantial refactoring of the core protocol
+diff --git a/docs/assoc.txt b/docs/assoc.txt
+index 7b413a3..17488b4 100644
+--- a/docs/assoc.txt
++++ b/docs/assoc.txt
+@@ -37,14 +37,7 @@ are mobilized by a configuration command which
+ includes the +preempt+ option or upon arrival of an automatic server
+ discovery packet. They are are demobilized by timeout or when preempted
+ by a "better" server, as described on the link:discover.html[Automatic
+-Server Discovery Schemes] page. Ephemeral associations are mobilized
+-upon arrival of broadcast or multicast server packets and demobilized by
+-timeout.
+-
+-Ordinarily, successful mobilization of ephemeral associations requires
+-the server to be cryptographically authenticated to the client. This can
+-be done using symmetric key cryptography,
+-as described on the link:authentic.html[Authentication Support] page.
++Server Discovery Schemes] page.
+ 
+ There are three principal modes of operation in NTP: client/server,
+ symmetric active/passive and broadcast/multicast. There are three
+@@ -119,6 +112,11 @@ into the response.
+ [[broad]]
+ == Broadcast/Multicast Modes ==
+ 
++These modes cannot be effectively secured and are deprecated in
++NTPsec.  Client-mode support has been removed; server-side support
++is retained for backward compatibility but may be removed in a
++future release.
++
+ NTP broadcast and multicast modes are intended for configurations
+ involving one or a few servers and a possibly very large client
+ population. Broadcast mode can be used with Ethernet, FDDI and WiFi
+@@ -129,9 +127,7 @@ on the link:discover.html[Automatic NTP Configuration Options] page.
+ 
+ A server is configured to send broadcast or multicast messages using
+ the +broadcast+ command and specifying the subnet address for
+-broadcast or the multicast group address for multicast. Due to
+-unresolvable security issues, NTPsec no longer supports functioning as
+-a broadcast or multicast client.
++broadcast or the multicast group address for multicast.
+ 
+ [[many]]
+ == Manycast and Pool Modes ==
+diff --git a/docs/authentic.txt b/docs/authentic.txt
+index 5508bce..6d29064 100644
+--- a/docs/authentic.txt
++++ b/docs/authentic.txt
+@@ -42,7 +42,7 @@ vulnerability analysis is in the white paper
+ {millshome}security.html[NTP Security Analysis].
+ 
+ Authentication is configured separately for each association using the +key+
+-subcommand on the +peer+, +server+, +broadcast+ and +manycastclient+
++subcommand on the +peer+, +server+, and +broadcast+
+ configuration commands. The authentication options described below
+ specify the locations of the key files, if other than default, which
+ symmetric keys are trusted and the interval between various
+@@ -73,15 +73,6 @@ to new broadcast and symmetric active messages and remote
+ configuration commands and, in particular, the flag has no effect on
+ the authentication process itself.
+ 
+-An attractive alternative where multicast support is available is
+-manycast mode, in which clients periodically troll for servers as
+-described in the 'Automatic NTP Configuration Options' page of the Web
+-documentation.  Authentication can be used in this mode. The principle
+-advantage of manycast mode is that potential servers need not be
+-configured in advance, since the client finds them during regular
+-operation, and the configuration files for all clients can be
+-identical.
+-
+ The security model and protocol schemes for symmetric key
+ are summarized below.
+ 
+diff --git a/docs/debug.txt b/docs/debug.txt
+index 0c207d4..a9d44c0 100644
+--- a/docs/debug.txt
++++ b/docs/debug.txt
+@@ -215,16 +215,6 @@ displayed which shows the authentication status in the +auth+ field. A
+ status of 1 indicates the packet was successful authenticated; otherwise
+ it has failed.
+ 
+-A common misconception is the implication of the +auth+ bit in the
+-+enable+ and +disable+ commands. *This bit does not affect
+-authentication in any way other than to enable or disable mobilization
+-of a new persistent association in broadcast/multicast client, manycast
+-client or symmetric passive modes.* If enabled, which is the default,
+-these associations require authentication; if not, an association is
+-mobilized even if not authenticated. Users are cautioned that running
+-with authentication disabled is very dangerous, since an intruder can
+-easily strike up an association and inject false time values.
+-
+ == Debugging Checklist ==
+ 
+ If the +ntpq+ or program does not show that messages are being
+diff --git a/docs/discover.txt b/docs/discover.txt
+index ba8caea..4a882e4 100644
+--- a/docs/discover.txt
++++ b/docs/discover.txt
+@@ -27,7 +27,7 @@ include::includes/hand.txt[]
+ 
+ This page describes the automatic server discovery schemes provided in
+ NTPv4. There are three automatic server discovery schemes:
+-broadcast/multicast, many cast, and server pool, which are described on
++broadcast/multicast, manycast, and server pool, which are described on
+ this page. The broadcast/multicast and many cast schemes utilize the
+ ubiquitous broadcast or one-to-many paradigm native to IPv4 and IPv6.
+ The server pool scheme uses DNS to resolve addresses of multiple
+@@ -143,6 +143,12 @@ all systems on the subnet are fully trusted.
+ [[mcst]]
+ == Manycast Scheme ==
+ 
++Note: This mode of operation is deprecated, because manycast
++associations cannot be effectively secured.  Accordingly, manycast
++client support has been removed from NTPsec; manycast server mode is
++retained for backwards compatibility but may be removed in a future
++release.
++
+ Manycast is an automatic server discovery and configuration paradigm.
+ It is intended as a means for a client to troll the nearby network
+ neighborhood to find cooperating servers, validate them using
+@@ -163,12 +169,6 @@ plurality of redundant servers satisfying defined optimality criteria.
+ 
+ Manycasting can be used with symmetric-key cryptography.
+ 
+-A manycast client is configured using the +manycastclient+
+-configuration command, which is similar to the +server+ configuration
+-command but with a multicast (IPv4 class _D_ or IPv6 prefix _FF_)
+-group address. The IANA has designated IPv4 address 224.1.1.1 and IPv6
+-address FF05::101 (site local) for NTP.
+-
+ A manycast server is configured using the +manycastserver+ command,
+ which listens on the specified address for manycast client
+ messages.  If a manycast server is in scope of the current TTL and is
+@@ -176,138 +176,6 @@ itself synchronized to a valid source and operating at a stratum level
+ equal to or lower than the manycast client, it replies with an ordinary
+ unicast server message.
+ 
+-The client sends ordinary client mode messages, but to one of
+-these multicast addresses rather than a unicast address, and sends
+-only if less than +maxclock+ associations remain and then only at the
+-minimum feasible rate and minimum feasible time-to-live (TTL)
+-hops. The polling strategy is designed to reduce as much as possible
+-the volume of manycast client messages and the effects of implosion due to
+-near-simultaneous arrival of manycast server messages. There can be as
+-many manycast client associations as different addresses, each one
+-serving as a template for future unicast client/server associations.
+-
+-The manycast client receiving this message mobilizes a preemptable
+-client association according to the matching manycast client template.
+-This requires the server to be cryptographically authenticated and the
+-server stratum to be less than or equal to the client stratum.
+-
+-Then, the client polls the server at its unicast address in
+-burst mode in order to reliably set the host clock and validate the
+-source. This normally results in a volley of eight client/server at 2-s
+-intervals during which both the synchronization and cryptographic
+-protocols run concurrently. Following the volley, the client runs the
+-NTP intersection and clustering algorithms, which act to discard all but
+-the "best" associations according to stratum and synchronization
+-distance. The surviving associations then continue in ordinary
+-client/server mode.
+-
+-The strategy is determined by the _manycastclient_, _tos_ and _ttl_
+-configuration commands. The manycast poll interval is normally eight
+-times the system poll interval, which starts out at the _minpoll_ value
+-specified in the _manycastclient_, command and, under normal
+-circumstances, increments to the _maxpolll_ value specified in this
+-command. Initially, the TTL is set at the minimum hops specified by the
+-ttl command. At each retransmission the TTL is increased until reaching
+-the maximum hops specified by this command or a sufficient number of client
+-associations have been found. Further retransmissions use the same TTL.
+-
+-The quality and reliability of the suite of associations discovered by
+-the manycast client is determined by the NTP mitigation algorithms and
+-the _minclock_ and _minsane_ values specified in the +tos+ configuration
+-command. At least _minsane_ candidate servers must be available and the
+-mitigation algorithms produce at least _minclock_ survivors in order to
+-synchronize the clock. Byzantine agreement principles require at least
+-four candidates in order to correctly discard a single falseticker. For
+-legacy purposes, _minsane_ defaults to 1 and _minclock_ defaults to 3.
+-For manycast service _minsane_ should be explicitly set to 4, assuming
+-at least that number of servers are available.
+-
+-If at least _minclock_ servers are found, the manycast poll interval is
+-immediately set to eight times _maxpoll_. If less than _minclock_
+-servers are found when the TTL has reached the maximum hops, the
+-manycast poll interval is doubled. For each transmission after that, the
+-poll interval is doubled again until reaching the maximum of eight times
+-_maxpoll_. Further transmissions use the same poll interval and TTL
+-values. Note that while all this is going on, each client/server
+-association found is operating normally at the system poll interval.
+-
+-Administratively scoped multicast boundaries are normally specified by
+-the network router configuration and, in the case of IPv6, the link/site
+-scope prefix. By default, the increment for TTL hops is 32 starting from
+-31; however, the _ttl_ configuration command can be used to modify the
+-values to match the scope rules.
+-
+-It is often useful to narrow the range of acceptable servers which can
+-be found by manycast client associations. Because manycast servers
+-respond only when the client stratum is equal to or greater than the
+-server stratum, primary (stratum 1) servers will find only primary
+-servers in TTL range, which is probably the most common objective.
+-However, unless configured otherwise, all manycast clients in TTL range
+-will eventually find all primary servers in TTL range, which is probably
+-not the most common objective in large networks. The +tos+ command can
+-be used to modify this behavior. Servers with stratum below _floor_ or
+-above _ceiling_ specified in the +tos+ command are strongly discouraged
+-during the selection process; however, these servers may be temporally
+-accepted if the number of servers within TTL range is less than
+-_minclock_.
+-
+-The above actions occur for each manycast client message, which repeats
+-at the designated poll interval. However, once the ephemeral client
+-association is mobilized, subsequent manycast server replies are
+-discarded, since that would result in a duplicate association. If during
+-a poll interval the number of client associations falls below
+-_minclock_, all manycast client prototype associations are reset to the
+-initial poll interval and TTL hops and operation resumes from the
+-beginning. It is important to avoid frequent manycast client messages,
+-since each one requires all manycast servers in TTL range to respond.
+-The result could well be an implosion, either minor or major, depending
+-on the number of servers in range. The recommended value for _maxpoll_
+-is 12 (4,096 s).
+-
+-It is possible and frequently useful to configure a host as both
+-manycast client and manycast server. A number of hosts configured this
+-way and sharing a common multicast group address will automatically
+-organize themselves in an optimum configuration based on stratum and
+-synchronization distance. For example, consider an NTP subnet of two
+-primary servers and a hundred or more dependent clients. With two
+-exceptions, all servers and clients have identical configuration files
+-including both +multicastclient+ and +multicastserver+ commands using,
+-for instance, multicast group address 239.1.1.1. The only exception is
+-that each primary server configuration file must include commands for
+-the primary reference source such as a GPS receiver.
+-
+-The remaining configuration files for all secondary servers and clients
+-have the same contents, except for the +tos+ command, which is specific
+-for each stratum level. For stratum 1 and stratum 2 servers, that
+-command is not necessary. For stratum 3 and above servers the _floor_
+-value is set to the intended stratum number. Thus, all stratum 3
+-configuration files are identical, all stratum 4 files are identical and
+-so forth.
+-
+-Once operations have stabilized in this scenario, the primary servers
+-will find the primary reference source and each other, since they both
+-operate at the same stratum (1), but not with any secondary server or
+-client, since these operate at a higher stratum. The secondary servers
+-will find the servers at the same stratum level. If one of the primary
+-servers loses its GPS receiver, it will continue to operate as a client
+-and other clients will time out the corresponding association and
+-re-associate accordingly.
+-
+-Some administrators prefer to avoid running {ntpdman} continuously and
+-run {ntpdman} +-q+ as a cron job. In either case the servers must be
+-configured in advance and the program fails if none are available when
+-the cron job runs. A really slick application of manycast is with
+-ntpd +-q+. The program wakes up, scans the local landscape looking
+-for the usual suspects, selects the best from among the rascals, sets
+-the clock and then departs. Servers do not have to be configured in
+-advance and all clients throughout the network can have the same
+-configuration file.
+-
+-The use of cryptographic authentication is always a good idea in any
+-server discovery scheme. Cryptographic authentication can be used in
+-the same scenarios as described above for the broadcast/multicast
+-scheme.
+-
+ [[pool]]
+ == Server Pool Scheme ==
+ 
+@@ -320,15 +188,12 @@ mind an additional small load. The trick is to randomize over the
+ population and minimize the load on any one server while retaining the
+ advantages of multiple servers using the NTP mitigation algorithms.
+ 
+-To support this service, custom DNS software is used by pool.ntp.org and
+-its subdomains to discover a random selection of participating servers
+-in response to a DNS query. The client receiving this list mobilizes
+-some or all of them, similar to the manycast discovery scheme, and
+-prunes the excess. Unlike +manycastclient+, cryptographic authentication
+-is not required. The pool scheme solicits a single server at a time,
+-compared to +manycastclient+ which solicits all servers within a
+-multicast TTL range simultaneously. Otherwise, the pool server discovery
+-scheme operates as manycast does.
++To support this service, custom DNS software is used by pool.ntp.org
++and its subdomains to discover a random selection of participating
++servers in response to a DNS query. The client receiving this list
++mobilizes some or all of them, similar to the manycast discovery
++scheme, and prunes the excess. Cryptographic authentication is not
++required.
+ 
+ The pool scheme is configured using one or more +pool+ commands with DNS
+ names indicating the pool from which to draw. The +pool+ command can be
+diff --git a/docs/includes/access-commands.txt b/docs/includes/access-commands.txt
+index 035af5c..a0739c8 100644
+--- a/docs/includes/access-commands.txt
++++ b/docs/includes/access-commands.txt
+@@ -75,7 +75,7 @@
+     Deny {ntpqman} queries. Time service is not affected.
+   +nopeer+;;
+     Deny packets which would result in mobilizing a new association.
+-    This includes broadcast and symmetric active packets when a
++    This includes symmetric active packets when a
+     configured association does not exist. It also includes _pool_
+     associations, so if you want to use servers from a +pool+ directive
+     and also want to use +nopeer+ by default, you'll want a +restrict
+diff --git a/docs/includes/assoc-commands.txt b/docs/includes/assoc-commands.txt
+index efb99be..3e6b331 100644
+--- a/docs/includes/assoc-commands.txt
++++ b/docs/includes/assoc-commands.txt
+@@ -15,8 +15,6 @@ link-local IPV6 address with an interface specified in
+ 
+ +broadcast+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+ttl+ _ttl_]
+ 
+-+manycastclient+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_] [+ttl+ _ttl_] [+preempt+]
+-
+ +unpeer+ ['address' | 'associd']::
+   These six commands specify the time server name or address to be used
+   and the mode in which to operate. The _address_ can be either a DNS
+@@ -35,7 +33,7 @@ link-local IPV6 address with an interface specified in
+   mode association with the specified remote server or local radio
+   clock. In this mode the local clock can synchronized to the remote
+   server, but the remote server can never be synchronized to the local
+-  clock. This command should _not_ be used for broadcast or multicast addresses.
++  clock.
+ 
+ [[peer]]
+ +peer+::
+@@ -44,37 +42,23 @@ link-local IPV6 address with an interface specified in
+ 
+ [[broadcast]]
+ +broadcast+::
+-  For broadcast and multicast addresses (only), this command mobilizes a persistent
+-  broadcast mode association. Multiple commands can be used to specify
+-  multiple local broadcast interfaces (subnets) and/or multiple
+-  multicast groups. Note that local broadcast messages go only to the
+-  interface associated with the subnet specified, but multicast messages
+-  go to all interfaces. In broadcast mode the local server sends
+-  periodic broadcast messages to a client population at the _address_
+-  specified, which is usually the broadcast address on (one of) the
+-  local network(s) or a multicast address assigned to NTP. The IANA has
+-  assigned the multicast group address IPv4 224.0.1.1 and IPv6 ff05::101
+-  (site local) exclusively to NTP, but other nonconflicting addresses
+-  can be used to contain the messages within administrative boundaries.
+-
+-[[manycastclient]]
+-+manycastclient+::
+-  For multicast addresses (only), this command mobilizes a manycast client
+-  mode association for the multicast address specified. In this case a
+-  specific address must be supplied which matches the address used on
+-  the _manycastserver_ command for the designated manycast servers. The
+-  NTP multicast address 224.0.1.1 assigned by the IANA should NOT be
+-  used, unless specific means are taken to avoid spraying large areas of
+-  the Internet with these messages and causing a possibly massive
+-  implosion of replies at the sender. The _manycastserver_ command
+-  specifies that the local server is to operate in client mode with the
+-  remote servers that are discovered as the result of
+-  broadcast/multicast messages. The client broadcasts a request message
+-  to the group address associated with the specified _address_ and
+-  specifically enabled servers respond to these messages. The client
+-  selects the servers providing the best time and continues as with the
+-  _server_ command. The remaining servers are discarded as if never
+-  heard.
++  Note: This mode of server operation is deprecated, as broadcast
++  associations cannot be secured.  Broadcast-client mode has been
++  completely removed.
+++
++For broadcast and multicast addresses (only), this command mobilizes
++a persistent broadcast mode association. Multiple commands can be
++used to specify multiple local broadcast interfaces (subnets) and/or
++multiple multicast groups. Note that local broadcast messages go
++only to the interface associated with the subnet specified, but
++multicast messages go to all interfaces. In broadcast mode the local
++server sends periodic broadcast messages to a client population at
++the _address_ specified, which is usually the broadcast address on
++(one of) the local network(s) or a multicast address assigned to
++NTP. The IANA has assigned the multicast group address IPv4
++224.0.1.1 and IPv6 ff05::101 (site local) exclusively to NTP, but
++other nonconflicting addresses can be used to contain the messages
++within administrative boundaries.
+ 
+ [[unpeer]]
+ +unpeer+::
+diff --git a/docs/includes/assoc-options.txt b/docs/includes/assoc-options.txt
+index 11cb75d..3195420 100644
+--- a/docs/includes/assoc-options.txt
++++ b/docs/includes/assoc-options.txt
+@@ -47,7 +47,7 @@
+ +preempt+::
+   Specifies the association as preemptable rather than the default
+   persistent. This option is ignored with the +broadcast+ command and is
+-  most useful with the +manycastclient+ and +pool+ commands.
++  most useful with the +pool+ command.
+ 
+ +prefer+::
+   Marks the server as preferred. All other things being equal, this host
+@@ -56,11 +56,11 @@
+   for further information.
+ 
+ +ttl+ _ttl_::
+-  This option is used only with broadcast server and manycast client
+-  modes. It specifies the time-to-live _ttl_ to use on broadcast server
+-  and multicast server and the maximum _ttl_ for the expanding ring
+-  search with manycast client packets. Selection of the proper value,
+-  which defaults to 127, is something of a black art and should be
++  This option is used only with broadcast server mode. It specifies
++  the time-to-live _ttl_ to use on broadcast server and multicast
++  server and the maximum _ttl_ for the expanding ring search with
++  manycast client packets. Selection of the proper value, which
++  defaults to 127, is something of a black art and should be
+   coordinated with the network administrator.
+ 
+ +true+::
+diff --git a/docs/includes/confopt.txt b/docs/includes/confopt.txt
+index f46ef8c..8b027da 100644
+--- a/docs/includes/confopt.txt
++++ b/docs/includes/confopt.txt
+@@ -1,8 +1,6 @@
+ === Server Commands and Options ===
+ * link:confopt.html#server[server - configure client association]
+-* link:confopt.html#peer[peer - configure symmetric peer association]
+ * link:confopt.html#broadcast[broadcast - configure broadcast server association]
+-* link:confopt.html#manycastclient[manycastclient - configure manycast client  association]
+ * link:confopt.html#pool[pool - configure pool association]
+ * link:confopt.html#unpeer[unpeer - remove association]
+ * link:discover.html#mcst[manycastserver - enable manycast server]
+diff --git a/docs/includes/misc-options.txt b/docs/includes/misc-options.txt
+index dc19598..5e92385 100644
+--- a/docs/includes/misc-options.txt
++++ b/docs/includes/misc-options.txt
+@@ -1,17 +1,5 @@
+ // Miscellaneous options.  Gets included twice.
+ 
+-[[broadcastdelay]]
+-+broadcastdelay+ _seconds_::
+-  The broadcast and multicast modes require a special calibration to
+-  determine the network delay between the local and remote servers.
+-  Ordinarily, this is done automatically by the initial protocol
+-  exchanges between the client and server. In some cases, the
+-  calibration procedure may fail due to network or server access
+-  controls, for example. This command specifies the default delay to be
+-  used under these circumstances. Typically (for Ethernet), a number
+-  between 0.003 and 0.007 seconds is appropriate. The default when this
+-  command is not used is 0.004 seconds.
+-
+ +calldelay+ _delay_::
+   This option controls the delay in seconds between the first and second
+   packets sent in burst or iburst mode to allow additional time for a
+@@ -38,7 +26,7 @@ have write permission for the directory the drift file is located in,
+ and that file system links, symbolic or otherwise, should be avoided.
+ 
+ [[enable]]
+-+enable+ [+auth+ | +bclient+ | +calibrate+ | +kernel+ | +monitor+ | +ntp+ | +stats+]; +disable+ [+auth+ | +bclient+ | +calibrate+ | +kernel+ | +monitor+ | +ntp+ | +stats+]::
+++enable+ [+auth+ | +calibrate+ | +kernel+ | +monitor+ | +ntp+ | +stats+]; +disable+ [+auth+ | +calibrate+ | +kernel+ | +monitor+ | +ntp+ | +stats+]::
+   Provides a way to enable or disable various server options. Flags not
+   mentioned are unaffected. Note that all of these flags can be
+   controlled remotely using the {ntpqman} utility program.
+@@ -47,10 +35,6 @@ and that file system links, symbolic or otherwise, should be avoided.
+     Enables the server to synchronize with unconfigured peers only if
+     the peer has been correctly authenticated. The default for this
+     flag is +enable+.
+-  +bclient+;;
+-    Enables the server to listen for a message from a broadcast or
+-    multicast server, as in the +multicastclient+ command with default
+-    address. The default for this flag is +disable+.
+   +calibrate+;;
+     Enables the calibrate feature for reference clocks. The default for
+     this flag is +disable+.
+diff --git a/docs/includes/miscopt.txt b/docs/includes/miscopt.txt
+index c519a94..5a68a58 100644
+--- a/docs/includes/miscopt.txt
++++ b/docs/includes/miscopt.txt
+@@ -1,5 +1,4 @@
+ == Miscellaneous Commands and Options ==
+-* link:miscopt.html#broadcastdelay[broadcastdelay - specify broadcast delay]
+ * link:miscopt.html#driftfile[driftfile - specify frequency file]
+ * link:miscopt.html#enable[enable - enable options]
+ * link:miscopt.html#enable[disable - disable options]
+diff --git a/docs/includes/ntpd-body.txt b/docs/includes/ntpd-body.txt
+index bc22e1b..8db60a7 100644
+--- a/docs/includes/ntpd-body.txt
++++ b/docs/includes/ntpd-body.txt
+@@ -6,9 +6,9 @@
+ == SYNOPSIS ==
+ [verse]
+ ntpd
+-    [-46aAbghLmnNqx] [-c 'conffile'] [-f 'driftfile'] [-i 'jaildir']
++    [-46ghLmnNqx] [-c 'conffile'] [-f 'driftfile'] [-i 'jaildir']
+     [-k 'keyfile'] [-l 'logfile'] [-p 'pidfile'] [-P 'priority']
+-    [-r 'broadcast-delay']  [-s 'statsdir']  [-t  'key']
++    [-s 'statsdir']  [-t  'key']
+     [-u 'user'[:'group']] [-U 'interface_update_interval']
+     [-v 'variable'] [-V 'variable'] [server...]
+ 
+@@ -71,24 +71,6 @@ the IPv4 namespace.
+ Force DNS resolution of following host names on the command line to
+ the IPv6 namespace.
+ 
+-+-a+, +--authreq+::
+-  Require crypto authentication. This option must not appear in
+-  combination with any of the following options: authnoreq.
+-+
+-Require cryptographic authentication for broadcast client, multicast
+-client and symmetric passive associations. This is the default.
+-
+-+-A+, +--authnoreq+::
+-  Do not require crypto authentication. This option must not appear in
+-  combination with any of the following options: authreq.
+-+
+-Do not require cryptographic authentication for broadcast client,
+-multicast client and symmetric passive associations. This is almost
+-never a good idea.
+-
+-+-b+, +--bcastsync+::
+-  Allow us to sync to broadcast servers.
+-
+ +-c+ _string_, +--configfile+=_string_::
+   configuration file name.
+ +
+@@ -215,13 +197,6 @@ which has been replaced with a shell script. The +-g+ and +-x+ options can be
+ used with this option. Note: The kernel time discipline is disabled
+ with this option.
+ 
+-+-r+ _string_, +--propagationdelay+=_string_::
+-  Broadcast/propagation delay.
+-+
+-Specify the default propagation delay from the broadcast/multicast
+-server to this client. This is necessary only if the delay cannot be
+-computed automatically by the protocol.
+-
+ +-s+ _string_, +--statsdir+=_string_::
+   Statistics file location.
+ +
+@@ -428,19 +403,11 @@ file at hourly intervals.
+ 
+ === Operating Modes ===
+ 
+-The +ntpd+ utility can operate in any of several modes, including
+-symmetric active/passive, client/server broadcast/multicast and
+-manycast, as described in the "Association Management" page (available
+-as part of the HTML documentation provided in +/usr/share/doc/ntp+). It
+-normally operates continuously while monitoring for small changes in
+-frequency and trimming the clock for the ultimate precision. However, it
+-can operate in a one-time mode where the time is set from an external
+-server and frequency is set from a previously recorded frequency file. A
+-broadcast/multicast or manycast client can discover remote servers,
+-compute server-client propagation delay correction factors and configure
+-itself automatically. This makes it possible to deploy a fleet of
+-workstations without specifying configuration details specific to the
+-local environment.
+++ntpd+ normally operates continuously while monitoring for small
++changes in frequency and trimming the clock for the ultimate
++precision. However, it can operate in a one-time mode where the time
++is set from an external server and frequency is set from a previously
++recorded frequency file.
+ 
+ By default, +ntpd+ runs in continuous mode where each of possibly
+ several external servers is polled at intervals determined by an
+diff --git a/docs/includes/ntpq-body.txt b/docs/includes/ntpq-body.txt
+index 61f929c..ad1dadb 100644
+--- a/docs/includes/ntpq-body.txt
++++ b/docs/includes/ntpq-body.txt
+@@ -345,7 +345,7 @@ of the link:decode.html#peer[peer status word]
+ |+refid+         |association ID or link:decode.html#kiss[kiss code]
+ |+st+            |stratum
+ |+t+             |
+-+u+: unicast or manycast client, +b+: broadcast or multicast client,
+++u+: unicast or manycast client,
+ +l+: local (reference clock), +s+: symmetric (peer), +A+: manycast
+ server, +B+: broadcast server, +M+: multicast server
+ |+when+          |sec/min/hr since last received packet
+diff --git a/docs/index.txt b/docs/index.txt
+index 577c349..25b301b 100644
+--- a/docs/index.txt
++++ b/docs/index.txt
+@@ -94,6 +94,11 @@ few will be user-visible.
+ * peer mode has been removed.  The keyword peer in ntp.conf is now
+   just an alias for keyword server.  Incoming peer packets are ignored.
+ 
++* Broadcast- and multicast client modes, which are impossible to
++  secure, has been removed. Broadcast and multicast service can still
++  be enabled, though this is a deprecated mode of operation and may be
++  removed in a future release.
++
+ * The deprecated and vulnerability-prone ntpdate program has been
+   replaced with a shell wrapper around ntpdig.  Its -e and -p
+   options are not implemented. It is no longer documented, but can be
+diff --git a/include/ntp.h b/include/ntp.h
+index 833173c..7464d4c 100644
+--- a/include/ntp.h
++++ b/include/ntp.h
+@@ -613,11 +613,11 @@ struct pkt {
+ /*
+  * Configuration items.  These are for the protocol module (proto_config())
+  */
+-#define	PROTO_BROADCLIENT	1
++#define	PROTO_BROADCLIENT	1	/* (not used) */
+ #define	PROTO_PRECISION		2	/* (not used) */
+ #define	PROTO_AUTHENTICATE	3
+-#define	PROTO_BROADDELAY	4
+-#define	PROTO_AUTHDELAY		5	/* (not used) */
++#define	PROTO_BROADDELAY	4	/* (not used) */
++#define	PROTO_AUTHDELAY		5
+ #define PROTO_MULTICAST_ADD	6
+ #define PROTO_MULTICAST_DEL	7
+ #define PROTO_NTP		8
+@@ -702,7 +702,7 @@ struct mon_data {
+ #define	MDF_BCAST	0x04	/* broadcast server */
+ #define	MDF_POOL	0x08	/* pool client solicitor */
+ #define MDF_ACAST	0x10	/* manycast client solicitor */
+-#define	MDF_BCLNT	0x20	/* eph. broadcast/multicast client */
++#define	MDF_BCLNT	0x20	/* eph. broadcast/multicast client (not used) */
+ #define MDF_UCLNT	0x40	/* preemptible manycast or pool client */
+ /*
+  * In the context of struct peer in ntpd, three of the cast_flags bits
+diff --git a/include/ntp_config.h b/include/ntp_config.h
+index 6daa924..c928b70 100644
+--- a/include/ntp_config.h
++++ b/include/ntp_config.h
+@@ -200,9 +200,7 @@ struct config_tree_tag {
+ 	unpeer_fifo *	unpeers;
+ 
+ 	/* Other Modes */
+-	int		broadcastclient;
+ 	address_fifo *	manycastserver;
+-	address_fifo *	multicastclient;
+ 
+ 	attr_val_fifo *	orphan_cmds;	/* s/b renamed tos_options */
+ 
+diff --git a/include/ntp_io.h b/include/ntp_io.h
+index 82c8685..7d00fc9 100644
+--- a/include/ntp_io.h
++++ b/include/ntp_io.h
+@@ -41,7 +41,6 @@ typedef enum {
+ 
+ extern int	qos;
+ SOCKET		move_fd(SOCKET fd);
+-bool	get_broadcastclient_flag(void);
+ extern bool	is_ip_address(const char *, u_short, sockaddr_u *);
+ extern void	sau_from_netaddr(sockaddr_u *, const isc_netaddr_t *);
+ extern void	add_nic_rule(nic_rule_match match_type,
+diff --git a/include/ntpd.h b/include/ntpd.h
+index bbcf272..cff89d9 100644
+--- a/include/ntpd.h
++++ b/include/ntpd.h
+@@ -115,10 +115,6 @@ extern	void	init_io 	(void);
+ extern  SOCKET	open_socket	(sockaddr_u *, bool, bool, endpt *);
+ extern	void	io_open_sockets	(void);
+ extern	void	io_clr_stats	(void);
+-extern	void	io_setbclient	(void);
+-extern	void	io_unsetbclient	(void);
+-extern	void	io_multicast_add(sockaddr_u *);
+-extern	void	io_multicast_del(sockaddr_u *);
+ extern	void	sendpkt 	(sockaddr_u *, endpt *, int, void *, int);
+ #ifdef DEBUG
+ extern	void	collect_timing  (struct recvbuf *, const char *, int, l_fp *);
+@@ -403,8 +399,6 @@ extern int	sys_minclock;		/* minimum candidates */
+ /*
+  * Nonspecified system state variables.
+  */
+-extern int	sys_bclient;		/* we set our time to broadcasts */
+-extern double	sys_bdelay; 		/* broadcast client default delay */
+ extern bool	sys_authenticate;	/* requre authentication for config */
+ extern l_fp	sys_authdelay;		/* authentication delay */
+ extern u_long 	sys_epoch;		/* last clock update time */
+diff --git a/ntpd/keyword-gen.c b/ntpd/keyword-gen.c
+index d4533a9..0882e7c 100644
+--- a/ntpd/keyword-gen.c
++++ b/ntpd/keyword-gen.c
+@@ -25,7 +25,6 @@ struct key_tok ntp_keywords[] = {
+ { "...",		T_Ellipsis,		FOLLBY_TOKEN },
+ { "allpeers",		T_Allpeers,		FOLLBY_TOKEN },
+ { "broadcast",		T_Broadcast,		FOLLBY_STRING },
+-{ "broadcastdelay",	T_Broadcastdelay,	FOLLBY_TOKEN },
+ { "baud",		T_Baud,			FOLLBY_TOKEN },
+ { "ctl",		T_Ctl,			FOLLBY_TOKEN },
+ { "disable",		T_Disable,		FOLLBY_TOKEN },
+@@ -42,7 +41,6 @@ struct key_tok ntp_keywords[] = {
+ { "leapsmearinterval",	T_Leapsmearinterval,	FOLLBY_TOKEN },
+ { "logconfig",		T_Logconfig,		FOLLBY_STRINGS_TO_EOC },
+ { "logfile",		T_Logfile,		FOLLBY_STRING },
+-{ "manycastclient",	T_Manycastclient,	FOLLBY_STRING },
+ { "manycastserver",	T_Manycastserver,	FOLLBY_STRINGS_TO_EOC },
+ { "mem",		T_Mem,			FOLLBY_TOKEN },
+ { "path",		T_Path,			FOLLBY_STRING },
+@@ -181,7 +179,6 @@ struct key_tok ntp_keywords[] = {
+ { "time2",		T_Time2,		FOLLBY_TOKEN },
+ /* system_option */
+ { "auth",		T_Auth,			FOLLBY_TOKEN },
+-{ "bclient",		T_Bclient,		FOLLBY_TOKEN },
+ { "calibrate",		T_Calibrate,		FOLLBY_TOKEN },
+ { "kernel",		T_Kernel,		FOLLBY_TOKEN },
+ { "ntp",		T_Ntp,			FOLLBY_TOKEN },
+diff --git a/ntpd/ntp.conf-man.txt b/ntpd/ntp.conf-man.txt
+index 320d35e..af9f637 100644
+--- a/ntpd/ntp.conf-man.txt
++++ b/ntpd/ntp.conf-man.txt
+@@ -41,8 +41,8 @@ the options used to control it:
+ 
+ Following these is a section describing 'Miscellaneous Options'.
+ While there is a rich set of options available, the only required
+-option is one or more `pool`, `server`, `peer`, `broadcast` or
+-`manycastclient` commands.
++option is one or more `pool`, `server`, `peer`, or `broadcast`
++commansds.
+ 
+ == Configuration Support ==
+ 
+diff --git a/ntpd/ntp_config.c b/ntpd/ntp_config.c
+index f230054..81a86dd 100644
+--- a/ntpd/ntp_config.c
++++ b/ntpd/ntp_config.c
+@@ -1148,10 +1148,6 @@ config_other_modes(
+ 	sockaddr_u	addr_sock;
+ 	address_node *	addr_node;
+ 
+-	if (ptree->broadcastclient)
+-		proto_config(PROTO_BROADCLIENT, ptree->broadcastclient,
+-			     0., NULL);
+-
+ 	addr_node = HEAD_PFIFO(ptree->manycastserver);
+ 	while (addr_node != NULL) {
+ 		ZERO_SOCK(&addr_sock);
+@@ -1164,22 +1160,6 @@ config_other_modes(
+ 		}
+ 		addr_node = addr_node->link;
+ 	}
+-
+-	/* Configure the multicast clients */
+-	addr_node = HEAD_PFIFO(ptree->multicastclient);
+-	if (addr_node != NULL) {
+-		do {
+-			ZERO_SOCK(&addr_sock);
+-			AF(&addr_sock) = addr_node->type;
+-			if (1 == getnetnum(addr_node->address,
+-					   &addr_sock, 1, t_UNK)) {
+-				proto_config(PROTO_MULTICAST_ADD, 0, 0.,
+-					     &addr_sock);
+-			}
+-			addr_node = addr_node->link;
+-		} while (addr_node != NULL);
+-		proto_config(PROTO_MULTICAST_ADD, 1, 0., NULL);
+-	}
+ }
+ 
+ static void
+@@ -1207,7 +1187,6 @@ free_config_other_modes(
+ 	)
+ {
+ 	FREE_ADDRESS_FIFO(ptree->manycastserver);
+-	FREE_ADDRESS_FIFO(ptree->multicastclient);
+ }
+ 
+ 
+@@ -2271,10 +2250,6 @@ apply_enable_disable(
+ 			proto_config(PROTO_AUTHENTICATE, enable, 0., NULL);
+ 			break;
+ 
+-		case T_Bclient:
+-			proto_config(PROTO_BROADCLIENT, enable, 0., NULL);
+-			break;
+-
+ 		case T_Calibrate:
+ 			proto_config(PROTO_CAL, enable, 0., NULL);
+ 			break;
+@@ -2635,10 +2610,6 @@ config_vars(
+ 		/* Determine which variable to set and set it */
+ 		switch (curr_var->attr) {
+ 
+-		case T_Broadcastdelay:
+-			proto_config(PROTO_BROADDELAY, 0, curr_var->value.d, NULL);
+-			break;
+-
+ 		case T_Tick:
+ 			loop_config(LOOP_TICK, curr_var->value.d);
+ 			break;
+@@ -2716,7 +2687,6 @@ is_sane_resolved_address(
+ 	/*
+ 	 * Shouldn't be able to specify multicast
+ 	 * address for server/peer!
+-	 * and unicast address for manycastclient!
+ 	 */
+ 	if ((T_Server == hmode || T_Peer == hmode || T_Pool == hmode)
+ 	    && IS_MCAST(peeraddr)) {
+@@ -2725,12 +2695,6 @@ is_sane_resolved_address(
+ 			socktoa(peeraddr));
+ 		return false;
+ 	}
+-	if (T_Manycastclient == hmode && !IS_MCAST(peeraddr)) {
+-		msyslog(LOG_ERR,
+-			"attempt to configure invalid address %s",
+-			socktoa(peeraddr));
+-		return false;
+-	}
+ 
+ 	if (IS_IPV6(peeraddr) && !ipv6_works)
+ 		return false;
+@@ -2782,7 +2746,7 @@ peer_config(
+ 
+ 	/*
+ 	 * Mobilize the association and initialize its variables. If
+-	 * emulating ntpdate, force iburst.  For pool and manycastclient
++	 * emulating ntpdate, force iburst.  For pool,
+ 	 * strip FLAG_PREEMPT as the prototype associations are not
+ 	 * themselves preemptible, though the resulting associations
+ 	 * are.
+@@ -2806,7 +2770,6 @@ get_correct_host_mode(
+ 
+ 	case T_Server:
+ 	case T_Pool:
+-	case T_Manycastclient:
+ 	case T_Peer:
+ 		return MODE_CLIENT;
+ 
+diff --git a/ntpd/ntp_control.c b/ntpd/ntp_control.c
+index 26ffbd4..50faba1 100644
+--- a/ntpd/ntp_control.c
++++ b/ntpd/ntp_control.c
+@@ -164,7 +164,7 @@ static const struct ctl_proc control_codes[] = {
+ #define	CS_SS_PROCESSED		43
+ #define	CS_PEERADR		44
+ #define	CS_PEERMODE		45
+-#define	CS_BCASTDELAY		46
++#define	CS_BCASTDELAY		46	/* not used */
+ #define	CS_AUTHDELAY		47
+ #define	CS_AUTHKEYS		48
+ #define	CS_AUTHFREEK		49
+@@ -338,7 +338,7 @@ static const struct ctl_var sys_var[] = {
+ 	{ CS_SS_PROCESSED,	RO, "ss_processed" },	/* 43 */
+ 	{ CS_PEERADR,		RO, "peeradr" },	/* 44 */
+ 	{ CS_PEERMODE,		RO, "peermode" },	/* 45 */
+-	{ CS_BCASTDELAY,	RO, "bcastdelay" },	/* 46 */
++	//{ CS_BCASTDELAY,	RO, "bcastdelay" },	/* 46 */
+ 	{ CS_AUTHDELAY,		RO, "authdelay" },	/* 47 */
+ 	{ CS_AUTHKEYS,		RO, "authkeys" },	/* 48 */
+ 	{ CS_AUTHFREEK,		RO, "authfreek" },	/* 49 */
+@@ -1715,10 +1715,6 @@ ctl_putsys(
+ 		ctl_putuint(sys_var[varid].text, sys_processed);
+ 		break;
+ 
+-	case CS_BCASTDELAY:
+-		ctl_putdbl(sys_var[varid].text, sys_bdelay * 1e3);
+-		break;
+-
+ 	case CS_AUTHDELAY:
+ 		LFPTOD(&sys_authdelay, dtemp);
+ 		ctl_putdbl(sys_var[varid].text, dtemp * 1e3);
+diff --git a/ntpd/ntp_io.c b/ntpd/ntp_io.c
+index b701bf2..0f57fc0 100644
+--- a/ntpd/ntp_io.c
++++ b/ntpd/ntp_io.c
+@@ -130,7 +130,6 @@ endpt *	any_interface;		/* wildcard ipv4 interface */
+ endpt *	any6_interface;		/* wildcard ipv6 interface */
+ endpt *	loopback_interface;	/* loopback ipv4 interface */
+ 
+-bool broadcast_client_enabled;	/* is broadcast client enabled */
+ u_int sys_ifnum;			/* next .ifnum to assign */
+ int ninterfaces;			/* total # of interfaces */
+ 
+@@ -168,18 +167,9 @@ static bool	is_wildcard_addr	(const sockaddr_u *);
+ /*
+  * Multicast functions
+  */
+-static	bool	addr_ismulticast	(sockaddr_u *);
+ static	bool	is_anycast		(sockaddr_u *,
+ 						 const char *);
+ 
+-/*
+- * Not all platforms support multicast
+- */
+-#ifdef MCAST
+-static	bool	socket_multicast_enable	(endpt *, sockaddr_u *);
+-static	bool	socket_multicast_disable(endpt *, sockaddr_u *);
+-#endif
+-
+ #ifdef DEBUG
+ static void interface_dump	(const endpt *);
+ static void sockaddr_dump	(const sockaddr_u *);
+@@ -257,8 +247,6 @@ const int accept_wildcard_if_for_winnt = false;
+ 
+ static void	add_fd_to_list		(SOCKET, enum desc_type);
+ static endpt *	find_addr_in_list	(sockaddr_u *);
+-static endpt *	find_flagged_addr_in_list(sockaddr_u *, uint32_t);
+-static void	delete_addr_from_list	(sockaddr_u *);
+ static void	delete_interface_from_list(endpt *);
+ static void	close_and_delete_fd_from_list(SOCKET);
+ static void	add_addr_to_list	(sockaddr_u *, endpt *);
+@@ -1956,12 +1944,7 @@ update_interfaces(
+ 	 */
+ 	refresh_all_peerinterfaces();
+ 
+-	if (broadcast_client_enabled)
+-		io_setbclient();
+-
+-	if (sys_bclient)
+-		io_setbclient();
+-
++#ifdef __unused__
+ 	/*
+ 	 * Check multicast interfaces and try to join multicast groups if
+          * not joined yet.
+@@ -1987,7 +1970,8 @@ update_interfaces(
+ 			}
+ 		}
+ 	}
+-
++#endif /* __unused__ */
++	
+ 	return new_interface_found;
+ }
+ 
+@@ -2228,41 +2212,6 @@ socket_broadcast_disable(
+ #endif /* OPEN_BCAST_SOCKET */
+ 
+ /*
+- * return the broadcast client flag value
+- */
+-bool
+-get_broadcastclient_flag(void)
+-{
+-	return (broadcast_client_enabled);
+-}
+-/*
+- * Check to see if the address is a multicast address
+- */
+-static bool
+-addr_ismulticast(
+-	sockaddr_u *maddr
+-	)
+-{
+-	bool result;
+-
+-#ifndef USE_IPV6_MULTICAST_SUPPORT
+-	/*
+-	 * If we don't have IPV6 support any IPV6 addr is not multicast
+-	 */
+-	if (IS_IPV6(maddr))
+-		result = false;
+-	else
+-#endif
+-		result = IS_MCAST(maddr);
+-
+-	if (!result)
+-		DPRINTF(4, ("address %s is not multicast\n",
+-			    socktoa(maddr)));
+-
+-	return result;
+-}
+-
+-/*
+  * Multicast servers need to set the appropriate Multicast interface
+  * socket option in order for it to know which interface to use for
+  * send the multicast packet.
+@@ -2331,407 +2280,6 @@ enable_multicast_if(
+ }
+ 
+ /*
+- * Add a multicast address to a given socket
+- * The socket is in the ep_list all we need to do is enable
+- * multicasting. It is not this function's job to select the socket
+- */
+-#if defined(MCAST)
+-static bool
+-socket_multicast_enable(
+-	endpt *		iface,
+-	sockaddr_u *	maddr
+-	)
+-{
+-	struct ip_mreq		mreq;
+-#ifdef USE_IPV6_MULTICAST_SUPPORT
+-	struct ipv6_mreq	mreq6;
+-#endif
+-	switch (AF(maddr)) {
+-
+-	case AF_INET:
+-		ZERO(mreq);
+-		mreq.imr_multiaddr = SOCK_ADDR4(maddr);
+-		mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+-		if (setsockopt(iface->fd,
+-			       IPPROTO_IP,
+-			       IP_ADD_MEMBERSHIP,
+-			       (char *)&mreq,
+-			       sizeof(mreq))) {
+-#ifndef __COVERITY__
+-			DPRINTF(2, (
+-				"setsockopt IP_ADD_MEMBERSHIP failed: %m on socket %d, addr %s for %x / %x (%s)",
+-				iface->fd, socktoa(&iface->sin),
+-				mreq.imr_multiaddr.s_addr,
+-				mreq.imr_interface.s_addr,
+-				socktoa(maddr)));
+-#endif /* __COVERTY__ */
+-			return false;
+-		}
+-		DPRINTF(4, ("Added IPv4 multicast membership on socket %d, addr %s for %x / %x (%s)\n",
+-			    iface->fd, socktoa(&iface->sin),
+-			    mreq.imr_multiaddr.s_addr,
+-			    mreq.imr_interface.s_addr, socktoa(maddr)));
+-		break;
+-
+-	case AF_INET6:
+-#ifdef USE_IPV6_MULTICAST_SUPPORT
+-		/*
+-		 * Enable reception of multicast packets.
+-		 * If the address is link-local we can get the
+-		 * interface index from the scope id. Don't do this
+-		 * for other types of multicast addresses. For now let
+-		 * the kernel figure it out.
+-		 */
+-		ZERO(mreq6);
+-		mreq6.ipv6mr_multiaddr = SOCK_ADDR6(maddr);
+-		mreq6.ipv6mr_interface = iface->ifindex;
+-
+-		if (setsockopt(iface->fd, IPPROTO_IPV6,
+-			       IPV6_JOIN_GROUP, (char *)&mreq6,
+-			       sizeof(mreq6))) {
+-#ifndef __COVERITY__
+-			DPRINTF(2, (
+-				"setsockopt IPV6_JOIN_GROUP failed: %m on socket %d, addr %s for interface %u (%s)",
+-				iface->fd, socktoa(&iface->sin),
+-				mreq6.ipv6mr_interface, socktoa(maddr)));
+-#endif /* __COVERITY__ */
+-			return false;
+-		}
+-		DPRINTF(4, ("Added IPv6 multicast group on socket %d, addr %s for interface %u (%s)\n",
+-			    iface->fd, socktoa(&iface->sin),
+-			    mreq6.ipv6mr_interface, socktoa(maddr)));
+-#else
+-		return false;
+-#endif	/* USE_IPV6_MULTICAST_SUPPORT */
+-	}
+-	iface->flags |= INT_MCASTOPEN;
+-	iface->num_mcast++;
+-
+-	return true;
+-}
+-#endif	/* MCAST */
+-
+-
+-/*
+- * Remove a multicast address from a given socket
+- * The socket is in the ep_list all we need to do is disable
+- * multicasting. It is not this function's job to select the socket
+- */
+-#ifdef MCAST
+-static bool
+-socket_multicast_disable(
+-	endpt *	iface,
+-	sockaddr_u *		maddr
+-	)
+-{
+-#ifdef USE_IPV6_MULTICAST_SUPPORT
+-	struct ipv6_mreq mreq6;
+-#endif
+-	struct ip_mreq mreq;
+-
+-	ZERO(mreq);
+-
+-	if (find_addr_in_list(maddr) == NULL) {
+-		DPRINTF(4, ("socket_multicast_disable(%s): not found\n",
+-			    socktoa(maddr)));
+-		return true;
+-	}
+-
+-	switch (AF(maddr)) {
+-
+-	case AF_INET:
+-		mreq.imr_multiaddr = SOCK_ADDR4(maddr);
+-		mreq.imr_interface = SOCK_ADDR4(&iface->sin);
+-		if (setsockopt(iface->fd, IPPROTO_IP,
+-			       IP_DROP_MEMBERSHIP, (char *)&mreq,
+-			       sizeof(mreq))) {
+-
+-#ifndef __COVERITY__
+-			msyslog(LOG_ERR,
+-				"setsockopt IP_DROP_MEMBERSHIP failed: %m on socket %d, addr %s for %x / %x (%s)",
+-				iface->fd, socktoa(&iface->sin),
+-				SRCADR(maddr), SRCADR(&iface->sin),
+-				socktoa(maddr));
+-			return false;
+-#endif /* __COVERITY__ */
+-		}
+-		break;
+-	case AF_INET6:
+-#ifdef USE_IPV6_MULTICAST_SUPPORT
+-		/*
+-		 * Disable reception of multicast packets
+-		 * If the address is link-local we can get the
+-		 * interface index from the scope id.  Don't do this
+-		 * for other types of multicast addresses. For now let
+-		 * the kernel figure it out.
+-		 */
+-		mreq6.ipv6mr_multiaddr = SOCK_ADDR6(maddr);
+-		mreq6.ipv6mr_interface = iface->ifindex;
+-
+-		if (setsockopt(iface->fd, IPPROTO_IPV6,
+-			       IPV6_LEAVE_GROUP, (char *)&mreq6,
+-			       sizeof(mreq6))) {
+-#ifndef __COVERITY__
+-			msyslog(LOG_ERR,
+-				"setsockopt IPV6_LEAVE_GROUP failure: %m on socket %d, addr %s for %d (%s)",
+-				iface->fd, socktoa(&iface->sin),
+-				iface->ifindex, socktoa(maddr));
+-#endif /* __COVERITY__ */
+-			return false;
+-		}
+-		break;
+-#else
+-		return false;
+-#endif	/* USE_IPV6_MULTICAST_SUPPORT */
+-	}
+-
+-	iface->num_mcast--;
+-	if (!iface->num_mcast)
+-		iface->flags &= ~INT_MCASTOPEN;
+-
+-	return true;
+-}
+-#endif	/* MCAST */
+-
+-/*
+- * io_setbclient - open the broadcast client sockets
+- */
+-void
+-io_setbclient(void)
+-{
+-#ifdef OPEN_BCAST_SOCKET
+-	endpt *	interf;
+-	int			nif;
+-
+-	nif = 0;
+-	set_reuseaddr(1);
+-
+-	for (interf = ep_list;
+-	     interf != NULL;
+-	     interf = interf->elink) {
+-
+-		if (interf->flags & (INT_WILDCARD | INT_LOOPBACK))
+-			continue;
+-
+-		/* use only allowed addresses */
+-		if (interf->ignore_packets)
+-			continue;
+-
+-		/* Need a broadcast-capable interface */
+-		if (!(interf->flags & INT_BROADCAST))
+-			continue;
+-
+-		/* Only IPv4 addresses are valid for broadcast */
+-		NTP_REQUIRE(IS_IPV4(&interf->sin));
+-
+-		/* Do we already have the broadcast address open? */
+-		if (interf->flags & INT_BCASTOPEN) {
+-			/*
+-			 * account for already open interfaces to avoid
+-			 * misleading warning below
+-			 */
+-			nif++;
+-			continue;
+-		}
+-
+-		/*
+-		 * Try to open the broadcast address
+-		 */
+-		interf->family = AF_INET;
+-		interf->bfd = open_socket(&interf->bcast, 1, 0, interf);
+-
+-		/*
+-		 * If we succeeded then we use it otherwise enable
+-		 * broadcast on the interface address
+-		 */
+-		if (interf->bfd != INVALID_SOCKET) {
+-			nif++;
+-			interf->flags |= INT_BCASTOPEN;
+-			msyslog(LOG_INFO,
+-				"Listen for broadcasts to %s on interface #%d %s",
+-				socktoa(&interf->bcast), interf->ifnum, interf->name);
+-		} else {
+-			/* silently ignore EADDRINUSE as we probably opened
+-			   the socket already for an address in the same network */
+-			if (errno != EADDRINUSE)
+-				msyslog(LOG_INFO,
+-					"failed to listen for broadcasts to %s on interface #%d %s",
+-					socktoa(&interf->bcast), interf->ifnum, interf->name);
+-		}
+-	}
+-	set_reuseaddr(0);
+-	if (nif > 0) {
+-		broadcast_client_enabled = true;
+-		DPRINTF(1, ("io_setbclient: listening to %d broadcast addresses\n", nif));
+-	}
+-	else if (!nif) {
+-		broadcast_client_enabled = false;
+-		msyslog(LOG_ERR,
+-			"Unable to listen for broadcasts, no broadcast interfaces available");
+-	}
+-#else
+-	msyslog(LOG_ERR,
+-		"io_setbclient: Broadcast Client disabled by build");
+-#endif	/* OPEN_BCAST_SOCKET */
+-}
+-
+-/*
+- * io_unsetbclient - close the broadcast client sockets
+- */
+-void
+-io_unsetbclient(void)
+-{
+-	endpt *ep;
+-
+-	for (ep = ep_list; ep != NULL; ep = ep->elink) {
+-		if (INT_WILDCARD & ep->flags)
+-			continue;
+-		if (!(INT_BCASTOPEN & ep->flags))
+-			continue;
+-
+-		if (ep->bfd != INVALID_SOCKET) {
+-			/* destroy broadcast listening socket */
+-			msyslog(LOG_INFO,
+-				"stop listening for broadcasts to %s on interface #%d %s",
+-				socktoa(&ep->bcast), ep->ifnum, ep->name);
+-			close_and_delete_fd_from_list(ep->bfd);
+-			ep->bfd = INVALID_SOCKET;
+-			ep->flags &= ~INT_BCASTOPEN;
+-		}
+-	}
+-	broadcast_client_enabled = false;
+-}
+-
+-/*
+- * io_multicast_add() - add multicast group address
+- */
+-void
+-io_multicast_add(
+-	sockaddr_u *addr
+-	)
+-{
+-#ifdef MCAST
+-	endpt *	ep;
+-	endpt *	one_ep;
+-
+-	/*
+-	 * Check to see if this is a multicast address
+-	 */
+-	if (!addr_ismulticast(addr))
+-		return;
+-
+-	/* If we already have it we can just return */
+-	if (NULL != find_flagged_addr_in_list(addr, INT_MCASTOPEN)) {
+-		msyslog(LOG_INFO,
+-			"Duplicate request found for multicast address %s",
+-			socktoa(addr));
+-		return;
+-	}
+-
+-	ep = new_interface(NULL);
+-
+-	/*
+-	 * Open a new socket for the multicast address
+-	 */
+-	ep->sin = *addr;
+-	SET_PORT(&ep->sin, NTP_PORT);
+-	ep->family = AF(&ep->sin);
+-	AF(&ep->mask) = ep->family;
+-	SET_ONESMASK(&ep->mask);
+-
+-	set_reuseaddr(1);
+-	ep->bfd = INVALID_SOCKET;
+-	ep->fd = open_socket(&ep->sin, 0, 0, ep);
+-	if (ep->fd != INVALID_SOCKET) {
+-		ep->ignore_packets = false;
+-		ep->flags |= INT_MCASTIF;
+-
+-		strlcpy(ep->name, "multicast", sizeof(ep->name));
+-		DPRINT_INTERFACE(2, (ep, "multicast add ", "\n"));
+-		add_interface(ep);
+-		log_listen_address(ep);
+-	} else {
+-		/* bind failed, re-use wildcard interface */
+-		delete_interface(ep);
+-
+-		if (IS_IPV4(addr))
+-			ep = wildipv4;
+-		else if (IS_IPV6(addr))
+-			ep = wildipv6;
+-		else
+-			ep = NULL;
+-
+-		if (ep != NULL) {
+-			/* HACK ! -- stuff in an address */
+-			/* because we don't bind addr? DH */
+-			ep->bcast = *addr;
+-			msyslog(LOG_ERR,
+-				"multicast address %s using wildcard interface #%d %s",
+-				socktoa(addr), ep->ifnum, ep->name);
+-		} else {
+-			msyslog(LOG_ERR,
+-				"No multicast socket available to use for address %s",
+-				socktoa(addr));
+-			return;
+-		}
+-	}
+-	{	/* in place of the { following for in #else clause */
+-		one_ep = ep;
+-		if (ep->fd >= 0 && socket_multicast_enable(ep, addr))
+-			msyslog(LOG_INFO,
+-				"Joined %s socket to multicast group %s",
+-				socktoa(&ep->sin),
+-				socktoa(addr));
+-	}
+-
+-	add_addr_to_list(addr, one_ep);
+-#else	/* !MCAST  follows*/
+-	msyslog(LOG_ERR,
+-		"Can not add multicast address %s: no multicast support",
+-		socktoa(addr));
+-#endif
+-	return;
+-}
+-
+-
+-/*
+- * io_multicast_del() - delete multicast group address
+- */
+-void
+-io_multicast_del(
+-	sockaddr_u *	addr
+-	)
+-{
+-#ifdef MCAST
+-	endpt *iface;
+-
+-	/*
+-	 * Check to see if this is a multicast address
+-	 */
+-	if (!addr_ismulticast(addr)) {
+-		msyslog(LOG_ERR, "invalid multicast address %s",
+-			socktoa(addr));
+-		return;
+-	}
+-
+-	/*
+-	 * Disable reception of multicast packets
+-	 */
+-	while ((iface = find_flagged_addr_in_list(addr, INT_MCASTOPEN))
+-	       != NULL)
+-		socket_multicast_disable(iface, addr);
+-
+-	delete_addr_from_list(addr);
+-
+-#else /* not MCAST */
+-	msyslog(LOG_ERR,
+-		"Can not delete multicast address %s: no multicast support",
+-		socktoa(addr));
+-#endif /* not MCAST */
+-}
+-
+-
+-/*
+  * open_socket - open a socket, returning the file descriptor
+  */
+ 
+@@ -4056,24 +3604,6 @@ add_addr_to_list(
+ 
+ 
+ static void
+-delete_addr_from_list(
+-	sockaddr_u *addr
+-	)
+-{
+-	remaddr_t *unlinked;
+-
+-	UNLINK_EXPR_SLIST(unlinked, remoteaddr_list, SOCK_EQ(addr,
+-		&(UNLINK_EXPR_SLIST_CURRENT()->addr)), link, remaddr_t);
+-
+-	if (unlinked != NULL) {
+-		DPRINTF(4, ("Deleted addr %s from list of addresses\n",
+-			socktoa(addr)));
+-		free(unlinked);
+-	}
+-}
+-
+-
+-static void
+ delete_interface_from_list(
+ 	endpt *iface
+ 	)
+@@ -4117,37 +3647,6 @@ find_addr_in_list(
+ 	return NULL;
+ }
+ 
+-
+-/*
+- * Find the given address with the all given flags set in the list
+- */
+-static endpt *
+-find_flagged_addr_in_list(
+-	sockaddr_u *	addr,
+-	uint32_t		flags
+-	)
+-{
+-	remaddr_t *entry;
+-
+-	DPRINTF(4, ("Finding addr %s with flags %d in list: ",
+-		    socktoa(addr), flags));
+-
+-	for (entry = remoteaddr_list;
+-	     entry != NULL;
+-	     entry = entry->link)
+-
+-		if (SOCK_EQ(&entry->addr, addr)
+-		    && (entry->ep->flags & flags) == flags) {
+-
+-			DPRINTF(4, ("FOUND\n"));
+-			return entry->ep;
+-		}
+-
+-	DPRINTF(4, ("NOT FOUND\n"));
+-	return NULL;
+-}
+-
+-
+ const char *
+ localaddrtoa(
+ 	endpt *la
+diff --git a/ntpd/ntp_parser.y b/ntpd/ntp_parser.y
+index 248e504..7673ab3 100644
+--- a/ntpd/ntp_parser.y
++++ b/ntpd/ntp_parser.y
+@@ -58,10 +58,8 @@
+ %token	<Integer>	T_Auth
+ %token	<Integer>	T_Average
+ %token	<Integer>	T_Baud
+-%token	<Integer>	T_Bclient
+ %token	<Integer>	T_Beacon
+ %token	<Integer>	T_Broadcast
+-%token	<Integer>	T_Broadcastdelay
+ %token	<Integer>	T_Burst
+ %token	<Integer>	T_Calibrate
+ %token	<Integer>	T_Ceiling
+@@ -128,7 +126,6 @@
+ %token	<Integer>	T_Logconfig
+ %token	<Integer>	T_Logfile
+ %token	<Integer>	T_Loopstats
+-%token	<Integer>	T_Manycastclient
+ %token	<Integer>	T_Manycastserver
+ %token	<Integer>	T_Mask
+ %token	<Integer>	T_Maxage
+@@ -375,7 +372,6 @@ client_type
+ 	|	T_Pool
+ 	|	T_Peer
+ 	|	T_Broadcast
+-	|	T_Manycastclient
+ 	;
+ 
+ address
+@@ -1091,7 +1087,6 @@ system_option
+ 
+ system_option_flag_keyword
+ 	:	T_Auth
+-	|	T_Bclient
+ 	|	T_Calibrate
+ 	|	T_Kernel
+ 	|	T_Monitor
+@@ -1221,8 +1216,7 @@ miscellaneous_command
+ 	;
+ 
+ misc_cmd_dbl_keyword
+-	:	T_Broadcastdelay
+-	|	T_Nonvolatile
++	:	T_Nonvolatile
+ 	|	T_Tick
+ 	;
+ 
+diff --git a/ntpd/ntp_peer.c b/ntpd/ntp_peer.c
+index 96a5cc1..5e40452 100644
+--- a/ntpd/ntp_peer.c
++++ b/ntpd/ntp_peer.c
+@@ -307,7 +307,7 @@ findpeer(
+                  * doesn't match the peer's, check if it matches the
+                  * ACST prototype peer's.  If so it is a redundant
+                  * solicitation response, return AM_ERR to discard it.
+-                 * [Bug 1762]
++                 * [Classic Bug 1762]
+                  */
+                 if (MODE_SERVER == pkt_mode && AM_PROCPKT == *action) {
+                         pkt = &rbufp->recv_pkt;
+@@ -606,12 +606,6 @@ peer_refresh_interface(
+ 		    peer_clear(p, "XFAC", false);
+ 
+ 		/*
+-		 * Broadcast needs the socket enabled for broadcast
+-		 */
+-		if (MDF_BCAST & p->cast_flags)
+-			enable_broadcast(p->dstadr, &p->srcadr);
+-
+-		/*
+ 		 * Multicast needs the socket interface enabled for
+ 		 * multicast
+ 		 */
+diff --git a/ntpd/ntp_proto.c b/ntpd/ntp_proto.c
+index 4881fdd..6c91ca0 100644
+--- a/ntpd/ntp_proto.c
++++ b/ntpd/ntp_proto.c
+@@ -74,8 +74,6 @@ bool leap_sec_in_progress;
+ /*
+  * Nonspecified system state variables
+  */
+-int	sys_bclient;		/* broadcast client enable */
+-double	sys_bdelay;		/* broadcast client default delay */
+ bool	sys_authenticate;	/* require authentication for config */
+ l_fp	sys_authdelay;		/* authentication delay */
+ double	sys_offset;	/* current local clock offset */
+@@ -885,9 +883,7 @@ transmit(
+ 	 * growth in associations if the system clock or network quality
+ 	 * result in survivor count dipping below sys_minclock often.
+ 	 * This was observed testing with pool, where sys_maxclock == 12
+-	 * resulted in 60 associations without the hard limit.	A
+-	 * similar hard limit on manycastclient ephemeral associations
+-	 * may be appropriate.
++	 * resulted in 60 associations without the hard limit.
+ 	 */
+ 	if (peer->cast_flags & MDF_POOL) {
+ 		peer->outdate = current_time;
+@@ -2799,8 +2795,6 @@ init_proto(const bool verbose)
+ 	get_systime(&dummy);
+ 	sys_survivors = 0;
+ 	sys_manycastserver = 0;
+-	sys_bclient = 0;
+-	sys_bdelay = 0;
+ 	sys_authenticate = true;
+ 	sys_stattime = current_time;
+ 	orphwait = current_time + sys_orphwait;
+@@ -2841,14 +2835,6 @@ proto_config(
+ 		sys_authenticate = (bool)value;
+ 		break;
+ 
+-	case PROTO_BROADCLIENT: /* broadcast client (bclient) */
+-		sys_bclient = (int)value;
+-		if (sys_bclient == 0)
+-			io_unsetbclient();
+-		else
+-			io_setbclient();
+-		break;
+-
+ #ifdef REFCLOCK
+ 	case PROTO_CAL:		/* refclock calibrate (calibrate) */
+ 		cal_enable = value;
+@@ -2889,10 +2875,6 @@ proto_config(
+ 		sys_beacon = (int)dvalue;
+ 		break;
+ 
+-	case PROTO_BROADDELAY:	/* default broadcast delay (bdelay) */
+-		sys_bdelay = dvalue;
+-		break;
+-
+ 	case PROTO_CEILING:	/* stratum ceiling (ceiling) */
+ 		sys_ceiling = (int)dvalue;
+ 		break;
+@@ -2942,20 +2924,6 @@ proto_config(
+ 		orphwait += sys_orphwait;
+ 		break;
+ 
+-	/*
+-	 * Miscellaneous commands
+-	 */
+-	case PROTO_MULTICAST_ADD: /* add group address */
+-		if (svalue != NULL)
+-			io_multicast_add(svalue);
+-		sys_bclient = 1;
+-		break;
+-
+-	case PROTO_MULTICAST_DEL: /* delete group address */
+-		if (svalue != NULL)
+-			io_multicast_del(svalue);
+-		break;
+-
+ 	default:
+ 		msyslog(LOG_NOTICE,
+ 		    "proto: unsupported option %d", item);
+@@ -2986,6 +2954,4 @@ void proto_dump(FILE *fp)
+ {
+     /* must cover at least anything that can be set on the command line */
+     fprintf(fp, "%sable auth;\n", sys_authenticate ? "en" : "dis");
+-    fprintf(fp, "%sable bclient;\n", sys_bclient ? "en" : "dis");
+-    fprintf(fp, "broadcastdelay %f;\n", sys_bdelay);
+ }
+diff --git a/ntpd/ntpd.c b/ntpd/ntpd.c
+index 1fd5ef7..f15e9e9 100644
+--- a/ntpd/ntpd.c
++++ b/ntpd/ntpd.c
+@@ -125,13 +125,11 @@ static void	library_unexpected_error(const char *, int,
+ 					 const char *, va_list)
+ 					ISC_FORMAT_PRINTF(3, 0);
+ 
+-#define ALL_OPTIONS "46aAbc:dD:f:gGhi:I:k:l:LmnNp:Pqr:Rs:t:u:UVw:xyYzZ"
++#define ALL_OPTIONS "46c:dD:f:gGhi:I:k:l:LmnNp:PqRs:t:u:UVw:xyYzZ"
+ static const struct option longoptions[] = {
+     { "ipv4",		    0, 0, '4' },
+     { "ipv6",		    0, 0, '6' },
+-    { "authreq",	    0, 0, 'a' },
+     { "noauthreq",	    0, 0, 'A' },
+-    { "bcastsync",	    0, 0, 'b' },
+     { "configfile",	    1, 0, 'c' },
+     { "debug",		    0, 0, 'd' },
+     { "set-debug-level",    1, 0, 'D' },
+@@ -147,7 +145,6 @@ static const struct option longoptions[] = {
+     { "nofork",		    0, 0, 'n' },
+     { "nice",		    0, 0, 'N' },
+     { "quit",		    0, 0, 'q' },
+-    { "propagationdelay",   1, 0, 'r' },
+     { "dumpopts",	    0, 0, 'R' },
+     { "statsdir",	    1, 0, 's' },
+     { "trustedkey",	    1, 0, 't' },
+@@ -250,12 +247,6 @@ parse_cmdline_opts(
+ 	    case '6':
+ 		opt_ipv6 = true;
+ 		break;
+-	    case 'a':
+-		/* defer */
+-		break;
+-	    case 'A':
+-		/* defer */
+-		break;
+ 	    case 'b':
+ 		break;
+ 	    case 'c':
+@@ -720,15 +711,6 @@ ntpdmain(
+ 	while ((op = ntp_getopt_long(argc, argv, ALL_OPTIONS,
+ 				     longoptions, NULL)) != -1) {
+ 	    switch (op) {
+-	    case 'a':
+-		proto_config(PROTO_AUTHENTICATE, 1, 0.0, NULL);
+-		break;
+-	    case 'A':
+-		proto_config(PROTO_AUTHENTICATE, 0, 0.0, NULL);
+-		break;
+-	    case 'b':
+-		proto_config(PROTO_BROADCLIENT, 1, 0.0, NULL);
+-		break;
+ 	    case 'f':
+ 		stats_config(STATS_FREQ_FILE, driftfile);
+ 		break;
+@@ -748,9 +730,6 @@ ntpdmain(
+ 	    case 'p':
+ 		stats_config(STATS_PID_FILE, pidfile);
+ 		break;
+-	    case 'r':
+-		proto_config(PROTO_BROADDELAY, 0, atof(ntp_optarg), NULL);
+-		break;
+ 	    case 's':
+ 		stats_config(STATS_STATSDIR, statsdir);
+ 		break;
+-- 
+2.7.4
+

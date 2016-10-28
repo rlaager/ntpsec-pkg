@@ -1,0 +1,26 @@
+From f8eab8bb770028b191629d7c660ac6c2aee1962f Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Fri, 2 Dec 2016 17:20:59 -0600
+Subject: [PATCH 121/268] Stop showing a temp file in ntpleapfetch --help
+
+There is no need to show the name of the randomly-generated tempfile in
+the ntpleapfetch --help output.
+---
+ ntpleapfetch/ntpleapfetch | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/ntpleapfetch/ntpleapfetch b/ntpleapfetch/ntpleapfetch
+index ab67630..d910088 100755
+--- a/ntpleapfetch/ntpleapfetch
++++ b/ntpleapfetch/ntpleapfetch
+@@ -82,7 +82,6 @@ All arguments are optional:  Default (or current value) shown:
+     -P    Specify the syslog facility for logging
+           $LOGFAC
+     -t    Name of temporary file used in validation
+-          $TMPFILE
+     -q    Only report errors to stdout
+     -v    Verbose output
+     -z    Specify path for utilities
+-- 
+2.7.4
+

@@ -1,0 +1,32 @@
+From c233afea21be10a23316aecb9d5c8771d5746ac1 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sun, 27 Nov 2016 05:40:10 -0500
+Subject: [PATCH 040/268] Document --early-droproot.
+
+---
+ INSTALL | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/INSTALL b/INSTALL
+index 1605115..2c8c58d 100644
+--- a/INSTALL
++++ b/INSTALL
+@@ -226,6 +226,15 @@ of options.
+ refclocks are enabled with `--refclock=<n1,n2,n3..> or --refclock=all'
+ `waf configure --list' will print a list of available refclocks.
+ 
++=== --enable-early-droproot ===
++
++Drop root privileges as early as possible.  This requires the refclock
++devices to be owned by the same owner or group that ntpd will be
++running under (most likely that group will be named "ntp") so that it
++can still open the devices.  This can be accomplished by adding
++`GROUP="ntp"` or `OWNER="ntp"` to the udev rules that create the
++device symlinks for the refclocks.
++
+ == Developer options ==
+ 
+ --enable-debug-gdb::
+-- 
+2.7.4
+

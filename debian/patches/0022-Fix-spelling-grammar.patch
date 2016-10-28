@@ -1,0 +1,1298 @@
+From 63bc55d870590e3438717ad37a2dde48068c5d25 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Tue, 22 Nov 2016 09:14:59 -0500
+Subject: [PATCH 022/268] Fix spelling/grammar
+
+Identified by codespell.py
+---
+ contrib/cpu-temp-log                |  2 +-
+ contrib/pi-temp-log                 |  4 +--
+ contrib/temper-temp-log             |  2 +-
+ devel/hacking.txt                   |  4 +--
+ docs/copyright.txt                  |  2 +-
+ docs/includes/assoc-auxcommands.txt |  2 +-
+ docs/index.txt                      |  2 +-
+ docs/mode6.txt                      |  2 +-
+ docs/msyslog.txt                    |  4 +--
+ docs/oncore-shmem.txt               |  6 ++---
+ docs/parsedata.txt                  |  4 +--
+ docs/refclock.txt                   |  2 +-
+ include/ascii.h                     |  2 +-
+ include/ntp_assert.h                |  2 +-
+ libisc/include/isc/netaddr.h        |  2 +-
+ libjsmn/jsmn_test.c                 |  2 +-
+ libntp/authkeys.c                   |  2 +-
+ libntp/dolfptoa.c                   |  2 +-
+ libntp/ntp_calendar.c               |  2 +-
+ libntp/socket.c                     |  4 +--
+ libntp/systime.c                    |  4 +--
+ libparse/binio.c                    |  2 +-
+ libparse/clk_hopf6021.c             |  2 +-
+ libparse/clk_meinberg.c             |  8 +++---
+ libparse/clk_rawdcf.c               |  4 +--
+ libparse/clk_trimtsip.c             |  4 +--
+ libparse/data_mbg.c                 |  2 +-
+ libparse/gpstolfp.c                 |  2 +-
+ libparse/ieee754io.c                |  6 ++---
+ libparse/mfp_mul.c                  |  4 +--
+ libparse/parse.c                    |  6 ++---
+ ntpd/ntp_control.c                  |  6 ++---
+ ntpd/ntp_leapsec.c                  |  2 +-
+ ntpd/ntp_leapsec.h                  |  2 +-
+ ntpd/ntp_loopfilter.c               |  6 ++---
+ ntpd/ntp_peer.c                     |  2 +-
+ ntpd/ntp_proto.c                    |  2 +-
+ ntpd/ntp_refclock.c                 |  2 +-
+ ntpd/ntp_signd.c                    |  2 +-
+ ntpd/ntp_util.c                     |  2 +-
+ ntpd/refclock_generic.c             | 18 ++++++-------
+ ntpd/refclock_hpgps.c               |  2 +-
+ ntpd/refclock_jupiter.c             |  2 +-
+ ntpd/refclock_magnavox.c            | 10 ++++----
+ ntpd/refclock_nmea.c                | 14 +++++------
+ ntpd/refclock_oncore.c              | 50 ++++++++++++++++++-------------------
+ ntpd/refclock_pps.c                 |  2 +-
+ ntpd/refclock_shm.c                 |  2 +-
+ ntpd/refclock_trimble.c             |  4 +--
+ ntpd/refclock_truetime.c            |  2 +-
+ ntpdig/kod_management.c             |  2 +-
+ pylib/util.py                       |  2 +-
+ tests/check_y2k.c                   |  4 +--
+ tests/common/sockaddrtest.c         |  4 +--
+ tests/libntp/lfpfunc.c              |  4 +--
+ 55 files changed, 123 insertions(+), 123 deletions(-)
+
+diff --git a/contrib/cpu-temp-log b/contrib/cpu-temp-log
+index 34af48c..87213e6 100755
+--- a/contrib/cpu-temp-log
++++ b/contrib/cpu-temp-log
+@@ -4,7 +4,7 @@
+ Usage: cpu-temper-log
+ 
+ Reads 'sensors -u' for temperature data.  Writes all temperatures found
+-to stdout.  One temp per line, preceeded by the unix UTC time in seconds,
++to stdout.  One temp per line, preceded by the unix UTC time in seconds,
+ and an identifier.
+ 
+ Before you can use this utility lm_sensors must be installed and
+diff --git a/contrib/pi-temp-log b/contrib/pi-temp-log
+index 3e7f680..839e51d 100755
+--- a/contrib/pi-temp-log
++++ b/contrib/pi-temp-log
+@@ -5,7 +5,7 @@ Usage: pi-temper-log
+ 
+ Reads /sys/class/thermal/thermal_zone0/temp to find the CPU temperature
+ on a Raspberry Pi.  Writes all temperatures found to stdout on one line,
+-preceeded by the unix UTC time in seconds.
++preceded by the unix UTC time in seconds.
+ 
+ 
+ Sample log:
+@@ -18,7 +18,7 @@ Sample log:
+ 
+ Field 1: unix UTC time in seconds
+ Field 2: Loug source (PI)
+-Field 3: CPU Temerature
++Field 3: CPU Temperature
+ 
+ Sample crontab usage:
+ 
+diff --git a/contrib/temper-temp-log b/contrib/temper-temp-log
+index c0efc08..f2e67b5 100755
+--- a/contrib/temper-temp-log
++++ b/contrib/temper-temp-log
+@@ -4,7 +4,7 @@
+ Usage: temper-temper-log
+ 
+ Reads 'temper-poll -c' for room temperature data.  Writes the temperature
+-found to stdout on one line, preceeded by the unix UTC time in seconds
++found to stdout on one line, preceded by the unix UTC time in seconds
+ and the Log source ID.
+ 
+ Before you can use this utility you must have a TEMPer USB thermometer
+diff --git a/devel/hacking.txt b/devel/hacking.txt
+index bb9a73e..c7ab163 100644
+--- a/devel/hacking.txt
++++ b/devel/hacking.txt
+@@ -230,7 +230,7 @@ that's easy for both human eyes and programs to parse, do that.
+ Besides being simple, formats like these are easily handled by either
+ Python or shellscripts.
+ 
+-Such simplicity is often difficult or impractical for heterogenous
++Such simplicity is often difficult or impractical for heterogeneous
+ data that needs to be both grouped and labeled, so we have another
+ convention for those cases. Here it is:
+ 
+@@ -336,7 +336,7 @@ that appears on a man page.
+ 
+ === Version string ===
+ 
+-We use a varient of three part Semantic Versioning, of the form X.Y.Z.
++We use a variant of three part Semantic Versioning, of the form X.Y.Z.
+ X, Y, and Z are non-negative decimal integers.
+ 
+ X is the "major" version number.
+diff --git a/docs/copyright.txt b/docs/copyright.txt
+index 146ee8d..57be177 100644
+--- a/docs/copyright.txt
++++ b/docs/copyright.txt
+@@ -152,7 +152,7 @@ as authors of this work.
+ * mailto:shields@tembel.org[Michael Shields <shields@tembel.org>]
+   USNO clock driver
+ * mailto:harlan@pfcs.com[Harlan Stenn <harlan@pfcs.com>]
+-  General maintainance (see the ChangeLog)
++  General maintenance (see the ChangeLog)
+ * mailto:ajit@ee.udel.edu[Ajit Thyagarajan <ajit@ee.udel.edu>]IP
+   multicast/anycast support
+ * mailto:brian.utterback@oracle.com[Brian Utterback
+diff --git a/docs/includes/assoc-auxcommands.txt b/docs/includes/assoc-auxcommands.txt
+index de09d00..e3aa5b5 100644
+--- a/docs/includes/assoc-auxcommands.txt
++++ b/docs/includes/assoc-auxcommands.txt
+@@ -1,4 +1,4 @@
+-// Auxilary association commands - included twice 
++// Auxiliary association commands - included twice
+ 
+ +manycastserver+ _address..._::
+   This command enables reception of manycast client messages to the
+diff --git a/docs/index.txt b/docs/index.txt
+index cd2922d..0f853cd 100644
+--- a/docs/index.txt
++++ b/docs/index.txt
+@@ -191,7 +191,7 @@ few will be user-visible.
+ * Because +ntpviz+ exists, a number of ancient and poorly-documented
+   scripts in awk, Perl, and S, formerly used for making statistical
+   summaries, have been removed from the distribution in order to
+-  reduce overall maintainance burden and complexity. If you miss any
++  reduce overall maintenance burden and complexity. If you miss any
+   of this cruft, the project team will (a) be quite surprised, and (b)
+   work with you on better analytics using ntpviz and modern tools.
+ 
+diff --git a/docs/mode6.txt b/docs/mode6.txt
+index 06d0961..d39ee2f 100644
+--- a/docs/mode6.txt
++++ b/docs/mode6.txt
+@@ -257,7 +257,7 @@ entries which have since been reclaimed.  If necessary, the protocol
+ could be extended to zap those from the client snapshot at the end,
+ but so far that doesn't seem useful.
+ 
+-To accomodate the changing MRU list, the starting point for requests
++To accommodate the changing MRU list, the starting point for requests
+ after the first request is supplied as a series of last seen
+ timestamps and associated addresses, the newest ones the client has
+ received.  As long as at least one of those entries hasn't been
+diff --git a/docs/msyslog.txt b/docs/msyslog.txt
+index 5bd146e..28257c2 100644
+--- a/docs/msyslog.txt
++++ b/docs/msyslog.txt
+@@ -134,7 +134,7 @@ meaning should be clear from context.
+ +cert_parse: invalid issuer ?+::
+ +cert_parse: invalid signature ?+::
+ +cert_parse: invalid subject ?+::
+-  There is a problem with a certificate. Operation cannot proceed untill
++  There is a problem with a certificate. Operation cannot proceed until
+   the problem is fixed. If the certificate is local, it can be
+   regenerated using the ntpkeygen program. If it is held somewhere
+   else, it must be fixed by the holder.
+@@ -144,7 +144,7 @@ meaning should be clear from context.
+ +crypto_?: missing challenge+::
+ +crypto_?: scheme unavailable+::
+   There is a problem with the identity scheme. Operation cannot proceed
+-  untill the problem is fixed. Usually errors are due to
++  until the problem is fixed. Usually errors are due to
+   misconfiguration or an orphan association. If the latter, +ntpd+ will
+   usually time out and recover by itself.
+ +crypto_cert: wrong PEM type ?+::
+diff --git a/docs/oncore-shmem.txt b/docs/oncore-shmem.txt
+index ecd92df..c8f38d1 100644
+--- a/docs/oncore-shmem.txt
++++ b/docs/oncore-shmem.txt
+@@ -77,7 +77,7 @@ a new message arrives. With the sequence number it is easy to check
+ through the shared memory segment for messages that have changed.
+ 
+ The Oncore binary messages are kept in their full length, as described
+-in the Reference manual, that is everything from the @@ prefix thru the
++in the Reference manual, that is everything from the @@ prefix through the
+ <checksum><CR><LF>.
+ 
+ The data starts at location ONE of SHMEM (NOT location ZERO).
+@@ -151,12 +151,12 @@ could be used to open the Shared Memory Segment:
+ 
+         file = "/var/adm/ntpstats/ONCORE";  /* the file name on my ACCESS card */
+         if ((fd=open(file, O_RDONLY)) < 0) {
+-                fprintf(stderr, "Cant open %s\n", file);
++                fprintf(stderr, "Can't open %s\n", file);
+                 exit(1);
+         }
+ 
+         if (stat(file, &statbuf) < 0) {
+-                fprintf(stderr, "Cant stat %s\n", file);
++                fprintf(stderr, "Can't stat %s\n", file);
+                 exit(1);
+         }
+ 
+diff --git a/docs/parsedata.txt b/docs/parsedata.txt
+index 8f0473b..6cadb2e 100644
+--- a/docs/parsedata.txt
++++ b/docs/parsedata.txt
+@@ -158,7 +158,7 @@ there may be a special firmware version available.
+ 
+ == Raw DCF77 Data via serial line ==
+ 
+-RAWDCF: end=TIMEOUT>1.5s, sync each char (any char),generate psuedo time
++RAWDCF: end=TIMEOUT>1.5s, sync each char (any char),generate pseudo time
+ codes, fixed format
+ 
+ direct DCF77 code input
+@@ -196,7 +196,7 @@ Timecode transmission:
+     time marks of a 200ms duration constitute a logical 1
+ ---------------------------------------------------------------------
+ 
+-see the spec. (basically a (non-)inverted psuedo random phase shift)
++see the spec. (basically a (non-)inverted pseudo random phase shift)
+ encoding:
+ 
+ ------------------------------------------------------------------------------
+diff --git a/docs/refclock.txt b/docs/refclock.txt
+index 0461a0e..701400f 100644
+--- a/docs/refclock.txt
++++ b/docs/refclock.txt
+@@ -145,7 +145,7 @@ If you have seen older versions of NTP, this list may have fewer
+ entries than you expected.  Support for some very ancient drivers
+ (notably, those rendered obsolete by the WWVB modulation change at
+ 2012-10-29T15:00:00Z) has been dropped in order to reduce our
+-maintainence load. So have some other drivers (notably the Austron
++maintenance load. So have some other drivers (notably the Austron
+ 2200A/2201A) after having been end-of-lifed with no sign of
+ aftermarket activity for more than ten years. Several others have been
+ removed for relying on obsolete buses or hardware classes that no
+diff --git a/include/ascii.h b/include/ascii.h
+index ce6cd80..dd56913 100644
+--- a/include/ascii.h
++++ b/include/ascii.h
+@@ -58,7 +58,7 @@
+  * support PPSAPI, upgrade Copyright to Berkeley style
+  *
+  * Revision 4.1  1998/07/11 10:05:22  kardel
+- * Release 4.0.73d reconcilation
++ * Release 4.0.73d reconciliation
+  *
+  * Revision 4.0  1998/04/10 19:50:38  kardel
+  * Start 4.0 release version numbering
+diff --git a/include/ntp_assert.h b/include/ntp_assert.h
+index ec3fcb7..d1fb28e 100644
+--- a/include/ntp_assert.h
++++ b/include/ntp_assert.h
+@@ -88,7 +88,7 @@ extern void calysto_assert(unsigned char cnd); /* check whether this holds */
+ 
+ /*
+  * We initially used NTP_REQUIRE() instead of REQUIRE() etc, but that
+- * is unneccesarily verbose, as libisc use of REQUIRE() etc shows.
++ * is unnecessarily verbose, as libisc use of REQUIRE() etc shows.
+  */
+ #define	NTP_REQUIRE(x)		REQUIRE(x)
+ #define	NTP_INSIST(x)		INSIST(x)
+diff --git a/libisc/include/isc/netaddr.h b/libisc/include/isc/netaddr.h
+index 0f7fdfa..c406433 100644
+--- a/libisc/include/isc/netaddr.h
++++ b/libisc/include/isc/netaddr.h
+@@ -147,7 +147,7 @@ isc_netaddr_fromv4mapped(isc_netaddr_t *t, const isc_netaddr_t *s);
+ isc_result_t
+ isc_netaddr_prefixok(const isc_netaddr_t *na, unsigned int prefixlen);
+ /*
+- * Test whether the netaddr 'na' and 'prefixlen' are consistant.
++ * Test whether the netaddr 'na' and 'prefixlen' are consistent.
+  * e.g. prefixlen within range.
+  *      na does not have bits set which are not covered by the prefixlen.
+  *
+diff --git a/libjsmn/jsmn_test.c b/libjsmn/jsmn_test.c
+index 83411bf..d740528 100644
+--- a/libjsmn/jsmn_test.c
++++ b/libjsmn/jsmn_test.c
+@@ -10,7 +10,7 @@ static int test_failed = 0;
+ /* Terminate current test with error */
+ #define fail()	return __LINE__
+ 
+-/* Successfull end of the test case */
++/* Successful end of the test case */
+ #define done() return 0
+ 
+ /* Check single condition */
+diff --git a/libntp/authkeys.c b/libntp/authkeys.c
+index 2f82dcc..8394823 100644
+--- a/libntp/authkeys.c
++++ b/libntp/authkeys.c
+@@ -364,7 +364,7 @@ authhavekey(
+ 	}
+ 
+ 	/*
+-	 * Seach the bin for the key. If found and the key type
++	 * Search the bin for the key. If found and the key type
+ 	 * is zero, somebody marked it trusted without specifying
+ 	 * a key or key type. In this case consider the key missing.
+ 	 */
+diff --git a/libntp/dolfptoa.c b/libntp/dolfptoa.c
+index 66fdc32..eef37b6 100644
+--- a/libntp/dolfptoa.c
++++ b/libntp/dolfptoa.c
+@@ -108,7 +108,7 @@ dolfptoa(
+ 				carry = false;
+ 		}
+ 
+-		if (tp < cp) /* rounding from 999 to 1000 or similiar? */
++		if (tp < cp) /* rounding from 999 to 1000 or similar? */
+ 			cp = tp;
+ 	}
+ 
+diff --git a/libntp/ntp_calendar.c b/libntp/ntp_calendar.c
+index 58de405..5316579 100644
+--- a/libntp/ntp_calendar.c
++++ b/libntp/ntp_calendar.c
+@@ -807,7 +807,7 @@ ntpcal_dayjoin(
+  *---------------------------------------------------------------------
+  * Convert elapsed years in Era into elapsed days in Era.
+  *
+- * To accomodate for negative values of years, floor division would be
++ * To accommodate for negative values of years, floor division would be
+  * required for all division operations. This can be eased by first
+  * splitting the years into full 400-year cycles and years in the
+  * cycle. Only this operation must be coded as a full floor division; as
+diff --git a/libntp/socket.c b/libntp/socket.c
+index 3a1fdfb..e72b4bb 100644
+--- a/libntp/socket.c
++++ b/libntp/socket.c
+@@ -16,12 +16,12 @@
+  * makes use of file descriptors in the lower
+  * integer range.  stdio usually will make use
+  * of the file descriptors in the range of
+- * [0..FOPEN_MAX)
++ * [0..FOPEN_MAX]
+  * in order to keep this range clean, for socket
+  * file descriptors we attempt to move them above
+  * FOPEN_MAX. This is not as easy as it sounds as
+  * FOPEN_MAX changes from implementation to implementation
+- * and may exceed to current file decriptor limits.
++ * and may exceed the current file descriptor limits.
+  * We are using following strategy:
+  * - keep a current socket fd boundary initialized with
+  *   max(0, min(GETDTABLESIZE() - FD_CHUNK, FOPEN_MAX))
+diff --git a/libntp/systime.c b/libntp/systime.c
+index b5723bb..0668510 100644
+--- a/libntp/systime.c
++++ b/libntp/systime.c
+@@ -145,10 +145,10 @@ normalize_time(
+ 	l_fp	lfpfuzz;
+ 	l_fp	lfpdelta;
+ 
+-        /* First check if here was a Lamport violation, that is, two
++        /* First check if there was a Lamport violation, that is, two
+          * successive calls to 'get_ostime()' resulted in negative
+          * time difference. Use a few milliseconds of permissible
+-         * tolerance -- being too sharp can hurt here. (This is intented
++         * tolerance -- being too sharp can hurt here. (This is intended
+          * for the Win32 target, where the HPC interpolation might
+          * introduce small steps backward. It should not be an issue on
+          * systems where get_ostime() results in a true syscall.)
+diff --git a/libparse/binio.c b/libparse/binio.c
+index ac80960..591aef1 100644
+--- a/libparse/binio.c
++++ b/libparse/binio.c
+@@ -112,7 +112,7 @@ put_msb_long(
+ /*
+  * binio.c,v
+  * Revision 4.2  1999/02/21 12:17:34  kardel
+- * 4.91f reconcilation
++ * 4.91f reconciliation
+  *
+  * Revision 4.1  1998/06/28 16:47:50  kardel
+  * added {get,put}_msb_{short,long} functions
+diff --git a/libparse/clk_hopf6021.c b/libparse/clk_hopf6021.c
+index 2b4a58d..1dc1a74 100644
+--- a/libparse/clk_hopf6021.c
++++ b/libparse/clk_hopf6021.c
+@@ -247,7 +247,7 @@ inp_hopf6021(
+  * RECON_4_0_98F
+  *
+  * Revision 4.6  1998/11/15 20:27:57  kardel
+- * Release 4.0.73e13 reconcilation
++ * Release 4.0.73e13 reconciliation
+  *
+  * Revision 4.5  1998/06/14 21:09:35  kardel
+  * Sun acc cleanup
+diff --git a/libparse/clk_meinberg.c b/libparse/clk_meinberg.c
+index 6add4f6..51ee54f 100644
+--- a/libparse/clk_meinberg.c
++++ b/libparse/clk_meinberg.c
+@@ -42,7 +42,7 @@
+  * <D>             = 'S' if daylight saving time is active
+  *                 = 'U' if time is represented in UTC
+  *                 = ' ' if no special condition exists
+- * <A>             = '!' during the hour preceeding an daylight saving time
++ * <A>             = '!' during the hour preceding a daylight saving time
+  *                       start/end change
+  *                 = 'A' leap second insert warning
+  *                 = ' ' if no special condition exists
+@@ -62,7 +62,7 @@
+  *                   '#' if not PZF sychronisation available else ' ' for PZF 535/509
+  * <F>             = '*' if time comes from internal quartz else ' '
+  * <D>             = 'S' if daylight saving time is active else ' '
+- * <A>             = '!' during the hour preceeding an daylight saving time
++ * <A>             = '!' during the hour preceding a daylight saving time
+  *                       start/end change
+  * <L>             = 'A' LEAP second announcement
+  * <R>             = 'R' "call bit" used to signalize irregularities in the control facilities,
+@@ -90,7 +90,7 @@
+  * <S>             = '#' if never synced since powerup else ' '
+  * <F>             = '*' if position is not confirmed else ' '
+  * <D>             = 'S' if daylight saving time is active else ' '
+- * <A>             = '!' during the hour preceeding an daylight saving time
++ * <A>             = '!' during the hour preceding a daylight saving time
+  *                       start/end change
+  * <L>             = 'A' LEAP second announcement
+  * <R>             = 'R' "call bit" used to signalize irregularities in the control facilities,
+@@ -291,7 +291,7 @@ cvt_meinberg(
+ 		/*
+ 		 * in the extended timecode format we have also the
+ 		 * indication that the timecode is in UTC
+-		 * for compatibilty reasons we start at the USUAL
++		 * for compatibility reasons we start at the USUAL
+ 		 * offset (POWERUP flag) and know that the UTC indication
+ 		 * is the character before the powerup flag
+ 		 */
+diff --git a/libparse/clk_rawdcf.c b/libparse/clk_rawdcf.c
+index 7832abf..54ccd7d 100644
+--- a/libparse/clk_rawdcf.c
++++ b/libparse/clk_rawdcf.c
+@@ -30,7 +30,7 @@
+  *	time marks of a 100ms duration constitute a logical 0
+  *	time marks of a 200ms duration constitute a logical 1
+  * FM:
+- *	see the spec. (basically a (non-)inverted psuedo random phase shift)
++ *	see the spec. (basically a (non-)inverted pseudo random phase shift)
+  *
+  * Encoding:
+  * Second	Contents
+@@ -331,7 +331,7 @@ cvt_rawdcf(
+ 	{
+ 		unsigned int ch = *s ^ 0xFF;
+ 		/*
+-		 * these lines are left as an excercise to the reader 8-)
++		 * these lines are left as an exercise to the reader 8-)
+ 		 */
+ 		if (!((ch+1) & ch) || !*s)
+ 		{
+diff --git a/libparse/clk_trimtsip.c b/libparse/clk_trimtsip.c
+index 88d7f65..5e708d2 100644
+--- a/libparse/clk_trimtsip.c
++++ b/libparse/clk_trimtsip.c
+@@ -388,10 +388,10 @@ cvt_trimtsip(
+  * use mmemcpy instead of bcopy
+  *
+  * Revision 4.9  1999/02/21 12:17:42  kardel
+- * 4.91f reconcilation
++ * 4.91f reconciliation
+  *
+  * Revision 4.8  1998/11/15 20:27:58  kardel
+- * Release 4.0.73e13 reconcilation
++ * Release 4.0.73e13 reconciliation
+  *
+  * Revision 4.7  1998/08/16 18:49:20  kardel
+  * (cvt_trimtsip): initial kernel capable version (no more floats)
+diff --git a/libparse/data_mbg.c b/libparse/data_mbg.c
+index ddea026..36e8e61 100644
+--- a/libparse/data_mbg.c
++++ b/libparse/data_mbg.c
+@@ -496,7 +496,7 @@ get_mbg_iono(
+  * support PPSAPI, upgrade Copyright to Berkeley style
+  *
+  * Revision 4.3  1999/02/21 12:17:42  kardel
+- * 4.91f reconcilation
++ * 4.91f reconciliation
+  *
+  * Revision 4.2  1998/06/14 21:09:39  kardel
+  * Sun acc cleanup
+diff --git a/libparse/gpstolfp.c b/libparse/gpstolfp.c
+index f3d6fa4..9012aa4 100644
+--- a/libparse/gpstolfp.c
++++ b/libparse/gpstolfp.c
+@@ -41,7 +41,7 @@ gpstolfp(
+  * (GPSWRAP): update GPS rollover to 990 weeks
+  *
+  * Revision 4.2  1998/07/11 10:05:25  kardel
+- * Release 4.0.73d reconcilation
++ * Release 4.0.73d reconciliation
+  *
+  * Revision 4.1  1998/06/28 16:47:15  kardel
+  * added gpstolfp() function
+diff --git a/libparse/ieee754io.c b/libparse/ieee754io.c
+index 61e23af..2ec82c1 100644
+--- a/libparse/ieee754io.c
++++ b/libparse/ieee754io.c
+@@ -556,19 +556,19 @@ int main(
+  * support PPSAPI, upgrade Copyright to Berkeley style
+  *
+  * Revision 4.8  1999/02/21 12:17:36  kardel
+- * 4.91f reconcilation
++ * 4.91f reconciliation
+  *
+  * Revision 4.7  1999/02/21 11:26:03  kardel
+  * renamed index to fieldindex to avoid index() name clash
+  *
+  * Revision 4.6  1998/11/15 20:27:52  kardel
+- * Release 4.0.73e13 reconcilation
++ * Release 4.0.73e13 reconciliation
+  *
+  * Revision 4.5  1998/08/16 19:01:51  kardel
+  * debug information only compile for LIBDEBUG case
+  *
+  * Revision 4.4  1998/08/09 09:39:28  kardel
+- * Release 4.0.73e2 reconcilation
++ * Release 4.0.73e2 reconciliation
+  *
+  * Revision 4.3  1998/06/13 11:56:19  kardel
+  * disabled putbute() for the time being
+diff --git a/libparse/mfp_mul.c b/libparse/mfp_mul.c
+index 8eaedbc..5657bd4 100644
+--- a/libparse/mfp_mul.c
++++ b/libparse/mfp_mul.c
+@@ -75,7 +75,7 @@ mfp_mul(
+ 	unsigned long result_low, result_high;
+ 	int low_index = (i+j)/2;      /* formal [0..3]  - index for low long word */
+ 	int mid_index = 1+low_index;  /* formal [1..4]! - index for high long word
+-					 will generate unecessary add of 0 to c[4]
++					 will generate unnecessary add of 0 to c[4]
+ 					 but save 15 'if (result_high) expressions' */
+ 	int high_index = 1+mid_index; /* formal [2..5]! - index for high word overflow
+ 					 - only assigned on overflow (limits range to 2..3) */
+@@ -160,7 +160,7 @@ mfp_mul(
+  * support PPSAPI, upgrade Copyright to Berkeley style
+  *
+  * Revision 4.3  1999/02/21 12:17:37  kardel
+- * 4.91f reconcilation
++ * 4.91f reconciliation
+  *
+  * Revision 4.2  1998/12/20 23:45:28  kardel
+  * fix types and warnings
+diff --git a/libparse/parse.c b/libparse/parse.c
+index e87d402..3ad83d7 100644
+--- a/libparse/parse.c
++++ b/libparse/parse.c
+@@ -170,7 +170,7 @@ parse_ioread(
+ 	register unsigned int updated = CVT_NONE;
+ 	/*
+ 	 * within STREAMS CSx (x < 8) chars still have the upper bits set
+-	 * so we normalize the characters by masking unecessary bits off.
++	 * so we normalize the characters by masking unnecessary bits off.
+ 	 *
+ 	 * (ESR, 2015: Probably not necessary since STREAMS support has
+ 	 * been removed, but harmless.)
+@@ -783,10 +783,10 @@ parse_setcs(
+  * RECON_4_0_98F
+  *
+  * Revision 4.13  1999/02/28 11:50:20  kardel
+- * (timepacket): removed unecessary code
++ * (timepacket): removed unnecessary code
+  *
+  * Revision 4.12  1999/02/21 12:17:44  kardel
+- * 4.91f reconcilation
++ * 4.91f reconciliation
+  *
+  * Revision 4.11  1999/02/21 11:09:47  kardel
+  * unified debug output
+diff --git a/ntpd/ntp_control.c b/ntpd/ntp_control.c
+index 44b4f42..26ffbd4 100644
+--- a/ntpd/ntp_control.c
++++ b/ntpd/ntp_control.c
+@@ -2539,7 +2539,7 @@ control_unspec(
+ 
+ 	/*
+ 	 * What is an appropriate response to an unspecified op-code?
+-	 * I return no errors and no data, unless a specified assocation
++	 * I return no errors and no data, unless a specified association
+ 	 * doesn't exist.
+ 	 */
+ 	if (res_associd) {
+@@ -2580,7 +2580,7 @@ read_status(
+ #endif
+ 	/*
+ 	 * Two choices here. If the specified association ID is
+-	 * zero we return all known assocation ID's.  Otherwise
++	 * zero we return all known association ID's.  Otherwise
+ 	 * we return a bunch of stuff about the particular peer.
+ 	 */
+ 	if (res_associd) {
+@@ -3188,7 +3188,7 @@ send_mru_entry(
+  * from the client snapshot at the end, but so far that doesn't seem
+  * useful.
+  *
+- * To accomodate the changing MRU list, the starting point for requests
++ * To accommodate the changing MRU list, the starting point for requests
+  * after the first request is supplied as a series of last seen
+  * timestamps and associated addresses, the newest ones the client has
+  * received.  As long as at least one of those entries hasn't been
+diff --git a/ntpd/ntp_leapsec.c b/ntpd/ntp_leapsec.c
+index 3d3513c..42d47b8 100644
+--- a/ntpd/ntp_leapsec.c
++++ b/ntpd/ntp_leapsec.c
+@@ -329,7 +329,7 @@ leapsec_query(
+ 	if (ucmpv64(&ts64, &pt->head.stime) < 0)
+ 		return fired;
+ 
+-	/* now start to collect the remaing data */
++	/* now start to collect the remaining data */
+ 	due32 = vint64lo(pt->head.dtime);
+ 
+ 	qr->tai_diff  = pt->head.next_tai - pt->head.this_tai;
+diff --git a/ntpd/ntp_leapsec.h b/ntpd/ntp_leapsec.h
+index 63eebf4..fa5f652 100644
+--- a/ntpd/ntp_leapsec.h
++++ b/ntpd/ntp_leapsec.h
+@@ -49,7 +49,7 @@ extern int leapsec_validate(leapsec_reader, void*);
+  * The consequence of electric mode is that we do not 'see' the leap
+  * second, and no client actions are needed when crossing the leap era
+  * boundary.  In manual (aka non-electric) mode the clock will simply
+- * step forward untill *we* (that is, this module) tells the client app
++ * step forward until *we* (that is, this module) tells the client app
+  * to step at the right time. This needs a slightly different type of
+  * processing, so switching between those two modes should not be done
+  * too close to a leap second. The transition might be lost in that
+diff --git a/ntpd/ntp_loopfilter.c b/ntpd/ntp_loopfilter.c
+index f93f6cd..f85cb08 100644
+--- a/ntpd/ntp_loopfilter.c
++++ b/ntpd/ntp_loopfilter.c
+@@ -315,7 +315,7 @@ ntp_adjtime_error_handler(
+ # warning TIME_OOP is not defined
+ #endif
+ #ifdef TIME_WAIT
+-	    case TIME_WAIT: /* 4: leap second has occured */
++	    case TIME_WAIT: /* 4: leap second has occurred */
+ 		msyslog(LOG_INFO, "kernel reports leap second has occurred");
+ 	    break;
+ #else
+@@ -534,7 +534,7 @@ local_clock(
+ 	 * The huff-n'-puff filter finds the lowest delay in the recent
+ 	 * interval. This is used to correct the offset by one-half the
+ 	 * difference between the sample delay and minimum delay. This
+-	 * is most effective if the delays are highly assymetric and
++	 * is most effective if the delays are highly asymmetric and
+ 	 * clockhopping is avoided and the clock frequency wander is
+ 	 * relatively small.
+ 	 */
+@@ -561,7 +561,7 @@ local_clock(
+ 	 * system reacts to large phase and frequency excursion. There
+ 	 * are two main regimes: when the offset exceeds the step
+ 	 * threshold (128 ms) and when it does not. Under certain
+-	 * conditions updates are suspended until the stepout theshold
++	 * conditions updates are suspended until the stepout threshold
+ 	 * (900 s) is exceeded. See the documentation on how these
+ 	 * thresholds interact with commands and command line options.
+ 	 *
+diff --git a/ntpd/ntp_peer.c b/ntpd/ntp_peer.c
+index 7df1c38..96a5cc1 100644
+--- a/ntpd/ntp_peer.c
++++ b/ntpd/ntp_peer.c
+@@ -716,7 +716,7 @@ newpeer(
+ 
+ 	/*
+ 	 * Allocate a new peer structure. Some dirt here, since some of
+-	 * the initialization requires knowlege of our system state.
++	 * the initialization requires knowledge of our system state.
+ 	 */
+ 	if (peer_free_count == 0)
+ 		getmorepeermem();
+diff --git a/ntpd/ntp_proto.c b/ntpd/ntp_proto.c
+index ae7d56c..3c88569 100644
+--- a/ntpd/ntp_proto.c
++++ b/ntpd/ntp_proto.c
+@@ -195,7 +195,7 @@ is_control_packet(
+ 	    PKT_MODE(rbufp->recv_space.X_recv_buffer[0]) == MODE_CONTROL;
+ }
+ 
+-/* Free a parsed_pkt sturcture allocated by parsed_packet(). In the
++/* Free a parsed_pkt structure allocated by parsed_packet(). In the
+    event of a parse error, this function may be called from within
+    parse_packet() while the structure is only partially initalized, so
+    we must be careful not to dereference uninitialized pointers.  This
+diff --git a/ntpd/ntp_refclock.c b/ntpd/ntp_refclock.c
+index 87e78df..70d9235 100644
+--- a/ntpd/ntp_refclock.c
++++ b/ntpd/ntp_refclock.c
+@@ -65,7 +65,7 @@ static int refclock_sample (struct refclockproc *);
+ 
+ 
+ /*
+- * refclock_report - note the occurance of an event
++ * refclock_report - note the occurrence of an event
+  *
+  * This routine presently just remembers the report and logs it.  It
+  * tries to be a good citizen and bothers the system log only if
+diff --git a/ntpd/ntp_signd.c b/ntpd/ntp_signd.c
+index 458ef5b..7f607f9 100644
+--- a/ntpd/ntp_signd.c
++++ b/ntpd/ntp_signd.c
+@@ -1,6 +1,6 @@
+ /* Copyright 2008, Red Hat, Inc.
+    Copyright 2008, Andrew Tridgell.
+-   Licenced under the same terms as NTP itself. 
++   Licensed under the same terms as NTP itself.
+  */
+ #include <config.h>
+ 
+diff --git a/ntpd/ntp_util.c b/ntpd/ntp_util.c
+index 9453bcc..8a925ed 100644
+--- a/ntpd/ntp_util.c
++++ b/ntpd/ntp_util.c
+@@ -563,7 +563,7 @@ record_raw_stats(
+  * day (MJD)
+  * time (s past midnight)
+  * time since reset
+- * packets recieved
++ * packets received
+  * packets for this host
+  * current version
+  * old version
+diff --git a/ntpd/refclock_generic.c b/ntpd/refclock_generic.c
+index 471894d..c0df6e2 100644
+--- a/ntpd/refclock_generic.c
++++ b/ntpd/refclock_generic.c
+@@ -331,7 +331,7 @@ struct parseunit
+ 	u_long        pollneeddata; 	/* current_time(!=0) for receive sample expected in PPS mode */
+ 	u_short	      lastformat;       /* last format used */
+ 	u_long        lastsync;		/* time (ntp) when clock was last seen fully synchronized */
+-        u_long        maxunsync;        /* max time in seconds a receiver is trusted after loosing synchronisation */
++        u_long        maxunsync;        /* max time in seconds a receiver is trusted after losing synchronisation */
+         double        ppsphaseadjust;   /* phase adjustment of PPS time stamp */
+         u_long        lastmissed;       /* time (ntp) when poll didn't get data (powerup heuristic) */
+ 	u_long        ppsserial;        /* magic cookie for ppsclock serials (avoids stale ppsclock data) */
+@@ -376,7 +376,7 @@ typedef struct poll_info
+ 
+ #define DCF_ID		"DCF"	/* generic DCF */
+ #define DCF_A_ID	"DCFa"	/* AM demodulation */
+-#define DCF_P_ID	"DCFp"	/* psuedo random phase shift */
++#define DCF_P_ID	"DCFp"	/* pseudo random phase shift */
+ #define GPS_ID		"GPS"	/* GPS receiver */
+ #define MSF_ID		"MSF"	/* MSF receiver */
+ 
+@@ -2942,7 +2942,7 @@ parse_poll(
+ 	    ((int)(current_time - parse->pollneeddata) > (1<<(max(min(parse->peer->hpoll, parse->peer->ppoll), parse->peer->minpoll)))))
+ 	{
+ 		/*
+-		 * start worrying when exceeding a poll inteval
++		 * start worrying when exceeding a poll interval
+ 		 * bad news - didn't get a response last time
+ 		 */
+ 		parse->lastmissed = current_time;
+@@ -3355,7 +3355,7 @@ parse_process(
+ 		char tmp1[200];
+ 		char tmp2[200];
+ 		/*
+-		 * something happend - except for PPS events
++		 * something happened - except for PPS events
+ 		 */
+ 
+ 		(void) parsestate(parsetime->parse_state, tmp1, sizeof(tmp1));
+@@ -5526,7 +5526,7 @@ rawdcf_init_2(
+  * support PPSAPI, upgrade Copyright to Berkeley style
+  *
+  * Revision 4.43  2001/05/26 22:53:16  kardel
+- * 20010526 reconcilation
++ * 20010526 reconciliation
+  *
+  * Revision 4.42  2000/05/14 15:31:51  kardel
+  * PPSAPI && RAWDCF modemline support
+@@ -5544,7 +5544,7 @@ rawdcf_init_2(
+  * support PPSAPI
+  *
+  * Revision 4.37  2000/03/05 20:11:14  kardel
+- * 4.0.99g reconcilation
++ * 4.0.99g reconciliation
+  *
+  * Revision 4.36  1999/11/28 17:18:20  kardel
+  * disabled burst mode
+@@ -5598,7 +5598,7 @@ rawdcf_init_2(
+  * use new autoconfig symbols
+  *
+  * Revision 4.21  1999/02/21 12:18:13  kardel
+- * 4.91f reconcilation
++ * 4.91f reconciliation
+  *
+  * Revision 4.20  1999/02/21 10:53:36  kardel
+  * initial Linux PPSkit version
+@@ -5614,7 +5614,7 @@ rawdcf_init_2(
+  * is not defined
+  *
+  * Revision 4.16  1998/11/15 20:28:17  kardel
+- * Release 4.0.73e13 reconcilation
++ * Release 4.0.73e13 reconciliation
+  *
+  * Revision 4.15  1998/08/22 21:56:08  kardel
+  * fixed IO handling for non-STREAM IO
+@@ -5632,7 +5632,7 @@ rawdcf_init_2(
+  * Trimble TSIP support
+  *
+  * Revision 4.12  1998/07/11 10:05:34  kardel
+- * Release 4.0.73d reconcilation
++ * Release 4.0.73d reconciliation
+  *
+  * Revision 4.11  1998/06/14 21:09:42  kardel
+  * Sun acc cleanup
+diff --git a/ntpd/refclock_hpgps.c b/ntpd/refclock_hpgps.c
+index 5780c7c..8933e68 100644
+--- a/ntpd/refclock_hpgps.c
++++ b/ntpd/refclock_hpgps.c
+@@ -77,7 +77,7 @@
+  */
+ 
+ /*
+- * Fudge time1 is used to accomodate the timecode serial interface adjustment.
++ * Fudge time1 is used to accommodate the timecode serial interface adjustment.
+  * Option flag4 can be set to request a receiver status screen summary, which
+  * is recorded in the clockstats file.
+  */
+diff --git a/ntpd/refclock_jupiter.c b/ntpd/refclock_jupiter.c
+index 04f4b29..b755038 100644
+--- a/ntpd/refclock_jupiter.c
++++ b/ntpd/refclock_jupiter.c
+@@ -55,7 +55,7 @@
+ #define JUPITER_I_ALT		1219	/* user-entered altitude input */
+ #define JUPITER_I_PLAT		1220	/* application platform control */
+ #define JUPITER_I_NAV		1221	/* nav configuration */
+-#define JUPITER_I_TEST		1300	/* preform built-in test command */
++#define JUPITER_I_TEST		1300	/* perform built-in test command */
+ #define JUPITER_I_RESTART	1303	/* restart command */
+ #define JUPITER_I_PORT		1330	/* serial port com parameters */
+ #define JUPITER_I_PROTO		1331	/* message protocol control */
+diff --git a/ntpd/refclock_magnavox.c b/ntpd/refclock_magnavox.c
+index cd82d09..9c79c2d 100644
+--- a/ntpd/refclock_magnavox.c
++++ b/ntpd/refclock_magnavox.c
+@@ -121,7 +121,7 @@ struct mx4200unit {
+ 	bool   moving;			/* mobile platform? */
+ 	u_long sloppyclockflag;		/* driver option flags */
+ 	bool   known;			/* position known yet? */
+-	u_long clamp_time;		/* when to stop postion averaging */
++	u_long clamp_time;		/* when to stop position averaging */
+ 	u_long log_time;		/* when to print receiver status */
+ 	pps_handle_t	pps_h;
+ 	pps_params_t	pps_p;
+@@ -749,7 +749,7 @@ mx4200_receive(
+ 		 * messages and since the receiver outputs status messages by
+ 		 * default after being reset to factory defaults when sent the
+ 		 * "$PMVXG,018,C\r\n" message, any status message we get
+-		 * indicates the reciever needs to be initialized; thus, it is
++		 * indicates the receiver needs to be initialized; thus, it is
+ 		 * not necessary to decode the status message.
+ 		 */
+ 		if ((cp = mx4200_parse_s(peer)) != NULL) {
+@@ -1174,7 +1174,7 @@ mx4200_jday(
+  *			*This sentence is intended for post-analysis
+  *			applications.*
+  *	1 float UTC measurement time (seconds into week)
+- *	2 float WGS-84 Lattitude (degrees, minutes)
++ *	2 float WGS-84 Latitude (degrees, minutes)
+  *	3  char N=North, S=South
+  *	4 float WGS-84 Longitude (degrees, minutes)
+  *	5  char E=East, W=West
+@@ -1351,13 +1351,13 @@ mx4200_parse_p(
+  *			acceptable navigation for the receiver.
+  *	1	Constrain Altitude Mode:
+  *		0 = Auto.  Constrain altitude (2-D solution) and use
+- *		    manual altitude input when 3 sats avalable.  Do
++ *		    manual altitude input when 3 sats available.  Do
+  *		    not constrain altitude (3-D solution) when 4 sats
+  *		    available.
+  *		1 = Always constrain altitude (2-D solution).
+  *		2 = Never constrain altitude (3-D solution).
+  *		3 = Coast.  Constrain altitude (2-D solution) and use
+- *		    last GPS altitude calculation when 3 sats avalable.
++ *		    last GPS altitude calculation when 3 sats available.
+  *		    Do not constrain altitude (3-D solution) when 4 sats
+  *		    available.
+  *	2	Altitude Reference: (always 0 for MX4200)
+diff --git a/ntpd/refclock_nmea.c b/ntpd/refclock_nmea.c
+index d5665aa..623ec6a 100644
+--- a/ntpd/refclock_nmea.c
++++ b/ntpd/refclock_nmea.c
+@@ -58,7 +58,7 @@
+  * set, kernel hardpps is enabled.
+  *
+  * GPS sentences other than RMC (the default) may be enabled by setting
+- * the relevent bits of 'mode' in the server configuration line
++ * the relevant bits of 'mode' in the server configuration line
+  * refclock u mode X
+  * 
+  * bit 0 - enables RMC (1)
+@@ -658,7 +658,7 @@ nmea_timer(
+  * move the receive time stamp to the corresponding edge. This can warp
+  * into future, if a transmission delay of more than 500ms is not
+  * compensated with a corresponding fudge time2 value, because then the
+- * next PPS edge is nearer than the last. (Similiar to what the PPS
++ * next PPS edge is nearer than the last. (Similar to what the PPS
+  * driver does, but we deal with full time stamps here, not just phase
+  * shift information.) Likewise, a negative fudge time2 value must be
+  * used if the reference time stamp correlates with the *following* PPS
+@@ -672,7 +672,7 @@ nmea_timer(
+  * close as possible.
+  *
+  * It should also be noted that the typical use case is matching to the
+- * preceeding edge, as most units relate their sentences to the current
++ * preceding edge, as most units relate their sentences to the current
+  * second.
+  *
+  * The function returns PPS_RELATE_NONE (0) if no PPS edge correlation
+@@ -1389,7 +1389,7 @@ field_parse(
+  * -------------------------------------------------------------------
+  * Wipe (that is, overwrite with '_') data fields and the checksum in
+  * the last timecode.  The list of field indices is given as integers
+- * in a varargs list, preferrably in ascending order, in any case
++ * in a varargs list, preferably in ascending order, in any case
+  * terminated by a negative field index.
+  *
+  * A maximum number of 8 fields can be overwritten at once to guard
+@@ -1670,8 +1670,8 @@ unfold_day(
+  * -------------------------------------------------------------------
+  * A 2-digit year is expanded into full year spec around the year found
+  * in 'jd->year'. This should be in +79/-19 years around the system time,
+- * or the result will be off by 100 years.  The assymetric behaviour was
+- * chosen to enable inital sync for systems that do not have a
++ * or the result will be off by 100 years.  The asymmetric behaviour was
++ * chosen to enable initial sync for systems that do not have a
+  * battery-backup clock and start with a date that is typically years in
+  * the past.
+  *
+@@ -1829,7 +1829,7 @@ eval_gps_time(
+ 	 * division with floor correction is overkill here; a simple
+ 	 * addition or subtraction step is sufficient. Using WHILE loops
+ 	 * gives the right result even if the offset exceeds one day,
+-	 * which is NOT what it's intented for! */
++	 * which is NOT what it's intended for! */
+ 	while (gps_sec >= SECSPERDAY) {
+ 		gps_sec -= SECSPERDAY;
+ 		gps_day += 1;
+diff --git a/ntpd/refclock_oncore.c b/ntpd/refclock_oncore.c
+index 6a4f087..4f4d8aa 100644
+--- a/ntpd/refclock_oncore.c
++++ b/ntpd/refclock_oncore.c
+@@ -105,7 +105,7 @@
+  * Reg.Clemens (Mar 2004)
+  * Support for interfaces other than PPSAPI removed, for Solaris, SunOS,
+  * SCO, you now need to use one of the timepps.h files in the root dir.
+- * this driver will 'grab' it for you if you dont have one in /usr/include
++ * this driver will 'grab' it for you if you don't have one in /usr/include
+  * --------------------------------------------------------------------------
+  * This code uses the two devices
+  *	/dev/oncore.serial.n
+@@ -300,12 +300,12 @@ struct instance {
+ 	int8_t	traim;		/* do we have traim? yes UT/VP, M12+T, no BASIC, GT, M12, -1 unknown, 0 no, +1 yes */
+ 				/* the following 7 are all timing counters */
+ 	uint8_t	traim_delay;	/* seconds counter, waiting for reply */
+-	uint8_t	count;		/* cycles thru Ea before starting */
+-	uint8_t	count1; 	/* cycles thru Ea after SS_TESTING, waiting for SS_HW */
+-	uint8_t	count2; 	/* cycles thru Ea after count, to check for @@Ea */
+-	uint8_t	count3; 	/* cycles thru Ea checking for # channels */
+-	uint8_t	count4; 	/* cycles thru leap after Gj to issue Bj */
+-	uint8_t	count5; 	/* cycles thru get_timestamp waiting for valid UTC correction */
++	uint8_t	count;		/* cycles through Ea before starting */
++	uint8_t	count1; 	/* cycles through Ea after SS_TESTING, waiting for SS_HW */
++	uint8_t	count2; 	/* cycles through Ea after count, to check for @@Ea */
++	uint8_t	count3; 	/* cycles through Ea checking for # channels */
++	uint8_t	count4; 	/* cycles through leap after Gj to issue Bj */
++	uint8_t	count5; 	/* cycles through get_timestamp waiting for valid UTC correction */
+ 	uint8_t	count5_set;	/* only set count5 once */
+ 	uint8_t	counta; 	/* count for waiting on almanac message */
+ 	uint8_t	pollcnt;
+@@ -483,7 +483,7 @@ static uint8_t oncore_cmd_Ag[]  = { 'A', 'g', 0 };				    /* 6/8/12	Satellite Ma
+ static uint8_t oncore_cmd_Agx[] = { 'A', 'g', 0xff };				    /* 6/8/12	Satellite Mask Angle: read		*/
+ static uint8_t oncore_cmd_As[]  = { 'A', 's', 0,0,0,0, 0,0,0,0, 0,0,0,0, 0 };	    /* 6/8/12	Posn Hold Parameters			*/
+ static uint8_t oncore_cmd_Asx[] = { 'A', 's', 0x7f,0xff,0xff,0xff,		    /* 6/8/12	Posn Hold Readback			*/
+-					     0x7f,0xff,0xff,0xff,		    /*		 on UT+ this doesnt work with 0xff	*/
++					     0x7f,0xff,0xff,0xff,		    /*		 on UT+ this doesn't work with 0xff	*/
+ 					     0x7f,0xff,0xff,0xff, 0xff };	    /*		 but does work with 0x7f (sigh).	*/
+ static uint8_t oncore_cmd_At0[] = { 'A', 't', 0 };				    /* 6/8	Posn Hold: off				*/
+ static uint8_t oncore_cmd_At1[] = { 'A', 't', 1 };				    /* 6/8	Posn Hold: on				*/
+@@ -541,7 +541,7 @@ static uint8_t oncore_cmd_Ia[]  = { 'I', 'a' };					    /* 12	Self Test				*/
+  *				    the GT had Au,Av, but not As,At
+  * This was as of v2.0 of both firmware sets. possibly 1.3 for UT.
+  * Bj in UT at v1.3
+- * dont see Bd in UT/GT thru 1999
++ * don't see Bd in UT/GT through 1999
+  * Gj in UT as of 3.0, 1999 , Bj as of 1.3
+  */
+ 
+@@ -629,7 +629,7 @@ oncore_start(
+ 	oncore_log(instance, LOG_NOTICE, "state = ONCORE_NO_IDEA");
+ 
+ 	/* Now open files.
+-	 * This is a bit complicated, a we dont want to open the same file twice
++	 * This is a bit complicated, a we don't want to open the same file twice
+ 	 * (its a problem on some OS), and device2 may not exist for the new PPS
+ 	 */
+ 
+@@ -677,7 +677,7 @@ oncore_start(
+ 
+ 	/* for LINUX the PPS device is the result of a line discipline.
+ 	   It seems simplest to let an external program create the appropriate
+-	   /dev/pps<n> file, and only check (carefully) for its existance here
++	   /dev/pps<n> file, and only check (carefully) for its existence here
+ 	 */
+ 	if ((stat1.st_dev == stat2.st_dev) && (stat1.st_ino == stat2.st_ino))	/* same device here */
+ 		fd2 = fd1;
+@@ -1015,10 +1015,10 @@ oncore_init_shmem(
+ 		}
+ 	}
+ 
+-	/* we now walk thru the two buffers (shmem_old and buf, soon to become shmem)
++	/* we now walk through the two buffers (shmem_old and buf, soon to become shmem)
+ 	 * copying the data in shmem_old to buf.
+ 	 * When we are done we write it out and free both buffers.
+-	 * If the structure sizes dont agree, I will not copy.
++	 * If the structure sizes don't agree, I will not copy.
+ 	 * This could be due to an addition/deletion or a problem with the disk file.
+ 	 */
+ 
+@@ -1587,15 +1587,15 @@ oncore_get_timestamp(
+ 	peer = instance->peer;
+ 
+ #if 1
+-	/* If we are in SiteSurvey mode, then we are in 3D mode, and we fall thru.
+-	 * If we have Finished the SiteSurvey, then we fall thru for the 14/15
++	/* If we are in SiteSurvey mode, then we are in 3D mode, and we fall through.
++	 * If we have Finished the SiteSurvey, then we fall through for the 14/15
+ 	 *  times we get here in 0D mode (the 1/15 is in 3D for SHMEM).
+ 	 * This gives good time, which gets better when the SS is done.
+ 	 */
+ 
+ 	if ((instance->site_survey == ONCORE_SS_DONE) && (instance->mode != MODE_0D)) {
+ #else
+-	/* old check, only fall thru for SS_DONE and 0D mode, 2h45m wait for ticks */
++	/* old check, only fall through for SS_DONE and 0D mode, 2h45m wait for ticks */
+ 
+ 	if ((instance->site_survey != ONCORE_SS_DONE) || (instance->mode != MODE_0D)) {
+ #endif
+@@ -1700,8 +1700,8 @@ oncore_get_timestamp(
+ 
+ 	/* now have timestamp in ts */
+ 	/* add in saw_tooth and offset, these will be ZERO if no TRAIM */
+-	/* they will be IGNORED if the PPSAPI cant do PPS_OFFSET/ASSERT/CLEAR */
+-	/* we just try to add them in and dont test for that here */
++	/* they will be IGNORED if the PPSAPI can't do PPS_OFFSET/ASSERT/CLEAR */
++	/* we just try to add them in and don't test for that here */
+ 
+ 	/* saw_tooth not really necessary if using TIMEVAL */
+ 	/* since its only precise to us, but do it anyway. */
+@@ -1846,7 +1846,7 @@ oncore_get_timestamp(
+ 		    );
+ 	}
+ 
+-	/* and some things I dont understand (magic ntp things) */
++	/* and some things I don't understand (magic ntp things) */
+ 
+ 	if (!refclock_process(instance->pp)) {
+ 		refclock_report(instance->peer, CEVNT_BADTIME);
+@@ -3039,7 +3039,7 @@ oncore_msg_Cj_init(
+ 
+ 	if (instance->posn_set) {
+ 		oncore_log(instance, LOG_INFO, "Setting Posn from input data");
+-		oncore_set_posn(instance);	/* this should print posn indirectly thru the As cmd */
++		oncore_set_posn(instance);	/* this should print posn indirectly through the As cmd */
+ 	} else	/* must issue an @@At here to check on 6/8 Position Hold, set_posn would have */
+ 		if (instance->chan != 12)
+ 			oncore_sendmsg(instance, oncore_cmd_Atx, sizeof(oncore_cmd_Atx));
+@@ -3212,7 +3212,7 @@ oncore_msg_Gj(
+ 
+ 	UNUSED_ARG(len);
+ 
+-	instance->saw_Gj = 1; /* flag, saw_Gj, dont need to try Bj in check_leap */
++	instance->saw_Gj = 1; /* flag, saw_Gj, don't need to try Bj in check_leap */
+ 
+ 	/* print the message to verify whats there */
+ 
+@@ -3432,14 +3432,14 @@ oncore_check_leap_sec(
+ 	if (instance->Bj_day != instance->BEHa[5]) {	/* do this 1/day */
+ 		instance->Bj_day = instance->BEHa[5];
+ 
+-		if (instance->saw_Gj < 0) {	/* -1 DONT have Gj use Bj */
++		if (instance->saw_Gj < 0) {	/* -1 DON'T have Gj use Bj */
+ 			if ((instance->BEHa[4] == 6) || (instance->BEHa[4] == 12))
+ 				oncore_sendmsg(instance, oncore_cmd_Bj, sizeof(oncore_cmd_Bj));
+ 			oncore_sendmsg(instance, oncore_cmd_Bl, sizeof(oncore_cmd_Bl));
+ 			return;
+ 		}
+ 
+-		if (instance->saw_Gj == 0)	/* 0 is dont know if we have Gj */
++		if (instance->saw_Gj == 0)	/* 0 is don't know if we have Gj */
+ 			instance->count4 = 1;
+ 
+ 		oncore_sendmsg(instance, oncore_cmd_Gj, sizeof(oncore_cmd_Gj));
+@@ -3448,13 +3448,13 @@ oncore_check_leap_sec(
+ 
+ 	/* Gj works for some 6/8 chan UT and the M12	  */
+ 	/* if no response from Gj in 5 sec, we try Bj	  */
+-	/* which isnt implemented in all the GT/UT either */
++	/* which isn't implemented in all the GT/UT either */
+ 
+ 	if (instance->count4) { 	/* delay, waiting for Gj response */
+ 		if (instance->saw_Gj == 1)
+ 			instance->count4 = 0;
+ 		else if (instance->count4++ > 5) {	/* delay, waiting for Gj response */
+-			instance->saw_Gj = -1;		/* didnt see it, will use Bj */
++			instance->saw_Gj = -1;		/* didn't see it, will use Bj */
+ 			instance->count4 = 0;
+ 			if ((instance->BEHa[4] == 6) || (instance->BEHa[4] == 12)) {
+ 				oncore_sendmsg(instance, oncore_cmd_Bj, sizeof(oncore_cmd_Bj));
+diff --git a/ntpd/refclock_pps.c b/ntpd/refclock_pps.c
+index c1b06cf..e19aeb0 100644
+--- a/ntpd/refclock_pps.c
++++ b/ntpd/refclock_pps.c
+@@ -31,7 +31,7 @@
+  * levels, to the computer. One is to shift to EIA levels and connect to
+  * pin 8 (DCD) of a serial port. This requires a level converter and
+  * may require a one-shot flipflop to lengthen the pulse. The other is
+- * to connect the PPS signal directly to pin 10 (ACK) of a PC paralell
++ * to connect the PPS signal directly to pin 10 (ACK) of a PC parallel
+  * port. These methods are architecture dependent.
+  *
+  * This driver requires the Pulse-per-Second API for Unix-like Operating
+diff --git a/ntpd/refclock_shm.c b/ntpd/refclock_shm.c
+index be17219..b4dfd56 100644
+--- a/ntpd/refclock_shm.c
++++ b/ntpd/refclock_shm.c
+@@ -37,7 +37,7 @@
+ #endif /* HAVE_STDATOMIC_H */
+ 
+ /*
+- * This driver supports a reference clock attached thru shared memory
++ * This driver supports a reference clock attached through shared memory
+  */
+ 
+ /*
+diff --git a/ntpd/refclock_trimble.c b/ntpd/refclock_trimble.c
+index 5153a7d..893bcd9 100644
+--- a/ntpd/refclock_trimble.c
++++ b/ntpd/refclock_trimble.c
+@@ -94,7 +94,7 @@
+ #define PACKET_8FAC     0xAC	/* Supplementary Thunderbolt Time Packet */
+ #define PACKET_8FAB     0xAB	/* Primary Thunderbolt Time Packet */
+ #define PACKET_6D	0x6D	/* Supplementary Thunderbolt Tracking Stats */
+-#define PACKET_41	0x41	/* Thunderbolt I dont know what this packet is, it's not documented on my manual*/
++#define PACKET_41	0x41	/* Thunderbolt I don't know what this packet is, it's not documented on my manual*/
+ 
+ /* Acutime Packets */
+ #define PACKET_41A      0x41    /* GPS time */
+@@ -846,7 +846,7 @@ TSIP_decode (
+ 			else
+ 				printf ("	Time is Set\n");
+ 			if ((mb(9) & 0x08) != 0)
+-				printf("	I dont have UTC info\n");
++				printf("	I don't have UTC info\n");
+ 			else
+ 				printf ("	I have UTC info\n");
+ 			if ((mb(9) & 0x10) != 0)
+diff --git a/ntpd/refclock_truetime.c b/ntpd/refclock_truetime.c
+index c612169..523e7b0 100644
+--- a/ntpd/refclock_truetime.c
++++ b/ntpd/refclock_truetime.c
+@@ -551,7 +551,7 @@ true_receive(
+ 		refclock_report(peer, CEVNT_NOMINAL);
+ 
+ 		/*
+-		 * We have succedded in answering the poll.
++		 * We have succeeded in answering the poll.
+ 		 * Turn off the flag and return
+ 		 */
+ 		up->polled = false;
+diff --git a/ntpdig/kod_management.c b/ntpdig/kod_management.c
+index 0c9dad3..a17a2a4 100644
+--- a/ntpdig/kod_management.c
++++ b/ntpdig/kod_management.c
+@@ -275,7 +275,7 @@ kod_init_kod_db(
+ 
+ 	if (ferror(db_s) || error) {
+ 		kod_db_cnt = b;
+-		msyslog(LOG_WARNING, "An error occured while parsing the KoD db file %s",
++		msyslog(LOG_WARNING, "An error occurred while parsing the KoD db file %s",
+ 			db_file);
+ 		fclose(db_s);
+ 
+diff --git a/pylib/util.py b/pylib/util.py
+index 8c66cbd..cc2c9bd 100644
+--- a/pylib/util.py
++++ b/pylib/util.py
+@@ -350,7 +350,7 @@ class ReslistSummary:
+             return ''
+         address += ReslistSummary.__getPrefix(mask)
+         flags = variables.get("flags", "?")
+-        # reslist reponses are often corrupted
++        # reslist responses are often corrupted
+         s = "%10s %s\n           %s\n" % (hits, address, flags)
+         # Throw away corrupted entries.  This is a shim - we really
+         # want to make ntpd stop generating garbage
+diff --git a/tests/check_y2k.c b/tests/check_y2k.c
+index 0a57226..df8b4f2 100644
+--- a/tests/check_y2k.c
++++ b/tests/check_y2k.c
+@@ -21,7 +21,7 @@
+ 	specific directory, this check goes outside the scope of the local
+ 	directory.  It's not a perfect world (besides, there is a lot of
+ 	interdependence here, and it really needs to be tested in
+-	a controled order).
++	a controlled order).
+    */
+ 
+ /* { definitions lifted from ntpd.c to allow us to complie with 
+@@ -242,7 +242,7 @@ main( void )
+   }
+ 
+     puts( " include/ntp_calendar.h" );
+-  {		/* I belive this is good, but just to be sure... */
++  {		/* I believe this is good, but just to be sure... */
+ 
+ 	/* we are testing this #define */
+ #define is_leapyear(y) (y%4 == 0 && !(y%100 == 0 && !(y%400 == 0)))
+diff --git a/tests/common/sockaddrtest.c b/tests/common/sockaddrtest.c
+index ab45a0b..efed898 100644
+--- a/tests/common/sockaddrtest.c
++++ b/tests/common/sockaddrtest.c
+@@ -20,7 +20,7 @@ bool IsEqualS(const sockaddr_u *expected, const sockaddr_u *actual) {
+ 				   sizeof(in_addr_t)) == 0) {
+ 			return true;
+ 		} else {
+-			printf("IPv4 comparision failed, expected: %u (%s) but was: %u (%s)\n", expected->sa4.sin_addr.s_addr, socktoa(expected), actual->sa4.sin_addr.s_addr, socktoa(actual));
++			printf("IPv4 comparison failed, expected: %u (%s) but was: %u (%s)\n", expected->sa4.sin_addr.s_addr, socktoa(expected), actual->sa4.sin_addr.s_addr, socktoa(actual));
+ 			return false;
+ 		}
+ 	} else if (actual->sa.sa_family == AF_INET6) { //IPv6
+@@ -29,7 +29,7 @@ bool IsEqualS(const sockaddr_u *expected, const sockaddr_u *actual) {
+ 				   sizeof(struct in6_addr)) == 0) {
+ 			return true;
+ 		} else {
+-			printf("IPv6 comparision failed\n");
++			printf("IPv6 comparison failed\n");
+ 			return false;
+ 		}
+ 	} else { // Unknown family
+diff --git a/tests/libntp/lfpfunc.c b/tests/libntp/lfpfunc.c
+index fc894f1..aeb9354 100644
+--- a/tests/libntp/lfpfunc.c
++++ b/tests/libntp/lfpfunc.c
+@@ -31,7 +31,7 @@ typedef struct  {
+ } lfp_hl;
+ 
+ //----------------------------------------------------------------------
+-// reference comparision
++// reference comparison
+ // This is implemented as a full signed MP-subtract in 3 limbs, where
+ // the operands are zero or sign extended before the subtraction is
+ // executed.
+@@ -366,7 +366,7 @@ TEST(lfpfunc, FDF_RoundTrip) {
+ 	// since a l_fp has 64 bits in it's mantissa and a double has
+ 	// only 54 bits available (including the hidden '1') we have to
+ 	// make a few concessions on the roundtrip precision. The 'eps()'
+-	// function makes an educated guess about the avilable precision
++	// function makes an educated guess about the available precision
+ 	// and checks the difference in the two 'l_fp' values against
+ 	// that limit.
+ 
+-- 
+2.7.4
+

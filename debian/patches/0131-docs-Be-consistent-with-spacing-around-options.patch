@@ -1,0 +1,109 @@
+From 809be92b67738898a5509049297ad09a84893300 Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Fri, 2 Dec 2016 17:46:26 -0600
+Subject: [PATCH 131/268] docs: Be consistent with spacing around options
+
+I opted for no spaces, as they seem unnecessary, and `man man` does not
+use them.
+
+This also fixes a tab vs. spaces inconsistency in ntptime-body.txt.
+---
+ docs/includes/ntpd-body.txt      | 10 +++++-----
+ docs/includes/ntpfrob-body.txt   |  2 +-
+ docs/includes/ntpkeygen-body.txt |  2 +-
+ docs/includes/ntptime-body.txt   |  6 +++---
+ docs/includes/ntpviz-body.txt    |  7 +++----
+ 5 files changed, 13 insertions(+), 14 deletions(-)
+
+diff --git a/docs/includes/ntpd-body.txt b/docs/includes/ntpd-body.txt
+index 595ef8b..05a4e77 100644
+--- a/docs/includes/ntpd-body.txt
++++ b/docs/includes/ntpd-body.txt
+@@ -6,11 +6,11 @@
+ == SYNOPSIS ==
+ [verse]
+ ntpd
+-    [-46aAbghLmnNqx ] [ -c 'conffile' ] [ -f 'driftfile' ] [ -i 'jaildir' ]
+-    [ -k 'keyfile' ] [ -l 'logfile' ] [ -p 'pidfile' ] [ -P 'priority' ]
+-    [ -r 'broadcast-delay' ]  [ -s 'statsdir' ]  [ -t  'key' ]
+-    [ -u 'user'[:'group'] ] [ -U 'interface_update_interval' ]
+-    [ -v 'variable' ] [ -V 'variable' ] [server...]
++    [-46aAbghLmnNqx] [-c 'conffile'] [-f 'driftfile'] [-i 'jaildir']
++    [-k 'keyfile'] [-l 'logfile'] [-p 'pidfile'] [-P 'priority']
++    [-r 'broadcast-delay']  [-s 'statsdir']  [-t  'key']
++    [-u 'user'[:'group']] [-U 'interface_update_interval']
++    [-v 'variable'] [-V 'variable'] [server...]
+ 
+ [[descr]]
+ == DESCRIPTION ==
+diff --git a/docs/includes/ntpfrob-body.txt b/docs/includes/ntpfrob-body.txt
+index 6f1db9b..c2f4ac8 100644
+--- a/docs/includes/ntpfrob-body.txt
++++ b/docs/includes/ntpfrob-body.txt
+@@ -5,7 +5,7 @@
+ [[synop]]
+ == Synopsis ==
+ 
+-+ntpfrob+ [ +-A+] [+-b+ 'bump'] [ +-a+ 'tick' ] [ +-p+ 'ppsdev' ] [+-c+] [+-e+] [+-r+] [+-?+] [+-h+]
+++ntpfrob+ [+-A+] [+-b+ 'bump'] [+-a+ 'tick'] [+-p+ 'ppsdev'] [+-c+] [+-e+] [+-r+] [+-?+] [+-h+]
+ 
+ [[descr]]
+ == Description ==
+diff --git a/docs/includes/ntpkeygen-body.txt b/docs/includes/ntpkeygen-body.txt
+index 30e4268..2b7cb00 100644
+--- a/docs/includes/ntpkeygen-body.txt
++++ b/docs/includes/ntpkeygen-body.txt
+@@ -5,7 +5,7 @@
+ [[synop]]
+ == Synopsis ==
+ [verse]
+-+ntpkeygen+ [ +-M+ ]
+++ntpkeygen+ [+-M+]
+ 
+ [[descrip]]
+ == Description ==
+diff --git a/docs/includes/ntptime-body.txt b/docs/includes/ntptime-body.txt
+index e1b2ece..8aa62e0 100644
+--- a/docs/includes/ntptime-body.txt
++++ b/docs/includes/ntptime-body.txt
+@@ -4,9 +4,9 @@
+ 
+ == Synopsis ==
+ [verse]
+-ntptime [ +-chr+ ] [ +-e+ 'est_error' ] [ +-f+ 'frequency' ] [-j]
+-        [ +-m+ 'max_error' ] [ +-o+ 'offset' ] [ +-s+ 'status' ]
+-	[ +-t+ 'time_constant']
++ntptime [+-chr+] [+-e+ 'est_error'] [+-f+ 'frequency'] [-j]
++        [+-m+ 'max_error'] [+-o+ 'offset'] [+-s+ 'status']
++        [+-t+ 'time_constant']
+ 
+ == Description ==
+ 
+diff --git a/docs/includes/ntpviz-body.txt b/docs/includes/ntpviz-body.txt
+index 95f7a85..e3dadf9 100644
+--- a/docs/includes/ntpviz-body.txt
++++ b/docs/includes/ntpviz-body.txt
+@@ -8,8 +8,8 @@
+ ntpviz [-d LOGDIR] [-g] [-n name] [-p DAYS]
+          [-s starttime] [-e endtime]
+          [-o OUTDIR]
+-         [ -c | --clip ]
+-         [ -w SIZE | --width SIZE]
++         [-c | --clip]
++         [-w SIZE | --width SIZE]
+          [--all-peer-jitters |
+           --all-peer-offsets |
+           --local-error |
+@@ -22,8 +22,7 @@ ntpviz [-d LOGDIR] [-g] [-n name] [-p DAYS]
+           --local-stability |
+           --local-temps |
+           --peer-jitters=hosts |
+-          --peer-offsets=hosts |
+-         ]
++          --peer-offsets=hosts]
+          [-D DLVL | --debug DLVL]
+          [-V | --version]
+          [@OPTIONFILE]
+-- 
+2.7.4
+

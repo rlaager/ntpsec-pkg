@@ -1,0 +1,31 @@
+From 64073d5c8d09bd85dd4ea54678ff44061879d520 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sat, 3 Dec 2016 14:50:52 -0500
+Subject: [PATCH 163/268] Address GitLab issue #190:
+ ntp.packet.ControlException in ntpsweep
+
+---
+ ntpsweep/ntpsweep | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/ntpsweep/ntpsweep b/ntpsweep/ntpsweep
+index cdc055a..9a335d1 100755
+--- a/ntpsweep/ntpsweep
++++ b/ntpsweep/ntpsweep
+@@ -171,8 +171,11 @@ Host                             st offset(s) version     system       processor
+     known_host_peers = {}
+     trace = []
+     for host in hostlist:
+-        scan_host(host, 0)
+-
++        try:
++            scan_host(host, 0)
++        except ntp.packet.ControlException as e:
++            sys.stderr.write(e.message + "\n")
++            sys.exit(1)
+     sys.exit(0)
+ 
+ # end
+-- 
+2.7.4
+

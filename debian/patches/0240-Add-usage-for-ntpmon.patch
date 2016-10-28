@@ -1,0 +1,36 @@
+From 874be6b2ac61c8a4ec4af8bd6c5ca712f76a60cb Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Fri, 9 Dec 2016 00:04:20 -0500
+Subject: [PATCH 240/268] Add usage for ntpmon
+
+Error message:
+Traceback (most recent call last):
+  File "./ntpclients/ntpmon", line 66, in <module>
+    sys.stderr.write(usage)
+NameError: name 'usage' is not defined
+---
+ ntpclients/ntpmon | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/ntpclients/ntpmon b/ntpclients/ntpmon
+index a6d1cb4..722dded 100755
+--- a/ntpclients/ntpmon
++++ b/ntpclients/ntpmon
+@@ -49,6 +49,14 @@ class OutputContext:
+     def __exit__(self, extype_unused, value_unused, traceback_unused):
+         curses.endwin()
+ 
++usage = '''
++USAGE: ntpmon [-anw] [--all] [--numeric] [--wide] [ host ]
++  Flg Arg Option-Name    Description
++   -a no  all            Show all hosts, not just reachable ones.
++   -n no  numeric        numeric host addresses
++   -w no  wide           enable wide display of addresses
++'''
++
+ if __name__ == '__main__':
+     try:
+         (options, arguments) = getopt.getopt(sys.argv[1:],
+-- 
+2.7.4
+

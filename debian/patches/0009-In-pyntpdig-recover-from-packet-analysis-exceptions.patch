@@ -1,0 +1,38 @@
+From c488fe38277c68c53be880286e861df8eeac05d0 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Thu, 24 Nov 2016 19:26:39 -0500
+Subject: [PATCH 009/268] In pyntpdig, recover from packet-analysis exceptions.
+
+---
+ ntpdig/pyntpdig | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/ntpdig/pyntpdig b/ntpdig/pyntpdig
+index 33a87d7..6d749bb 100755
+--- a/ntpdig/pyntpdig
++++ b/ntpdig/pyntpdig
+@@ -356,11 +356,19 @@ if __name__ == '__main__':
+ 
+     returned = []
+     for server in concurrent_hosts:
+-        returned += queryhost(server=server, concurrent=True, timeout=timeout)
++        try:
++            returned += queryhost(server=server, concurrent=True, timeout=timeout)
++        except SyncException:
++            log(e.message)
++            continue
+         if len(returned) >= samples:
+             break
+     for server in arguments:
+-        returned += queryhost(server=server, concurrent=False, timeout=timeout)
++        try:
++            returned += queryhost(server=server, concurrent=False, timeout=timeout)
++        except SyncException:
++            log(e.message)
++            continue
+         if len(returned) >= samples:
+             break
+ 
+-- 
+2.7.4
+

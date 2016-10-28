@@ -1,0 +1,43 @@
+From d2c6e4ca096c2c18c37f21efb3c46bbed06b4640 Mon Sep 17 00:00:00 2001
+From: Hal Murray <hmurray@megapathdsl.net>
+Date: Fri, 25 Nov 2016 11:43:46 -0800
+Subject: [PATCH 081/268] Few more REFIDLEN fixes
+
+---
+ ntpd/ntp_proto.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/ntpd/ntp_proto.c b/ntpd/ntp_proto.c
+index 3c88569..4881fdd 100644
+--- a/ntpd/ntp_proto.c
++++ b/ntpd/ntp_proto.c
+@@ -246,7 +246,7 @@ parse_packet(
+ 	pkt->precision = (int8_t)recv_buf[3];
+ 	pkt->rootdelay = ntp_be32dec(recv_buf + 4);
+ 	pkt->rootdisp = ntp_be32dec(recv_buf + 8);
+-	memcpy(pkt->refid, recv_buf + 12, 4);
++	memcpy(pkt->refid, recv_buf + 12, REFIDLEN);
+ 	pkt->reftime = ntp_be64dec(recv_buf + 16);
+ 	pkt->org = ntp_be64dec(recv_buf + 24);
+ 	pkt->rec = ntp_be64dec(recv_buf + 32);
+@@ -552,7 +552,7 @@ handle_procpkt(
+ 	peer->outcount = 0;
+ 
+ 	if(is_kod(pkt)) {
+-		if(!memcmp(pkt->refid, "RATE", 4)) {
++		if(!memcmp(pkt->refid, "RATE", REFIDLEN)) {
+ 			peer->selbroken++;
+ 			report_event(PEVNT_RATE, peer, NULL);
+ 			if (peer->minpoll < 10) { peer->minpoll = 10; }
+@@ -622,7 +622,7 @@ handle_procpkt(
+ 	peer->precision = pkt->precision;
+ 	peer->rootdelay = scalbn((double)pkt->rootdelay, -16);
+ 	peer->rootdisp = scalbn((double)pkt->rootdisp, -16);
+-	memcpy(&peer->refid, pkt->refid, 4);
++	memcpy(&peer->refid, pkt->refid, REFIDLEN);
+ 	uint64_to_lfp(&peer->reftime, pkt->reftime);
+ 	uint64_to_lfp(&peer->rec, pkt->rec);
+ 	uint64_to_lfp(&peer->xmt, pkt->xmt);
+-- 
+2.7.4
+

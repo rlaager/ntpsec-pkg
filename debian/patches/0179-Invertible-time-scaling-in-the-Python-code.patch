@@ -1,0 +1,34 @@
+From dee65278ae23e4815d450c6807a403eb6fbcf718 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Mon, 5 Dec 2016 23:24:32 -0500
+Subject: [PATCH 179/268] Invertible time scaling  in the Python code.
+
+---
+ pylib/packet.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/pylib/packet.py b/pylib/packet.py
+index b3375f0..2a30ed4 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -431,7 +431,7 @@ class SyncPacket(Packet):
+     def posix_to_ntp(t):
+         "Scale from POSIX time to NTP time"
+         # Note: assumes we're in the same NTP era as the transmitter...
+-        return (t + SyncPacket.UNIX_EPOCH) * 2**32
++        return int((t + SyncPacket.UNIX_EPOCH) * 2**32)
+ 
+     def posixize(self):
+         self.root_delay *= 2**-16
+@@ -440,7 +440,7 @@ class SyncPacket(Packet):
+         self.origin_timestamp = SyncPacket.ntp_to_posix(self.origin_timestamp)
+         self.receive_timestamp = SyncPacket.ntp_to_posix(self.receive_timestamp)
+         self.transmit_timestamp = SyncPacket.ntp_to_posix(self.transmit_timestamp)
+-        self.transmit_timestamp = SyncPacket.ntp_to_posix(self.received)
++        self.received = SyncPacket.ntp_to_posix(self.received)
+ 
+     def t1(self):
+         return self.origin_timestamp
+-- 
+2.7.4
+

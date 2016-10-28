@@ -1,0 +1,25 @@
+From d6b8b3e6fcb7052e633547e706ea142c3e28b8db Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Wed, 7 Dec 2016 10:13:43 -0500
+Subject: [PATCH 206/268] Typo
+
+---
+ devel/ifdex-ignores | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/devel/ifdex-ignores b/devel/ifdex-ignores
+index 7b42a72..b2b9c7e 100644
+--- a/devel/ifdex-ignores
++++ b/devel/ifdex-ignores
+@@ -181,7 +181,7 @@ USE_ROUTING_SOCKET
+ YY_YY_NTP_PARSER_TAB_H_INCLUDED
+ calloc			# In Unity
+ close			# In Windows port config
+-free			# Un Unity and ntpd/ntp_parser.tab.c
++free			# In Unity and ntpd/ntp_parser.tab.c
+ malloc			# In Unity and ntpd/ntp_parser.tab.c
+ in_addr6		# In Windows port config
+ lifr_addrlen		# ISC interface-iterator code
+-- 
+2.7.4
+

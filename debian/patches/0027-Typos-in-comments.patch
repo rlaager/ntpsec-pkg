@@ -1,0 +1,27 @@
+From ee49ffc45991a2f376dee5cccd3a097a4bbc4883 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Sat, 26 Nov 2016 17:12:41 -0500
+Subject: [PATCH 027/268] Typos in comments
+
+---
+ ntpd/refclock_oncore.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ntpd/refclock_oncore.c b/ntpd/refclock_oncore.c
+index 4f4d8aa..1f93e3c 100644
+--- a/ntpd/refclock_oncore.c
++++ b/ntpd/refclock_oncore.c
+@@ -629,8 +629,8 @@ oncore_start(
+ 	oncore_log(instance, LOG_NOTICE, "state = ONCORE_NO_IDEA");
+ 
+ 	/* Now open files.
+-	 * This is a bit complicated, a we don't want to open the same file twice
+-	 * (its a problem on some OS), and device2 may not exist for the new PPS
++	 * This is a bit complicated, and we don't want to open the same file twice
++	 * (it's a problem on some OS), and device2 may not exist for the new PPS
+ 	 */
+ 
+ 	(void)snprintf(device1, sizeof(device1), DEVICE1, unit);
+-- 
+2.7.4
+

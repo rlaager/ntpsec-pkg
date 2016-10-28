@@ -1,0 +1,31 @@
+From bff4324d58bbc030c2609c7ca36cb6da03a4aa2e Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Mon, 28 Nov 2016 05:56:40 -0500
+Subject: [PATCH 052/268] Address GitLab issue #167: Python3: ntpq iostats
+ fails
+
+---
+ ntpq/ntpq | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ntpq/ntpq b/ntpq/ntpq
+index 3fb2b96..123355d 100755
+--- a/ntpq/ntpq
++++ b/ntpq/ntpq
+@@ -183,11 +183,11 @@ class Ntpq(cmd.Cmd):
+         return line
+ 
+     def say(self, msg):
+-        sys.stdout.write(msg)
++        sys.stdout.write(polystr(msg))
+         sys.stdout.flush()	# In case we're piping the output
+ 
+     def warn(self, msg):
+-        sys.stderr.write(msg)
++        sys.stderr.write(polystr(msg))
+ 
+     def help_help(self):
+         self.say("""\
+-- 
+2.7.4
+

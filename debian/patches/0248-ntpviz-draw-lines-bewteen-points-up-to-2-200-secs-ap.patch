@@ -1,0 +1,39 @@
+From 2ef4717a27b024ca25bfb72babb493ea97092617 Mon Sep 17 00:00:00 2001
+From: "Gary E. Miller" <gem@rellim.com>
+Date: Fri, 9 Dec 2016 12:45:54 -0800
+Subject: [PATCH 248/268] ntpviz: draw lines bewteen points up to 2,200 secs
+ apart.
+
+This allows for ntpd using poll=1024 secs, and some slop of
+unknown origin.  rlaager reports delays in data up to 2168 secs.
+---
+ ntpclients/ntpviz | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/ntpclients/ntpviz b/ntpclients/ntpviz
+index a3da517..3046584 100755
+--- a/ntpclients/ntpviz
++++ b/ntpclients/ntpviz
+@@ -350,7 +350,8 @@ set rmargin 10
+         if item2:
+             for row in rows:
+                 try:
+-                    if 1024000 < row[0] - last_time:
++                    if 2200000 < row[0] - last_time:
++                        # more than 2,200 seconds between points
+                         # data loss, add a break in the plot line
+                         plot_data += '\n'
+                     # fields: time, fld, and rtt
+@@ -361,7 +362,8 @@ set rmargin 10
+         else:
+             for row in rows:
+                 try:
+-                    if 1024000 < row[0] - last_time:
++                    if 2200000 < row[0] - last_time:
++                        # more than 2,200 seconds between points
+                         # data loss, add a break in the plot line
+                         plot_data += '\n'
+                     # fields: time, fld
+-- 
+2.7.4
+

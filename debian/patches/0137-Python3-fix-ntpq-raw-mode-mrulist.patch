@@ -1,0 +1,29 @@
+From 046c9497e969b64eb7e199cea5f9148fd6930399 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Sat, 3 Dec 2016 01:27:57 -0500
+Subject: [PATCH 137/268] Python3: fix ntpq raw mode mrulist
+
+The session response is of type bytes, so the replace() needs to use bytes, as
+well. But the text that's returned needs to be a string.
+
+Fixes GitLab issue #186
+---
+ ntpq/ntpq | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ntpq/ntpq b/ntpq/ntpq
+index d421c91..5662f96 100755
+--- a/ntpq/ntpq
++++ b/ntpq/ntpq
+@@ -447,7 +447,7 @@ usage: help [ command ]
+             # high-half characters.  We won't do that unless somebody
+             # files a bug, Mode 6 never seems to generate those in
+             # variable fetches.
+-            text = session.response.replace(",\r\n",",\n")
++            text = polystr(session.response.replace(polybytes(",\r\n"), polybytes(",\n")))
+         else:
+             if not quiet:
+                 self.say("status=%04x %s,\n" % \
+-- 
+2.7.4
+

@@ -1,0 +1,83 @@
+From 47e5df1f281f6c51d3fc69f0b6170d6a820fd416 Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Sun, 27 Nov 2016 11:28:05 -0500
+Subject: [PATCH 057/268] Make sure to import print_function wherever we use
+ print()
+
+---
+ contrib/pi-temp-log           | 2 ++
+ contrib/temper-temp-log       | 1 +
+ wafhelpers/check_libevent2.py | 2 ++
+ wafhelpers/configure.py       | 2 ++
+ wafhelpers/dist.py            | 2 ++
+ wafhelpers/test.py            | 2 ++
+ 6 files changed, 11 insertions(+)
+
+diff --git a/contrib/pi-temp-log b/contrib/pi-temp-log
+index 839e51d..b9dfd6c 100755
+--- a/contrib/pi-temp-log
++++ b/contrib/pi-temp-log
+@@ -30,6 +30,8 @@ to read your system temperatures will be hardware specific.
+ 
+ """
+ 
++from __future__ import print_function
++
+ import time
+ 
+ now = int(time.time())
+diff --git a/contrib/temper-temp-log b/contrib/temper-temp-log
+index f2e67b5..43ffe84 100755
+--- a/contrib/temper-temp-log
++++ b/contrib/temper-temp-log
+@@ -28,6 +28,7 @@ Sample crontab usage:
+ 
+ """
+ 
++from __future__ import print_function
+ 
+ import time, subprocess
+ 
+diff --git a/wafhelpers/check_libevent2.py b/wafhelpers/check_libevent2.py
+index fee57e4..9a7a90f 100644
+--- a/wafhelpers/check_libevent2.py
++++ b/wafhelpers/check_libevent2.py
+@@ -1,3 +1,5 @@
++from __future__ import print_function
++
+ from waflib.Logs import pprint
+ from wafhelpers.tool import check_sanity
+ 
+diff --git a/wafhelpers/configure.py b/wafhelpers/configure.py
+index 4d75593..52da469 100644
+--- a/wafhelpers/configure.py
++++ b/wafhelpers/configure.py
+@@ -1,3 +1,5 @@
++from __future__ import print_function
++
+ import sys, os, platform
+ from waflib.Configure import conf
+ from wafhelpers.probes import *
+diff --git a/wafhelpers/dist.py b/wafhelpers/dist.py
+index f1943e1..94e23de 100644
+--- a/wafhelpers/dist.py
++++ b/wafhelpers/dist.py
+@@ -1,3 +1,5 @@
++from __future__ import print_function
++
+ from os import path
+ from shutil import copyfile
+ from os.path import exists
+diff --git a/wafhelpers/test.py b/wafhelpers/test.py
+index a187828..fa2f089 100644
+--- a/wafhelpers/test.py
++++ b/wafhelpers/test.py
+@@ -1,3 +1,5 @@
++from __future__ import print_function
++
+ from waflib.Logs import pprint
+ 
+ def test_write_log(ctx):
+-- 
+2.7.4
+
