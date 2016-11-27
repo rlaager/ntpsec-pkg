@@ -7,11 +7,10 @@ def build(ctx):
 		"authkeys.c",
 		"authreadkeys.c",
 		"authusekey.c",
-		"caljulian.c",
+		"calgregorian.c",
 		"caltontp.c",
 		"calyearstart.c",
 		"clocktime.c",
-		"clocktypes.c",
 		"decodenetnum.c",
 		"dofptoa.c",
 		"dolfptoa.c",
@@ -19,7 +18,6 @@ def build(ctx):
 		"getopt.c",
 		"hextolfp.c",
 		"humandate.c",
-		"icom.c",
 		"iosignal.c",
 		"lib_strbuf.c",
 		"machines.c",
@@ -37,7 +35,6 @@ def build(ctx):
 		"numtohost.c",
 		"prettydate.c",
 		"recvbuff.c",
-		"refnumtoa.c",
 		"refidsmear.c",
 		"socket.c",
 		"socktoa.c",
@@ -53,17 +50,9 @@ def build(ctx):
 		"ymd2yd.c",
 	]
 
-	if ctx.env.AUDIO_ENABLE:
-
-		libntp_source += [
-			"audio.c"
-		]
-
-
 	source_libntpsim = [
 		"systime_s.c"
 	]
-
 
 	libntp_source_systime = [
 		"systime.c"

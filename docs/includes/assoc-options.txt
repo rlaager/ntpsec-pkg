@@ -9,15 +9,15 @@
   spacing between the first and second packets can be changed with the
   calldelay command to allow additional time for a modem or ISDN call to
   complete. This is designed to improve timekeeping quality with the
-  +server+ command and s addresses.
+  +server+ command.
 
 +iburst+::
-  When the server is unreachable, send a burst of eight packets instead
+  When the server is unreachable, send a burst of six packets instead
   of the usual one. The packet spacing is normally 2 s; however, the
   spacing between the first two packets can be changed with the
   calldelay command to allow additional time for a modem or ISDN call to
   complete. This is designed to speed the initial synchronization
-  acquisition with the +server+ command and s addresses and when
+  acquisition with the +server+ command, and when
   {ntpdman} is started with the +-q+ option.
 
 +key+ _key_::
@@ -33,12 +33,12 @@
   defaults to 10 (1,024 s), but can be increased by the _maxpoll_ option
   to an upper limit of 17 (36.4 h). The minimum poll interval defaults
   to 6 (64 s), but can be decreased by the _minpoll_ option to a lower
-  limit of 4 (16 s).
+  limit of 0 (1 s).
 
 +mode+ 'option'::
   Pass the +option+ to a reference clock driver, where +option+ is an
   integer in the range from 0 to 255, inclusive. This option is valid
-  only with type r addresses.
+  only with refclock addresses.
 
 +noselect+::
   Marks the server as unused, except for display purposes. The server is

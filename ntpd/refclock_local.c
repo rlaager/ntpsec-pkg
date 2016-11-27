@@ -57,7 +57,8 @@
  * Local interface definitions
  */
 #define PRECISION	(-7)	/* about 10 ms precision */
-#define DESCRIPTION "Undisciplined local clock" /* WRU */
+#define NAME		"LOCAL"	/* shortname */
+#define DESCRIPTION	"Undisciplined local clock" /* WRU */
 #define STRATUM 	5	/* default stratum */
 #define DISPERSION	.01	/* default dispersion (10 ms) */
 
@@ -86,13 +87,13 @@ static	u_long poll_time;	/* last time polled */
  * Transfer vector
  */
 struct	refclock refclock_local = {
+	NAME,			/* basename of driver */
 	local_start,		/* start up driver */
 	noentry,		/* shut down driver (not used) */
 	local_poll,	 	/* transmit poll message */
 	noentry,		/* not used (old lcl_control) */
 	noentry,		/* initialize driver (not used) */
-	noentry,		/* not used (old lcl_buginfo) */
-	noentry 		/* not used */
+	noentry 		/* timer - not used */
 };
 
 
@@ -118,6 +119,7 @@ local_start(
 	pp->leap = LEAP_NOTINSYNC;
 	peer->stratum = STRATUM;
 	pp->stratum = STRATUM;
+	pp->clockname = NAME;
 	pp->clockdesc = DESCRIPTION;
 	memcpy(&pp->refid, "LOCL", REFIDLEN);
 	peer->sstclktype = CTL_SST_TS_LOCAL;

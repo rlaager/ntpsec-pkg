@@ -10,6 +10,7 @@
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
 #include "ntp_assert.h"
+#include "lib_strbuf.h"
 
 #include <stdio.h>
 
@@ -25,7 +26,7 @@
 
 #ifdef HAVE_PPSAPI
 #include "ppsapi_timepps.h"
-#include "refclock_atom.h"
+#include "refclock_pps.h"
 #endif /* HAVE_PPSAPI */
 
 /*
@@ -53,8 +54,7 @@
  * which is used for all peer-specific processing and contains a
  * pointer to the refclockproc structure, which in turn contains a
  * pointer to the unit structure, if used.  The peer structure is 
- * identified by an interface address in the dotted quad form 
- * 127.127.t.u, where t is the clock type and u the unit.
+ * identified as a refclock by having a non-NULL procptr member. 
  */
 #define FUDGEFAC	.1	/* fudge correction factor */
 #define LF		0x0a	/* ASCII LF */
@@ -66,7 +66,6 @@ bool	cal_enable;		/* enable refclock calibrate */
  */
 static int refclock_cmpl_fp (const void *, const void *);
 static int refclock_sample (struct refclockproc *);
-static bool refclock_ioctl(int, u_int);
 
 
 /*
@@ -118,6 +117,21 @@ refclock_report(
 	}
 }
 
+char *
+refclock_name(
+	const struct peer *peer
+	)
+{
+	char *buf;
+
+	LIB_GETBUF(buf);
+
+	snprintf(buf, LIB_BUFLENGTH, "%s(%d)",
+			 peer->procptr->clockname, peer->refclkunit);
+
+	return buf;
+}
+
 
 /*
  * init_refclock - initialize the reference clock drivers
@@ -145,31 +159,18 @@ init_refclock(void)
  * driver-specific support routine completes the initialization, if
  * used. Default peer variables which identify the clock and establish
  * its reference ID and stratum are set here. It returns true if success
- * and false if the clock address is invalid or already running,
- * insufficient resources are available or the driver declares a bum
- * rap.
+ * and false if the clock already running, insufficient resources are
+ * available or the driver declares a bum rap.
  */
 bool
 refclock_newpeer(
+	uint8_t clktype,
+	int unit,
 	struct peer *peer	/* peer structure pointer */
 	)
 {
 	struct refclockproc *pp;
-	uint8_t clktype;
-	int unit;
 
-	/*
-	 * Check for valid clock address. If already running, shut it
-	 * down first.
-	 */
-	if (!ISREFCLOCKADR(&peer->srcadr)) {
-		msyslog(LOG_ERR,
-			"refclock_newpeer: clock address %s invalid",
-			stoa(&peer->srcadr));
-		return false;
-	}
-	clktype = (uint8_t)REFCLOCKTYPE(&peer->srcadr);
-	unit = REFCLOCKUNIT(&peer->srcadr);
 	if (clktype >= num_refclock_conf ||
 		refclock_conf[clktype]->clock_start == noentry) {
 		msyslog(LOG_ERR,
@@ -187,13 +188,11 @@ refclock_newpeer(
 	/*
 	 * Initialize structures
 	 */
-	peer->refclktype = clktype;
 	peer->refclkunit = (uint8_t)unit;
 	peer->flags |= FLAG_REFCLOCK;
 	peer->leap = LEAP_NOTINSYNC;
 	peer->stratum = STRATUM_REFCLOCK;
 	peer->ppoll = peer->maxpoll;
-	pp->type = clktype;
 	pp->conf = refclock_conf[clktype];
 	pp->timestarted = current_time;
 	pp->io.fd = -1;
@@ -215,7 +214,7 @@ refclock_newpeer(
 	 * Do driver dependent initialization. The above defaults
 	 * can be wiggled, then finish up for consistency.
 	 */
-	if (!((refclock_conf[clktype]->clock_start)(unit, peer))) {
+	if (!((pp->conf->clock_start)(unit, peer))) {
 		refclock_unpeer(peer);
 		return false;
 	}
@@ -232,7 +231,6 @@ refclock_unpeer(
 	struct peer *peer	/* peer structure pointer */
 	)
 {
-	uint8_t clktype;
 	int unit;
 
 	/*
@@ -242,10 +240,9 @@ refclock_unpeer(
 	if (NULL == peer->procptr)
 		return;
 
-	clktype = peer->refclktype;
 	unit = peer->refclkunit;
-	if (refclock_conf[clktype]->clock_shutdown != noentry)
-		(refclock_conf[clktype]->clock_shutdown)(unit, peer);
+	if (peer->procptr->conf->clock_shutdown != noentry)
+		(peer->procptr->conf->clock_shutdown)(unit, peer);
 	free(peer->procptr);
 	peer->procptr = NULL;
 }
@@ -284,10 +281,8 @@ refclock_transmit(
 	struct peer *peer	/* peer structure pointer */
 	)
 {
-	uint8_t clktype;
 	int unit;
 
-	clktype = peer->refclktype;
 	unit = peer->refclkunit;
 	peer->sent++;
 	get_systime(&peer->xmt);
@@ -326,8 +321,8 @@ refclock_transmit(
 	} else {
 		peer->burst--;
 	}
-	if (refclock_conf[clktype]->clock_poll != noentry)
-		(refclock_conf[clktype]->clock_poll)(unit, peer);
+	if (peer->procptr->conf->clock_poll != noentry)
+		(peer->procptr->conf->clock_poll)(unit, peer);
 	poll_update(peer, peer->hpoll);
 }
 
@@ -551,8 +546,8 @@ refclock_receive(
 	clock_filter(peer, pp->offset, 0., pp->jitter);
 	if (cal_enable && fabs(last_offset) < sys_mindisp && sys_peer !=
 	    NULL) {
-		if (sys_peer->refclktype == REFCLK_ATOM_PPS &&
-		    peer->refclktype != REFCLK_ATOM_PPS)
+		if (sys_peer->is_pps_driver &&
+		    !peer->is_pps_driver)
 			pp->fudgetime1 -= pp->offset * FUDGEFAC;
 	}
 }
@@ -750,21 +745,13 @@ refclock_open(
 	/* refclock_open() long returned 0 on failure, avoid it. */
 	if (0 == fd) {
 		fd = dup(0);
-		SAVE_ERRNO(
-			close(0);
-		)
+		close(0);
 	}
 	if (fd < 0) {
-		SAVE_ERRNO(
-			msyslog(LOG_ERR, "refclock_open %s: %m", dev);
-		)
+		msyslog(LOG_ERR, "refclock_open %s: %m", dev);
 		return -1;
 	}
 	if (!refclock_setup(fd, speed, lflags)) {
-		close(fd);
-		return -1;
-	}
-	if (!refclock_ioctl(fd, lflags)) {
 		close(fd);
 		return -1;
 	}
@@ -809,11 +796,7 @@ refclock_setup(
 	 * POSIX serial line parameters (termios interface)
 	 */
 	if (tcgetattr(fd, ttyp) < 0) {
-		SAVE_ERRNO(
-			msyslog(LOG_ERR,
-				"refclock_setup fd %d tcgetattr: %m",
-				fd);
-		)
+		msyslog(LOG_ERR, "refclock_setup fd %d tcgetattr: %m", fd);
 		return false;
 	}
 
@@ -864,14 +847,8 @@ refclock_setup(
 		ttyp->c_iflag = 0;
 		ttyp->c_cc[VMIN] = 1;
 	}
-	if (lflags & LDISC_ECHO)
-		ttyp->c_lflag |= ECHO;
 	if (tcsetattr(fd, TCSANOW, ttyp) < 0) {
-		SAVE_ERRNO(
-			msyslog(LOG_ERR,
-				"refclock_setup fd %d TCSANOW: %m",
-				fd);
-		)
+		msyslog(LOG_ERR, "refclock_setup fd %d TCSANOW: %m", fd);
 		return false;
 	}
 
@@ -883,34 +860,6 @@ refclock_setup(
 	if (tcflush(fd, TCIOFLUSH) < 0)
 		msyslog(LOG_ERR, "refclock_setup fd %d tcflush(): %m",
 			fd);
-	return true;
-}
-
-
-/*
- * refclock_ioctl - set serial port control functions
- *
- * This routine attempts to hide the internal, system-specific details
- * of serial ports. It can handle POSIX (termios), SYSV (termio) and BSD
- * (sgtty) interfaces with varying degrees of success. The routine sets
- * up optional features such as tty_clk. The routine returns true if
- * successful.
- */
-bool
-refclock_ioctl(
-	int	fd, 		/* file descriptor */
-	u_int	lflags		/* line discipline flags */
-	)
-{
-	UNUSED_ARG(fd);
-#ifndef DEBUG
-	UNUSED_ARG(lflags);
-#endif /* DEBUG */
-	/*
-	 * simply return true if no UNIX line discipline is supported
-	 */
-	DPRINTF(1, ("refclock_ioctl: fd %d flags 0x%x\n", fd, lflags));
-
 	return true;
 }
 
@@ -933,25 +882,21 @@ refclock_control(
 {
 	struct peer *peer;
 	struct refclockproc *pp;
-	uint8_t clktype;
 	int unit;
 
 	/*
 	 * Check for valid address and running peer
 	 */
-	if (!ISREFCLOCKADR(srcadr))
-		return;
-
-	clktype = (uint8_t)REFCLOCKTYPE(srcadr);
-	unit = REFCLOCKUNIT(srcadr);
-
 	peer = findexistingpeer(srcadr, NULL, NULL, -1, 0);
 
 	if (NULL == peer)
 		return;
 
-	NTP_INSIST(peer->procptr != NULL);
+	if (!IS_PEER_REFCLOCK(peer))
+		return;
+
 	pp = peer->procptr;
+	unit = peer->refclkunit;
 
 	/*
 	 * Initialize requested data
@@ -1014,7 +959,7 @@ refclock_control(
 
 		out->lastevent = pp->lastevent;
 		out->currentstatus = pp->currentstatus;
-		out->type = pp->type;
+		out->clockname = pp->clockname;
 		out->clockdesc = pp->clockdesc;
 		out->lencode = (u_short)pp->lencode;
 		out->p_lastcode = pp->a_lastcode;
@@ -1023,70 +968,8 @@ refclock_control(
 	/*
 	 * Give the stuff to the clock
 	 */
-	if (refclock_conf[clktype]->clock_control != noentry)
-		(refclock_conf[clktype]->clock_control)(unit, in, out, peer);
-}
-
-
-/*
- * refclock_buginfo - return debugging info
- *
- * This routine is used mainly for debugging. It returns designated
- * values from the interface structure that can be displayed using
- * ntpq and the clkbug command.
- */
-void
-refclock_buginfo(
-	sockaddr_u *srcadr,	/* clock address */
-	struct refclockbug *bug /* output structure */
-	)
-{
-	struct peer *peer;
-	struct refclockproc *pp;
-	int clktype;
-	int unit;
-	unsigned u;
-
-	/*
-	 * Check for valid address and peer structure
-	 */
-	if (!ISREFCLOCKADR(srcadr))
-		return;
-
-	clktype = (uint8_t) REFCLOCKTYPE(srcadr);
-	unit = REFCLOCKUNIT(srcadr);
-
-	peer = findexistingpeer(srcadr, NULL, NULL, -1, 0);
-
-	if (NULL == peer || NULL == peer->procptr)
-		return;
-
-	pp = peer->procptr;
-
-	/*
-	 * Copy structure values
-	 */
-	bug->nvalues = 8;
-	bug->svalues = 0x0000003f;
-	bug->values[0] = pp->year;
-	bug->values[1] = pp->day;
-	bug->values[2] = pp->hour;
-	bug->values[3] = pp->minute;
-	bug->values[4] = pp->second;
-	bug->values[5] = pp->nsec;
-	bug->values[6] = pp->yearstart;
-	bug->values[7] = pp->coderecv;
-	bug->stimes = 0xfffffffc;
-	bug->times[0] = pp->lastref;
-	bug->times[1] = pp->lastrec;
-	for (u = 2; u < bug->ntimes; u++)
-		DTOLFP(pp->filter[u - 2], &bug->times[u]);
-
-	/*
-	 * Give the stuff to the clock
-	 */
-	if (refclock_conf[clktype]->clock_buginfo != noentry)
-		(refclock_conf[clktype]->clock_buginfo)(unit, bug, peer);
+	if (peer->procptr->conf->clock_control != noentry)
+		(peer->procptr->conf->clock_control)(unit, in, out, peer);
 }
 
 
@@ -1094,13 +977,13 @@ refclock_buginfo(
 /*
  * refclock_ppsapi - initialize/update ppsapi
  *
- * This routine is called after the fudge command to open the PPSAPI
- * interface for later parameter setting after the fudge command.
+ * This routine is called after the refclock command to open the PPSAPI
+ * interface for later parameter setting after the refclock command.
  */
 bool
 refclock_ppsapi(
 	int	fddev,			/* fd device */
-	struct refclock_atom *ap	/* atom structure pointer */
+	struct refclock_ppsctl *ap	/* PPS context structure pointer */
 	)
 {
 	if (ap->handle == 0) {
@@ -1123,7 +1006,7 @@ refclock_ppsapi(
 bool
 refclock_params(
 	int	mode,			/* mode bits */
-	struct refclock_atom *ap	/* atom structure pointer */
+	struct refclock_ppsctl *ap	/* PPS context structure pointer */
 	)
 {
 	ZERO(ap->pps_params);
@@ -1152,8 +1035,12 @@ refclock_params(
 		if (time_pps_kcbind(ap->handle, PPS_KC_HARDPPS,
 		    ap->pps_params.mode & ~PPS_TSFMT_TSPEC,
 		    PPS_TSFMT_TSPEC) < 0) {
-			msyslog(LOG_ERR,
-			    "refclock_params: time_pps_kcbind: %m");
+			if (errno == EOPNOTSUPP)
+			    msyslog(LOG_ERR,
+				"refclock_params: kernel PLL (hardpps, RFC 1589) not implemented");
+			else
+			    msyslog(LOG_ERR,
+				"refclock_params: time_pps_kcbind: %m");
 			return false;
 		}
 		hardpps_enable = true;
@@ -1163,16 +1050,16 @@ refclock_params(
 
 
 /*
- * refclock_pps - called once per second
+ * refclock_catcher - called once per second
  *
  * This routine is called once per second. It snatches the PPS
  * timestamp from the kernel and saves the sign-extended fraction in
  * a circular buffer for processing at the next poll event.
  */
 pps_status
-refclock_pps(
+refclock_catcher(
 	struct peer *peer,		/* peer structure pointer */
-	struct refclock_atom *ap,	/* atom structure pointer */
+	struct refclock_ppsctl *ap,	/* PPS context structure pointer */
 	int	mode			/* mode bits */	
 	)
 {

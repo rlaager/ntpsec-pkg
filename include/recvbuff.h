@@ -5,8 +5,6 @@
 #include "ntp_net.h"
 #include "ntp_lists.h"
 
-#include <isc/result.h>
-
 /*
  * recvbuf memory management
  */
@@ -74,6 +72,9 @@ struct recvbuf {
 #define	recv_pkt		recv_space.X_recv_pkt
 #define	recv_buffer		recv_space.X_recv_buffer
 	int used;		/* reference count */
+#ifdef REFCLOCK
+	bool network_packet;
+#endif /* REFCLOCK */
 };
 
 extern	void	init_recvbuff(int);

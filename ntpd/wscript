@@ -128,18 +128,12 @@ def build(ctx):
 		refclock_define = ["REFCLOCK=1"]
 
 
-	# Note carefully: At least as of September 2015 you must link with 
-	# libgcc_s.so under Linux, otherwise the threaded getaddrinfo(3) call
-	# used to look up hostnames will SIGABRT and take ntpd down with it.
-	# That may only happen when mlockall() is used with not-enough-memory,
-	# but it has caused a long legacy of hard to diagnose problems.
-
 	ctx(
 		target		= "ntpd",
 		features	= "c rtems_trace cprogram bld_include src_include libisc_include libisc_pthread_include ntp_version",
 		source		= ntpd_source,
-		use			= "libntpd_obj isc ntp sodium opts OSSAUDIO M parse GCC_S RT CAP THR PTHREAD CRYPTO DNS_SD DNS_SD_INCLUDES %s" % use_refclock,
-#		use			= "libntpd_obj bison_obj isc ntp sodium opts OSSAUDIO M parse GCC_S RT CAP THR PTHREAD CRYPTO DNS_SD DNS_SD_INCLUDES %s" % use_refclock,
+		use			= "libntpd_obj isc ntp sodium opts M parse RT CAP SECCOMP THR PTHREAD CRYPTO DNS_SD DNS_SD_INCLUDES %s" % use_refclock,
+#		use			= "libntpd_obj bison_obj isc ntp sodium opts M parse RT CAP THR PTHREAD CRYPTO DNS_SD DNS_SD_INCLUDES %s" % use_refclock,
 		includes	= [
 						"%s/host/ntpd/" % ctx.bldnode.parent.abspath(),
 						"%s/ntpd/" % srcnode,
@@ -147,29 +141,6 @@ def build(ctx):
 		],
 		install_path= "${PREFIX}/sbin/",
 	)
-
-	ntpdsim_source = [
-		"ntp_config.c",
-		"ntp_io.c",
-		"ntp_scanner.c",
-		"ntpd.c",
-		"ntp_prio_q.c",
-		"ntpsim.c"
-	]
-
-	if 0:
-		ctx(
-			target		= "ntpdsim",
-			features	= "c cprogram bld_include src_include libisc_include libisc_pthread_include ntp_version",
-			source		= ntpdsim_source,
-			defines		= ["SIM"],
-			use		= "libntpd_obj bison_obj isc ntp opts M parse GCC_S RT CAP THR PTHREAD CRYPTO DNS_SD DNS_SD_INCLUDES %s" % use_refclock,
-			includes	= [
-							"%s/ntpd/" % bldnode,
-							"%s/ntpd/" % srcnode
-						],
-			install_path= "${PREFIX}/bin/",
-		)
 
 	ctx.manpage(8, "ntpd-man.txt")
 	ctx.manpage(5, "ntp.conf-man.txt")

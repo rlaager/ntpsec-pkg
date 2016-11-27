@@ -37,7 +37,7 @@
 
 #ifdef HAVE_PPSAPI
 # include "ppsapi_timepps.h"
-# include "refclock_atom.h"
+# include "refclock_pps.h"
 #endif /* HAVE_PPSAPI */
 
 
@@ -54,13 +54,13 @@
  * On startup if initialization of the PPSAPI fails, it will fall back
  * to the "normal" timestamps.
  *
- * The PPSAPI part of the driver understands fudge flag2 and flag3. If
+ * The PPSAPI part of the driver understands options flag2 and flag3. If
  * flag2 is set, it will use the clear edge of the pulse. If flag3 is
  * set, kernel hardpps is enabled.
  *
  * GPS sentences other than RMC (the default) may be enabled by setting
  * the relevent bits of 'mode' in the server configuration line
- * server 127.127.20.x mode X
+ * refclock u mode X
  * 
  * bit 0 - enables RMC (1)
  * bit 1 - enables GGA (2)
@@ -142,10 +142,15 @@
  */
 #define	DEVICE		"/dev/gps%d"	/* GPS serial device */
 #define	PPSDEV		"/dev/gpspps%d"	/* PPSAPI device override */
-#define	SPEED232	B4800	/* uart speed (4800 bps) */
-#define	PRECISION	(-9)	/* precision assumed (about 2 ms) */
-#define	PPS_PRECISION	(-20)	/* precision assumed (about 1 us) */
-#define	REFID		"GPS\0"	/* reference id */
+#ifdef ENABLE_CLASSIC_MODE
+#define	SPEED232	B4800		/* uart speed (4800 bps) */
+#else
+#define	SPEED232	B9600		/* uart speed (9600 bps) */
+#endif
+#define	PRECISION	(-9)		/* precision assumed (about 2 ms) */
+#define	PPS_PRECISION	(-20)		/* precision assumed (about 1 us) */
+#define	REFID		"GPS\0"		/* reference id */
+#define	NAME		"NMEA"		/* shortname */
 #define	DESCRIPTION	"NMEA GPS Clock" /* who we are */
 #ifndef O_NOCTTY
 #define M_NOCTTY	0
@@ -218,7 +223,7 @@ enum date_fmt {
  */
 typedef struct {
 #ifdef HAVE_PPSAPI
-	struct refclock_atom atom; /* PPSAPI structure */
+	struct refclock_ppsctl ppsctl; /* PPSAPI structure */
 	int	ppsapi_fd;	/* fd used with PPSAPI */
 	bool	ppsapi_tried;	/* attempt PPSAPI once */
 	bool	ppsapi_lit;	/* time_pps_create() worked */
@@ -319,14 +324,7 @@ static void     save_ltc        (struct refclockproc * const, const char * const
  * support functions by defining NMEA_WRITE_SUPPORT to non-zero...
  */
 #if NMEA_WRITE_SUPPORT
-
 static	void gps_send(int, const char *, struct peer *);
-# ifdef SYS_WINNT
-#  undef write	/* ports/winnt/include/config.h: #define write _write */
-extern int async_write(int, const void *, unsigned int);
-#  define write(fd, data, octets)	async_write(fd, data, octets)
-# endif /* SYS_WINNT */
-
 #endif /* NMEA_WRITE_SUPPORT */
 
 static int32_t g_gpsMinBase;
@@ -338,12 +336,12 @@ static int32_t g_gpsMinYear;
  * -------------------------------------------------------------------
  */
 struct refclock refclock_nmea = {
+	NAME,			/* basename of driver */
 	nmea_start,		/* start up driver */
 	nmea_shutdown,		/* shut down driver */
 	nmea_poll,		/* transmit poll message */
 	NMEA_CONTROL,		/* fudge control */
 	nmea_init,		/* initialize driver */
-	noentry,		/* buginfo */
 	nmea_timer		/* called once per second */
 };
 
@@ -400,40 +398,49 @@ nmea_start(
 	struct refclockproc * const	pp = peer->procptr;
 	nmea_unit * const		up = emalloc_zero(sizeof(*up));
 	char				device[20];
-	size_t				devlen;
-	uint32_t				rate;
-	int				baudrate;
+	uint32_t			rate;
+	unsigned int			baudrate;
 	const char *			baudtext;
 
 
-	/* Get baudrate choice from mode byte bits 4/5/6 */
+	/* Old style: get baudrate choice from mode byte bits 4/5/6 */
 	rate = (peer->ttl & NMEA_BAUDRATE_MASK) >> NMEA_BAUDRATE_SHIFT;
+
+	/* New style: get baudrate from baud option */
+	if (peer->baud)
+		rate = peer->baud;
 
 	switch (rate) {
 	case 0:
+	case 4800:
 		baudrate = SPEED232;
 		baudtext = "4800";
 		break;
 	case 1:
+	case 9600:
 		baudrate = B9600;
 		baudtext = "9600";
 		break;
 	case 2:
+	case 19200:
 		baudrate = B19200;
 		baudtext = "19200";
 		break;
 	case 3:
+	case 38400:
 		baudrate = B38400;
 		baudtext = "38400";
 		break;
 #ifdef B57600
 	case 4:
+	case 57600:
 		baudrate = B57600;
 		baudtext = "57600";
 		break;
 #endif
 #ifdef B115200
 	case 5:
+	case 115200:
 		baudrate = B115200;
 		baudtext = "115200";
 		break;
@@ -461,25 +468,23 @@ nmea_start(
 
 	/* Initialize miscellaneous variables */
 	peer->precision = PRECISION;
+	pp->clockname = NAME;
 	pp->clockdesc = DESCRIPTION;
 	memcpy(&pp->refid, REFID, REFIDLEN);
 	peer->sstclktype = CTL_SST_TS_UHF;
 
 	/* Open serial port. Use CLK line discipline, if available. */
-	devlen = snprintf(device, sizeof(device), DEVICE, unit);
-	if (devlen >= sizeof(device)) {
-		msyslog(LOG_ERR, "%s clock device name too long",
-			refnumtoa(&peer->srcadr));
-		return false; /* buffer overflow */
-	}
-	pp->io.fd = refclock_open(device, baudrate, LDISC_CLK);
+	snprintf(device, sizeof(device), DEVICE, unit);
+	pp->io.fd = refclock_open(peer->path ? peer->path : device,
+				  peer->baud ? peer->baud : baudrate,
+				  LDISC_CLK);
 	if (0 >= pp->io.fd) {
 		pp->io.fd = nmead_open(device);
 		if (-1 == pp->io.fd)
 			return false;
 	}
 	LOGIF(CLOCKINFO, (LOG_NOTICE, "%s serial %s open at %s bps",
-	      refnumtoa(&peer->srcadr), device, baudtext));
+	      refclock_name(peer), device, baudtext));
 
 	/* succeed if this clock can be added */
 	return io_addclock(&pp->io) != 0;
@@ -508,7 +513,7 @@ nmea_shutdown(
 	if (up != NULL) {
 #ifdef HAVE_PPSAPI
 		if (up->ppsapi_lit)
-			time_pps_destroy(up->atom.handle);
+			time_pps_destroy(up->ppsctl.handle);
 		if (up->ppsapi_tried && up->ppsapi_fd != pp->io.fd)
 			close(up->ppsapi_fd);
 #endif
@@ -557,25 +562,25 @@ nmea_control(
 		up->ppsapi_tried = true;
 		devlen = snprintf(device, sizeof(device), PPSDEV, unit);
 		if (devlen < sizeof(device)) {
-			up->ppsapi_fd = open(device, PPSOPENMODE,
-					     S_IRUSR | S_IWUSR);
+		    up->ppsapi_fd = open(peer->ppspath ? peer->ppspath : device,
+					 PPSOPENMODE, S_IRUSR | S_IWUSR);
 		} else {
 			up->ppsapi_fd = -1;
 			msyslog(LOG_ERR, "%s PPS device name too long",
-				refnumtoa(&peer->srcadr));
+				refclock_name(peer));
 		}
 		if (-1 == up->ppsapi_fd)
 			up->ppsapi_fd = pp->io.fd;	
-		if (refclock_ppsapi(up->ppsapi_fd, &up->atom)) {
+		if (refclock_ppsapi(up->ppsapi_fd, &up->ppsctl)) {
 			/* use the PPS API for our own purposes now. */
 			up->ppsapi_lit = refclock_params(
-				pp->sloppyclockflag, &up->atom);
+				pp->sloppyclockflag, &up->ppsctl);
 			if (!up->ppsapi_lit) {
 				/* failed to configure, drop PPS unit */
-				time_pps_destroy(up->atom.handle);
+				time_pps_destroy(up->ppsctl.handle);
 				msyslog(LOG_WARNING,
 					"%s set PPSAPI params fails",
-					refnumtoa(&peer->srcadr));				
+					refclock_name(peer));
 			}
 			/* note: the PPS I/O handle remains valid until
 			 * flag1 is cleared or the clock is shut down. 
@@ -583,7 +588,7 @@ nmea_control(
 		} else {
 			msyslog(LOG_WARNING,
 				"%s flag1 1 but PPSAPI fails",
-				refnumtoa(&peer->srcadr));
+				refclock_name(peer));
 		}
 	}
 
@@ -591,8 +596,8 @@ nmea_control(
 	if (!(CLK_FLAG1 & pp->sloppyclockflag) && up->ppsapi_tried) {
 		/* shutdown PPS API */
 		if (up->ppsapi_lit)
-			time_pps_destroy(up->atom.handle);
-		up->atom.handle = 0;
+			time_pps_destroy(up->ppsctl.handle);
+		up->ppsctl.handle = 0;
 		/* close/drop PPS fd */
 		if (up->ppsapi_fd != pp->io.fd)
 			close(up->ppsapi_fd);
@@ -654,7 +659,7 @@ nmea_timer(
  * move the receive time stamp to the corresponding edge. This can warp
  * into future, if a transmission delay of more than 500ms is not
  * compensated with a corresponding fudge time2 value, because then the
- * next PPS edge is nearer than the last. (Similiar to what the PPS ATOM
+ * next PPS edge is nearer than the last. (Similiar to what the PPS
  * driver does, but we deal with full time stamps here, not just phase
  * shift information.) Likewise, a negative fudge time2 value must be
  * used if the reference time stamp correlates with the *following* PPS
@@ -674,7 +679,7 @@ nmea_timer(
  * The function returns PPS_RELATE_NONE (0) if no PPS edge correlation
  * can be fixed; PPS_RELATE_EDGE (1) when a PPS edge could be fixed, but
  * the distance to the reference time stamp is too big (exceeds
- * +/-400ms) and the ATOM driver PLL cannot be used to fix the phase;
+ * +/-400ms) and the PPS driver PLL cannot be used to fix the phase;
  * and PPS_RELATE_PHASE (2) when the ATOM driver PLL code can be used.
  *
  * On output, the receive time stamp is replaced with the corresponding
@@ -690,7 +695,7 @@ nmea_timer(
 static int
 refclock_ppsrelate(
 	const struct refclockproc  * pp	    ,	/* for sanity	  */
-	const struct refclock_atom * ap	    ,	/* for PPS io	  */
+	const struct refclock_ppsctl * ap    ,	/* for PPS io	  */
 	const l_fp		   * reftime ,
 	l_fp			   * rd_stamp,	/* i/o read stamp */
 	double			     pp_fudge,	/* pps fudge	  */
@@ -741,18 +746,18 @@ refclock_ppsrelate(
 
 	/* if whole system out-of-sync, do not try to PLL */
 	if (sys_leap == LEAP_NOTINSYNC)
-		return PPS_RELATE_EDGE; /* cannot PLL with atom code */
+		return PPS_RELATE_EDGE; /* cannot PLL with pps code */
 
-	/* check against reftime if ATOM PLL can be used */
+	/* check against reftime if PPS PLL can be used */
 	pp_delta = *reftime;
 	L_SUB(&pp_delta, &pp_stamp);
 	LFPTOD(&pp_delta, delta);
 	delta += pp_fudge;
 	if (fabs(delta) > 0.45)
-		return PPS_RELATE_EDGE; /* cannot PLL with atom code */
+		return PPS_RELATE_EDGE; /* cannot PLL with PPS code */
 
 	/* all checks passed, gets an AAA rating here! */
-	return PPS_RELATE_PHASE; /* can PLL with atom code */
+	return PPS_RELATE_PHASE; /* can PLL with PPS code */
 }
 #endif	/* HAVE_PPSAPI */
 
@@ -822,7 +827,7 @@ nmea_receive(
 
 	case CHECK_INVALID:
 		DPRINTF(1, ("%s invalid data: '%s'\n",
-			refnumtoa(&peer->srcadr), rd_lastcode));
+			refclock_name(peer), rd_lastcode));
 		refclock_report(peer, CEVNT_BADREPLY);
 		return;
 
@@ -831,7 +836,7 @@ nmea_receive(
 
 	default:
 		DPRINTF(1, ("%s gpsread: %d '%s'\n",
-			refnumtoa(&peer->srcadr), rd_lencode,
+			refclock_name(peer), rd_lencode,
 			rd_lastcode));
 		break;
 	}
@@ -863,7 +868,7 @@ nmea_receive(
 
 	/* Eventually output delay measurement now. */
 	if (peer->ttl & NMEA_DELAYMEAS_MASK) {
-		mprintf_clock_stats(&peer->srcadr, "delay %0.6f %.*s",
+		mprintf_clock_stats(peer, "delay %0.6f %.*s",
 			 ldexp(rd_timestamp.l_uf, -32),
 			 (int)(strchr(rd_lastcode, ',') - rd_lastcode),
 			 rd_lastcode);
@@ -897,7 +902,7 @@ nmea_receive(
 		up->cksum_type[sentence] = (uint8_t)checkres;
 	} else {
 		DPRINTF(1, ("%s checksum missing: '%s'\n",
-			refnumtoa(&peer->srcadr), rd_lastcode));
+			refclock_name(peer), rd_lastcode));
 		refclock_report(peer, CEVNT_BADREPLY);
 		up->tally.malformed++;
 		return;
@@ -914,7 +919,7 @@ nmea_receive(
 	}
 
 	DPRINTF(1, ("%s processing %d bytes, timecode '%s'\n",
-		refnumtoa(&peer->srcadr), rd_lencode, rd_lastcode));
+		refclock_name(peer), rd_lencode, rd_lastcode));
 
 	/*
 	 * Grab fields depending on clock string type and possibly wipe
@@ -1010,14 +1015,14 @@ nmea_receive(
 	}
 
 	DPRINTF(1, ("%s effective timecode: %04u-%02u-%02u %02d:%02d:%02d\n",
-		refnumtoa(&peer->srcadr),
+		refclock_name(peer),
 		date.year, date.month, date.monthday,
 		date.hour, date.minute, date.second));
 
 	/* Check if we must enter GPS time mode; log so if we do */
 	if (!up->gps_time && (sentence == NMEA_GPZDG)) {
 		msyslog(LOG_INFO, "%s using GPS time as if it were UTC",
-			refnumtoa(&peer->srcadr));
+			refclock_name(peer));
 		up->gps_time = true;
 	}
 	
@@ -1037,7 +1042,7 @@ nmea_receive(
 	rd_fudge = pp->fudgetime2;
 
 	DPRINTF(1, ("%s using '%s'\n",
-		    refnumtoa(&peer->srcadr), rd_lastcode));
+		    refclock_name(peer), rd_lastcode));
 
 	/* Data will be accepted. Update stats & log data. */
 	up->tally.accepted++;
@@ -1051,7 +1056,7 @@ nmea_receive(
 	 */
 	if (up->ppsapi_lit)
 		switch (refclock_ppsrelate(
-				pp, &up->atom, &rd_reftime, &rd_timestamp,
+				pp, &up->ppsctl, &rd_reftime, &rd_timestamp,
 				pp->fudgetime1,	&rd_fudge))
 		{
 		case PPS_RELATE_PHASE:
@@ -1059,7 +1064,7 @@ nmea_receive(
 			peer->precision = PPS_PRECISION;
 			peer->flags |= FLAG_PPS;
 			DPRINTF(2, ("%s PPS_RELATE_PHASE\n",
-				    refnumtoa(&peer->srcadr)));
+				    refclock_name(peer)));
 			up->tally.pps_used++;
 			break;
 			
@@ -1067,7 +1072,7 @@ nmea_receive(
 			up->ppsapi_gate = true;
 			peer->precision = PPS_PRECISION;
 			DPRINTF(2, ("%s PPS_RELATE_EDGE\n",
-				    refnumtoa(&peer->srcadr)));
+				    refclock_name(peer)));
 			break;
 			
 		case PPS_RELATE_NONE:
@@ -1078,7 +1083,7 @@ nmea_receive(
 			 * at the end of the poll cycle we know...
 			 */
 			DPRINTF(2, ("%s PPS_RELATE_NONE\n",
-				    refnumtoa(&peer->srcadr)));
+				    refclock_name(peer)));
 			break;
 		}
 #endif /* HAVE_PPSAPI */
@@ -1148,13 +1153,13 @@ nmea_poll(
 		const char *nmea = pp->a_lastcode;
 		if (*nmea == '\0') nmea = "(none)";
 		mprintf_clock_stats(
-		  &peer->srcadr, "%s  %u %u %u %u %u %u",
+		  peer, "%s  %u %u %u %u %u %u",
 		  nmea,
 		  up->tally.total, up->tally.accepted,
 		  up->tally.rejected, up->tally.malformed,
 		  up->tally.filtered, up->tally.pps_used);
 	} else {
-		record_clock_stats(&peer->srcadr, pp->a_lastcode);
+		record_clock_stats(peer, pp->a_lastcode);
 	}
 	ZERO(up->tally);
 }
@@ -1222,7 +1227,7 @@ gps_send(
 			       len, beg, dcs);
 		if ((size_t)len >= sizeof(buf)) {
 			DPRINTF(1, ("%s gps_send: buffer overflow for command '%s'\n",
-				    refnumtoa(&peer->srcadr), cmd));
+				    refclock_name(peer), cmd));
 			return;	/* game over player 1 */
 		}
 		cmd = buf;
@@ -1230,7 +1235,7 @@ gps_send(
 		len = strlen(cmd);
 	}
 
-	DPRINTF(1, ("%s gps_send: '%.*s'\n", refnumtoa(&peer->srcadr),
+	DPRINTF(1, ("%s gps_send: '%.*s'\n", refclock_name(peer),
 		len - 2, cmd));
 
 	/* send out the whole stuff */
@@ -1862,7 +1867,7 @@ eval_gps_time(
 		up->epoch_warp = weeks;
 		LOGIF(CLOCKINFO, (LOG_INFO,
 				  "%s Changed GPS epoch warp to %d weeks",
-				  refnumtoa(&peer->srcadr), weeks));
+				  refclock_name(peer), weeks));
 	}
 
 	/* - build result and be done */

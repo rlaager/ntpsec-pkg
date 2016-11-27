@@ -6,7 +6,7 @@
 == SYNOPSIS ==
 [verse]
 {ntpd}
-    [-46aAbgLmnNqx ] [ -c 'conffile' ] [ -f 'driftfile' ] [ -i 'jaildir' ]
+    [-46aAbghLmnNqx ] [ -c 'conffile' ] [ -f 'driftfile' ] [ -i 'jaildir' ]
     [ -k 'keyfile' ] [ -l 'logfile' ] [ -p 'pidfile' ] [ -P 'priority' ]
     [ -r 'broadcast-delay' ]  [ -s 'statsdir' ]  [ -t  'key' ]
     [ -u 'user'[:'group'] ] [ -U 'interface_update_interval' ]
@@ -116,7 +116,7 @@ This is the same operation as the _driftfile_
 configuration specification in the +/etc/{ntpconf}+ file.
 
 +-g+, +--panicgate+::
-  Allow the first adjustment to be Big. This option may appear an
+  Allow the first adjustment to be big. This option may appear an
   unlimited number of times.
 +
 Normally, +{ntpd}+ exits with a message to the system log if the offset
@@ -126,6 +126,9 @@ this can happen only once. If the threshold is exceeded after that,
 +{ntpd}+ will exit with a message to the system log. This option can be
 used with the +-q+ and +-x+ options. See the _tinker_ configuration
 file directive for other options.
+
++-h+, +--help+::
+  Print a usage message summarizing options and exit.
 
 +-G+, +--force-step-once+::
   Step any initial offset correction..
@@ -145,9 +148,7 @@ Chroot the server to the directory _jaildir_ This option also implies
 that the server attempts to drop root privileges at startup. You may
 need to also specify a +-u+ option. This option is only available if
 the OS supports adjusting the clock without full root privileges. This
-option is supported under NetBSD (configure with +--enable-clockctl+)
-or Linux (configure with +--enable-linuxcaps+) or Solaris (configure
-with +--enable-solarisprivs+).
+option is supported under Linux, NetBSD and Solaris.
 
 +-I+ iface, +--interface+=_iface_::
   Listen on an interface name or address. This option may appear an
@@ -218,21 +219,13 @@ specified _sched_setscheduler(SCHED_FIFO)_ priority.
 
 +-q+, +--quit+::
   Set the time and quit. This option must not appear in combination with
-  any of the following options: saveconfigquit, wait-sync.
+  wait-sync.
 +
 +{ntpd}+ will not daemonize and will exit after the clock is first
 synchronized. This behavior mimics that of the old _ntpdate_ program,
 which has been replaced with a shell script. The +-g+ and +-x+ options can be
 used with this option. Note: The kernel time discipline is disabled
 with this option.
-
-+-Q+, +--saveconfigquit+=_string_::
-  Save parsed configuration and quit. This option must not appear in
-  combination with any of the following options: quit, wait-sync.
-+
-Cause +{ntpd}+ to parse its startup configuration file and save an
-equivalent to the given filename and exit. This option was designed
-for automated testing.
 
 +-r+ string, +--propagationdelay+=_string_::
   Broadcast/propagation delay.
@@ -259,9 +252,7 @@ Add the specified key number to the trusted key list.
 +
 Specify a user, and optionally a group, to switch to. This option is
 only available if the OS supports adjusting the clock without full
-root privileges. This option is supported under NetBSD (configure with
-+--enable-clockctl+) or Linux (configure with +--enable-linuxcaps+) or
-Solaris (configure with +--enable-solarisprivs+).
+root privileges. This option is supported under Linux, NetBSD and Solaris.
 
 +-U+ number, +--updateinterval+=_number_::
   interval in seconds between scans for new or dropped interfaces. This
@@ -275,8 +266,8 @@ between scans.
 
 +-w+ number, +--wait-sync+=_number_::
   Seconds to wait for first clock sync. This option must not appear in
-  combination with any of the following options: nofork, quit,
-  saveconfigquit. This option takes an integer number as its argument.
+  combination with any of the following options: nofork, quit.
+  This option takes an integer number as its argument.
 +
 If greater than zero, alters +{ntpd}+'s behavior when forking to
 daemonize. Instead of exiting with status 0 immediately after the
@@ -428,7 +419,7 @@ the problems mentioned above.
 [[starting]]
 === Starting NTP (Best Current Practice) ===
 
-First, use the _iburst_ option on your _server_ entries.
+First, use the _iburst_ option on your _server_ and _pool_ entries.
 
 If you can also keep a good _ntp.drift_ file then {ntpdman} will
 effectively "warm-start" and your system's clock will be stable in under
@@ -502,7 +493,7 @@ nothing is heard after a couple of minutes, the daemon times out and
 exits.
 
 When kernel support is available to discipline the clock frequency,
-which is the case for stock Solaris, Tru64, Linux and FreeBSD, a useful
+which is the case for stock Solaris, Linux and FreeBSD, a useful
 feature is available to discipline the clock frequency. First, +{ntpd}+ is
 run in continuous mode with selected servers in order to measure and
 record the intrinsic clock frequency offset in the frequency file. It
@@ -583,17 +574,30 @@ as described in {ntpdconfman}.
 |keys path          |+/usr/local/etc+|none        |+keysdir+
 |================================================================
 
+[[signals]]
+== SIGNALS ==
+
+SIGQUIT, SIGINT, and SIGTERM will cause ntpd to clean up and exit.
+
+SIGHUP will reopen the log file if it has changed and
+check for a new leapseconds file if one was specified.
+
+On most systems, you can send SIGHUP to +ntpd+ with
+-----
+  # sigkill -HUP ntpd
+-----
+
+If built with debugging enabled (waf configured without --disable-debug)
+SIGUSR1 will increase the debug level by 1 and
+SIGUSR2 will decrease it by 1.  This may be helpful if you are
+running without -n, either just to see the logging on your screen
+or with gdb.
+
 [[bugs]]
 == BUGS ==
 
 The '-V' option is not backward-compatible with its use (as the
 equivalent of -Z) in older versions.
-
-The +{ntpd}+ utility has gotten rather fat. While not huge, it has gotten
-larger than might be desirable for an elevated-priority +{ntpd}+ running
-on a workstation, particularly since many of the fancy features which
-consume the space were designed more with a busy primary server, rather
-than a high stratum workstation in mind.
 
 == STANDARDS ==
 

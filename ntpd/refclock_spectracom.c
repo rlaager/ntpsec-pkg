@@ -16,7 +16,7 @@
 
 #ifdef HAVE_PPSAPI
 #include "ppsapi_timepps.h"
-#include "refclock_atom.h"
+#include "refclock_pps.h"
 #endif /* HAVE_PPSAPI */
 
 /*
@@ -85,10 +85,9 @@
  * Fudge Factors
  *
  * This driver can retrieve a table of quality data maintained
- * internally by the Netclock/2 clock. If flag4 of the fudge
- * configuration command is set to 1, the driver will retrieve this
- * table and write it to the clockstats file when the first timecode
- * message of a new day is received.
+ * internally by the Netclock/2 clock. If option flag4 is set to 1,
+ * the driver will retrieve this table and write it to the clockstats
+ * file when the first timecode message of a new day is received.
  *
  * PPS calibration fudge time 1: format 0 .003134, format 2 .004034
  */
@@ -96,23 +95,24 @@
  * Interface definitions
  */
 #define	DEVICE		"/dev/spectracom%d" /* device name and unit */
-#define	SPEED232	B9600	/* uart speed (9600 baud) */
-#define	PRECISION	(-13)	/* precision assumed (about 100 us) */
-#define	PPS_PRECISION	(-13)	/* precision assumed (about 100 us) */
-#define	REFID		"GPS\0"	/* reference ID */
+#define	SPEED232	B9600		/* uart speed (9600 baud) */
+#define	PRECISION	(-13)		/* precision assumed (about 100 us) */
+#define	PPS_PRECISION	(-13)		/* precision assumed (about 100 us) */
+#define	REFID		"GPS\0"		/* reference ID */
+#define NAME		"SPECTRACOM"	/* shortname */
 #define	DESCRIPTION	"Spectracom GPS Receiver" /* WRU */
 
-#define	LENTYPE0	22	/* format 0 timecode length */
-#define	LENTYPE2	24	/* format 2 timecode length */
-#define LENTYPE3	29	/* format 3 timecode length */
-#define MONLIN		15	/* number of monitoring lines */
+#define	LENTYPE0	22		/* format 0 timecode length */
+#define	LENTYPE2	24		/* format 2 timecode length */
+#define LENTYPE3	29		/* format 3 timecode length */
+#define MONLIN		15		/* number of monitoring lines */
 
 /*
  * Spectracom unit control structure
  */
 struct spectracomunit {
 #ifdef HAVE_PPSAPI
-	struct refclock_atom atom; /* PPSAPI structure */
+	struct refclock_ppsctl ppsctl; /* PPSAPI structure */
 	int	ppsapi_tried;	/* attempt PPSAPI once */
 	int	ppsapi_lit;	/* time_pps_create() worked */
 	int	tcount;		/* timecode sample counter */
@@ -144,12 +144,12 @@ static	void	spectracom_control	(int, const struct refclockstat *,
  * Transfer vector
  */
 struct	refclock refclock_spectracom = {
+	NAME,			/* basename of driver */
 	spectracom_start,		/* start up driver */
 	spectracom_shutdown,		/* shut down driver */
 	spectracom_poll,		/* transmit poll message */
 	SPECTRACOM_CONTROL,		/* fudge set/change notification */
 	noentry,		/* initialize driver (not used) */
-	noentry,		/* not used (old wwvb_buginfo) */
 	spectracom_timer		/* called once per second */
 };
 
@@ -172,7 +172,9 @@ spectracom_start(
 	 * Open serial port. Use CLK line discipline, if available.
 	 */
 	snprintf(device, sizeof(device), DEVICE, unit);
-	fd = refclock_open(device, SPEED232, LDISC_CLK);
+	fd = refclock_open(peer->path ? peer->path : device,
+			   peer->baud ? peer->baud : SPEED232,
+			   LDISC_CLK);
 	if (fd <= 0)
 		/* coverity[leaked_handle] */
 		return false;
@@ -198,6 +200,7 @@ spectracom_start(
 	 * Initialize miscellaneous variables
 	 */
 	peer->precision = PRECISION;
+	pp->clockname = NAME;
 	pp->clockdesc = DESCRIPTION;
 	memcpy(&pp->refid, REFID, REFIDLEN);
 	peer->sstclktype = CTL_SST_TS_LF;
@@ -365,7 +368,7 @@ spectracom_receive(
 		 */
 		if (up->linect > 0) {
 			up->linect--;
-			record_clock_stats(&peer->srcadr,
+			record_clock_stats(peer,
 			    pp->a_lastcode);
 		} else {
 			refclock_report(peer, CEVNT_BADREPLY);
@@ -470,7 +473,7 @@ spectracom_timer(
 #endif
 #ifdef HAVE_PPSAPI
 	if (up->ppsapi_lit &&
-	    refclock_pps(peer, &up->atom, pp->sloppyclockflag) > 0) {
+	    refclock_catcher(peer, &up->ppsctl, pp->sloppyclockflag) > 0) {
 		up->pcount++,
 		peer->flags |= FLAG_PPS;
 		peer->precision = PPS_PRECISION;
@@ -532,7 +535,7 @@ spectracom_poll(
 	}
 #endif /* HAVE_PPSAPI */
 	refclock_receive(peer);
-	record_clock_stats(&peer->srcadr, pp->a_lastcode);
+	record_clock_stats(peer, pp->a_lastcode);
 #ifdef DEBUG
 	if (debug)
 		printf("wwvb: timecode %d %s\n", pp->lencode,
@@ -571,8 +574,8 @@ spectracom_control(
 			return;
 		peer->flags &= ~FLAG_PPS;
 		peer->precision = PRECISION;
-		time_pps_destroy(up->atom.handle);
-		up->atom.handle = 0;
+		time_pps_destroy(up->ppsctl.handle);
+		up->ppsctl.handle = 0;
 		up->ppsapi_lit = 0;
 		return;
 	}
@@ -583,13 +586,13 @@ spectracom_control(
 	 * Light up the PPSAPI interface.
 	 */
 	up->ppsapi_tried = 1;
-	if (refclock_ppsapi(pp->io.fd, &up->atom)) {
+	if (refclock_ppsapi(pp->io.fd, &up->ppsctl)) {
 		up->ppsapi_lit = 1;
 		return;
 	}
 
 	msyslog(LOG_WARNING, "%s flag1 1 but PPSAPI fails",
-		refnumtoa(&peer->srcadr));
+		refclock_name(peer));
 }
 #endif	/* HAVE_PPSAPI */
 

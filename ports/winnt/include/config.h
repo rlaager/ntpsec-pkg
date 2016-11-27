@@ -246,7 +246,6 @@ typedef int socklen_t;
 #define TYPEOF_IP_MULTICAST_LOOP	BOOL
 #define SETSOCKOPT_ARG_CAST		(const char *)
 #define HAVE_RANDOM 
-#define SAVECONFIG			1
 
 /*
  * Multimedia timer enable
@@ -332,25 +331,21 @@ extern char *	ntp_strerror	(int e);
 
 # define REFCLOCK			/* from ntpd.mak */
 
-/* #define CLOCK_PARSE  */
+/* #define CLOCK_GENERIC  */
 #define CLOCK_ACTS
 #define CLOCK_ARBITER
-#define CLOCK_ARCRON_MSF
 #define OWN_PPS_NTP_TIMESTAMP_FROM_COUNTER	/* timepps.h */
 #define HAVE_TIMEPPS_H
 #define HAVE_PPSAPI
-#define CLOCK_ATOM
+#define CLOCK_PPS
 #define CLOCK_CHU
-#define CLOCK_CHRONOLOG
 #define CLOCK_DUMBCLOCK
-#define CLOCK_HOPF_SERIAL	/* device 38, hopf DCF77/GPS serial line receiver  */
-#define CLOCK_HOPF_PCI		/* device 39, hopf DCF77/GPS PCI-Bus receiver  */
 #define CLOCK_JUPITER
 #define CLOCK_LOCAL
 #define CLOCK_NMEA
 #define CLOCK_ONCORE
 #define CLOCK_PALISADE		/* from ntpd.mak */
-#define CLOCK_PARSE
+#define CLOCK_GENERIC
 /* parse component drivers */
 #define CLOCK_COMPUTIME
 #define CLOCK_DCF7000
@@ -366,7 +361,6 @@ extern char *	ntp_strerror	(int e);
 /* end parse component drivers */
 /* # define CLOCK_SHM */
 #define CLOCK_SPECTRACOM	/* refclock_spectracom.c */
-#define CLOCK_TRIMBLEDC
 #define CLOCK_TRUETIME
 
 #define NTP_LITTLE_ENDIAN		/* from libntp.mak */

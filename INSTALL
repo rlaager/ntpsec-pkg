@@ -30,9 +30,14 @@ libevent 2.x::
       # ln -s /usr/pkg/lib/libevent_core-2.0.so.5
 
 libcap::
-   Optional, required for -u user:group on Linux
+   Required on Linux, to support dropping root.
    Fedora: libcap and libcap-devel
    Debian: libcap2 and libcap-dev
+
+seccomp::
+   Optional on Linux to support restricting syscalls
+   Fedora: libseccomp-devel
+   Debian: libseccomp-dev (gets libseccomp2)
 
 OpenSSL::
    Optional, required for --enable-crypto.
@@ -63,8 +68,19 @@ sys/timepps.h::
 asciidoc, a2x::
    You will need asciidoc to make HTML and a2x to make manual pages from the
    documentation masters.  Only required if you configured with --enable-doc.
-   Fedora: asciidoc
+   Note, you need asciidoc 8.6.0 at minimum.
+   Fedora: asciidoc  (Stock CentOS/RHEL has only 8.4.5, you must upgrade)
    Debian: asciidoc
+
+gnuplot::
+   Required for ntpviz.
+   Fedora: gnuplot
+   Debian: gnuplot
+
+liberation::
+   Optional, improves font quality in ntpviz renderings.
+   Fedora: liberation
+   Debian: liberation
 
 The OS X build has been tested in this environment:
 
@@ -105,15 +121,17 @@ Under Unix, the simplest way to compile this package is:
   You may want to add configuration options after the verb 'configure';
   see below.
 
-  3. Type `./waf build' to compile the package.
+  3. Invoke `./waf build' to compile the package.
 
-  4. Type `./waf install' to install the programs and any data files and
+  4. Invoke `./waf install' to install the programs and any data files and
      documentation.
 
-  5. You can remove the program binaries and object files from the
+  5. You can uninstall cleanly by invoking `./waf uninstall' as root.
+
+  6. You can remove the program binaries and object files from the
      source code directory by typing `./waf clean'.
 
-  6. To also remove the files that `./waf configure' created (so you can
+  7. To also remove the files that `./waf configure' created (so you can
      configure and compile the package for a different kind of
      computer), type `./waf distclean'.
 
@@ -142,10 +160,30 @@ By default, `waf install' will install the package's files in
 installation prefix other than `/usr/local' by giving waf the
 option `--prefix=PATH'.
 
+== Strict compatibility mode ==
+
+There have been a handful of forward-incompatible changes from NTP Classic.
+These are unlikely to affect normal operation.  However, there is a configure
+operation, --enable-classic-mode, that restores certain legacy behaviors. This
+is not recommended, as it makes the code a little bulkier and slower.
+
+Here's what it presently does:
+
+* Reverts logging to the old format that designates clocks with magic
+  addresses rather than the driver shortname and unit number.
+
+* Enables declaring generic-driver refclocks with the old magic-address
+  syntax (but the new syntax won't work for these, though it will for
+  other driver types).
+
+* Reverts the default baudrate of the NMEA driver to 4800 (from 9600).
+
+Other behaviors may be added in future releases.
+
 == Uninstalled binaries and scripts ==
 
 Due to variations in Perl library paths, our stock source distribution
-makes no attempt to install certain Perl scripts: notably
+makes no attempt to install certain Perl/Python/shell scripts: notably
 ntpleapfetch, ntpwait, and ntptrace.  If you installed this software
 from a binary package prepared by your OS distributor, the OS
 distributor may install them, arranging a rendezvous with the

@@ -7,10 +7,13 @@
 #include <stddef.h>
 #include <math.h>
 
-#if _XOPEN_SOURCE >= 600
+#if (_XOPEN_SOURCE >= 600) || (__STDC_VERSION__ >= 199901L)
 /*
  * Supply GCCisms that stop being visible if we tell it we need the
- * prototype for strptime(3).
+ * prototype for strptime(3).  Note that this conditionalization is
+ * not actually necessary with -std=gnu99; we're leaving it here as
+ * documentation. Ideally all these nonstandard types should go away
+ * to be replaced by POSIX typedefs.
  */
 typedef unsigned long	u_long;
 typedef unsigned short	u_short;
@@ -91,7 +94,7 @@ typedef unsigned int	u_int;
  * Poll interval parameters
  */
 #define NTP_UNREACH	10	/* poll unreach threshold */
-#define	NTP_MINPOLL	3	/* log2 min poll interval (8 s) */
+#define	NTP_MINPOLL	0	/* log2 min poll interval (1 s) */
 #define NTP_MINDPOLL	6	/* log2 default min poll (64 s) */
 #define NTP_MAXDPOLL	10	/* log2 default max poll (~17 m) */
 #define	NTP_MAXPOLL	17	/* log2 max poll interval (~36 h) */
@@ -232,6 +235,15 @@ struct interface {
 #define	PEER_BOGON_MASK	(BOGON10 | BOGON11 | BOGON12 | BOGON13)
 
 /*
+ * Does a peer node represent a reference clock?
+ */
+#ifdef REFCLOCK
+#define IS_PEER_REFCLOCK(p)	((p)->procptr != NULL)
+#else
+#define IS_PEER_REFCLOCK(p)	false
+#endif
+
+/*
  * The peer structure. Holds state information relating to the guys
  * we are peering with. Most of this stuff is from section 3.2 of the
  * spec.
@@ -263,7 +275,10 @@ struct peer {
 	 */
 #ifdef REFCLOCK
 	struct refclockproc *procptr; /* refclock structure pointer */
-	uint8_t	refclktype;	/* reference clock type */
+	char *  path;		/* override path if non-NULL */
+	char *  ppspath;	/* override PPS device path if non-NULL */
+	uint32_t baud;		/* baud rate to initialize driver with */
+	bool	is_pps_driver;	/* is this the PPS driver? */
 	uint8_t	refclkunit;	/* reference clock unit number */
 	uint8_t	sstclktype;	/* clock type for system status word */
 #endif /* REFCLOCK */
@@ -424,61 +439,6 @@ struct peer {
 #define END_CRYPTO_TO_ZERO(p)	((char *)&((p)->end_clear_to_zero))
 #define LEN_CRYPTO_TO_ZERO	(END_CRYPTO_TO_ZERO((struct peer *)0) \
 				    - CRYPTO_TO_ZERO((struct peer *)0))
-
-/*
- * Reference clock types.  Added as necessary.
- *
- * This is all assigned refclock types since the beginning of time.
- * Some are no longer in use.
- */
-#define	REFCLK_NONE		0	/* unknown or missing */
-#define	REFCLK_LOCALCLOCK	1	/* external (e.g., lockclock) */
-#define	REFCLK_GPS_TRAK		2	/* TRAK 8810 GPS Receiver */
-#define	REFCLK_WWV_PST		3	/* PST/Traconex 1020 WWV/H */
-#define	REFCLK_SPECTRACOM	4	/* Spectracom (generic) Receivers */
-#define	REFCLK_TRUETIME		5	/* TrueTime (generic) Receivers */
-#define REFCLK_IRIG_AUDIO	6	/* IRIG-B/W audio decoder */
-#define	REFCLK_CHU_AUDIO	7	/* CHU audio demodulator/decoder */
-#define REFCLK_PARSE		8	/* generic driver (usually DCF77,GPS,MSF) */
-#define	REFCLK_GPS_MX4200	9	/* Magnavox MX4200 GPS */
-#define REFCLK_GPS_AS2201	10	/* Austron 2201A GPS */
-#define	REFCLK_GPS_ARBITER	11	/* Arbiter 1088A/B/ GPS */
-#define REFCLK_IRIG_TPRO	12	/* KSI/Odetics TPRO-S IRIG */
-#define REFCLK_ATOM_LEITCH	13	/* Leitch CSD 5300 Master Clock */
-#define REFCLK_MSF_EES		14	/* EES M201 MSF Receiver */
-#define	REFCLK_GPSTM_TRUE	15	/* OLD TrueTime GPS/TM-TMD Receiver */
-#define REFCLK_IRIG_BANCOMM	16	/* Bancomm GPS/IRIG Interface */
-#define REFCLK_GPS_DATUM	17	/* Datum Programmable Time System */
-#define REFCLK_ACTS		18	/* Generic Auto Computer Time Service */
-#define REFCLK_WWV_HEATH	19	/* Heath GC1000 WWV/WWVH Receiver */
-#define REFCLK_GPS_NMEA		20	/* NMEA based GPS clock */
-#define REFCLK_GPS_VME		21	/* TrueTime GPS-VME Interface */
-#define REFCLK_ATOM_PPS		22	/* 1-PPS Clock Discipline */
-#define REFCLK_PTB_ACTS		23	/* replaced by REFCLK_ACTS */
-#define REFCLK_USNO		24	/* replaced by REFCLK_ACTS */
-#define REFCLK_GPS_HP		26	/* HP 58503A Time/Frequency Receiver */
-#define REFCLK_ARCRON_MSF	27	/* ARCRON MSF radio clock. */
-#define REFCLK_SHM		28	/* clock attached thru shared memory */
-#define REFCLK_PALISADE		29	/* Trimble Navigation Palisade GPS */
-#define REFCLK_ONCORE		30	/* Motorola UT Oncore GPS */
-#define REFCLK_GPS_JUPITER	31	/* Rockwell Jupiter GPS receiver */
-#define REFCLK_CHRONOLOG	32	/* Chrono-log K WWVB receiver */
-#define REFCLK_DUMBCLOCK	33	/* Dumb localtime clock */
-#define REFCLK_ULINK		34	/* Ultralink M320 WWVB receiver */
-#define REFCLK_PCF		35	/* Conrad parallel port radio clock */
-#define REFCLK_WWV_AUDIO	36	/* WWV/H audio demodulator/decoder */
-#define REFCLK_FG		37	/* Forum Graphic GPS */
-#define REFCLK_HOPF_SERIAL	38	/* hopf DCF77/GPS serial receiver  */
-#define REFCLK_HOPF_PCI		39	/* hopf DCF77/GPS PCI receiver  */
-#define REFCLK_JJY		40	/* JJY receiver  */
-#define	REFCLK_TT560		41	/* TrueTime 560 IRIG-B decoder */
-#define REFCLK_ZYFER		42	/* Zyfer GPStarplus receiver  */
-#define REFCLK_RIPENCC		43	/* RIPE NCC Trimble driver */
-#define REFCLK_NEOCLOCK4X	44	/* NeoClock4X DCF77 or TDF receiver */
-#define REFCLK_TSYNCPCI		45	/* Spectracom TSYNC PCI timing board */
-#define REFCLK_GPSDJSON		46
-#define REFCLK_MAX		46
-
 
 /*
  * NTP packet format.  The mac field is optional.  It isn't really
@@ -671,9 +631,8 @@ struct pkt {
 #define LOOP_ALLAN		10	/* set minimum Allan intercept */
 #define LOOP_HUFFPUFF		11	/* set huff-n'-puff filter length */
 #define LOOP_FREQ		12	/* set initial frequency */
-#define LOOP_CODEC		13	/* set audio codec frequency */
-#define	LOOP_LEAP		14	/* insert leap after second 23:59 */
-#define	LOOP_TICK		15	/* sim. low precision clock */
+#define	LOOP_LEAP		13	/* insert leap after second 23:59 */
+#define	LOOP_TICK		14	/* sim. low precision clock */
 
 /*
  * Configuration items for the stats printer

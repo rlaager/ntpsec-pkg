@@ -217,7 +217,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\..\libntp\caljulian.c"
+				RelativePath="..\..\..\libntp\calgregorian.c"
 				>
 			</File>
 			<File
@@ -410,10 +410,6 @@
 			</File>
 			<File
 				RelativePath="..\..\..\libntp\recvbuff.c"
-				>
-			</File>
-			<File
-				RelativePath="..\..\..\libntp\refnumtoa.c"
 				>
 			</File>
 			<File

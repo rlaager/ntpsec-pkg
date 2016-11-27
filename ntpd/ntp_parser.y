@@ -22,24 +22,11 @@
   #include "ntp_config.h"
   #include "ntp_crypto.h"
 
-  #include "ntpsim.h"		/* HMS: Do we really want this all the time? */
-				/* SK: It might be a good idea to always
-				   include the simulator code. That way
-				   someone can use the same configuration file
-				   for both the simulator and the daemon
-				*/
-
   #define YYMALLOC	emalloc
   #define YYFREE	free
   #define YYERROR_VERBOSE
   #define YYMAXDEPTH	1000	/* stop the madness sooner */
   void yyerror(const char *msg);
-
-  #ifdef SIM
-  #  define ONLY_SIM(a)	(a)
-  #else
-  #  define ONLY_SIM(a)	NULL
-  #endif
 %}
 
 /* 
@@ -61,20 +48,16 @@
 	address_node *		Address_node;
 	address_fifo *		Address_fifo;
 	setvar_node *		Set_var;
-	server_info *		Sim_server;
-	server_info_fifo *	Sim_server_fifo;
-	script_info *		Sim_script;
-	script_info_fifo *	Sim_script_fifo;
 }
 
-/* TERMINALS (do not appear left of colon) */
-%token	<Integer>	T_Abbrev
+/* Terminals (do not appear left of colon) */
 %token	<Integer>	T_Age
 %token	<Integer>	T_All
 %token	<Integer>	T_Allan
 %token	<Integer>	T_Allpeers
 %token	<Integer>	T_Auth
 %token	<Integer>	T_Average
+%token	<Integer>	T_Baud
 %token	<Integer>	T_Bclient
 %token	<Integer>	T_Beacon
 %token	<Integer>	T_Broadcast
@@ -114,6 +97,7 @@
 %token	<Integer>	T_Floor
 %token	<Integer>	T_Freq
 %token	<Integer>	T_Fudge
+%token	<Integer>	T_Holdover
 %token	<Integer>	T_Host
 %token	<Integer>	T_Huffpuff
 %token	<Integer>	T_Iburst
@@ -187,12 +171,14 @@
 %token	<Integer>	T_Orphan
 %token	<Integer>	T_Orphanwait
 %token	<Integer>	T_Panic
+%token	<Integer>	T_Path
 %token	<Integer>	T_Peer
 %token	<Integer>	T_Peerstats
 %token	<Integer>	T_Phone
 %token	<Integer>	T_Pid
 %token	<Integer>	T_Pidfile
 %token	<Integer>	T_Pool
+%token	<Integer>	T_Ppspath
 %token	<Integer>	T_Port
 %token	<Integer>	T_Preempt
 %token	<Integer>	T_Prefer
@@ -200,6 +186,7 @@
 %token	<Integer>	T_Pw
 %token	<Integer>	T_Randfile
 %token	<Integer>	T_Rawstats
+%token	<Integer>	T_Refclock
 %token	<Integer>	T_Refid
 %token	<Integer>	T_Requestkey
 %token	<Integer>	T_Reset
@@ -219,6 +206,7 @@
 %token	<Integer>	T_Stepfwd
 %token	<Integer>	T_Stepout
 %token	<Integer>	T_Stratum
+%token	<Integer>	T_Subtype
 %token	<String>	T_String		/* not a token */
 %token	<Integer>	T_Sys
 %token	<Integer>	T_Sysstats
@@ -235,8 +223,10 @@
 %token	<Integer>	T_Ttl
 %token	<Integer>	T_Type
 %token	<Integer>	T_U_int			/* Not a token */
+%token	<Integer>	T_Unit
 %token	<Integer>	T_Unconfig
 %token	<Integer>	T_Unpeer
+%token	<Integer>	T_Usestats
 %token	<Integer>	T_Version
 %token	<Integer>	T_WanderThreshold	/* Not a token */
 %token	<Integer>	T_Week
@@ -245,21 +235,6 @@
 %token	<Integer>	T_Year
 %token	<Integer>	T_Flag			/* Not a token */
 %token	<Integer>	T_EOC
-
-
-/* NTP Simulator Tokens */
-%token	<Integer>	T_Simulate
-%token	<Integer>	T_Beep_Delay
-%token	<Integer>	T_Sim_Duration
-%token	<Integer>	T_Server_Offset
-%token	<Integer>	T_Duration
-%token	<Integer>	T_Freq_Offset
-%token	<Integer>	T_Wander
-%token	<Integer>	T_Jitter
-%token	<Integer>	T_Prop_Delay
-%token	<Integer>	T_Proc_Delay
-
-
 
 /*** NON-TERMINALS ***/
 %type	<Integer>	access_control_flag
@@ -309,8 +284,14 @@
 %type	<Attr_val>	option_flag
 %type	<Integer>	option_flag_keyword
 %type	<Attr_val_fifo>	option_list
+%type	<Attr_val>	option_boolean
+%type	<Integer>	option_bool_keyword
+%type	<Attr_val>	option_double
+%type	<Integer>	option_double_keyword
 %type	<Attr_val>	option_int
 %type	<Integer>	option_int_keyword
+%type	<Attr_val>	option_string
+%type	<Integer>	optional_unit
 %type	<Integer>	reset_command
 %type	<Integer>	rlimit_option_keyword
 %type	<Attr_val>	rlimit_option
@@ -334,20 +315,6 @@
 %type	<Attr_val_fifo>	trap_option_list
 %type	<Integer>	unpeer_keyword
 %type	<Set_var>	variable_assign
-
-/* NTP Simulator non-terminals */
-%type	<Attr_val>		sim_init_statement
-%type	<Attr_val_fifo>		sim_init_statement_list
-%type	<Integer>		sim_init_keyword
-%type	<Sim_server_fifo>	sim_server_list
-%type	<Sim_server>		sim_server
-%type	<Double>		sim_server_offset
-%type	<Address_node>		sim_server_name
-%type	<Sim_script>		sim_act
-%type	<Sim_script_fifo>	sim_act_list
-%type	<Integer>		sim_act_keyword
-%type	<Attr_val_fifo>		sim_act_stmt_list
-%type	<Attr_val>		sim_act_stmt
 
 %%
 
@@ -387,11 +354,11 @@ command :	/* NULL STATEMENT */
 	|	access_control_command
 	|	orphan_mode_command
 	|	fudge_command
+	|	refclock_command
 	|	rlimit_command
 	|	system_option_command
 	|	tinker_command
 	|	miscellaneous_command
-	|	simulate_command
 	;
 
 /* Server Commands
@@ -447,6 +414,9 @@ option_list
 option
 	:	option_flag
 	|	option_int
+	|	option_double
+	|	option_string
+	|	option_boolean
 	;
 
 option_flag
@@ -469,6 +439,15 @@ option_int
 			{ $$ = create_attr_ival($1, $2); }
 	|	option_int_keyword T_U_int
 			{ $$ = create_attr_uval($1, $2); }
+	|	T_Stratum T_Integer
+		{
+			if ($2 >= 0 && $2 <= STRATUM_UNSPEC) {
+				$$ = create_attr_ival($1, $2);
+			} else {
+				$$ = NULL;
+				yyerror("fudge factor: stratum value out of boands, ignored");
+			}
+		}
 	;
 
 option_int_keyword
@@ -477,8 +456,43 @@ option_int_keyword
 	|	T_Maxpoll
 	|	T_Ttl
 	|	T_Mode
+	|	T_Subtype
 	|	T_Version
+	|	T_Baud
+	|	T_Holdover
 	;
+
+option_double
+	:	option_double_keyword number
+			{ $$ = create_attr_dval($1, $2); }
+	;
+
+option_boolean
+	:	option_bool_keyword boolean
+			{ $$ = create_attr_ival($1, $2); }
+	;
+
+option_string
+	:	T_Refid T_String
+			{ $$ = create_attr_sval($1, $2); }
+	|	T_Path T_String
+			{ $$ = create_attr_sval($1, $2); }
+	|	T_Ppspath T_String
+			{ $$ = create_attr_sval($1, $2); }
+	;
+
+option_double_keyword
+	:	T_Time1
+	|	T_Time2
+	;
+
+option_bool_keyword
+	:	T_Flag1
+	|	T_Flag2
+	|	T_Flag3
+	|	T_Flag4
+	;
+
 
 /* unpeer commands
  * ---------------
@@ -680,8 +694,9 @@ stat
 	|	T_Peerstats
 	|	T_Rawstats
 	|	T_Sysstats
-	|	T_Timingstats
 	|	T_Protostats
+	|	T_Timingstats
+	|	T_Usestats
 	;
 
 filegen_option_list
@@ -954,8 +969,6 @@ fudge_factor
 				yyerror("fudge factor: stratum value not in [0..16], ignored");
 			}
 		}
-	|	T_Abbrev T_String
-			{ $$ = create_attr_sval($1, $2); }
 	|	T_Refid T_String
 			{ $$ = create_attr_sval($1, $2); }
 	;
@@ -971,6 +984,43 @@ fudge_factor_bool_keyword
 	|	T_Flag3
 	|	T_Flag4
 	;
+
+/* Refclock Command
+ * ----------------
+ */
+
+refclock_command
+	:	T_Refclock T_String optional_unit option_list
+		{
+#ifdef REFCLOCK
+			peer_node *my_node;
+			address_node *fakeaddr;
+			char addrbuf[NI_MAXHOST];
+			int dtype;
+
+			for (dtype = 1; dtype < (int)num_refclock_conf; dtype++)
+			    if (refclock_conf[dtype]->basename != NULL && strcasecmp(refclock_conf[dtype]->basename, $2) == 0)
+				goto foundit;
+			 msyslog(LOG_ERR, "Unknown driver name %s", $2);
+			 exit(1);
+		foundit:
+			snprintf(addrbuf, sizeof(addrbuf),
+				 "127.127.%d.%d", dtype, $3);
+			fakeaddr = create_address_node(estrdup(addrbuf),AF_INET);
+			my_node = create_peer_node(T_Server, fakeaddr, $4);
+			APPEND_G_FIFO(cfgt.peers, my_node);
+#endif /* REFCLOCK */
+		}
+	;
+
+optional_unit
+	:
+			{$$ = 0;}
+	|
+		T_Unit T_Integer
+			{$$ = $2;}
+	;
+
 
 /* rlimit Commands
  * ---------------
@@ -1466,127 +1516,6 @@ number
 	|	T_Double
 	;
 
-
-/* Simulator Configuration Commands
- * --------------------------------
- */
-
-simulate_command
-	:	sim_conf_start '{' sim_init_statement_list sim_server_list '}'
-		{
-			sim_node *sn;
-			
-			sn =  create_sim_node($3, $4);
-			APPEND_G_FIFO(cfgt.sim_details, sn);
-
-			/* Revert from ; to \n for end-of-command */
-			old_config_style = true;
-		}
-	;
-
-/* The following is a terrible hack to get the configuration file to
- * treat newlines as whitespace characters within the simulation.
- * This is needed because newlines are significant in the rest of the
- * configuration file.
- */
-sim_conf_start
-	:	T_Simulate { old_config_style = false; }
-	;
-
-sim_init_statement_list
-	:	sim_init_statement_list sim_init_statement T_EOC
-		{
-			$$ = $1;
-			APPEND_G_FIFO($$, $2);
-		}
-	|	sim_init_statement T_EOC
-		{
-			$$ = NULL;
-			APPEND_G_FIFO($$, $1);
-		}
-	;
-
-sim_init_statement
-	:	sim_init_keyword '=' number
-			{ $$ = create_attr_dval($1, $3); }
-	;
-
-sim_init_keyword
-	:	T_Beep_Delay
-	|	T_Sim_Duration
-	;
-
-sim_server_list
-	:	sim_server_list sim_server
-		{
-			$$ = $1;
-			APPEND_G_FIFO($$, $2);
-		}
-	|	sim_server
-		{
-			$$ = NULL;
-			APPEND_G_FIFO($$, $1);
-		}
-	;
-
-sim_server
-	:	sim_server_name '{' sim_server_offset sim_act_list '}'
-			{ $$ = ONLY_SIM(create_sim_server($1, $3, $4)); }
-	;
-
-sim_server_offset
-	:	T_Server_Offset '=' number T_EOC
-			{ $$ = $3; }
-	;
-
-sim_server_name
-	:	T_Server '=' address
-			{ $$ = $3; }
-	;
-
-sim_act_list
-	:	sim_act_list sim_act
-		{
-			$$ = $1;
-			APPEND_G_FIFO($$, $2);
-		}
-	|	sim_act
-		{
-			$$ = NULL;
-			APPEND_G_FIFO($$, $1);
-		}
-	;
-
-sim_act
-	:	T_Duration '=' number '{' sim_act_stmt_list '}'
-			{ $$ = ONLY_SIM(create_sim_script_info($3, $5)); }
-	;
-
-sim_act_stmt_list
-	:	sim_act_stmt_list sim_act_stmt T_EOC
-		{
-			$$ = $1;
-			APPEND_G_FIFO($$, $2);
-		}
-	|	sim_act_stmt T_EOC
-		{
-			$$ = NULL;
-			APPEND_G_FIFO($$, $1);
-		}
-	;
-
-sim_act_stmt
-	:	sim_act_keyword '=' number
-			{ $$ = create_attr_dval($1, $3); }
-	;
-
-sim_act_keyword
-	:	T_Freq_Offset
-	|	T_Wander
-	|	T_Jitter
-	|	T_Prop_Delay
-	|	T_Proc_Delay
-	;
 
 %%
 

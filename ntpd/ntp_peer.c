@@ -382,7 +382,7 @@ clear_all(void)
 	 */
 	for (p = peer_list; p != NULL; p = p->p_link)
 		if (!(MDF_TXONLY_MASK & p->cast_flags))
-			peer_clear(p, "STEP");
+		    peer_clear(p, "STEP", false);
 
 	DPRINTF(1, ("clear_all: at %lu\n", current_time));
 }
@@ -525,7 +525,7 @@ unpeer(
 	)
 {
 	mprintf_event(PEVNT_DEMOBIL, peer, "assoc %u", peer->associd);
-	restrict_source(&peer->srcadr, 1, 0);
+	restrict_source(&peer->srcadr, true, 0);
 	set_peerdstadr(peer, NULL);
 	peer_demobilizations++;
 	peer_associations--;
@@ -542,67 +542,6 @@ unpeer(
 	free_peer(peer, true);
 }
 
-
-/*
- * peer_config - configure a new association
- */
-struct peer *
-peer_config(
-	sockaddr_u *	srcadr,
-	const char *	hostname,
-	endpt *		dstadr,
-	uint8_t		hmode,
-	uint8_t		version,
-	uint8_t		minpoll,
-	uint8_t		maxpoll,
-	u_int		flags,
-	uint32_t		ttl,
-	keyid_t		key
-	)
-{
-	uint8_t cast_flags;
-
-	/*
-	 * We do a dirty little jig to figure the cast flags. This is
-	 * probably not the best place to do this, at least until the
-	 * configure code is rebuilt. Note only one flag can be set.
-	 */
-	switch (hmode) {
-	case MODE_BROADCAST:
-		if (IS_MCAST(srcadr))
-			cast_flags = MDF_MCAST;
-		else
-			cast_flags = MDF_BCAST;
-		break;
-
-	case MODE_CLIENT:
-		if (hostname != NULL && SOCK_UNSPEC(srcadr))
-			cast_flags = MDF_POOL;
-		else if (IS_MCAST(srcadr))
-			cast_flags = MDF_ACAST;
-		else
-			cast_flags = MDF_UCAST;
-		break;
-
-	default:
-		cast_flags = MDF_UCAST;
-	}
-
-	/*
-	 * Mobilize the association and initialize its variables. If
-	 * emulating ntpdate, force iburst.  For pool and manycastclient
-	 * strip FLAG_PREEMPT as the prototype associations are not
-	 * themselves preemptible, though the resulting associations
-	 * are.
-	 */
-	flags |= FLAG_CONFIG;
-	if (mode_ntpdate)
-		flags |= FLAG_IBURST;
-	if ((MDF_ACAST | MDF_POOL) & cast_flags)
-		flags &= ~FLAG_PREEMPT;
-	return newpeer(srcadr, hostname, dstadr, hmode, version,
-		       minpoll, maxpoll, flags, cast_flags, ttl, key);
-}
 
 /*
  * setup peer dstadr field keeping it in sync with the interface
@@ -683,7 +622,7 @@ peer_refresh_interface(
 		 */
 		if (p->dstadr != piface && !(MDF_ACAST & p->cast_flags)
 		    && MODE_BROADCAST != p->pmode)
-			peer_clear(p, "XFAC");
+		    peer_clear(p, "XFAC", false);
 
 		/*
 	 	 * Broadcast needs the socket enabled for broadcast
@@ -738,7 +677,8 @@ newpeer(
 	u_int		flags,
 	uint8_t		cast_flags,
 	uint32_t		ttl,
-	keyid_t		key
+	keyid_t		key,
+	bool		initializing
 	)
 {
 	struct peer *	peer;
@@ -865,15 +805,15 @@ newpeer(
 	peer->precision = sys_precision;
 	peer->hpoll = peer->minpoll;
 	if (cast_flags & MDF_ACAST)
-		peer_clear(peer, "ACST");
+		peer_clear(peer, "ACST", initializing);
 	else if (cast_flags & MDF_POOL)
-		peer_clear(peer, "POOL");
+		peer_clear(peer, "POOL", initializing);
 	else if (cast_flags & MDF_MCAST)
-		peer_clear(peer, "MCST");
+		peer_clear(peer, "MCST", initializing);
 	else if (cast_flags & MDF_BCAST)
-		peer_clear(peer, "BCST");
+		peer_clear(peer, "BCST", initializing);
 	else
-		peer_clear(peer, "INIT");
+		peer_clear(peer, "INIT", initializing);
 	if (mode_ntpdate)
 		peer_ntpdate++;
 
@@ -883,33 +823,6 @@ newpeer(
 	peer->timereset = current_time;
 	peer->timereachable = current_time;
 	peer->timereceived = current_time;
-
-	if (ISREFCLOCKADR(&peer->srcadr)) {
-#ifdef REFCLOCK
-		/*
-		 * We let the reference clock support do clock
-		 * dependent initialization.  This includes setting
-		 * the peer timer, since the clock may have requirements
-		 * for this.
-		 */
-		if (maxpoll == 0)
-			peer->maxpoll = peer->minpoll;
-		if (!refclock_newpeer(peer)) {
-			/*
-			 * Dump it, something screwed up
-			 */
-			set_peerdstadr(peer, NULL);
-			free_peer(peer, 0);
-			return NULL;
-		}
-#else /* REFCLOCK */
-		msyslog(LOG_ERR, "refclock %s isn't supported. ntpd was compiled without refclock support.",
-			stoa(&peer->srcadr));
-		set_peerdstadr(peer, NULL);
-		free_peer(peer, 0);
-		return NULL;
-#endif /* REFCLOCK */
-	}
 
 	/*
 	 * Put the new peer in the hash tables.
@@ -922,7 +835,7 @@ newpeer(
 	assoc_hash_count[hash]++;
 	LINK_SLIST(peer_list, peer, p_link);
 
-	restrict_source(&peer->srcadr, 0, 0);
+	restrict_source(&peer->srcadr, false, 0);
 	mprintf_event(PEVNT_MOBIL, peer, "assoc %d", peer->associd);
 	DPRINTF(1, ("newpeer: %s->%s mode %u vers %u poll %u %u flags 0x%x 0x%x ttl %u key %08x\n",
 	    latoa(peer->dstadr), stoa(&peer->srcadr), peer->hmode,

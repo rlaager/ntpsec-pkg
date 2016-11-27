@@ -12,11 +12,11 @@ typedef union ctl_pkt_u_tag {
 struct ntp_control {
 	uint8_t li_vn_mode;		/* leap, version, mode */
 	uint8_t r_m_e_op;		/* response, more, error, opcode */
-	u_short sequence;		/* sequence number of request */
-	u_short status;			/* status word for association */
-	associd_t associd;		/* association ID */
-	u_short offset;			/* offset of this batch of data */
-	u_short count;			/* count of data in this packet */
+	uint16_t sequence;		/* sequence number of request */
+	uint16_t status;		/* status word for association */
+	uint16_t associd;		/* association ID (associd_t) */
+	uint16_t offset;		/* offset of this batch of data */
+	uint16_t count;			/* count of data in this packet */
 	ctl_pkt_u u;
 };
 
@@ -59,7 +59,6 @@ struct ntp_control {
 #define	CTL_OP_SETTRAP		6	/* set trap address */
 #define	CTL_OP_ASYNCMSG		7	/* asynchronous message */
 #define CTL_OP_CONFIGURE	8	/* runtime configuration */
-#define CTL_OP_SAVECONFIG	9	/* save config to file */
 #define CTL_OP_READ_MRU		10	/* retrieve MRU (mrulist) */
 #define CTL_OP_READ_ORDLIST_A	11	/* ordered list req. auth. */
 #define CTL_OP_REQ_NONCE	12	/* request a client nonce */

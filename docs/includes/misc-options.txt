@@ -22,7 +22,7 @@
   operation as the +-f+ command line option. If the file exists, it is
   read at startup in order to set the initial frequency and then updated
   once per hour with the current frequency computed by the daemon. If
-  the file name is specified, but the file itself does not exist, the
+  the file name is specified, but the file itself does not exist, +ntpd+
   starts with an initial frequency of zero and creates the file when
   writing it for the first time. If this command is not given, the
   daemon will always start with an initial frequency of zero.
@@ -80,7 +80,7 @@ and that file system links, symbolic or otherwise, should be avoided.
   whether input is dropped without processing. The first parameter
   determines the action for addresses which match the second parameter.
   That parameter specifies a class of addresses, or a specific interface
-  name, or an address. In the address case, _+prefixlen+_ determines how
+  name, or an address. In the address case, _prefixlen_ determines how
   many bits must match for this rule to apply. +ignore+ prevents opening
   matching addresses, +drop+ causes +{ntpd}+ to open the address and drop
   all received packets without examination. Multiple +interface+
@@ -147,9 +147,7 @@ and so on is suppressed.
   used instead of the default system _syslog_(3)_ facility. This is the
   same operation as the -l command line option.
 
-+mru+ [+maxdepth+ 'count' | +maxmem+ 'kilobytes' | +mindepth+ 'count' | +maxage+ 'se
-conds' | +initalloc+ 'count' | +initmem+ 'kilobytes' | +incalloc+ 'count' | +incmem+
- 'kilobytes']::
++mru+ [+maxdepth+ 'count' | +maxmem+ 'kilobytes' | +mindepth+ 'count' | +maxage+ 'seconds' | +initalloc+ 'count' | +initmem+ 'kilobytes' | +incalloc+ 'count' | +incmem+ 'kilobytes']::
   Controls size limits of the monitoring facility Most Recently Used
   (MRU) list of client addresses, which is also
   used by the rate control facility.
@@ -183,7 +181,7 @@ conds' | +initalloc+ 'count' | +initmem+ 'kilobytes' | +incalloc+ 'count' | +inc
     entries or kilobytes. The default is 4 kilobytes.
 
 +nonvolatile+ 'threshold'::
-  Specify the _+threshold+_ in seconds to write the frequency file, with
+  Specify the _threshold_ in seconds to write the frequency file, with
   default of 1e-7 (0.1 PPM). The frequency file is inspected each hour.
   If the difference between the current frequency and the last value
   written exceeds the threshold, the file is written and the +threshold+
@@ -201,12 +199,6 @@ conds' | +initalloc+ 'count' | +initmem+ 'kilobytes' | +incalloc+ 'count' | +inc
 +reset [allpeers] [auth] [ctl] [io] [mem] [sys] [timer]+::
   Reset one or more groups of counters maintained by {ntpd} and exposed by
   +{ntpq}+.
-
-+saveconfigdir+ 'directory_path'::
-  Specify the directory in which to write configuration snapshots
-  requested with +{ntpq}+'s 'saveconfig' command.  If +saveconfigdir+
-  does not appear in the configuration file, saveconfig requests are
-  rejected by {ntpd}.
 
 +setvar+ _variable_ [_default_]::
   This command adds an additional system variable. These variables can
@@ -237,7 +229,7 @@ conds' | +initalloc+ 'count' | +initmem+ 'kilobytes' | +incalloc+ 'count' | +inc
 +
 The variables operate as follows:
 +
-+allan+ _allan_;;
+  +allan+ _allan_;;
     The argument becomes the new value for the minimum Allan intercept,
     which is a parameter of the PLL/FLL clock discipline algorithm. The
     value in log2 seconds defaults to 11 (2048 s), which is also the
@@ -282,13 +274,10 @@ The variables operate as follows:
 +rlimit+ [+memlock+ _megabytes_ | +stacksize+ _4kPages_ | +filenum+ _filedescriptors_]::
 
   +memlock+ _megabytes_;;
-    Specify the number of megabytes of memory that can be allocated.
-    Probably only available under Linux, this option is useful when
-    dropping root (the +-i+ option). The default is 32 megabytes.
-    Setting this to zero will prevent any attempt to lock memory.
+    Ignored for backward compatibility.
   +stacksize+ _4kPages_;;
     Specifies the maximum size of the process stack on systems with the
-    mlockall()_function. Defaults to 50 4k pages (200 4k pages in OpenBSD).
+    mlockall()_function. Defaults to 50 4k pages.
   +filenum+ _filedescriptors_;;
     Specifies the maximum number of file descriptors {ntpd} may have open
     at once. Defaults to the system default.

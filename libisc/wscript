@@ -8,7 +8,6 @@ def build(ctx):
 		"error.c",
 		"md5.c",
 		"netaddr.c",
-		"result.c",
 		"sha1.c",
 		"unix/errno2result.c",
 		"unix/interfaceiter.c",
@@ -21,8 +20,8 @@ def build(ctx):
 		source		= libisc_source,
 		includes	= [
 						"%s/libisc/include/" % ctx.srcnode.abspath(),
-						"%s/libisc/unix/include/" % ctx.srcnode.abspath(), # XXX: platform: requires unix/win32 switch.
-						"%s/libisc/pthreads/include/" % ctx.srcnode.abspath() # XXX: platform: requires thread switch
+						"%s/libisc/unix/include/" % ctx.srcnode.abspath() # XXX: platform: requires unix/win32 switch.
+
 					],
 
 	)

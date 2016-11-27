@@ -4,7 +4,7 @@
 
 == Synopsis ==
 
-+{ntpq}+ [+-46dinpw+] [+-c+ 'command'] ['host'] [...]
++{ntpq}+ [+-46dhinpw+] [+-c+ 'command'] ['host'] [...]
 
 == Description ==
 
@@ -66,6 +66,8 @@ attempt to read interactive format commands from the standard input.
   Increase debugging level by 1.
 +-D+ num, +--set-debug-level+=num::
   The debug level is set to the following numeric argument.
++-h+, +--help+::
+  Print a usage message summarizing options end exit.
 +-i+, +--interactive+::
   Force +{ntpq}+ to operate in interactive mode. Prompts will be written
   to the standard output and commands read from the standard input.
@@ -103,7 +105,7 @@ following.
   +{ntpq}+. A +?+ followed by a command keyword will print function and
   usage information about the command.
 
-+addvars+ _+name+_ [ = value] [...]; +rmvars+ _+name+_ [...]; +clearvars+::
++addvars+ _name_ [ = value] [...]; +rmvars+ _name_ [...]; +clearvars+::
   The arguments to this command consist of a list of items of the form
   +name = value+, where the += value+ is ignored, and can be omitted in
   read requests. +{ntpq}+ maintains an internal list in which data to be
@@ -282,7 +284,7 @@ ind assid status conf reach auth condition last_event cnt
   and +resall=+'hexmask' filter entries containing none or less than all,
   respectively, of the bits in 'hexmask', which must begin with +0x+.
 +
-The _+sortorder+_ defaults to +lstint+ and may be any of +addr+,
+The _sortorder_ defaults to +lstint+ and may be any of +addr+,
 +count+, +avgint+, +lstint+, or any of those preceded by a minus sign
 (hyphen) to reverse the sort order. The output columns are:
 +
@@ -383,16 +385,6 @@ displayed.
 
 +reslist+::
   Show the access control (restrict) list for +{ntpq}+.
-
-+saveconfig+ 'filename'::
-  Write the current configuration, including any runtime modifications
-  given with +:config+ or +config-from-file+, to the {ntpd} host's file
-  _filename_. This command will be rejected by the server unless
-  link:miscopt.html#saveconfigdir[saveconfigdir] appears in the +{ntpd}+
-  configuration file. _filename_ can use strftime() format specifies to
-  substitute the current date and time, for example,
-  +saveconfig ntp-%Y%m%d-%H%M%S.conf+. The filename used is stored in
-  system variable +savedconfig+. Authentication is required.
 
 +timerstats+::
   Display interval timer counters.
@@ -548,5 +540,15 @@ some configurations.
 |+refid+       |driver reference ID
 |+flags+       |driver flags
 |==========================================
+
+== Compatibility ==
+
+When listing refids, addresses of the form 127.127.x.x are no
+longer automatically interpreted as local refclocks as in older
+versons of +ntpq+.
+
+In older versions, the 'type' variable associated with a
+reference clock was a numeric driver type index. It has been replaced
+by 'name', a shortname for the driver type.
 
 // end

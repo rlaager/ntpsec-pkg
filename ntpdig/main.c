@@ -13,6 +13,7 @@
 #include "utilities.h"
 #include "log.h"
 #include "libntp.h"
+#include "ntp_intres.h"
 
 bool shutting_down;
 bool time_derived;
@@ -117,9 +118,7 @@ void dec_pending_ntp(const char *, sockaddr_u *);
 bool libevent_version_ok(void);
 int  gettimeofday_cached(struct event_base *b, struct timeval *tv);
 
-#define EXIT_SOFTWARE	70
-
-#define ALL_OPTIONS "46a:b:c:dD:g:jK:k:l:M:o:rSst:VwW"
+#define ALL_OPTIONS "46a:b:c:dD:g:hjK:k:l:M:o:rSst:VwW"
 static const struct option longoptions[] = {
     { "ipv4",		    0, 0, '4' },
     { "ipv6",		    0, 0, '6' },
@@ -129,6 +128,7 @@ static const struct option longoptions[] = {
     { "debug",		    0, 0, 'd' },
     { "set-debug-level",    1, 0, 'D' },
     { "gap",                1, 0, 'g' },
+    { "help",               9, 0, 'h' },
     { "kod",                1, 0, 'K' },
     { "json",               1, 0, 'j' },
     { "keyfile",            1, 0, 'k' },
@@ -161,6 +161,37 @@ static bool opt_step =false, opt_slew = false;
 static float opt_timeout = 5.0;
 static int opt_wait = false;
 
+static void ntpdig_usage(void)
+{
+#define P(x)	fputs(x, stderr)
+    P("USAGE:  sntp [ -<flag> [<val>] | --<name>[{=| }<val>] ]...\n");
+    P("		[ hostname-or-IP ...]\n");
+    P("  Flg Arg Option-Name    Description\n");
+    P("   -4 no  ipv4           Force IPv4 DNS name resolution\n");
+    P("				- prohibits the option 'ipv6'\n");
+    P("   -6 no  ipv6           Force IPv6 DNS name resolution\n");
+    P("				- prohibits the option 'ipv4'\n");
+    P("   -d no  normalverbose  Normal verbose\n");
+    P("   -K Str kod            KoD history filename\n");
+    P("   -p no  syslog         Logging with syslog\n");
+    P("				- prohibits the option 'logfile'\n");
+    P("   -l Str logfile        Log to specified logfile\n");
+    P("				- prohibits the option 'syslog'\n");
+    P("   -s no  settod         Set (step) the time with settimeofday()\n");
+    P("				- prohibits the option 'adjtime'\n");
+    P("   -j no  adjtime        Set (slew) the time with adjtime()\n");
+    P("				- prohibits the option 'settod'\n");
+    P("   -b Str broadcast      Use broadcasts to the address specified for synchronisation\n");
+    P("   -t Num timeout        Specify seconds to wait for broadcasts\n");
+    P("   -a Num authentication Enable authentication with the numbered key\n");
+    P("   -k Str keyfile        Specify a keyfile. SNTP will look in this file\n");
+    P("                         for the key specified with -a\n");
+    P("   -V no version         Output version information and exit\n");
+    P("   -h no  help           Display extended usage information and exit\n");
+#undef P
+}
+
+
 /*
  * The actual main function.
  */
@@ -181,7 +212,7 @@ ntpdig_main (
 	ntpdig_init_logging(argv[0]);
 
 	if (!libevent_version_ok())
-		exit(EXIT_SOFTWARE);
+		exit(2);
 
 	init_lib();
 	init_auth();
@@ -222,6 +253,9 @@ ntpdig_main (
 			exit(1);
 		}
 		break;
+	    case 'h':
+		ntpdig_usage();
+		exit(0);
 	    case 'j':
 		opt_json = true;
 		syslogit = false;
@@ -264,7 +298,10 @@ ntpdig_main (
 		opt_wait = false;
 		break;
 	    default :
-		break;
+		/* chars not in table get converted to ? */
+		fputs("Unknown command line switch or missing argument.\n", stderr);
+		ntpdig_usage();
+		exit(1);
 	    } /*switch*/
 	}
 
@@ -293,7 +330,7 @@ ntpdig_main (
 	if (0 == argc && !opt_broadcast && !opt_concurrent) {
 		printf("%s: Must supply at least one of -b hostname, -c hostname, or hostname.\n",
 		       progname);
-		exit(EXIT_SOFTWARE);
+		exit(1);
 	}
 
 
@@ -308,7 +345,7 @@ ntpdig_main (
 	response_tv.tv_usec = (response_timeout - (int)response_timeout) * MICROSECONDS;
 
 	/* IPv6 available? */
-	if (isc_net_probeipv6() != ISC_R_SUCCESS) {
+	if (isc_net_probeipv6_bool()) {
 		ai_fam_pref = AF_INET;
 		TRACE(1, ("No ipv6 support available, forcing ipv4\n"));
 	} else {
@@ -1588,7 +1625,7 @@ set_time(
 		*/
 	}
 
-	return EXIT_SOFTWARE;
+	return EXIT_FAILURE;
 }
 
 

@@ -66,7 +66,7 @@
 /*	       jjy_start()					      */
 /*    [Change] Change clockstats format of the Tristate JJY01/02      */
 /*	       Issues more command to get the status of the receiver  */
-/*	       when "fudge 127.127.40.X flag1 1" is specified	      */
+/*	       when "flag1 1" is specified	      */
 /*	       ( DATE,STIM -> DCST,STUS,DATE,STIM )		      */
 /*								      */
 /*  2011/04/30							      */
@@ -82,6 +82,10 @@
 /*								      */
 /*  2015/05/15							      */
 /*    [Add]    Support the SEIKO TIME SYSTEMS TDC-300		      */
+/*								      */
+/*  2015/05/08							      */
+/*    [Fix]    C-DEX JST2000                                          */
+/*             Thanks to Mr. Kuramatsu for the report and the patch.  */
 /*								      */
 /**********************************************************************/
 
@@ -113,6 +117,7 @@
 #define	SPEED232_SEIKO_TIMESYS_TDC_300	B2400   /* UART speed (2400 baud) */
 #define	SPEED232_TELEPHONE		B2400   /* UART speed (4800 baud) */
 #define	REFID   	"JJY"		/* reference ID */
+#define	NAME		"JJY"		/* shortname */
 #define	DESCRIPTION	"JJY Receiver"
 #define	PRECISION	(-3)		/* precision assumed (about 100 ms) */
 
@@ -315,12 +320,12 @@ static	void	printableString ( char*, int, const char*, int ) ;
  * Transfer vector
  */
 struct	refclock refclock_jjy = {
+	NAME,		/* basename of driver */
 	jjy_start,	/* start up driver */
 	jjy_shutdown,	/* shutdown driver */
 	jjy_poll,	/* transmit poll message */
-	noentry,	/* not used */
-	noentry,	/* not used */
-	noentry,	/* not used */
+	noentry,	/* control - not used */
+	noentry,	/* init - not used */
 	jjy_timer	/* 1 second interval timer */
 };
 
@@ -421,11 +426,11 @@ jjy_start ( int unit, struct peer *peer )
 	/* Set up the device name */
 	snprintf( sDeviceName, sizeof(sDeviceName), DEVICE, unit ) ;
 
-	snprintf( sLog, sizeof(sLog), "mode=%d dev=%s", peer->ttl, sDeviceName ) ;
+	snprintf( sLog, sizeof(sLog), "subtype=%d dev=%s", peer->ttl, sDeviceName ) ;
 	jjy_write_clockstats( peer, JJY_CLOCKSTATS_MARK_JJY, sLog ) ;
 
 	/*
-	 * peer->ttl is a mode number specified by "127.127.40.X mode N" in the ntp.conf
+	 * peer->ttl is a subtype number specified by "jjy subtype N" in the ntp.conf
 	 */
 	switch ( peer->ttl ) {
 	case 0 :
@@ -454,7 +459,7 @@ jjy_start ( int unit, struct peer *peer )
 		if ( 101 <= peer->ttl && peer->ttl <= 180 ) {
 			rc = jjy_start_telephone ( unit, peer, up ) ;
 		} else {
-			msyslog ( LOG_ERR, "JJY receiver [ %s mode %d ] : Unsupported mode",
+			msyslog ( LOG_ERR, "JJY receiver [ %s subtype %d ] : Unsupported mode",
 				  ntoa(&peer->srcadr), peer->ttl ) ;
 			free ( (void*) up ) ;
 		return false ;
@@ -462,7 +467,7 @@ jjy_start ( int unit, struct peer *peer )
 	}
 
 	if ( rc != 0 ) {
-		msyslog ( LOG_ERR, "JJY receiver [ %s mode %d ] : Initialize error",
+		msyslog ( LOG_ERR, "JJY receiver [ %s subtype %d ] : Initialize error",
 			  ntoa(&peer->srcadr), peer->ttl ) ;
 		free ( (void*) up ) ;
 		return false ;
@@ -481,7 +486,8 @@ jjy_start ( int unit, struct peer *peer )
 	 */
 	pp = peer->procptr ;
 
-	pp->clockdesc	= DESCRIPTION ;
+	pp->clockname     = NAME;
+	pp->clockdesc	  = DESCRIPTION ;
 	pp->unitptr       = up ;
 	pp->io.clock_recv = jjy_receive ;
 	pp->io.srcclock   = peer ;
@@ -526,8 +532,8 @@ jjy_shutdown ( int unit, struct peer *peer )
 		free ( up ) ;
 	}
 
-	snprintf( sLog, sizeof(sLog), "JJY stopped. unit=%d mode=%d", unit, peer->ttl ) ;
-	record_clock_stats( &peer->srcadr, sLog ) ;
+	snprintf( sLog, sizeof(sLog), "JJY stopped. unit=%d subtype=%d", unit, peer->ttl ) ;
+	record_clock_stats(peer, sLog ) ;
 
 }
 
@@ -1030,7 +1036,7 @@ jjy_synctime ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 /*##												##*/
 /*##    The Tristate Ltd. JJY receiver TS-JJY01, TS-JJY02					##*/
 /*##												##*/
-/*##    server  127.127.40.X  mode 1								##*/
+/*##    refclock jjy unit X subtype 1								##*/
 /*##												##*/
 /*################################################################################################*/
 /*################################################################################################*/
@@ -1361,7 +1367,7 @@ jjy_poll_tristate_jjy01  ( int unit, struct peer *peer )
 /*##												##*/
 /*##    The C-DEX Co. Ltd. JJY receiver JST2000							##*/
 /*##												##*/
-/*##    server  127.127.40.X  mode 2								##*/
+/*##    refclock jjy unit X subtype 2								##*/
 /*##												##*/
 /*################################################################################################*/
 /*################################################################################################*/
@@ -1458,9 +1464,9 @@ jjy_receive_cdex_jst2000 ( struct recvbuf *rbufp )
 		return JJY_RECEIVE_ERROR ;
 	}
 
-	/* JYYMMDD HHMMSSS */
+	/* JYYMMDDWHHMMSSS */
 
-	rc = sscanf ( pBuf, "J%2d%2d%2d %2d%2d%2d%1d",
+	rc = sscanf ( pBuf, "J%2d%2d%2d%*1d%2d%2d%2d%1d",
 		      &up->year, &up->month, &up->day,
 		      &up->hour, &up->minute, &up->second,
 		      &up->msecond ) ;
@@ -1524,7 +1530,7 @@ jjy_poll_cdex_jst2000 ( int unit, struct peer *peer )
 /*##												##*/
 /*##    The Echo Keisokuki Co. Ltd. JJY receiver LT2000						##*/
 /*##												##*/
-/*##    server  127.127.40.X  mode 3								##*/
+/*##    refclock jjy unit X subtype 3								##*/
 /*##												##*/
 /*################################################################################################*/
 /*################################################################################################*/
@@ -1756,7 +1762,7 @@ jjy_poll_echokeisokuki_lt2000 ( int unit, struct peer *peer )
 /*##												##*/
 /*##    The CITIZEN T.I.C CO., LTD. JJY receiver JJY200						##*/
 /*##												##*/
-/*##    server  127.127.40.X  mode 4								##*/
+/*##    refclock jjy unit X subtype 4								##*/
 /*##												##*/
 /*################################################################################################*/
 /*################################################################################################*/
@@ -1897,12 +1903,12 @@ jjy_poll_citizentic_jjy200 ( int unit, struct peer *peer )
 /*##												##*/
 /*##    The Tristate Ltd. GPS clock TS-GPS01							##*/
 /*##												##*/
-/*##    server  127.127.40.X  mode 5								##*/
+/*##    refclock jjy unit X subtype 5								##*/
 /*##												##*/
 /*################################################################################################*/
 /*################################################################################################*/
 /*                                                                                                */
-/*  This clock has NMEA mode and command/respose mode.                                            */
+/*  This clock has NMEA mode and command/response mode.                                            */
 /*  When this jjy driver are used, set to command/respose mode of this clock                      */
 /*  by the onboard switch SW4, and make sure the LED-Y is tured on.                               */
 /*  Other than this JJY driver, the refclock driver type 20, generic NMEA driver,                 */
@@ -2252,7 +2258,7 @@ jjy_poll_tristate_gpsclock01 ( int unit, struct peer *peer )
 /*##												##*/
 /*##    The SEIKO TIME SYSTEMS TDC-300								##*/
 /*##												##*/
-/*##    server  127.127.40.X  mode 6								##*/
+/*##    refclock jjy unit X subtype 6								##*/
 /*##												##*/
 /*################################################################################################*/
 /*################################################################################################*/
@@ -2364,10 +2370,11 @@ jjy_receive_seiko_tsys_tdc_300 ( struct recvbuf *rbufp )
 		}
 
 		time( &now ) ;
-		pTime = localtime_r( &now, &tmbuf ) ;
-		up->year  = pTime->tm_year ;
-		up->month = pTime->tm_mon + 1 ;
-		up->day   = pTime->tm_mday ;
+		if ((pTime = localtime_r( &now, &tmbuf )) != NULL) {
+			up->year  = pTime->tm_year ;
+			up->month = pTime->tm_mon + 1 ;
+			up->day   = pTime->tm_mday ;
+		}
 
 		break ;
 
@@ -2482,7 +2489,7 @@ jjy_poll_seiko_tsys_tdc_300 ( int unit, struct peer *peer )
 /*##												##*/
 /*##    Telephone JJY										##*/
 /*##												##*/
-/*##    server  127.127.40.X  mode 100 to 180							##*/
+/*##    refclock jjy unit X subtype 100 to 180							##*/
 /*##												##*/
 /*################################################################################################*/
 /*################################################################################################*/
@@ -3076,7 +3083,7 @@ teljjy_getDelay ( struct peer *peer, struct jjyunit *up )
 		return -1 ;
 	}
 
-	/* mode 101 = 1%, mode 150 = 50%, mode 180 = 80% */
+	/* subtype 101 = 1%, subtype 150 = 50%, subtype 180 = 80% */
 
 	iPercent = ( peer->ttl - 100 ) ;
 
@@ -3480,10 +3487,10 @@ teljjy_conn_data ( struct peer *peer, struct refclockproc *pp, struct jjyunit *u
 			bAdjustment = true ;
 
 			if ( peer->ttl == 100 ) {
-				/* mode=100 */
+				/* subtype=100 */
 				up->msecond = 0 ;
 			} else {
-				/* mode=101 to 110 */
+				/* subtype=101 to 110 */
 				up->msecond = teljjy_getDelay( peer, up ) ;
 				if (up->msecond < 0 ) {
 					up->msecond = 0 ;
@@ -4058,19 +4065,19 @@ modem_init_resp00 ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 	case 2 :
 		/* Mn = Speaker switch  0:Off  1:On until remote carrier detected  2:On */
 		if ( ( pp->sloppyclockflag & CLK_FLAG3 ) == 0 ) {
-			/* fudge 127.127.40.n flag3 0 */
+			/* refclock jjy unit n flag3 0 */
 			iSpeakerSwitch = 0 ;
 		} else {
-			/* fudge 127.127.40.n flag3 1 */
+			/* refclock jjy unit n flag3 1 */
 			iSpeakerSwitch = 2 ;
 		}
 
 		/* Ln = Speaker volume  0:Very low  1:Low  2:Middle  3:High */
 		if ( ( pp->sloppyclockflag & CLK_FLAG4 ) == 0 ) {
-			/* fudge 127.127.40.n flag4 0 */
+			/* refclock jjy unit n flag4 0 */
 			iSpeakerVolume = 1 ;
 		} else {
-			/* fudge 127.127.40.n flag4 1 */
+			/* refclock jjy unit n flag4 1 */
 			iSpeakerVolume = 2 ;
 		}
 
@@ -4096,10 +4103,10 @@ modem_init_resp00 ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 	case 6 :
 		/* \Nn = Error correction  0:Normal mode  1:Direct mode  2:V42,MNP  3:V42,MNP,Normal */
 		if ( ( pp->sloppyclockflag & CLK_FLAG2 ) == 0 ) {
-			/* fudge 127.127.40.n flag2 0 */
+			/* refclock jjy unit n flag2 0 */
 			iErrorCorrection = 0 ;
 		} else {
-			/* fudge 127.127.40.n flag2 1 */
+			/* refclock jjy unit n flag2 1 */
 			iErrorCorrection = 3 ;
 		}
 
@@ -4197,10 +4204,10 @@ modem_dial_dialout ( struct peer *peer, struct refclockproc *pp, struct jjyunit 
 
 	/* Tone or Pulse */
 	if ( ( pp->sloppyclockflag & CLK_FLAG1 ) == 0 ) {
-		/* fudge 127.127.40.n flag1 0 */
+		/* refclock jjy unit n flag1 0 */
 		cToneOrPulse = 'T' ;
 	} else {
-		/* fudge 127.127.40.n flag1 1 */
+		/* refclock jjy unit n flag1 1 */
 		cToneOrPulse = 'P' ;
 	}
 
@@ -4457,7 +4464,7 @@ jjy_write_clockstats ( struct peer *peer, int iMark, const char *pData )
 		printf( "refclock_jjy.c : clockstats : %s\n", sLog ) ;
 	}
 #endif
-	record_clock_stats( &peer->srcadr, sLog ) ;
+	record_clock_stats( peer, sLog ) ;
 
 }
 

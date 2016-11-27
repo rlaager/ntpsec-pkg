@@ -441,10 +441,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\include\hopf_PCI_io.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\..\..\include\ieee754io.h"
 				>
 			</File>
@@ -693,10 +689,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\..\..\ntpd\refclock_palisade.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\..\..\lib\isc\include\isc\result.h"
 				>
 			</File>
@@ -762,10 +754,6 @@
 			Name="Reference Clock"
 			>
 			<File
-				RelativePath="..\..\ntpd\hopf_PCI_io.c"
-				>
-			</File>
-			<File
 				RelativePath="..\..\..\..\ntpd\refclock_acts.c"
 				>
 			</File>
@@ -778,10 +766,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\..\..\ntpd\refclock_as2201.c"
-				>
-			</File>
-			<File
 				RelativePath="..\..\..\..\ntpd\refclock_atom.c"
 				>
 			</File>
@@ -791,10 +775,6 @@
 			</File>
 			<File
 				RelativePath="..\..\..\..\ntpd\refclock_chronolog.c"
-				>
-			</File>
-			<File
-				RelativePath="..\..\..\..\ntpd\refclock_chu.c"
 				>
 			</File>
 			<File
@@ -818,19 +798,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\..\..\ntpd\refclock_hopfpci.c"
-				>
-			</File>
-			<File
-				RelativePath="..\..\..\..\ntpd\refclock_hopfser.c"
-				>
-			</File>
-			<File
 				RelativePath="..\..\..\..\ntpd\refclock_hpgps.c"
-				>
-			</File>
-			<File
-				RelativePath="..\..\..\..\ntpd\refclock_irig.c"
 				>
 			</File>
 			<File
@@ -854,7 +822,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\..\..\ntpd\refclock_mx4200.c"
+				RelativePath="..\..\..\..\ntpd\refclock_magnavox.c"
 				>
 			</File>
 			<File
@@ -870,15 +838,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\..\..\ntpd\refclock_palisade.c"
+				RelativePath="..\..\..\..\ntpd\refclock_trimble0.c"
 				>
 			</File>
 			<File
 				RelativePath="..\..\..\..\ntpd\refclock_parse.c"
-				>
-			</File>
-			<File
-				RelativePath="..\..\..\..\ntpd\refclock_pcf.c"
 				>
 			</File>
 			<File
@@ -903,10 +867,6 @@
 			</File>
 			<File
 				RelativePath="..\..\..\..\ntpd\refclock_true.c"
-				>
-			</File>
-			<File
-				RelativePath="..\..\..\..\ntpd\refclock_tsyncpci.c"
 				>
 			</File>
 			<File

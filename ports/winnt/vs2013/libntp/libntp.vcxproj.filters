@@ -32,9 +32,6 @@
     <ClCompile Include="..\..\..\..\libntp\atolfp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\libntp\audio.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\..\libntp\authkeys.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -53,7 +50,7 @@
     <ClCompile Include="..\..\..\..\lib\isc\buffer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\libntp\caljulian.c">
+    <ClCompile Include="..\..\..\..\libntp\calgregorian.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\libntp\caltontp.c">
@@ -201,9 +198,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\libntp\recvbuff.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\libntp\refnumtoa.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\libntp\setpriority.c">

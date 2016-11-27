@@ -1,0 +1,336 @@
+#!/usr/bin/env python
+"""\
+ntpviz - logfile visualizer for NTP log files
+
+Usage: ntpviz [-d statsdir] [-g] [-n name] [-p period]
+              [-s starttime]  [-e endtime]
+              [--local-offset | --local-jitter | --local-stability]
+              [--peer-offsets=hosts | --all-peer-offsets]
+              [--peer-jitters=hosts | --all-peer-jitters]
+              [-o outdir]
+
+See the manual page for details.
+
+Python by ESR, concept and GNUPLOT code by Dan Drown.
+"""
+#SPDX-License-Identifier: BSD-2-Clause
+from __future__ import print_function, division
+
+import os, sys, getopt, socket, binascii
+from ntpstats import *
+
+# RMS frequency jitter - Deviation from a root-mean-square linear approximation?
+# Investigate.
+#
+# TO-DO: Embed Dan Drown's glossary and notes file in the HTML.
+
+def gnuplot(template, outfile=None):
+    "Run a specified GNUPLOT program."
+    if outfile is None:
+        out = None
+    else:
+        out = open(outfile, "w")
+    proc = subprocess.Popen("gnuplot",
+                            shell=True, bufsize=4096,
+                            stdin=subprocess.PIPE, stdout=out)
+    proc.stdin.write(template)
+    proc.stdin.close()
+    return proc.wait()
+
+class NTPViz(NTPStats):
+    "Class for visualizing statistics from a single server."
+    Common = """\
+set terminal png size 900,600
+set xdata time
+set grid
+set xlabel "Time"
+set format x "@d-@H:@M"
+set timefmt "@s"
+set xtic rotate by -45 scale 0
+set lmargin 12
+set rmargin 12
+"""
+    def __init__(self, statsdir, sitename=None):
+        NTPStats.__init__(self, sitename, statsdir)
+        if self.sitename is None:
+            self.sitename = os.path.basename(statsdir)
+    def local_offset_gnuplot(self):
+        "Generate GNUPLOT code graphing local clock loop statistics"
+        sitename = self.sitename
+        plot_template = NTPViz.Common + """\
+set title "%(sitename)s: Local Clock Offsets"
+set ytics format "@1.2f us" nomirror textcolor rgb '#0060ad'
+set y2tics format "@2.3f ppm" nomirror textcolor rgb '#dd181f'
+set key bottom right box
+set style line 1 lc rgb '#0060ad' lt 1 lw 1 pt 7 ps 0   # --- blue
+set style line 2 lc rgb '#dd181f' lt 1 lw 1 pt 5 ps 0   # --- red
+plot \
+ "-" using 1:($2*1000000) title "clock offset us" with linespoints ls 1, \
+ "-" using 1:3 title "frequency offset ppm" with linespoints ls 2 axis x1y2
+""" % locals()
+        return plot_template.replace('@', '%') + self.dump("loopstats") + "e\n" + self.dump("loopstats")
+    def loopstats_gnuplot(self, fld, title, legend):
+        "Generate GNUPLOT code of a given loopstats field"
+        sitename   = self.sitename
+        ninetynine = self.percentile(fld, 95, self.loopstats) * 1000000
+        ninetyfive = self.percentile(fld, 99, self.loopstats) * 1000000
+        five       = self.percentile(fld,  5, self.loopstats) * 1000000
+        one        = self.percentile(fld,  1, self.loopstats) * 1000000
+        nf_m_f     = ninetyfive - five
+        nn_m_o     = ninetynine - one
+        plot_template = NTPViz.Common + """\
+set title "%(sitename)s: %(title)s"
+set ytics format "@1.2f us" nomirror
+set key top right box
+set style line 1 lc rgb '#0060ad' lt 1 lw 1 pt 7 ps 0   # --- blue
+set style line 2 lc rgb '#dd181f' lt 1 lw 1 pt 5 ps 0   # --- red
+set label 1 gprintf("99@@ = %(ninetynine)s us",99) at graph 0.01,0.95 left front
+set label 2 gprintf("95@@ = %(ninetyfive)s us",95) at graph 0.01,0.9 left front
+set label 3 gprintf(" 5@@ = %(five)s us",5) at graph 0.01,0.85 left front
+set label 4 gprintf(" 1@@ = %(one)s us",1) at graph 0.01,0.8 left front
+set label 5 gprintf("95@@ - 5@@ = %(nf_m_f)s us",90) at graph 0.01,0.75 left front
+set label 6 gprintf("99@@ - 1@@ = %(nn_m_o) us",98) at graph 0.01,0.7 left front
+plot \
+ "-" using 1:($%(fld)d*1000000) title "%(legend)s" with linespoints ls 1, \
+ %(ninetynine)s title "99th percentile", \
+ %(ninetyfive)s title "95th percentile", \
+ %(five)s title "5th percentile", \
+ %(one)s title "1st percentile"
+""" % locals()
+        return plot_template.replace('@', '%') + self.dump("loopstats")
+    def local_offset_jitter_gnuplot(self):
+        "Generate GNUPLOT code of local clock loop standard deviation"
+        return self.loopstats_gnuplot(4, "RMS Time jitter", "Jitter")
+    def local_offset_stability_gnuplot(self):
+        "Generate GNUPLOT code graphing local clock stability"
+        return self.loopstats_gnuplot(5, "RMS Frequency Jitter", "Stability")
+    def peerstats_gnuplot(self, peerlist, fld, title):
+        "Plot a specified field from peerstats."
+        sitename = self.sitename
+        peerdict = self.peersplit()
+        if not peerlist:
+            peerlist = list(peerdict.keys())
+        peerlist.sort()	# For stability of output
+        if len(peerlist) == 1:
+            title += ": "+ peerlist[0]
+        else:
+            title += "s"
+        plot_template = NTPViz.Common + """\
+set title "%(sitename)s: %(title)s"
+set ylabel ""
+set ytics format "@1.0f us" nomirror
+set key top right box
+plot \\
+""" % locals()
+	plot_template = plot_template.replace("@", "%")
+        for key in peerlist:
+            plot_template += "'-' using 1:($%d*1000000) title '%s' with line, \\\n" % (fld, self.ip_label(key))
+        
+        plot_template = plot_template[:-4] + "\n"
+        for key in peerlist:
+            # Trickiness - we allow peerlist elements to be DNS names.
+            # The socket.gethostbyname() call maps DNS names to IP addresses,
+            # passing through literal IPv4 addresses unaltered.  However,
+            # it barfs on either literal IPv6 addresses or refclock names. 
+            if "(" in key or "::" in key:
+                ip = key
+            else:
+                ip = socket.gethostbyname(key)
+            if ip in peerdict:
+                plot_template += "\n".join(peerdict[ip]) + "\ne\n"
+            else:
+                sys.stderr.write("No such peer as %s" % key)
+                raise SystemExit(1)
+        return plot_template[:-2]
+    def peer_offsets_gnuplot(self, peerlist):
+        return self.peerstats_gnuplot(peerlist, 4, "Peer clock offset")
+    def peer_jitters_gnuplot(self, peerlist):
+        return self.peerstats_gnuplot(peerlist, 7, "Peer clock jitter")
+    def peer_rtt_gnuplot(self, host):
+        "Plot offset with rtt bounds for specified host."
+        sitename = self.sitename
+        entries = self.peersplit()[host]
+        fifty = self.percentile(4,  50, entries) * 1000000
+        host = self.ip_label(host)
+        plot_template = NTPViz.Common + """\
+set title "%(sitename)s: offset of %(host)s"
+set ylabel ""
+set ytics format "@1.0f us" nomirror
+set key top right box
+plot \
+'-' using 1:($4*1000000) title 'offset' with line, \
+'-' using 1:(($4+$5/2)*1000000) title 'offset+rtt/2' with line, \
+'-' using 1:(($4-$5/2)*1000000) title 'offset-rtt/2' with line, \
+%(fifty)s title '50th percentile'
+""" % locals()
+	plot_template = plot_template.replace("@", "%")
+        data = "\n".join(entries)
+        plot_template += data + "\ne\n"	+ data + "\ne\n" + data
+        return plot_template
+
+ntpsec_logo = """
+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
+"""
+
+if __name__ == '__main__':
+    try:
+        (options, arguments) = getopt.getopt(sys.argv[1:], "d:e:ghn:o:p:s:", [
+            "local-offset", "local-jitter", "local-stability",
+            "all-peer-offsets", "peer-offsets=",
+            "all-peer-jitters", "peer-jitters=",
+            "peer-rtt=",
+            ])
+    except getopt.GetoptError as err:
+        sys.stderr.write(str(err) + "\n")
+        raise SystemExit(2)
+    period = 7	# days
+    sitename = None
+    statsdirs = ["/var/log/ntpstats"]
+    endtime = starttime = None
+    generate = False
+    show_local_offset = show_local_jitter = show_local_stability = False
+    show_peer_offsets = show_peer_jitters = None
+    show_peer_rtt = None
+    outdir = "ntpgraphs"
+    for (switch, val) in options:
+        if switch == "-d":
+            statsdirs = val.split(",")
+        elif switch == "-e":
+            endtime = iso_to_posix(val)
+        elif switch == "-g":
+            generate = True
+        elif switch == "-h":
+            sys.stdout.write(__doc__)
+            raise SystemExit(0)
+        elif switch == "-n":
+            sitename = val
+        elif switch == "-p":
+            period = int(val)	# Denominated in days
+        elif switch == "-s":
+            starttime = iso_to_posix(val)
+        elif switch == "-o":
+            outdir = val
+        elif switch == "--local-offset":
+            show_local_offset = True
+        elif switch == "--local-jitter":
+            show_local_jitter = True
+        elif switch == "--local-stability":
+            show_local_stability = True
+        elif switch == "--peer-offsets":
+            show_peer_offsets = val.split(",")
+        elif switch == "--all-peer-offsets":
+            show_peer_offsets = []
+        elif switch == "--peer-jitters":
+            show_peer_jitters = val.split(",")
+        elif switch == "--all-peer-jitters":
+            show_peer_jitters = []
+        elif switch == "--peer-rtt":
+            show_peer_rtt = val
+    period *= 24 * 60 * 60
+    statlist = [NTPViz(statsdir=d, sitename=sitename) for d in statsdirs]
+    for stats in statlist:
+        # Default to one week before the latest date
+        if endtime is None and starttime == None:
+            endtime = int(stats.rangemax())
+            starttime = endtime - period
+        elif starttime is None and endtime is not None:
+            starttime = endtime - period
+        elif starttime is not None and endtime is None:
+            endtime = starttime + period
+        if starttime:
+            stats.clip(starttime, endtime)
+
+    for fontpath in ("/usr/share/fonts/liberation",
+                     "/usr/share/fonts/liberation-fonts",
+                     "/usr/share/fonts/truetype/liberation"):
+
+        if os.path.exists(fontpath):
+            os.environ["GDFONTPATH"] = fontpath
+            break
+    else:
+        sys.stderr.write("warning: liberation truetype fonts not found\n")
+    os.environ["GNUPLOT_DEFAULT_GDFONT"] = "LiberationSans-Regular"
+
+    if len(statlist) == 1:
+        stats = statlist[0]
+        if show_local_offset or show_local_jitter or show_local_stability:
+            if not stats.loopstats:
+                sys.stderr.write("ntpviz: missing loopstats data\n")
+                raise SystemExit(1)
+            if show_local_offset + show_local_jitter + show_local_stability > 1:
+                sys.stderr.write("ntpviz: clash of mode options\n")
+                raise SystemExit(1)
+            if show_local_offset:
+                plot = stats.local_offset_gnuplot()
+            if show_local_jitter:
+                plot = stats.local_offset_jitter_gnuplot()
+            if show_local_stability:
+                plot = stats.local_offset_stability_gnuplot()
+            if generate:
+                gnuplot(plot)
+            else:
+                sys.stdout.write(plot)
+            raise SystemExit(0)
+
+        if show_peer_offsets is not None or show_peer_jitters is not None or show_peer_rtt is not None:
+            if not stats.loopstats:
+                sys.stderr.write("ntpviz: missing peerstats data\n")
+                raise SystemExit(1)
+            if show_peer_offsets is not None:
+                plot = stats.peer_offsets_gnuplot(show_peer_offsets)
+            if show_peer_jitters is not None:
+                plot = stats.peer_jitters_gnuplot(show_peer_jitters)
+            if show_peer_rtt is not None:
+                plot = stats.peer_rtt_gnuplot(show_peer_rtt)
+            if generate:
+                gnuplot(plot)
+            else:
+                sys.stdout.write(plot)
+            raise SystemExit(0)
+
+        # Fall through to HTML code generation
+        if not os.path.isdir(outdir):
+            try:
+                os.mkdir(outdir)
+            except SystemError:
+                sys.stderr.write("ntpviz: %s can't be created.\n" % outdir)
+                raise SystemExit(1)
+        with open(os.path.join(outdir, "ntpsec-logo.png", "w")) as wp:
+            wp.write(binascii.a2b_base64(ntpsec_logo))
+        index_header = '''\
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>ntpviz plot</title>
+</head>
+<body>
+<img sec="ntpsec-logo.png"/>
+'''
+        index_trailer = '''\
+</body>
+</html>
+'''
+        imagepairs = [
+            ("local-offset", stats.local_offset_gnuplot),
+            ("local-jitter", stats.local_offset_jitter_gnuplot),
+            ("local-stability", stats.local_offset_stability_gnuplot),
+            ("peer-offsets", lambda: stats.peer_offsets_gnuplot(None)),
+            ]
+        for key in stats.peersplit().keys():
+            imagepairs.append(("peer-offset-" + key,
+                           lambda: stats.peer_offsets_gnuplot([key])))
+        imagepairs.append(("peer-jitters",
+                           lambda: stats.peer_jitters_gnuplot(None)))
+        for key in stats.peersplit().keys():
+            imagepairs.append(("peer-jitter-" + key,
+                           lambda: stats.peer_jitters_gnuplot([key])))
+        for (imagename, generator) in imagepairs:
+            gnuplot(generator(), os.path.join(outdir, imagename + ".png"))
+            with open(os.path.join(outdir, "index.html"), "w") as ifile:
+                ifile.write(index_header)
+                for (imagename, _) in imagepairs:
+                    ifile.write("<img src='%s.png'/>\n" % imagename)
+                ifile.write(index_trailer)
+
+# end
