@@ -6,11 +6,64 @@ Much of the traditional function of a news file is now better addressed
 by browsing the comments in the revision history.  This file will focus
 on user-visible changes.
 
-== Repository head ==
+== 2016-08-16: 0.9.4 ==
+
+A new visualization tool, ntpviz, generates graphical summaries of
+logfile data that can be helpful for identifying problems such as
+misconfigured servers.
+
+usestats has been added to the statistics collection to record
+system resource usage statistics.
+
+A new, simpler configuration syntax for refclocks has been
+implemented.  Configuration examples in the new syntax have been added
+to each driver page.
+
+Refclocks are now designated by name, not number. A list is available
+from "--waf configure --list".
+
+The rarely-used saveconfig feature in ntpq, and various associated
+configuration directives, have been removed for security reasons. The
+ntpd --saveconfigquit option, undocumented in NTP Classic, has
+also been removed.
+
+The ARCRON MSF refclock has been removed on the advice of last maintainer.
+
+The Spectracom TSYNC PCI refclock has been removed. It required a
+proprietary driver.  As a matter of good security policy, NTPsec will
+not trust nor attempt to support code it cannot audit.
+
+The Conrad Parallel Port radio refclock has been removed.  It required
+a third-party parallel-port driver for Linux that no longer exists.
+
+Both Hopf refclocks have been removed.  The 6039 driver required a
+kernel driver that no longer exists; the 6021 driver duplicated
+support in the generic driver.
+
+The Austron refclock has been removed, on the grounds that it was
+EOLed more than 20 years ago and there's been no aftermarket activity
+or web chatter around it for a decade.
+
+The audio-path drivers (IRIG and CHU) have been removed. The class
+of hardware required to support them has gone essentially extinct due
+to cheap DSP. The complexity/maintainance overhead of this code
+was high enough to motivate dropping them.
+
+This release contains a fix for one vulnerability inherited from
+NTP Classic:
+
+[Bug 3044] (CVE-2016-4954) Processing spoofed server packets
+
+https://lists.ntpsec.org/pipermail/devel/2016-June/001299.html provides
+additional information on this issue.
+
+It also includes the following fix cross-ported from Classic:
+
+[Bug 3047] refclock_jjy does not work with C-DEX JST2000
 
 == 2016-05-17: 0.9.3 ==
 
-The long-deprected Autokey feature has been removed.
+The long-deprecated Autokey feature has been removed.
 
 This release contains fixes for three vulnerabilities inherited from
 NTP Classic:
@@ -19,8 +72,8 @@ NTP Classic:
   (Credit: Matt Street et. al. of Cisco ASIG)
 [Bug 3008] (CVE-2016-2519) ctl_getitem() return value not always checked
   (Credit: Yihan Lian of the Qihoo 360 cloud security team)
-[Bug 2978] (CVE-2016-1548) Interleave-pivot (Credit: Miroslav Lichvar of
-  RedHat and Jonathan Gardner of Cisco ASIG)
+[Bug 2978] (CVE-2016-1548) Interleave-pivot
+  (Credit: Miroslav Lichvar of RedHat and Jonathan Gardner of Cisco ASIG)
 
 The following non-security fixes have been
 forward-ported from Classic:

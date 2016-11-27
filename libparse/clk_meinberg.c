@@ -19,8 +19,6 @@
 
 #include "ntp_stdlib.h"
 
-#include "ntp_stdlib.h"
-
 #include "mbg_gps166.h"
 #include "binio.h"
 #include "ascii.h"
@@ -229,7 +227,7 @@ clockformat_t clock_meinberg[] =
  *
  * convert simple type format
  */
-static u_long
+static unsigned long
 cvt_meinberg(
 	     unsigned char *buffer,
 	     int            size,
@@ -392,7 +390,7 @@ cvt_meinberg(
  *
  * grab data from input stream
  */
-static u_long
+static unsigned long
 mbg_input(
 	  parse_t      *parseio,
 	  char         ch,
@@ -431,7 +429,7 @@ mbg_input(
  *
  * convert Meinberg GPS format
  */
-static u_long
+static unsigned long
 cvt_mgps(
 	 unsigned char *buffer,
 	 int            size,
@@ -556,7 +554,7 @@ cvt_mgps(
  *
  * grep binary data from input stream
  */
-static u_long
+static unsigned long
 gps_input(
 	  parse_t      *parseio,
 	  char ch,

@@ -17,12 +17,6 @@
 # include <sys/ioctl.h>
 #endif /* HAVE_SYS_IOCTL_H */
 
-#ifdef SYS_WINNT
-#undef write	/* ports/winnt/include/config.h: #define write _write */
-extern int async_write(int, const void *, unsigned int);
-#define write(fd, data, octets)	async_write(fd, data, octets)
-#endif
-
 /*
  * This driver supports the US (NIST, USNO) and European (PTB, NPL,
  * etc.) modem time services, as well as Spectracom GPS
@@ -42,7 +36,7 @@ extern int async_write(int, const void *, unsigned int);
  * so on. The phone number is specified by the Hayes ATDT prefix
  * followed by the number itself, including the long-distance prefix
  * and delay code, if necessary. The calling program is enabled
- * when (a) fudge flag1 is set by ntpq, (b) at each poll interval
+ * when (a) option flag1 is set by ntpq, (b) at each poll interval
  * when no other synchronization sources are present, and (c) at each
  * poll interval whether or not other synchronization sources are 
  * present. The calling program disconnects if (a) the called party
@@ -56,7 +50,7 @@ extern int async_write(int, const void *, unsigned int);
  * succeed is the message accepted. Corrupted lines are discarded
  * without complaint.
  *
- * Fudge controls
+ * Options:
  *
  * flag1	force a call in manual mode
  * flag2	enable port locking (not verified)
@@ -69,7 +63,7 @@ extern int async_write(int, const void *, unsigned int);
  * list is defined. If no phones list is defined, the port can be 
  * connected directly to a device or another computer. In this case the
  * driver will send a single character 'T' at each poll event. If
- * fudge flag2 is enabled, port locking allows the modem to be shared
+ * option flag2 is enabled, port locking allows the modem to be shared
  * when not in use by this driver.
  */
 /*
@@ -134,6 +128,7 @@ extern int async_write(int, const void *, unsigned int);
 #define	SPEED232	B19200	/* uart speed (19200 bps) */
 #define	PRECISION	(-10)	/* precision assumed (about 1 ms) */
 #define LOCKFILE	"/var/spool/lock/LCK..cua%d"
+#define NAME		"ACTS"	/* shortname */
 #define DESCRIPTION	"Automated Computer Time Service" /* WRU */
 #define REFID		"NONE"	/* default reference ID */
 #define MSGCNT		20	/* max message count */
@@ -228,12 +223,12 @@ static	void	acts_close	(struct peer *);
  * Transfer vector (conditional structure name)
  */
 struct refclock refclock_acts = {
+	NAME,			/* basename of driver */
 	acts_start,		/* start up driver */
 	acts_shutdown,		/* shut down driver */
 	acts_poll,		/* transmit poll message */
-	noentry,		/* not used */
-	noentry,		/* not used */
-	noentry,		/* not used */
+	noentry,		/* control - not used */
+	noentry,		/* init - not used */
 	acts_timer		/* housekeeping timer */
 };
 
@@ -266,6 +261,7 @@ acts_start(
 	 * Initialize miscellaneous variables
 	 */
 	peer->precision = PRECISION;
+	pp->clockname = NAME;
 	pp->clockdesc = DESCRIPTION;
 	memcpy(&pp->refid, REFID, REFIDLEN);
 	peer->sstclktype = CTL_SST_TS_TELEPHONE;
@@ -512,10 +508,10 @@ acts_timeout(
 		/*
 		 * Open the device in raw mode and link the I/O.
 		 */
-		snprintf(device, sizeof(device), DEVICE,
-		    up->unit);
-		fd = refclock_open(device, SPEED232, LDISC_ACTS |
-		    LDISC_RAW | LDISC_REMOTE);
+		snprintf(device, sizeof(device), DEVICE, up->unit);
+		fd = refclock_open(peer->path ? peer->path : device,
+				   peer->baud ? peer->baud : SPEED232,
+				   LDISC_ACTS | LDISC_RAW | LDISC_REMOTE);
 		if (fd < 0) {
 			msyslog(LOG_ERR, "acts: open fails %m");
 			return;
@@ -580,7 +576,7 @@ acts_timeout(
 			report_event(PEVNT_CLOCK, peer, "no timecodes");
 		} else {
 			pp->lastref = pp->lastrec;
-			record_clock_stats(&peer->srcadr, pp->a_lastcode);
+			record_clock_stats(peer, pp->a_lastcode);
 			refclock_receive(peer);
 		}
 		break;
@@ -658,7 +654,7 @@ acts_poll(
 
 	/*
 	 * In manual mode the calling program is activated by the ntpq
-	 * program using the enable flag (fudge flag1), either manually
+	 * program using the enable flag (flag1 option), either manually
 	 * or by a cron job.
 	 */
 	case MODE_MANUAL:

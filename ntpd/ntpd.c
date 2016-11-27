@@ -8,7 +8,7 @@
 #include "ntpd.h"
 #include "ntp_io.h"
 #include "ntp_stdlib.h"
-#include <ntp_random.h>
+#include "ntp_random.h"
 
 #include "ntp_config.h"
 #include "ntp_syslog.h"
@@ -18,10 +18,6 @@
 #include "isc/formatcheck.h"
 #include "iosignal.h"
 
-#ifdef SIM
-# include "ntpsim.h"
-#endif
-
 #include <unistd.h>
 #include <sys/stat.h>
 #include <stdio.h>
@@ -30,9 +26,6 @@
 #ifdef HAVE_SYS_IOCTL_H
 # include <sys/ioctl.h>
 #endif /* HAVE_SYS_IOCTL_H */
-#if defined(HAVE_RTPRIO)
-# include <sys/rtprio.h>
-#endif
 #include <sched.h>
 #include <sys/mman.h>
 
@@ -45,7 +38,7 @@ extern bool sandbox(const bool droproot,
 		    const char *chrootdir,
 		    bool want_dynamic_interface_tracking);
 
-#if !defined(SIM) && defined(SIGDIE1)
+#if defined(SIGDIE1)
 static volatile bool signalled	= false;
 static volatile int signo	= 0;
 /* In an ideal world, 'finish_safe()' would declared as noreturn... */
@@ -63,16 +56,9 @@ DNSServiceRef mdns;
 
 #include <sodium.h>
 
-/*
- * Scheduling priority we run at
- */
-#define NTPD_PRIO	(-12)
-
-static  enum {PRIORITY_UNSET,	/* Set priority */
-	      PRIORITY_OK,	/* Priority is OK where it is */
-	      PRIORITY_NOSET,	/* Don't set priority */
-				/* Latter two are pretty much the same */
-} priority_done = PRIORITY_NOSET;
+static bool need_priority = false;
+static bool config_priority_override = false;
+static int config_priority;
 
 bool listen_to_virtual_ips = true;
 
@@ -96,25 +82,14 @@ bool mdnsreg = false;
 int mdnstries = 5;
 #endif  /* ENABLE_MDNS_REGISTRATION */
 
-#ifdef ENABLE_DROPROOT
-bool droproot;
+bool droproot = false;
 char *user;		/* User to switch to */
 char *group;		/* group to switch to */
 const char *chrootdir;	/* directory to chroot to */
-#endif /* ENABLE_DROPROOT */
 
 #ifdef HAVE_WORKING_FORK
 int	waitsync_fd_to_close = -1;	/* -w/--wait-sync */
 #endif
-
-/*
- * Initializing flag.  All async routines watch this and only do their
- * thing when it is clear.
- */
-bool initializing;
-
-bool config_priority_override = false;
-int config_priority;
 
 char const *progname;
 
@@ -124,23 +99,27 @@ extern bool	check_netinfo;
 
 bool was_alarmed;
 
-#if !defined(SIM) && defined(HAVE_WORKING_FORK)
+#if defined(HAVE_WORKING_FORK)
 static int	wait_child_sync_if	(int, long);
 #endif
 
-#if !defined(SIM) && !defined(SYS_WINNT)
+#if defined(SIGHUP)
+static	void	catchHUP	(int);
+volatile int sawHUP = false;
+#endif
+
+#if !defined(SYS_WINNT)
 # ifdef	DEBUG
 static	void	moredebug	(int);
 static	void	lessdebug	(int);
 # else	/* !DEBUG follows */
 static	void	no_debug	(int);
 # endif	/* !DEBUG */
-#endif	/* !SIM && !SYS_WINNT */
+#endif	/* !SYS_WINNT */
 
 int	saved_argc;
 char **	saved_argv;
 
-#ifndef SIM
 int		ntpdmain		(int, char **);
 static void	mainloop		(void);
 static void	set_process_priority	(void);
@@ -154,10 +133,8 @@ static void	library_fatal_error	(const char *, int,
 static void	library_unexpected_error(const char *, int,
 					 const char *, va_list)
 					ISC_FORMAT_PRINTF(3, 0);
-#endif	/* !SIM */
 
-
-#define ALL_OPTIONS "46aAbc:dD:f:gGi:I:k:l:LmMnNp:PqQ:r:Rs:t:u:UVw:xyYzZ"
+#define ALL_OPTIONS "46aAbc:dD:f:gGhi:I:k:l:LmMnNp:Pqr:Rs:t:u:UVw:xyYzZ"
 static const struct option longoptions[] = {
     { "ipv4",		    0, 0, '4' },
     { "ipv6",		    0, 0, '6' },
@@ -170,6 +147,7 @@ static const struct option longoptions[] = {
     { "ipv4",		    0, 0, '4' },
     { "driftile",	    1, 0, 'f' },
     { "panicgate",	    0, 0, 'g' },
+    { "help",	            0, 0, 'h' },
     { "jaildir",	    1, 0, 'i' },
     { "interface",	    1, 0, 'I' },
     { "keyfile",	    1, 0, 'k' },
@@ -180,7 +158,6 @@ static const struct option longoptions[] = {
     { "quit",		    0, 0, 'q' },
     { "propagationdelay",   1, 0, 'r' },
     { "dumpopts",	    0, 0, 'R' },
-    { "saveconfigquit",	    1, 0, 'Q' },
     { "statsdir",	    1, 0, 's' },
     { "trustedkey",	    1, 0, 't' },
     { "user",		    1, 0, 'u' },
@@ -194,6 +171,68 @@ static const struct option longoptions[] = {
     { NULL,                 0, 0, '\0'}, 
 };
 
+static void ntpd_usage(void)
+{
+#define P(x)	fputs(x, stderr)
+    P("USAGE:  ntpd [ -<flag> [<val>] | --<name>[{=| }<val>] ]...\n");
+    P("  Flg Arg Option-Name    Description\n");
+    P("   -4 no  ipv4           Force IPv4 DNS name resolution\n");
+    P("				- prohibits the option 'ipv6'\n");
+    P("   -6 no  ipv6           Force IPv6 DNS name resolution\n");
+    P("				- prohibits the option 'ipv4'\n");
+    P("   -a no  authreq        Require crypto authentication\n");
+    P("				- prohibits the option 'authnoreq'\n");
+    P("   -A no  authnoreq      Do not require crypto authentication\n");
+    P("				- prohibits the option 'authreq'\n");
+    P("   -b no  bcastsync      Allow us to sync to broadcast servers\n");
+    P("   -c Str configfile     configuration file name\n");
+    P("   -d no  debug-level    Increase output debug message level\n");
+    P("				- may appear multiple times\n");
+    P("   -D Str set-debug-level Set the output debug message level\n");
+    P("				- may appear multiple times\n");
+    P("   -f Str driftfile      frequency drift file name\n");
+    P("   -g no  panicgate      Allow the first adjustment to be Big\n");
+    P("				- may appear multiple times\n");
+    P("   -h no  --help         Display usage summary of options and exit.\n"); 
+    P("   -i Str jaildir        Jail directory\n");
+    P("   -I Str interface      Listen on an interface name or address\n");
+    P("				- may appear multiple times\n");
+    P("   -k Str keyfile        path to symmetric keys\n");
+    P("   -l Str logfile        path to the log file\n");
+    P("   -L no  novirtualips   Do not listen to virtual interfaces\n");
+    P("   -n no  nofork         Do not fork\n");
+    P("   -N no  nice           Run at high priority\n");
+    P("   -p Str pidfile        path to the PID file\n");
+    P("   -P Num priority       Process priority\n");
+    P("   -q no  quit           Set the time and quit\n");
+    P("   -r Str propagationdelay Broadcast/propagation delay\n");
+    P("   -s Str statsdir       Statistics file location\n");
+    P("   -t Str trustedkey     Trusted key number\n");
+    P("				- may appear multiple times\n");
+    P("   -u Str user           Run as userid (or userid:groupid)\n");
+    P("   -U Num uinterval      interval in secs between scans for new or dropped interfaces\n");
+    P("      Str var            make ARG an ntp variable (RW)\n");
+    P("				- may appear multiple times\n");
+    P("      Str dvar           make ARG an ntp variable (RW|DEF)\n");
+    P("				- may appear multiple times\n");
+    P("   -x no  slew           Slew up to 600 seconds\n");
+    P("   -V no  version        Output version information and exit\n");
+    P("   -h no  help           Display extended usage information and exit\n");
+#ifdef REFCLOCK
+    P("This version was compiled with the following clock drivers:\n");
+    int ct = 0;
+    for (int dtype = 1; dtype < (int)num_refclock_conf; dtype++)
+	if (refclock_conf[dtype]->basename != NULL)
+	{
+	    fprintf(stderr, "%12s", refclock_conf[dtype]->basename);
+	    if (((++ct % 5) == 0))
+		fputc('\n', stderr);
+	}
+    if (ct % 5)
+	fputc('\n', stderr);
+#endif /* REFCLOCK */
+#undef P
+}
 
 static void
 parse_cmdline_opts(
@@ -250,6 +289,9 @@ parse_cmdline_opts(
 	    case 'G':
 		force_step_once = true;
 		break;
+	    case 'h':
+		ntpd_usage();
+		exit(0);
 	    case 'i':
 #ifdef ENABLE_DROPROOT
 		droproot = true;
@@ -281,7 +323,7 @@ parse_cmdline_opts(
 		nofork = true;
 		break;
 	    case 'N':
-		priority_done = PRIORITY_UNSET;
+		need_priority = true;
 		break;
 	    case 'p':
 		pidfile = ntp_optarg;
@@ -289,23 +331,12 @@ parse_cmdline_opts(
 	    case 'P':
 		config_priority = atoi(ntp_optarg);
 		config_priority_override = true;
-		priority_done = PRIORITY_UNSET;
+		need_priority = true;
 		break;
 	    case 'q':
 		mode_ntpdate = true;
 		nofork = true; 
 		break;
-	    case 'Q':	/* saveconfigquit - undocumented(?) in NTP Classic */
-		syslogit = false;
-#ifdef SAVECONFIG
-		saveconfigquit = true;
-		saveconfigfile = ntp_optarg;
-		nofork = true; 
-		break;
-#else
-		msyslog(LOG_ERR, "-Q/--saveconfigquit requires SAVECONFIG/--enable-saveconfig");
-		exit(1);
-#endif
 	    case 'r':
 		{
 		    double tmp;
@@ -395,8 +426,10 @@ parse_cmdline_opts(
 	    case 'Z':
 		/* defer */
 		break;
-	    default :
-		break;
+	    default:
+		fputs("Unknown command line switch or missing argument.\n", stderr);
+		ntpd_usage();
+		exit(1);
 	    } /*switch*/
 	}
 
@@ -420,24 +453,6 @@ parse_cmdline_opts(
 		exit(0);
 }
 
-#ifdef SIM
-int
-main(
-	int argc,
-	char *argv[]
-	)
-{
-	progname = argv[0];
-	intercept_argparse(&argc, &argv);
-	parse_cmdline_opts(argc, argv);
-
-#ifdef DEBUG
-	DPRINTF(1, ("ntpd %s\n", Version));
-#endif
-
-	return ntpsim(argc, argv);
-}
-#else	/* !SIM follows */
 #ifdef NO_MAIN_ALLOWED
 CALL(ntpd,"ntpd",ntpdmain);
 #else	/* !NO_MAIN_ALLOWED follows */
@@ -452,7 +467,6 @@ main(
 }
 #endif /* !SYS_WINNT */
 #endif /* !NO_MAIN_ALLOWED */
-#endif /* !SIM */
 
 #ifdef SIGDANGER
 /*
@@ -470,22 +484,19 @@ catch_danger(int signo)
 /*
  * Set the process priority
  */
-#ifndef SIM
 static void
 set_process_priority(void)
 {
-
 # ifdef DEBUG
 	if (debug > 1)
-		msyslog(LOG_DEBUG, "set_process_priority: %s: priority_done is <%d>",
-			((priority_done)
+		msyslog(LOG_DEBUG, "set_process_priority: %s",
+			((!need_priority)
 			 ? "Leave priority alone"
 			 : "Attempt to set priority"
-				),
-			priority_done);
+				));
 # endif /* DEBUG */
-
-	if (priority_done == PRIORITY_UNSET) {
+#ifdef HAVE_SCHED_SETSCHEDULER
+	if (need_priority) {
 		int pmax, pmin;
 		struct sched_param sched;
 
@@ -500,54 +511,20 @@ set_process_priority(void)
 			else
 				sched.sched_priority = config_priority;
 		}
-#ifdef HAVE_SCHED_SETSCHEDULER
 		if ( sched_setscheduler(0, SCHED_FIFO, &sched) == -1 )
 			msyslog(LOG_ERR, "sched_setscheduler(): %m");
 		else
+			need_priority = false;
+	}
 #endif
-			priority_done = PRIORITY_OK;
-	}
-# ifdef HAVE_RTPRIO
-#  ifdef RTP_SET
-	if (priority_done == PRIORITY_UNSET) {
-		struct rtprio srtp;
-
-		srtp.type = RTP_PRIO_REALTIME;	/* was: RTP_PRIO_NORMAL */
-		srtp.prio = 0;		/* 0 (hi) -> RTP_PRIO_MAX (31,lo) */
-
-		if (rtprio(RTP_SET, getpid(), &srtp) < 0)
-			msyslog(LOG_ERR, "rtprio() error: %m");
-		else
-			priority_done = PRIORITY_OK;
-	}
-#  else	/* !RTP_SET follows */
-	if (priority_done == oriority_set) {
-		if (rtprio(0, 120) < 0)
-			msyslog(LOG_ERR, "rtprio() error: %m");
-		else
-			priority_done = PRIORITY_OK;
-	}
-#  endif	/* !RTP_SET */
-# endif	/* HAVE_RTPRIO */
-# if defined(NTPD_PRIO) && NTPD_PRIO != 0
-	if (priority_done == PRIORITY_UNSET) {
-		if (-1 == setpriority(PRIO_PROCESS, 0, NTPD_PRIO))
-			msyslog(LOG_ERR, "setpriority() error: %m");
-		else
-			priority_done = PRIORITY_OK;
-	}
-# endif	/* NTPD_PRIO && NTPD_PRIO != 0 */
-	if (priority_done == PRIORITY_UNSET)
+	if (need_priority)
 		msyslog(LOG_ERR, "set_process_priority: No way found to improve our priority");
 }
-#endif	/* !SIM */
-
 
 /*
  * Main program.  Initialize us, disconnect us from the tty if necessary,
  * and loop waiting for I/O and/or timer expiries.
  */
-#ifndef SIM
 int
 ntpdmain(
 	int argc,
@@ -574,7 +551,6 @@ ntpdmain(
 	saved_argc = argc;
 	saved_argv = argv;
 	progname = argv[0];
-	initializing = true;		/* mark that we are initializing */
 	intercept_argparse(&argc, &argv);
 	parse_cmdline_opts(argc, argv);
 # ifdef DEBUG
@@ -590,7 +566,7 @@ ntpdmain(
 	} else {
 		if (nofork)
 		    termlogit = (intercept_get_mode() == none || debug > 0);
-		if (saveconfigquit || dumpopts)
+		if (dumpopts)
 			syslogit = false;
 	}
 
@@ -623,7 +599,7 @@ ntpdmain(
 	isc_error_setunexpected(library_unexpected_error);
 
 	uid = getuid();
-	if (uid && intercept_get_mode() != replay && !saveconfigquit && !dumpopts) {
+	if (uid && intercept_get_mode() != replay && !dumpopts) {
 		termlogit = true;
 		msyslog(LOG_ERR,
 			"must be run as root, not uid %ld", (long)uid);
@@ -724,22 +700,6 @@ ntpdmain(
 	 */
 	sodium_init();
 
-
-
-        if (!saveconfigquit && !dumpopts) {
-	    /* Setup stack size in preparation for locking pages in memory. */
-	    ntp_rlimit(RLIMIT_STACK, DFLT_RLIMIT_STACK * 4096, 4096, "4k");
-#ifdef RLIMIT_MEMLOCK
-	    /*
-	     * The default RLIMIT_MEMLOCK is very low on Linux systems.
-	     * Unless we increase this limit malloc calls are likely to
-	     * fail if we drop root privilege.  To be useful the value
-	     * has to be larger than the largest ntpd resident set size.
-	     */
-	    ntp_rlimit(RLIMIT_MEMLOCK, DFLT_RLIMIT_MEMLOCK * 1024 * 1024, 1024 * 1024, "MB");
-#endif	/* RLIMIT_MEMLOCK */
-        }
-
 	/*
 	 * Set up signals we pay attention to locally.
 	 */
@@ -747,7 +707,9 @@ ntpdmain(
 	signal_no_reset(SIGDIE1, finish);
 	signal_no_reset(SIGDIE2, finish);
 	signal_no_reset(SIGDIE3, finish);
-	signal_no_reset(SIGDIE4, finish);
+# endif
+# ifdef SIGHUP
+	signal_no_reset(SIGHUP, catchHUP);
 # endif
 # ifdef SIGBUS
 	signal_no_reset(SIGBUS, finish);
@@ -863,6 +825,32 @@ ntpdmain(
 	    }
 	}
 
+	/*
+	 * ntpd's working set is never going to be large relative to memory
+	 * availability on modern machines. Do what chrony does and indulge it;
+	 * we get some latency improvement that way.
+	 * Need to do this before droproot.
+	 */
+	{
+	    struct rlimit rlim;
+	    rlim.rlim_max = rlim.rlim_cur = RLIM_INFINITY;
+	    if (setrlimit(RLIMIT_MEMLOCK, &rlim) < 0)
+		msyslog(LOG_WARNING, "setrlimit() failed: not locking into RAM");
+	    else if (mlockall(MCL_CURRENT|MCL_FUTURE) < 0)
+		msyslog(LOG_WARNING, "mlockall() failed: not locking into RAM");
+	    else
+		msyslog(LOG_INFO, "successfully locked into RAM");
+	}
+
+#ifdef ENABLE_EARLY_DROPROOT
+	/* drop root privileges */
+	/* This doesn't work on NetBSD or with SHM */
+	if (sandbox(droproot, user, group, chrootdir, interface_interval!=0) && interface_interval) {
+		interface_interval = 0;
+		msyslog(LOG_INFO, "running as non-root disables dynamic interface tracking");
+	}
+#endif
+
      	/* use this to test if option setting gives expected results */
 	if (dumpopts) {
 	    proto_dump(stdout);
@@ -908,25 +896,6 @@ ntpdmain(
 	    exit(0);
 	}
 			
-	/*
-	 * Get the configuration.
-	 */
-	have_interface_option = (!listen_to_virtual_ips || explicit_interface);
-	intercept_getconfig(explicit_config);
-
-	if (do_memlock) {
-		/*
-		 * lock the process into memory
-		 */
-		if (!saveconfigquit && !dumpopts &&
-		    0 != mlockall(MCL_CURRENT|MCL_FUTURE))
-			msyslog(LOG_ERR, "mlockall(): %m");
-	}
-
-	loop_config(LOOP_DRIFTINIT, 0);
-	report_event(EVNT_SYSRESTART, NULL, NULL);
-	initializing = false;
-
 	if (ipv4_works && ipv6_works) {
 		if (opt_ipv4)
 			ipv6_works = false;
@@ -940,11 +909,22 @@ ntpdmain(
 	else if (opt_ipv6 && !ipv6_works)
 		msyslog(LOG_WARNING, "-6/--ipv6 ignored, IPv6 networking not found.");
 
+	/*
+	 * Get the configuration.
+	 */
+	have_interface_option = (!listen_to_virtual_ips || explicit_interface);
+	intercept_getconfig(explicit_config);
+
+	loop_config(LOOP_DRIFTINIT, 0);
+	report_event(EVNT_SYSRESTART, NULL, NULL);
+
+#ifndef ENABLE_EARLY_DROPROOT
 	/* drop root privileges */
 	if (sandbox(droproot, user, group, chrootdir, interface_interval!=0) && interface_interval) {
 		interface_interval = 0;
 		msyslog(LOG_INFO, "running as non-root disables dynamic interface tracking");
 	}
+#endif
 
 	if (intercept_get_mode() == replay)
 	    intercept_replay();
@@ -964,7 +944,7 @@ static void mainloop(void)
 
 # ifdef HAVE_IO_COMPLETION_PORT
 	for (;;) {
-#if !defined(SIM) && defined(SIGDIE1)
+#if defined(SIGDIE1)
 		if (signalled)
 			finish_safe(signo);
 #endif
@@ -975,7 +955,7 @@ static void mainloop(void)
 	was_alarmed = false;
 
 	for (;;) {
-#if !defined(SIM) && defined(SIGDIE1)
+#if defined(SIGDIE1)
 		if (signalled)
 			finish_safe(signo);
 #endif
@@ -1066,6 +1046,24 @@ static void mainloop(void)
 # endif
 
 		/*
+		 * Check files
+		 */
+		if (sawHUP) {
+			sawHUP = false;
+			msyslog(LOG_INFO, "Saw SIGHUP");
+
+			reopen_logfile();
+
+			{
+			l_fp snow;
+			time_t tnow;
+			get_systime(&snow);
+			time(&tnow);
+			check_leap_file(false, snow.l_ui, &tnow);
+			}
+		}
+
+		/*
 		 * Go around again
 		 */
 
@@ -1090,10 +1088,9 @@ static void mainloop(void)
 	}
 	UNBLOCK_IO_AND_ALARM();
 }
-#endif	/* !SIM */
 
 
-#if !defined(SIM) && defined(SIGDIE1)
+#if defined(SIGDIE1)
 /*
  * finish - exit gracefully
  */
@@ -1127,10 +1124,18 @@ finish(
 	signo = sig;
 }
 
-#endif	/* !SIM && SIGDIE1 */
+/*
+ * catchHUP - set flag to check files
+ */
+static void catchHUP(int sig)
+{
+	UNUSED_ARG(sig);
+	sawHUP = true;
+}
+
+#endif	/* SIGDIE1 */
 
 
-#ifndef SIM
 /*
  * wait_child_sync_if - implements parent side of -w/--wait-sync
  */
@@ -1283,9 +1288,8 @@ library_unexpected_error(
 		msyslog(LOG_ERR, "Too many errors.  Shutting up.");
 
 }
-#endif	/* !SIM */
 
-#if !defined(SIM) && !defined(SYS_WINNT)
+#if !defined(SYS_WINNT)
 # ifdef DEBUG
 
 /*
@@ -1344,4 +1348,4 @@ no_debug(
 	errno = saved_errno;
 }
 # endif	/* !DEBUG */
-#endif	/* !SIM && !SYS_WINNT */
+#endif	/* !SYS_WINNT */

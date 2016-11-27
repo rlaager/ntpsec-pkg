@@ -15,14 +15,12 @@
 # include <mswsock.h>
 #endif
 #include <isc/net.h>
-#include <isc/result.h>
 
 #include "ntpq.h"
 #include "ntp_assert.h"
 #include "ntp_stdlib.h"
 #include "ntp_unixtime.h"
 #include "ntp_calendar.h"
-#include "ntp_assert.h"
 #include "lib_strbuf.h"
 #include "ntp_lineedit.h"
 #include "ntp_debug.h"
@@ -404,13 +402,14 @@ void clear_globals(void)
 #endif /* !BUILD_AS_LIB */
 #endif /* NO_MAIN_ALLOWED */
 
-#define ALL_OPTIONS "46c:dD:inOpVw"
+#define ALL_OPTIONS "46c:dhD:inOpVw"
 static const struct option longoptions[] = {
     { "ipv4",		    0, 0, '4' },
     { "ipv6",		    0, 0, '6' },
     { "command",	    1, 0, 'c' },
     { "debug",		    0, 0, 'd' },
     { "set-debug-level",    1, 0, 'D' },
+    { "help",               0, 0, 'h' },
     { "interactive",        0, 0, 'i' },
     { "numeric",            0, 0, 'n' },
     { "old-rv",             0, 0, 'O' },
@@ -443,6 +442,36 @@ main(
 #endif
 
 #ifndef BUILD_AS_LIB
+static void ntpq_usage(void)
+{
+#define P(x)	fputs(x, stderr)
+    P("USAGE: ntpq [-46dphinOV] [-c str] [-D lvl] [ host ...]\n");
+    P("  Flg Arg Option-Name    Description\n");
+    P("   -4 no  ipv4           Force IPv4 DNS name resolution\n");
+    P("				- prohibits the option 'ipv6'\n");
+    P("   -6 no  ipv6           Force IPv6 DNS name resolution\n");
+    P("				- prohibits the option 'ipv4'\n");
+    P("   -c Str command        run a command and exit\n");
+    P("				- may appear multiple times\n");
+    P("   -d no  debug-level    Increase output debug message level\n");
+    P("				- may appear multiple times\n");
+    P("   -D Str set-debug-level Set the output debug message level\n");
+    P("				- may appear multiple times\n");
+    P("   -h no  help           Print a usage message.\n");
+    P("   -p no  peers          Print a list of the peers\n");
+    P("				- prohibits the option 'interactive'\n");
+    P("   -i no  interactive    Force ntpq to operate in interactive mode\n");
+    P("				- prohibits these options:\n");
+    P("				command\n");
+    P("				peers\n");
+    P("   -n no  numeric        numeric host addresses\n");
+    P("   -O no  old-rv         Always output status line with readvar\n");
+    P("   -V opt version        Output version information and exit\n");
+    P("   -w no  wide           enable wide display of addresses\n");
+#undef P
+}
+
+
 int
 ntpqmain(
 	int argc,
@@ -511,6 +540,7 @@ ntpqmain(
 			break;
 		    case 'c':
 			opt_command = ntp_optarg;
+			ADDCMD(opt_command);
 			break;
 		    case 'd':
 #ifdef DEBUG
@@ -521,6 +551,10 @@ ntpqmain(
 #ifdef DEBUG
 			debug = atoi(ntp_optarg);
 #endif
+			break;
+		    case 'h':
+			ntpq_usage();
+			exit(0);
 			break;
 		    case 'i':
 			opt_interactive = true;
@@ -533,17 +567,19 @@ ntpqmain(
 			break;
 		    case 'p':
 			opt_peers = true;
+			ADDCMD("peers");
 			break;
 		    case 'V':
-			printf("ntpd %s\n", Version);
+			printf("ntpq %s\n", Version);
 			exit(0);
 		    case 'w':
 			opt_wide = true;
 			break;
-		    default :
+		    default:
 			/* chars not in table get converted to ? */
-			printf("Unknown command line switch ignored.\n");
-			break;
+			fputs("Unknown command line switch or missing argument.\n", stderr);
+			ntpq_usage();
+			exit(1);
 		    } /*switch*/
 		}
 
@@ -562,12 +598,6 @@ ntpqmain(
 		ai_fam_templ = AF_INET6;
 	else
 		ai_fam_templ = ai_fam_default;
-
-	if (opt_command != NULL)
-		ADDCMD(opt_command);
-
-	if (opt_peers)
-		ADDCMD("peers");
 
 	if (opt_interactive)
 		interactive = true;
@@ -764,17 +794,6 @@ openhost(
 		freeaddrinfo(ai);
 		return false;
 	}
-
-
-#ifdef NEED_RCVBUF_SLOP
-# ifdef SO_RCVBUF
-	{ int rbufsize = DATASIZE + 2048;	/* 2K for slop */
-	if (setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF,
-		       &rbufsize, sizeof(int)) == -1)
-		error("setsockopt");
-	}
-# endif
-#endif
 
 	if (connect(sockfd, (struct sockaddr *)ai->ai_addr, ai->ai_addrlen)==-1)
 	{
@@ -1032,14 +1051,6 @@ getresponse(
 		if (ntohs(rpkt.associd) != associd) {
 			TRACE(1, ("Association ID %d doesn't match expected %d\n",
 				  ntohs(rpkt.associd), associd));
-			/*
-			 * Hack for silly fuzzballs which, at the time
-			 * of writing, return an assID of sys.peer
-			 * when queried for system variables.
-			 */
-#ifdef __UNUSED__
-			continue;
-#endif
 		}
 
 		/*
@@ -1940,8 +1951,6 @@ nntohost_col(
 			out = trunc_left(stoa(addr), width);
 		else
 			out = trunc_right(stoa(addr), width);
-	} else if (ISREFCLOCKADR(addr)) {
-		out = refnumtoa(addr);
 	} else {
 		out = trunc_right(socktohost(addr), width);
 	}
@@ -1962,8 +1971,6 @@ nntohostp(
 
 	if (!showhostnames || SOCK_UNSPEC(netnum))
 		return sptoa(netnum);
-	else if (ISREFCLOCKADR(netnum))
-		return refnumtoa(netnum);
 
 	hostn = socktohost(netnum);
 	LIB_GETBUF(buf);
@@ -1995,8 +2002,7 @@ decodets(
 		return hextolfp(str, lfp);
 
 	/*
-	 * Try it as a decimal.  If this fails, try as an unquoted
-	 * RT-11 date.  This code should go away eventually.
+	 * Try it as a decimal.
 	 */
 	if (atolfp(str, lfp))
 		return true;
@@ -3236,11 +3242,7 @@ cookedprint(
 
 		case RF:
 			if (decodenetnum(value, &hval)) {
-				if (ISREFCLOCKADR(&hval))
-					output(fp, name,
-					       refnumtoa(&hval));
-				else
-					output(fp, name, stoa(&hval));
+			    output(fp, name, stoa(&hval));
 			} else if (strlen(value) <= 4) {
 				output(fp, name, value);
 			} else {

@@ -1,10 +1,5 @@
 /*
- * ----------------------------------------------------------------------------
- * "THE BEER-WARE LICENSE" (Revision 42):
- * <phk@FreeBSD.ORG> wrote this file.  As long as you retain this notice you
- * can do whatever you want with this stuff. If we meet some day, and you think
- * this stuff is worth it, you can buy me a beer in return.   Poul-Henning Kamp
- * ----------------------------------------------------------------------------
+ * SPDX-License-Identifier: Beerware
  *
  * refclock_oncore.c
  *
@@ -118,7 +113,7 @@
  * which may be linked to the same device.
  * and can read initialization data from the file
  *	/etc/ntp.oncoreN, /etc/ntp.oncore.N, or /etc/ntp.oncore, where
- *	n or N are the unit number, viz 127.127.30.N.
+ *	n or N are the unit number
  * --------------------------------------------------------------------------
  * Reg.Clemens <reg@dwf.com> Sep98.
  *  Original code written for FreeBSD.
@@ -173,6 +168,9 @@
 #ifdef HAVE_PPSAPI
 # include "ppsapi_timepps.h"
 #endif
+
+#define NAME		"ONCORE"
+#define DESCRIPTION	"Motorola Oncore GPS Receiver"
 
 struct Bl {
 	int	dt_ls;
@@ -258,7 +256,7 @@ enum posn_mode {
 };
 
 struct instance {
-	int	unit;		/* 127.127.30.unit */
+	int	unit;
 	struct	refclockproc *pp;
 	struct	peer *peer;
 
@@ -409,13 +407,13 @@ static	void	oncore_msg_Gj	   (struct instance *, uint8_t *, size_t);
 static	void	oncore_msg_Sz	   (struct instance *, uint8_t *, size_t);
 
 struct	refclock refclock_oncore = {
+	NAME,			/* basename of driver */
 	oncore_start,		/* start up driver */
 	oncore_shutdown,	/* shut down driver */
 	oncore_poll,		/* transmit poll message */
-	noentry,		/* not used */
-	noentry,		/* not used */
-	noentry,		/* not used */
-	noentry 		/* not used */
+	noentry,		/* control - not used */
+	noentry,		/* init - not used */
+	noentry 		/* timer - not used */
 };
 
 /*
@@ -625,7 +623,8 @@ oncore_start(
 	peer->precision = -26;
 	peer->minpoll = 4;
 	peer->maxpoll = 4;
-	pp->clockdesc = "Motorola Oncore GPS Receiver";
+	pp->clockname = NAME;
+	pp->clockdesc = DESCRIPTION;
 	memcpy((char *)&pp->refid, "GPS\0", (size_t) 4);
 
 	oncore_log(instance, LOG_NOTICE, "ONCORE DRIVER -- CONFIGURING");
@@ -1090,7 +1089,7 @@ oncore_read_config(
 /*
  * First we try to open the configuration file
  *    /etc/ntp.oncore.N
- * where N is the unit number viz 127.127.30.N.
+ * where N is the unit number
  * If we don't find it we try
  *    /etc/ntp.oncoreN
  * and then
@@ -3896,9 +3895,10 @@ oncore_set_traim(
 			oncore_sendmsg(instance, oncore_cmd_Bnx, sizeof(oncore_cmd_Bnx));
 		else if (instance->chan == 8)
 			oncore_sendmsg(instance, oncore_cmd_Enx, sizeof(oncore_cmd_Enx));
-		else	/* chan == 12 */
+		else {	/* chan == 12 */
 			oncore_sendmsg(instance, oncore_cmd_Ge0, sizeof(oncore_cmd_Ge0));
 			oncore_sendmsg(instance, oncore_cmd_Hn0, sizeof(oncore_cmd_Hn0));
+		}
 	}
 }
 
@@ -4075,7 +4075,7 @@ oncore_log (
 	)
 {
 	msyslog(log_level, "ONCORE[%d]: %s", instance->unit, msg);
-	mprintf_clock_stats(&instance->peer->srcadr, "ONCORE[%d]: %s",
+	mprintf_clock_stats(instance->peer, "ONCORE[%d]: %s",
 			    instance->unit, msg);
 }
 

@@ -1,0 +1,99 @@
+// This is the body of the manual page for ntpviz.
+// It's included in two places: once for the docs/ HTML
+// tree, and once to make an individual man page.
+
+[[synop]]
+== SYNOPSIS ==
+[verse]
+{ntpviz} [-d statsdir] [-g] [-n name] [-p period]
+         [-s starttime] [-e endtime]
+         [--local-offset | --local-jitter | --local-stability]
+         [--peer-offsets=hosts | --all-peer-offsets]
+         [--peer-jitters=hosts | --all-peer-jitters]
+	 [-o outdir]
+
+== DESCRIPTION ==
+
+This utility analyzes files in an NTP log directory and generates
+statistical plots from them.  It can report either PNG images or
+the GNUPLOT programs to generate them to standard output.  In its
+default mode it generates an HTML directory containing all plots
+and an index page.
+
+The most basic option is -d, which specifies a logfile directory to
+examine; the default is /var/log/ntpstats.
+
+The -n option allows you to set the sitename shown in the plot title.
+The default is the basename of the log directory.
+
+The -s, -e and -p options allow you to set the time window to be
+reported on. With -s and -e you set the start and end times as either
+numeric POSIX time or ISO8601-style timestamps, -
+yyyy-mmm-ddThh:mm:ss. Alternatively you can specify either -s or -e
+(but not both) and use -p to set the default period in days.  The
+default is for the period to be 7 days, the end time to match the last
+logfile entry, and the start time to be set so that adding the period
+just reaches the last logfile entry.
+
+The plot options choose what graph is generated; invoke only one.  By
+default, the GNUPLOT for the graph is reported; with -g you get the
+rendered PNG.
+
+The following plots are available:
+
+--local-offset::
+   Clock time and clock frequency offsets from the loop statistics
+   (fields 3 and 4).
+
+--local-jitter::
+   Clock time-jitter plot from the loop statistics (field 5).
+
+--local-stability::
+   RMS frequency-jitter plot from the loop statistics (field 6).
+   This is deviation from a root-mean-square extrapolation of the
+   moving average of past frequency readings.
+
+--peer-offsets=host1[,host2...]::
+   Peer offset from local clock time from peerstats (field 4). A
+   comma-separated list of peer names or IP addresses must follow. It
+   is a fatal error for any of these names not to appear in peerstats.
+
+--all-peer-offsets::
+   Report all peer offsets.  This is a different option name from
+   --peer-offsets only because of a minor limitation in the Python
+   standard library.
+
+--peer-jitter=host1[,host2...]::
+   Peer jitter from local clock time, from peerstats (field 7)
+   A comma-separated list of peer names must follow. It is a fatal
+   error for any of these names not to appear in peerstats.
+
+--all-peer-jitters::
+   Report all peer jitters.  This is a different option name from
+   --peer-offsets only because of a limitation in the Python
+   standard library.
+
+--peer-rtt=host::
+   Show offset plus or minus round-trip-time (rtt) of a specified
+   peer. This graph combines fields 4 and 5 of loopstats.
+
+If no individual plot is specified, all plots and an index HTML page
+are generated into a new output directory.  Normally this directory is
+named 'ntpgraphs', but the name can be changed with the -o option.
+Warning: existing PNG files and index.html in this directory will be
+clobbered.
+
+The code includes various sanity checks and will bail out with a message to
+standard error on, for example, missing logfile data required for a plot.
+
+== REQUIREMENTS ==
+
+Python and GNUPLOT.  The plots will look better with the 'liberation'
+font package installed.
+
+== AUTHORS ==
+
+Eric S. Raymond  and Daniel Drown. The GNUPLOT in this package is
+largely based on templates in Daniel Drown's 'chrony-graph' project.
+
+// end

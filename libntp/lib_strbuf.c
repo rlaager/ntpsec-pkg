@@ -4,7 +4,6 @@
 #include <config.h>
 
 #include <isc/net.h>
-#include <isc/result.h>
 
 #include "ntp_fp.h"
 #include "ntp_stdlib.h"
@@ -19,7 +18,6 @@ libbufstr	lib_stringbuf[LIB_NUMBUF];
 int		lib_nextbuf;
 bool		ipv4_works;
 bool		ipv6_works;
-bool		lib_inited;
 
 
 /*
@@ -28,10 +26,12 @@ bool		lib_inited;
 void
 init_lib(void)
 {
+	static bool		lib_inited;
+
 	if (lib_inited)
 		return;
-	ipv4_works = (ISC_R_SUCCESS == isc_net_probeipv4());
-	ipv6_works = (ISC_R_SUCCESS == isc_net_probeipv6());
+	ipv4_works = isc_net_probeipv4_bool();
+	ipv6_works = isc_net_probeipv6_bool();
 	init_systime();
 	lib_inited = true;
 }

@@ -68,14 +68,12 @@ double	sys_residual = 0;	/* adjustment residue (s) */
 bool	trunc_os_clock;		/* sys_tick > measured_tick */
 time_stepped_callback	step_callback;
 
-#ifndef SIM
 /* perlinger@ntp.org: As 'get_sysime()' does its own check for clock
  * backstepping, this could probably become a local variable in
  * 'get_systime()' and the cruft associated with communicating via a
  * static value could be removed after the v4.2.8 release.
  */
 static bool lamport_violated;	/* clock was stepped back */
-#endif	/* !SIM */
 
 #ifdef DEBUG
 static bool systime_init_done;
@@ -113,8 +111,6 @@ init_systime(void)
 	DONE_SYSTIME_INIT();
 }
 
-
-#ifndef SIM	/* ntpsim.c has get_systime() and friends for sim */
 
 void
 get_ostime(
@@ -386,7 +382,7 @@ step_systime(
 		pivot += ntpcal_date_to_time(&jd);
 	} else {
 		msyslog(LOG_ERR,
-			"step-systime: assume 1970-01-01 as build date");
+			"step_systime: assume 1970-01-01 as build date");
 	}
 #else
 	UNUSED_LOCAL(jd);
@@ -414,6 +410,10 @@ step_systime(
 	get_ostime(&timets);
 	fp_sys = tspec_stamp_to_lfp(timets);
 
+	/* only used for utmp/wtmpx time-step recording */
+	tvlast.tv_sec = timets.tv_sec;
+	tvlast.tv_usec = (timets.tv_nsec + 500) / 1000;
+
 	/* get the target time as l_fp */
 	L_ADD(&fp_sys, &fp_ofs);
 
@@ -422,7 +422,7 @@ step_systime(
 
 	/* now set new system time */
 	if (settime(&timets) != 0) {
-		msyslog(LOG_ERR, "step-systime: %m");
+		msyslog(LOG_ERR, "step_systime: %m");
 		return false;
 	}
 
@@ -498,8 +498,5 @@ step_systime(
 # undef NTIME_MSG
 #endif
 	}
-	tvlast = timetv;
 	return true;
 }
-
-#endif	/* !SIM */

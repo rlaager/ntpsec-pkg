@@ -3,11 +3,6 @@
  * that only provides hh:mm:ss (in local time, yet!).
  */
 
-/*
- * Must interpolate back to local time.  Very annoying.
- */
-#define GET_LOCALTIME
-
 #include <config.h>
 #include "ntpd.h"
 #include "ntp_io.h"
@@ -18,12 +13,6 @@
 
 #include <stdio.h>
 #include <ctype.h>
-
-#ifdef SYS_WINNT
-extern int async_write(int, const void *, unsigned int);
-#undef write
-#define write(fd, data, octets)	async_write(fd, data, octets)
-#endif
 
 /*
  * This driver supports a generic dumb clock that only outputs hh:mm:ss,
@@ -43,10 +32,11 @@ extern int async_write(int, const void *, unsigned int);
  * Interface definitions
  */
 #define	DEVICE		"/dev/dumbclock%d" /* device name and unit */
-#define	SPEED232	B9600	/* uart speed (9600 baud) */
-#define	PRECISION	(-13)	/* precision assumed (about 100 us) */
-#define	REFID		"DUMB"	/* reference ID */
-#define	DESCRIPTION	"Dumb clock" /* WRU */
+#define	SPEED232	B9600		/* uart speed (9600 baud) */
+#define	PRECISION	(-13)		/* precision assumed (about 100 us) */
+#define	REFID		"DUMB"		/* reference ID */
+#define	NAME		"DUMBCLOCK"	/* shortname */
+#define	DESCRIPTION	"Dumb clock"	/* WRU */
 
 
 /*
@@ -74,21 +64,18 @@ struct dumbclock_unit {
 static	bool	dumbclock_start		(int, struct peer *);
 static	void	dumbclock_shutdown	(int, struct peer *);
 static	void	dumbclock_receive	(struct recvbuf *);
-#if 0
-static	void	dumbclock_poll		(int, struct peer *);
-#endif
 
 /*
  * Transfer vector
  */
 struct	refclock refclock_dumbclock = {
+	NAME,				     /* basename of driver */
 	dumbclock_start,		     /* start up driver */
 	dumbclock_shutdown,		     /* shut down driver */
 	noentry,			     /* poll the driver -- a nice fabrication */
-	noentry,			     /* not used */
-	noentry,			     /* not used */
-	noentry,			     /* not used */
-	noentry				     /* not used */
+	noentry,			     /* control - not used */
+	noentry,			     /* init - not used */
+	noentry				     /* timer - not used */
 };
 
 
@@ -113,11 +100,9 @@ dumbclock_start(
 	 * it's not available.
 	 */
 	snprintf(device, sizeof(device), DEVICE, unit);
-#ifdef DEBUG
-	if (debug)
-		printf ("starting Dumbclock with device %s\n",device);
-#endif
-	fd = refclock_open(device, SPEED232, 0);
+	fd = refclock_open(peer->path ? peer->path : device,
+			   peer->baud ? peer->baud : SPEED232,
+			   0);
 	if (fd <= 0)
 		/* coverity[leaked_handle] */
 		return false;
@@ -152,6 +137,7 @@ dumbclock_start(
 	 * Initialize miscellaneous variables
 	 */
 	peer->precision = PRECISION;
+	pp->clockname = NAME;
 	pp->clockdesc = DESCRIPTION;
 	memcpy((char *)&pp->refid, REFID, REFIDLEN);
 	peer->sstclktype = CTL_SST_TS_LF;
@@ -329,45 +315,7 @@ dumbclock_receive(
 	}
 	pp->lastref = pp->lastrec;
 	refclock_receive(peer);
-	record_clock_stats(&peer->srcadr, pp->a_lastcode);
+	record_clock_stats(peer, pp->a_lastcode);
 	up->lasthour = (uint8_t)pp->hour;
 }
 
-#if 0
-/*
- * dumbclock_poll - called by the transmit procedure
- */
-static void
-dumbclock_poll(
-	int unit,
-	struct peer *peer
-	)
-{
-	register struct dumbclock_unit *up;
-	struct refclockproc *pp;
-	char pollchar;
-
-	/*
-	 * Time to poll the clock. The Chrono-log clock is supposed to
-	 * respond to a 'T' by returning a timecode in the format(s)
-	 * specified above.  Ours does (can?) not, but this seems to be
-	 * an installation-specific problem.  This code is dyked out,
-	 * but may be re-enabled if anyone ever finds a Chrono-log that
-	 * actually listens to this command.
-	 */
-#if 0
-	pp = peer->procptr;
-	up = pp->unitptr;
-	if (peer->reach == 0)
-		refclock_report(peer, CEVNT_TIMEOUT);
-	if (up->linect > 0)
-		pollchar = 'R';
-	else
-		pollchar = 'T';
-	if (write(pp->io.fd, &pollchar, 1) != 1)
-		refclock_report(peer, CEVNT_FAULT);
-	else
-		pp->polls++;
-#endif
-}
-#endif

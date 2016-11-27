@@ -42,7 +42,7 @@ static void RunAllTests(void)
 	RUN_TEST_GROUP(a_md5encrypt);
 	RUN_TEST_GROUP(authkeys);
 	RUN_TEST_GROUP(calendar);
-	RUN_TEST_GROUP(caljulian);
+	RUN_TEST_GROUP(calgregorian);
 	RUN_TEST_GROUP(caltontp);
 	RUN_TEST_GROUP(calyearstart);
 	RUN_TEST_GROUP(clocktime);
@@ -58,9 +58,6 @@ static void RunAllTests(void)
 	RUN_TEST_GROUP(numtohost);
 	RUN_TEST_GROUP(prettydate);
 	RUN_TEST_GROUP(recvbuff);
-#ifdef REFCLOCK
-	RUN_TEST_GROUP(refnumtoa);
-#endif
 	RUN_TEST_GROUP(sfptostr);
 	RUN_TEST_GROUP(socktoa);
 	RUN_TEST_GROUP(ssl_init);

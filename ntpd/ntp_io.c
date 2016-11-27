@@ -35,12 +35,7 @@
 #include <isc/mem.h>
 #include <isc/interfaceiter.h>
 #include <isc/netaddr.h>
-#include <isc/result.h>
 #include <isc/sockaddr.h>
-
-#ifdef SIM
-#include "ntpsim.h"
-#endif
 
 #ifdef HAVE_NET_ROUTE_H
 # define USE_ROUTING_SOCKET
@@ -273,7 +268,6 @@ static	bool	addr_eqprefix	(const sockaddr_u *, const sockaddr_u *,
 static  bool	addr_samesubnet	(const sockaddr_u *, const sockaddr_u *,
 				 const sockaddr_u *, const sockaddr_u *);
 static	int	create_sockets	(u_short);
-static	SOCKET	open_socket	(sockaddr_u *, bool, bool, endpt *);
 static	char *	fdbits		(int, fd_set *);
 static	void	set_reuseaddr	(int);
 static	bool	socket_broadcast_enable	 (struct interface *, SOCKET, sockaddr_u *);
@@ -1164,7 +1158,7 @@ create_wildcards(
 			log_listen_address(wildif);
 		} else {
 			msyslog(LOG_ERR,
-				"unable to bind to wildcard address %s - another process may be running - EXITING",
+				"unable to bind to wildcard address %s - another process may be running: %m; EXITING",
 				stoa(&wildif->sin));
 			exit(1);
 		}
@@ -1216,7 +1210,7 @@ create_wildcards(
 			log_listen_address(wildif);
 		} else {
 			msyslog(LOG_ERR,
-				"unable to bind to wildcard address %s - another process may be running - EXITING",
+				"unable to bind to wildcard address %s - another process may be running: %m; EXITING",
 				stoa(&wildif->sin));
 			exit(1);
 		}
@@ -1758,7 +1752,7 @@ update_interfaces(
 	isc_mem_t *		mctx = (void *)-1;
 	interface_info_t	ifi;
 	isc_interfaceiter_t *	iter;
-	isc_result_t		result;
+	bool			result;
 	isc_interface_t		isc_if;
 	int			new_interface_found;
 	unsigned int		family;
@@ -1776,9 +1770,9 @@ update_interfaces(
 
 	new_interface_found = false;
 	iter = NULL;
-	result = isc_interfaceiter_create(mctx, &iter);
+	result = isc_interfaceiter_create_bool(mctx, &iter);
 
-	if (result != ISC_R_SUCCESS)
+	if (!result)
 		return false;
 
 	/*
@@ -1787,13 +1781,13 @@ update_interfaces(
 	 */
 	sys_interphase ^= 0x1;
 
-	for (result = isc_interfaceiter_first(iter);
-	     ISC_R_SUCCESS == result;
-	     result = isc_interfaceiter_next(iter)) {
+	for (result = isc_interfaceiter_first_bool(iter);
+	     result;
+	     result = isc_interfaceiter_next_bool(iter)) {
 
-		result = isc_interfaceiter_current(iter, &isc_if);
+		result = isc_interfaceiter_current_bool(iter, &isc_if);
 
-		if (result != ISC_R_SUCCESS)
+		if (!result)
 			break;
 
 		/* See if we have a valid family to use */
@@ -2869,7 +2863,7 @@ io_multicast_del(
  * open_socket - open a socket, returning the file descriptor
  */
 
-static SOCKET
+SOCKET
 open_socket(
 	sockaddr_u *	addr,
 	bool		bcast,
@@ -2977,7 +2971,7 @@ open_socket(
 				"setsockopt IPV6_TCLASS (%02x) fails on address %s: %m",
 				qos, stoa(addr));
 #endif /* IPV6_TCLASS */
-		if (isc_net_probe_ipv6only() == ISC_R_SUCCESS
+		if (isc_net_probe_ipv6only_bool()
 		    && setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY,
 		    (char*)&on, sizeof(on)))
 			msyslog(LOG_ERR,
@@ -3086,7 +3080,7 @@ open_socket(
  * Add the socket to the completion port
  */
 	if (io_completion_port_add_socket(fd, interf)) {
-		msyslog(LOG_ERR, "unable to set up io completion port - EXITING");
+		msyslog(LOG_ERR, "unable to set up io completion port: %m;  EXITING");
 		exit(1);
 	}
 #endif
@@ -3110,7 +3104,7 @@ sendpkt(
 	sockaddr_u *		dest,
 	struct interface *	ep,
 	int			ttl,
-	struct pkt *		pkt,
+	void *			pkt,
 	int			len
 	)
 {
@@ -3183,12 +3177,8 @@ sendpkt(
 		}
 #endif	/* MCAST */
 
-#ifdef SIM
-		cc = simulate_server(dest, src, pkt);
-#else
-		cc = sendto(src->fd, (char *)pkt, (u_int)len, 0,
+		cc = sendto(src->fd, pkt, (u_int)len, 0,
 			    &dest->sa, SOCKLEN(dest));
-#endif
 		if (cc == -1) {
 			src->notsent++;
 			packets_notsent++;
@@ -3286,6 +3276,7 @@ read_refclock_packet(
 	rb->fd = fd;
 	rb->recv_time = ts;
 	rb->receiver = rp->clock_recv;
+	rb->network_packet = false;
 
 	consumed = indicate_refclock_packet(rp, rb);
 	if (!consumed) {
@@ -3462,7 +3453,7 @@ read_network_packet(
 			freerecvbuf(rb);
 
 		fromlen = sizeof(from);
-		buflen = recvfrom(fd, buf, sizeof(buf), 0,
+		buflen = intercept_recvfrom(fd, buf, sizeof(buf), 0,
 				  &from.sa, &fromlen);
 		DPRINTF(4, ("%s on (%lu) fd=%d from %s\n",
 			(itf->ignore_packets)
@@ -3479,7 +3470,7 @@ read_network_packet(
 	fromlen = sizeof(rb->recv_srcadr);
 
 #ifndef USE_PACKET_TIMESTAMP
-	rb->recv_length = recvfrom(fd, (char *)&rb->recv_space,
+	rb->recv_length = intercept_recvfrom(fd, (char *)&rb->recv_space,
 				   sizeof(rb->recv_space), 0,
 				   &rb->recv_srcadr.sa, &fromlen);
 #else
@@ -3517,16 +3508,11 @@ read_network_packet(
 	DPRINTF(3, ("read_network_packet: fd=%d length %d from %s\n",
 		    fd, buflen, stoa(&rb->recv_srcadr)));
 
-	if (ISREFCLOCKADR(&rb->recv_srcadr)) {
-		msyslog(LOG_ERR, "recvfrom(%s) fd=%d: refclock srcadr on a network interface!",
-			stoa(&rb->recv_srcadr), fd);
-		DPRINTF(1, ("read_network_packet: fd=%d dropped (refclock srcadr))\n",
-			    fd));
-		packets_dropped++;
-		freerecvbuf(rb);
-		return (buflen);
-	}
-
+	/*
+	 * We used to drop network packets with addresses matching the magic
+	 * refclock format here. Now we do the check in the protocol machine,
+	 * rejecting any source address that matches an active clock.
+	 */
 
 	/*
 	** Bug 2672: Some OSes (MacOSX and Linux) don't block spoofed ::1
@@ -3565,7 +3551,10 @@ read_network_packet(
 	ts = fetch_timestamp(rb, &msghdr, ts);
 #endif
 	rb->recv_time = ts;
-	rb->receiver = intercept_receive;
+	rb->receiver = receive;
+#ifdef REFCLOCK
+	rb->network_packet = true;
+#endif /* REFCLOCK */
 
 	add_full_recv_buffer(rb);
 
@@ -3733,12 +3722,12 @@ input_handler(
 			 */
 			if (buflen < 0 && EAGAIN != errno) {
 				saved_errno = errno;
-				clk = refnumtoa(&rp->srcclock->srcadr);
+				clk = refclock_name(rp->srcclock);
 				errno = saved_errno;
 				msyslog(LOG_ERR, "%s read: %m", clk);
 				maintain_activefds(fd, true);
 			} else if (0 == buflen) {
-				clk = refnumtoa(&rp->srcclock->srcadr);
+				clk = refclock_name(rp->srcclock);
 				msyslog(LOG_ERR, "%s read EOF", clk);
 				maintain_activefds(fd, true);
 			} else {
@@ -3851,7 +3840,6 @@ select_peerinterface(
 	)
 {
 	endpt *ep;
-#ifndef SIM
 	endpt *wild;
 
 	wild = ANY_INTERFACE_CHOOSE(srcadr);
@@ -3864,7 +3852,7 @@ select_peerinterface(
 	 * This might happen in some systems and would preclude proper
 	 * operation with public key cryptography.
 	 */
-	if (ISREFCLOCKADR(srcadr)) {
+	if (IS_PEER_REFCLOCK(peer)) {
 		ep = loopback_interface;
 	} else if (peer->cast_flags &
 		   (MDF_BCLNT | MDF_ACAST | MDF_MCAST | MDF_BCAST)) {
@@ -3896,9 +3884,6 @@ select_peerinterface(
 	if (ep != NULL && INT_WILDCARD & ep->flags)
 		if (!accept_wildcard_if_for_winnt)
 			ep = NULL;
-#else	/* SIM follows */
-	ep = loopback_interface;
-#endif
 
 	return ep;
 }

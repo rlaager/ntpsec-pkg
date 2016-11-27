@@ -195,20 +195,6 @@ typedef union {
 
 
 /*
- * We tell reference clocks from real peers by giving the reference
- * clocks an address of the form 127.127.t.u, where t is the type and
- * u is the unit number.  We define some of this here since we will need
- * some sanity checks to make sure this address isn't interpretted as
- * that of a normal peer.
- */
-#define	REFCLOCK_ADDR	0x7f7f0000	/* 127.127.0.0 */
-#define	REFCLOCK_MASK	0xffff0000	/* 255.255.0.0 */
-
-#define	ISREFCLOCKADR(srcadr)					\
-	(IS_IPV4(srcadr) &&					\
-	 (SRCADR(srcadr) & REFCLOCK_MASK) == REFCLOCK_ADDR)
-
-/*
  * Macro for checking for invalid addresses.  This is really, really
  * gross, but is needed so no one configures a host on net 127 now that
  * we're encouraging it the configuration file.

@@ -13,12 +13,6 @@
 #include <stdio.h>
 #include <ctype.h>
 
-#ifdef SYS_WINNT
-extern int async_write(int, const void *, unsigned int);
-#undef write
-#define write(fd, data, octets)	async_write(fd, data, octets)
-#endif
-
 /*
  * This driver supports the Arbiter 1088A/B Satellite Controlled Clock.
  * The claimed accuracy of this clock is 100 ns relative to the PPS
@@ -90,14 +84,15 @@ extern int async_write(int, const void *, unsigned int);
 /*
  * Interface definitions
  */
-#define	DEVICE		"/dev/gps%d" /* device name and unit */
-#define	SPEED232	B9600	/* uart speed (9600 baud) */
-#define	PRECISION	(-20)	/* precision assumed (about 1 us) */
-#define	REFID		"GPS "	/* reference ID */
+#define	DEVICE		"/dev/gps%d"	/* device name and unit */
+#define	SPEED232	B9600		/* uart speed (9600 baud) */
+#define	PRECISION	(-20)		/* precision assumed (about 1 us) */
+#define	REFID		"GPS "		/* reference ID */
+#define	NAME		"ARBITER"	/* shortname */
 #define	DESCRIPTION	"Arbiter 1088A/B GPS Receiver" /* WRU */
-#define	LENARB		24	/* format B5 timecode length */
-#define MAXSTA		40	/* max length of status string */
-#define MAXPOS		80	/* max length of position string */
+#define	LENARB		24		/* format B5 timecode length */
+#define MAXSTA		40		/* max length of status string */
+#define MAXPOS		80		/* max length of position string */
 
 #define COMMAND_HALT_BCAST ( (peer->ttl % 2) ? "O0" : "B0" )
 #define COMMAND_START_BCAST ( (peer->ttl % 2) ? "O5" : "B5" )
@@ -125,13 +120,13 @@ static	void	arb_poll	(int, struct peer *);
  * Transfer vector
  */
 struct	refclock refclock_arbiter = {
+	NAME,			/* basename of driver */
 	arb_start,		/* start up driver */
 	arb_shutdown,		/* shut down driver */
 	arb_poll,		/* transmit poll message */
 	noentry,		/* not used (old arb_control) */
 	noentry,		/* initialize driver (not used) */
-	noentry,		/* not used (old arb_buginfo) */
-	noentry			/* not used */
+	noentry			/* timer - not used */
 };
 
 
@@ -153,7 +148,8 @@ arb_start(
 	 * Open serial port. Use CLK line discipline, if available.
 	 */
 	snprintf(device, sizeof(device), DEVICE, unit);
-	fd = refclock_open(device, SPEED232, LDISC_CLK);
+	fd = refclock_open(peer->path ? peer->path : device,
+			   peer->baud ? peer->baud : SPEED232, LDISC_CLK);
 	if (fd <= 0)
 		/* coverity[leaked_handle] */
 		return false;
@@ -179,6 +175,7 @@ arb_start(
 	 * Initialize miscellaneous variables
 	 */
 	peer->precision = PRECISION;
+	pp->clockname = NAME;
 	pp->clockdesc = DESCRIPTION;
 	memcpy((char *)&pp->refid, REFID, REFIDLEN);
 	peer->sstclktype = CTL_SST_TS_UHF;
@@ -311,7 +308,7 @@ arb_receive(
 		} else if (!strncmp(tbuf, "DB", 2)) {
 			strlcat(up->latlon, " ", sizeof(up->latlon));
 			strlcat(up->latlon, tbuf + 2, sizeof(up->latlon));
-			record_clock_stats(&peer->srcadr, up->latlon);
+			record_clock_stats(peer, up->latlon);
 #ifdef DEBUG
 			if (debug)
 				printf("arbiter: %s\n", up->latlon);
@@ -462,7 +459,7 @@ arb_poll(
 		return;
 	}
 	refclock_receive(peer);
-	record_clock_stats(&peer->srcadr, pp->a_lastcode);
+	record_clock_stats(peer, pp->a_lastcode);
 #ifdef DEBUG
 	if (debug)
 		printf("arbiter: timecode %d %s\n",

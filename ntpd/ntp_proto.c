@@ -20,7 +20,6 @@
 #include <libscf.h>
 #endif
 #include <unistd.h>
-#include <stdio.h>
 
 /*
  * This macro defines the authentication state. If x is 1 authentication
@@ -123,7 +122,7 @@ uint8_t	sys_ttl[MAX_TTL];	/* ttl mapping vector */
 /*
  * Statistics counters - first the good, then the bad
  */
-u_long	sys_stattime;		/* elapsed time */
+u_long	sys_stattime;		/* elapsed time since reset */
 u_long	sys_received;		/* packets received */
 u_long	sys_processed;		/* packets for this host */
 u_long	sys_newversion;		/* current version */
@@ -134,6 +133,7 @@ u_long	sys_badauth;		/* bad authentication */
 u_long	sys_declined;		/* declined */
 u_long	sys_limitrejected;	/* rate exceeded */
 u_long	sys_kodsent;		/* KoD sent */
+u_long	use_stattime;		/* elapsed time since reset */
 
 static	double	root_distance	(struct peer *);
 static	void	clock_combine	(peer_select *, int, int);
@@ -324,7 +324,7 @@ transmit(
 			/* ephemeral: no FLAG_CONFIG nor FLAG_PREEMPT */
 			if (!(peer->flags & (FLAG_CONFIG | FLAG_PREEMPT))) {
 				report_event(PEVNT_RESTART, peer, "timeout");
-				peer_clear(peer, "TIME");
+				peer_clear(peer, "TIME", false);
 				unpeer(peer);
 				return;
 			}
@@ -332,7 +332,7 @@ transmit(
 			    (peer_associations > sys_maxclock) &&
 			    score_all(peer)) {
 				report_event(PEVNT_RESTART, peer, "timeout");
-				peer_clear(peer, "TIME");
+				peer_clear(peer, "TIME", false);
 				unpeer(peer);
 				return;
 			}
@@ -354,7 +354,7 @@ transmit(
 					if (!termlogit)
 						printf(
 						    "ntpd: no servers found\n");
-					intercept_exit(0);
+					intercept_exit(1);
 				}
 			}
 		}
@@ -369,7 +369,6 @@ transmit(
 		peer_xmit(peer);
 	poll_update(peer, hpoll);
 }
-
 
 /*
  * receive - receive procedure called for each packet received
@@ -420,7 +419,12 @@ receive(
 		sys_badlength++;
 		return;				/* bogus port */
 	}
-	restrict_mask = restrictions(&rbufp->recv_srcadr);
+#ifdef REFCLOCK
+	if (!rbufp->network_packet)
+	    restrict_mask = 0;
+	else
+#endif /* REFCLOCK */
+	    restrict_mask = restrictions(&rbufp->recv_srcadr);
 	DPRINTF(2, ("receive: at %ld %s<-%s flags %x restrict %03x\n",
 		    current_time, stoa(&rbufp->dstadr->sin),
 		    stoa(&rbufp->recv_srcadr),
@@ -581,6 +585,19 @@ receive(
 	 * matching association and that's okay.
 	 */
 	peer = findpeer(rbufp,  hismode, &retcode);
+
+	/*
+	 * If a network packet (nonzero dstadr) source-matched an
+	 * active refclock node, drop it. This replaces the old style of
+	 * looking for a magic address prefix.
+	 */
+	if (peer && IS_PEER_REFCLOCK(peer) && rbufp->dstadr != 0)
+	{
+	    msyslog(LOG_ERR, "refclock srcadr on a network interface (%s)!",
+		    stoa(&peer->srcadr));
+	    return;
+	}
+
 #ifdef DEBUG
 	dstadr_sin = &rbufp->dstadr->sin;
 #endif
@@ -791,7 +808,7 @@ receive(
 			       MODE_CLIENT, hisversion, peer2->minpoll,
 			       peer2->maxpoll, FLAG_PREEMPT |
 			       (FLAG_IBURST & peer2->flags), MDF_UCAST |
-			       MDF_UCLNT, 0, skeyid);
+			       MDF_UCLNT, 0, skeyid, false);
 		if (NULL == peer) {
 			sys_declined++;
 			return;			/* ignore duplicate  */
@@ -868,7 +885,7 @@ receive(
 			peer = newpeer(&rbufp->recv_srcadr, NULL,
 			    match_ep, MODE_BCLIENT, hisversion,
 			    pkt->ppoll, pkt->ppoll, FLAG_PREEMPT,
-			    MDF_BCLNT, 0, skeyid);
+			    MDF_BCLNT, 0, skeyid, false);
 			if (NULL == peer) {
 				sys_restricted++;
 				return;		/* ignore duplicate */
@@ -891,7 +908,7 @@ receive(
 		peer = newpeer(&rbufp->recv_srcadr, NULL, match_ep,
 		    MODE_CLIENT, hisversion, pkt->ppoll, pkt->ppoll,
 		    FLAG_BC_VOL | FLAG_IBURST | FLAG_PREEMPT, MDF_BCLNT,
-		    0, skeyid);
+		    0, skeyid, false);
 		if (NULL == peer) {
 			sys_restricted++;
 			return;			/* ignore duplicate */
@@ -973,8 +990,9 @@ receive(
 		 * Mobilize a symmetric passive association.
 		 */
 		if ((peer = newpeer(&rbufp->recv_srcadr, NULL,
-		    rbufp->dstadr, MODE_PASSIVE, hisversion, pkt->ppoll,
-		    NTP_MAXDPOLL, 0, MDF_UCAST, 0, skeyid)) == NULL) {
+				    rbufp->dstadr, MODE_PASSIVE, hisversion,
+				    pkt->ppoll, NTP_MAXDPOLL, 0, MDF_UCAST,
+				    0, skeyid, false)) == NULL) {
 			sys_declined++;
 			return;			/* ignore duplicate */
 		}
@@ -1237,8 +1255,6 @@ process_packet(
 
 	UNUSED_ARG(len);
 
-	sys_processed++;
-	peer->processed++;
 	p_del = FPTOD(NTOHS_FP(pkt->rootdelay));
 	p_offset = 0;
 	p_disp = FPTOD(NTOHS_FP(pkt->rootdisp));
@@ -1250,6 +1266,36 @@ process_packet(
 	pleap = PKT_LEAP(pkt->li_vn_mode);
 	pversion = PKT_VERSION(pkt->li_vn_mode);
 	pstratum = PKT_TO_STRATUM(pkt->stratum);
+
+	/*
+	 * Verify the server is synchronized; that is, the leap bits,
+	 * stratum and root distance are valid.
+	 */
+	if (pleap == LEAP_NOTINSYNC ||		/* test 6 */
+	    pstratum < sys_floor || pstratum >= sys_ceiling)
+		peer->flash |= BOGON6;		/* bad synch or strat */
+	if (p_del / 2 + p_disp >= MAXDISPERSE)	/* test 7 */
+		peer->flash |= BOGON7;		/* bad header */
+
+	/*
+	 * If any tests have failed at this point, the packet is
+	 * discarded.  Note that this check covers both the bits that
+	 * may have been set immediately above, as well as some that
+	 * may have been set earlier in the receive() routine.
+	 */
+	if (peer->flash & PKT_BOGON_MASK) {
+		peer->seldisptoolarge++;
+#ifdef DEBUG
+		if (debug)
+			printf("packet: flash header %04x\n",
+			    peer->flash);
+#endif
+		return;
+	}
+
+	sys_processed++;
+	peer->processed++;
+
 	if (peer->outcount) peer->outcount--;  /* dup, peer with shorter poll */
 
 	/*
@@ -1286,31 +1332,6 @@ process_packet(
 			peer->nextdate = current_time;
 	}
 	poll_update(peer, peer->hpoll);
-
-	/*
-	 * Verify the server is synchronized; that is, the leap bits,
-	 * stratum and root distance are valid.
-	 */
-	if (pleap == LEAP_NOTINSYNC ||		/* test 6 */
-	    pstratum < sys_floor || pstratum >= sys_ceiling)
-		peer->flash |= BOGON6;		/* bad synch or strat */
-	if (p_del / 2 + p_disp >= MAXDISPERSE)	/* test 7 */
-		peer->flash |= BOGON7;		/* bad header */
-
-	/*
-	 * If any tests fail at this point, the packet is discarded.
-	 * Note that some flashers may have already been set in the
-	 * receive() routine.
-	 */
-	if (peer->flash & PKT_BOGON_MASK) {
-		peer->seldisptoolarge++;
-#ifdef DEBUG
-		if (debug)
-			printf("packet: flash header %04x\n",
-			    peer->flash);
-#endif
-		return;
-	}
 
 	/*
 	 * If the peer was previously unreachable, raise a trap. In any
@@ -1618,7 +1639,7 @@ clock_update(
 			if (smf_maintain_instance(fmri, 0) < 0) {
 				printf("smf_maintain_instance: %s\n",
 				    scf_strerror(scf_error()));
-				exit(1);
+				intercept_exit(1);
 			}
 			/*
 			 * Sleep until SMF kills us.
@@ -1627,7 +1648,8 @@ clock_update(
 				pause();
 		}
 #endif /* HAVE_LIBSCF_H */
-		exit (-1);
+		msyslog(LOG_ERR, "Panic: offset too big: %.3f", sys_offset);
+		intercept_exit (1);
 		/* not reached */
 
 	/*
@@ -1806,7 +1828,8 @@ poll_update(
 void
 peer_clear(
 	struct peer *peer,		/* peer structure */
-	const char *ident		/* tally lights */
+	const char *ident,		/* tally lights */
+	const bool initializing
 	)
 {
 	uint8_t	u;
@@ -2057,8 +2080,7 @@ clock_filter(
 	 * processing. If not synchronized or not in a burst, tickle the
 	 * clock select algorithm.
 	 */
-	record_peer_stats(&peer->srcadr, ctlpeerstatus(peer),
-	    peer->offset, peer->delay, peer->disp, peer->jitter);
+	record_peer_stats(peer, ctlpeerstatus(peer));
 #ifdef DEBUG
 	if (debug)
 		printf(
@@ -2549,13 +2571,13 @@ clock_select(void)
 	/*
 	 * If a PPS driver is lit and the combined offset is less than
 	 * 0.4 s, select the driver as the PPS peer and use its offset
-	 * and jitter. However, if this is the atom driver, use it only
+	 * and jitter. However, if this is the pps driver, use it only
 	 * if there is a prefer peer or there are no survivors and none
 	 * are required.
 	 */
 	if (typepps != NULL && fabs(sys_offset) < 0.4 &&
-	    (typepps->refclktype != REFCLK_ATOM_PPS ||
-	    (typepps->refclktype == REFCLK_ATOM_PPS && (sys_prefer !=
+	    (!typepps->is_pps_driver ||
+	    (typepps->is_pps_driver && (sys_prefer !=
 	    NULL || (typesystem == NULL && sys_minsane == 0))))) {
 		typesystem = typepps;
 		sys_clockhop = 0;
@@ -2800,7 +2822,7 @@ peer_xmit(
 	sendlen += authlen;
 	if (sendlen > sizeof(xpkt)) {
 		msyslog(LOG_ERR, "proto: buffer overflow %zu", sendlen);
-		exit (-1);
+		intercept_exit(1);
 	}
 	peer->t21_bytes = sendlen;
 	intercept_sendpkt(__func__, &peer->srcadr, peer->dstadr, sys_ttl[peer->ttl], &xpkt,
@@ -3061,7 +3083,7 @@ pool_xmit(
 		return;	/* out of addresses, re-query DNS next poll */
 	restrict_mask = restrictions(rmtadr);
 	if (RES_FLAGS & restrict_mask)
-		restrict_source(rmtadr, 0,
+		restrict_source(rmtadr, false,
 				current_time + POOL_SOLICIT_WINDOW + 1);
 	lcladr = findinterface(rmtadr);
 	memset(&xpkt, 0, sizeof(xpkt));
@@ -3191,6 +3213,13 @@ peer_unfit(
 	if (!(peer->flags & FLAG_REFCLOCK) && root_distance(peer) >=
 	    sys_maxdist + clock_phi * ULOGTOD(peer->hpoll))
 		rval |= BOGON11;		/* distance exceeded */
+/* Startup bug, https://gitlab.com/NTPsec/ntpsec/issues/68
+ *   introduced with ntp-dev-4.2.7p385
+ * [2085] Fix root distance and root dispersion calculations.
+ */
+        if (!(peer->flags & FLAG_REFCLOCK) && peer->disp >=
+            sys_maxdist + clock_phi * ULOGTOD(peer->hpoll))
+                rval |= BOGON11;                /* Initialization */
 
 	/*
 	 * A loop error occurs if the remote peer is synchronized to the
@@ -3313,7 +3342,7 @@ measure_tick_fuzz(void)
 	}
 	if (changes < MINCHANGES) {
 		msyslog(LOG_ERR, "Fatal error: precision could not be measured (MINSTEP too large?)");
-		exit(1);
+		intercept_exit(1);
 	}
 
 	if (0 == max_repeats) {
@@ -3394,6 +3423,7 @@ init_proto(const bool verbose)
 	sys_stattime = current_time;
 	orphwait = current_time + sys_orphwait;
 	proto_clr_stats();
+	use_stattime = current_time;
 	for (i = 0; i < MAX_TTL; i++) {
 		sys_ttl[i] = (uint8_t)((i * 256) / MAX_TTL);
 		sys_ttlmax = i;

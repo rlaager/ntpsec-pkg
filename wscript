@@ -8,13 +8,13 @@ pprint.__doc__ = None
 
 out="build"
 
-from pylib.configure import cmd_configure
+from wafhelpers.configure import cmd_configure
 from waflib.Tools import waf_unit_test
-from pylib.test import test_write_log, test_print_log
-from pylib.options import options_cmd
+from wafhelpers.test import test_write_log, test_print_log
+from wafhelpers.options import options_cmd
 
 config = {
-	"NTPS_RELEASE": True,
+	"NTPS_RELEASE": False,
 	"out": out,
 	"OPT_STORE": {}
 }
@@ -31,17 +31,18 @@ config = {
 
 
 def dist(ctx):
-	from pylib.dist import dist_cmd
+	from wafhelpers.dist import dist_cmd
 	dist_cmd(ctx, config)
 
 
 def options(ctx):
 	options_cmd(ctx, config)
+	ctx.recurse("ntpstats")
 
 def configure(ctx):
-	from pylib.configure import cmd_configure
+	from wafhelpers.configure import cmd_configure
 	cmd_configure(ctx, config)
-
+	ctx.recurse("ntpstats")
 
 from waflib.Build import BuildContext
 class check(BuildContext):
@@ -49,7 +50,7 @@ class check(BuildContext):
 	variant = "main"
 
 def bin_test(ctx):
-	from pylib.bin_test import cmd_bin_test
+	from wafhelpers.bin_test import cmd_bin_test
 	cmd_bin_test(ctx, config)
 bin_test.__doc__ = "Run binary check, use after tests."
 
@@ -113,10 +114,10 @@ for command, func, descr in commands:
 
 
 def build(ctx):
-	ctx.load('waf', tooldir='pylib/')
+	ctx.load('waf', tooldir='wafhelpers/')
 	ctx.load('bison')
-	ctx.load('asciidoc', tooldir='pylib/')
-	ctx.load('rtems_trace', tooldir='pylib/')
+	ctx.load('asciidoc', tooldir='wafhelpers/')
+	ctx.load('rtems_trace', tooldir='wafhelpers/')
 
 	if ctx.env.ENABLE_DOC_USER:
 		if ctx.variant != "main":
@@ -132,7 +133,7 @@ def build(ctx):
 
 
 	ctx.recurse("libisc")
-	if ctx.env.REFCLOCK_PARSE: # Only required by the parse refclock
+	if ctx.env.REFCLOCK_GENERIC: # Only required by the generic refclock
 		ctx.recurse("libparse")
 	ctx.recurse("libntp")
 	if ctx.env.LIBEVENT2_ENABLE:
@@ -143,26 +144,34 @@ def build(ctx):
 	ctx.recurse("ntpq")
 	ctx.recurse("ntpkeygen")
 	ctx.recurse("ntptime")
+	ctx.recurse("ntpstats")
 	ctx.recurse("util")
 	ctx.recurse("tests")
 
-
-	subst_scripts = [
-		"ntpwait/ntpwait",
+	# Some of these presently fail because they require a Perl
+	# module that'ds never installed. Awkwardly, their man pages do
+	# get installed. There is a note about this mess in INSTALL.
+	scripts = [
+		"ntpleapfetch/ntpleapfetch",
+		"ntpstats/ntpviz",
 		"ntptrace/ntptrace",
-		"util/ntpsweep/ntpsweep",
+		"ntpwait/ntpwait",
+		#"util/ntpsweep/ntpsweep",
 	]
 
 	ctx(
 		features    = "subst",
-		source      = subst_scripts,
-		target	    = [x.replace(".in", "") for x in subst_scripts],
-		chmod	    = Utils.O755
+		source      = scripts,
+		target	    = scripts,
+		chmod	    = Utils.O755,
+		install_path = "${PREFIX}/bin/"
 	)
 
 	ctx.manpage(8, "ntpleapfetch/ntpleapfetch-man.txt")
-	ctx.manpage(8, "ntpwait/ntpwait-man.txt")
 	ctx.manpage(1, "ntptrace/ntptrace-man.txt")
+	ctx.manpage(1, "ntpstats/ntpviz-man.txt")
+	ctx.manpage(8, "ntpwait/ntpwait-man.txt")
+	#ctx.manpage(1, "util/ntpsweep/ntpsweep-man.txt")
 
 
 	# Skip running unit tests on a cross compile build

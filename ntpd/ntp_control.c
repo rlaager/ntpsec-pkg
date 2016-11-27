@@ -82,7 +82,6 @@ static	void	write_variables (struct recvbuf *, int);
 static	void	read_clockstatus(struct recvbuf *, int);
 static	void	write_clockstatus(struct recvbuf *, int);
 static	void	set_trap	(struct recvbuf *, int);
-static	void	save_config	(struct recvbuf *, int);
 static	void	configure	(struct recvbuf *, int);
 static	void	send_mru_entry	(mon_entry *, int);
 static	void	send_random_tag_value(int);
@@ -112,7 +111,6 @@ static const struct ctl_proc control_codes[] = {
 	{ CTL_OP_WRITECLOCK,		NOAUTH,	write_clockstatus },
 	{ CTL_OP_SETTRAP,		NOAUTH,	set_trap },
 	{ CTL_OP_CONFIGURE,		AUTH,	configure },
-	{ CTL_OP_SAVECONFIG,		AUTH,	save_config },
 	{ CTL_OP_READ_MRU,		NOAUTH,	read_mru_list },
 	{ CTL_OP_READ_ORDLIST_A,	AUTH,	read_ordlist },
 	{ CTL_OP_REQ_NONCE,		NOAUTH,	req_nonce },
@@ -271,12 +269,13 @@ static const struct ctl_proc control_codes[] = {
 #define	CP_SELDISP		48
 #define	CP_SELBROKEN		49
 #define	CP_CANDIDATE		50
-#define	CP_MAXCODE		CP_CANDIDATE
+#define CP_DISPLAYNAME		51
+#define	CP_MAXCODE		CP_DISPLAYNAME
 
 /*
  * Clock variables we understand
  */
-#define	CC_TYPE		1
+#define	CC_NAME		1
 #define	CC_TIMECODE	2
 #define	CC_POLL		3
 #define	CC_NOREPLY	4
@@ -481,7 +480,8 @@ static const struct ctl_var peer_var[] = {
 	{ CP_SELDISP,	RO, "seldisp" },	/* 48 */
 	{ CP_SELBROKEN,	RO, "selbroken" },	/* 49 */
 	{ CP_CANDIDATE, RO, "candidate" },	/* 50 */
-	{ 0,		EOV, "" }		/* 50/58 */
+	{ CP_DISPLAYNAME, RO, "displayname" },	/* 51 */
+	{ 0,		EOV, "" }		/* 51/58 */
 };
 
 
@@ -523,6 +523,7 @@ static const uint8_t def_peer_var[] = {
 	CP_FILTDELAY,
 	CP_FILTOFFSET,
 	CP_FILTERROR,
+	CP_DISPLAYNAME,
 	0
 };
 
@@ -533,7 +534,7 @@ static const uint8_t def_peer_var[] = {
  */
 static const struct ctl_var clock_var[] = {
 	{ 0,		PADDING, "" },		/* 0 */
-	{ CC_TYPE,	RO, "type" },		/* 1 */
+	{ CC_NAME,	RO, "name" },		/* 1 */
 	{ CC_TIMECODE,	RO, "timecode" },	/* 2 */
 	{ CC_POLL,	RO, "poll" },		/* 3 */
 	{ CC_NOREPLY,	RO, "noreply" },	/* 4 */
@@ -555,7 +556,7 @@ static const struct ctl_var clock_var[] = {
  */
 static const uint8_t def_clock_var[] = {
 	CC_DEVICE,
-	CC_TYPE,	/* won't be output if device = known */
+	CC_NAME,
 	CC_TIMECODE,
 	CC_POLL,
 	CC_NOREPLY,
@@ -720,146 +721,13 @@ ctl_error(
 		maclen = authencrypt(res_keyid, (uint32_t *)&rpkt,
 				     CTL_HEADER_LEN);
 		intercept_sendpkt(__func__,
-				  rmt_addr, lcl_inter, -2, (void *)&rpkt,
+				  rmt_addr, lcl_inter, -2, &rpkt,
 				  CTL_HEADER_LEN + maclen);
 	} else
 		intercept_sendpkt(__func__,
-			      rmt_addr, lcl_inter, -3, (void *)&rpkt,
+			      rmt_addr, lcl_inter, -3, &rpkt,
 			      CTL_HEADER_LEN);
 }
-
-/*
- * save_config - Implements ntpq -c "saveconfig <filename>"
- *		 Writes current configuration including any runtime
- *		 changes by ntpq's :config or config-from-file
- */
-void
-save_config(
-	struct recvbuf *rbufp,
-	int restrict_mask
-	)
-{
-	char reply[128];
-#ifdef SAVECONFIG
-	char filespec[128];
-	char filename[128];
-	char fullpath[512];
-	const char savedconfig_eq[] = "savedconfig=";
-	char savedconfig[sizeof(savedconfig_eq) + sizeof(filename)];
-	time_t now;
-	int fd;
-	FILE *fptr;
-	struct tm tmbuf;
-#endif
-
-	if (RES_NOMODIFY & restrict_mask) {
-		snprintf(reply, sizeof(reply),
-			 "saveconfig prohibited by restrict ... nomodify");
-		ctl_putdata(reply, strlen(reply), 0);
-		ctl_flushpkt(0);
-		NLOG(NLOG_SYSINFO)
-			msyslog(LOG_NOTICE,
-				"saveconfig from %s rejected due to nomodify restriction",
-				stoa(&rbufp->recv_srcadr));
-		sys_restricted++;
-		return;
-	}
-
-#ifdef SAVECONFIG
-	if (NULL == saveconfigdir) {
-		snprintf(reply, sizeof(reply),
-			 "saveconfig prohibited, no saveconfigdir configured");
-		ctl_putdata(reply, strlen(reply), 0);
-		ctl_flushpkt(0);
-		NLOG(NLOG_SYSINFO)
-			msyslog(LOG_NOTICE,
-				"saveconfig from %s rejected, no saveconfigdir",
-				stoa(&rbufp->recv_srcadr));
-		return;
-	}
-
-	if (0 == reqend - reqpt)
-		return;
-
-	strlcpy(filespec, reqpt, sizeof(filespec));
-	time(&now);
-
-	/*
-	 * allow timestamping of the saved config filename with
-	 * strftime() format such as:
-	 *   ntpq -c "saveconfig ntp-%Y%m%d-%H%M%S.conf"
-	 * XXX: Nice feature, but not too safe.
-	 */
-	if (0 == strftime(filename, sizeof(filename), filespec,
-			  localtime_r(&now, &tmbuf)))
-		strlcpy(filename, filespec, sizeof(filename));
-
-	/*
-	 * Conceptually we should be searching for DIR_SEP in filename,
-	 * however Windows actually recognizes both forward and
-	 * backslashes as equivalent directory separators at the API
-	 * level.  On POSIX systems we could allow '\\' but such
-	 * filenames are tricky to manipulate from a shell, so just
-	 * reject both types of slashes on all platforms.  We add
-	 * DIR_SEP anyway so we don't have a vulnerability pop up
-	 * in case the code is ported to OpenVMS or Stratus VOS or
-	 * something.
-	 */
-	if (strchr(filename, DIR_SEP) || strchr(filename, '\\') || strchr(filename, '/')) {
-		snprintf(reply, sizeof(reply),
-			 "saveconfig does not allow directory in filename");
-		ctl_putdata(reply, strlen(reply), 0);
-		ctl_flushpkt(0);
-		msyslog(LOG_NOTICE,
-			"saveconfig with path from %s rejected",
-			stoa(&rbufp->recv_srcadr));
-		return;
-	}
-
-	snprintf(fullpath, sizeof(fullpath), "%s%s",
-		 saveconfigdir, filename);
-
-	fd = open(fullpath, O_CREAT | O_TRUNC | O_WRONLY,
-		  S_IRUSR | S_IWUSR);
-	if (-1 == fd)
-		fptr = NULL;
-	else
-		fptr = fdopen(fd, "w");
-
-	if (NULL == fptr || -1 == dump_all_config_trees(fptr, 1)) {
-		snprintf(reply, sizeof(reply),
-			 "Unable to save configuration to file %s",
-			 filename);
-		msyslog(LOG_ERR,
-			"saveconfig %s from %s failed", filename,
-			stoa(&rbufp->recv_srcadr));
-	} else {
-		snprintf(reply, sizeof(reply),
-			 "Configuration saved to %s", filename);
-		msyslog(LOG_NOTICE,
-			"Configuration saved to %s (requested by %s)",
-			fullpath, stoa(&rbufp->recv_srcadr));
-		/*
-		 * save the output filename in system variable
-		 * savedconfig, retrieved with:
-		 *   ntpq -c "rv 0 savedconfig"
-		 */
-		snprintf(savedconfig, sizeof(savedconfig), "%s%s",
-			 savedconfig_eq, filename);
-		set_sys_var(savedconfig, strlen(savedconfig) + 1, RO);
-	}
-
-	if (NULL != fptr)
-		fclose(fptr);
-#else	/* !SAVECONFIG follows */
-	snprintf(reply, sizeof(reply),
-		 "saveconfig unavailable, configured with --disable-saveconfig");
-#endif
-
-	ctl_putdata(reply, strlen(reply), 0);
-	ctl_flushpkt(0);
-}
-
 
 /*
  * process_control - process an incoming control message
@@ -1157,10 +1025,10 @@ ctl_flushpkt(
 			maclen = authencrypt(res_keyid,
 					     (uint32_t *)&rpkt, totlen);
 			intercept_sendpkt(__func__, rmt_addr, lcl_inter, -5,
-				(struct pkt *)&rpkt, totlen + maclen);
+				&rpkt, totlen + maclen);
 		} else {
 			intercept_sendpkt(__func__, rmt_addr, lcl_inter, -6,
-				(struct pkt *)&rpkt, sendlen);
+				&rpkt, sendlen);
 		}
 		if (more)
 			numctlfrags++;
@@ -2446,6 +2314,17 @@ ctl_putpeer(
 	case CP_CANDIDATE:
 		ctl_putuint(peer_var[id].text, p->status);
 		break;
+
+	case CP_DISPLAYNAME:
+#ifdef REFCLOCK
+		if (p->procptr != NULL) {
+		    char buf[NI_MAXHOST];
+		    strlcpy(buf, refclock_name(p), sizeof(buf));
+		    ctl_putunqstr(peer_var[id].text, buf, strlen(buf));
+		}
+#endif /* REFCLOCK */
+		break;
+
 	default:
 		break;
 	}
@@ -2471,10 +2350,16 @@ ctl_putclock(
 
 	switch (id) {
 
-	case CC_TYPE:
-		if (mustput || pcs->clockdesc == NULL
-		    || *(pcs->clockdesc) == '\0') {
-			ctl_putuint(clock_var[id].text, pcs->type);
+	case CC_NAME:
+		if (pcs->clockname == NULL ||
+		    *(pcs->clockname) == '\0') {
+			if (mustput)
+				ctl_putstr(clock_var[id].text,
+					   "", 0);
+		} else {
+			ctl_putstr(clock_var[id].text,
+				   pcs->clockname,
+				   strlen(pcs->clockname));
 		}
 		break;
 	case CC_TIMECODE:
@@ -4491,10 +4376,12 @@ report_event(
 
 		peer->last_event = errlast;
 		peer->num_events++;
-		if (ISREFCLOCKADR(&peer->srcadr))
-			src = refnumtoa(&peer->srcadr);
+#ifdef REFCLOCK
+		if (IS_PEER_REFCLOCK(peer))
+			src = refclock_name(peer);
 		else
-			src = stoa(&peer->srcadr);
+#endif /* REFCLOCK */ 
+		    src = stoa(&peer->srcadr);
 
 		snprintf(statstr, sizeof(statstr),
 		    "%s %04x %02x %s", src,

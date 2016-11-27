@@ -71,6 +71,7 @@
 #define	SPEED232	B9600	/* uart speed (9600 baud) */
 #define	PRECISION	(-20)	/* precision assumed (about 1 us) */
 #define	REFID		"GPS\0"	/* reference ID */
+#define	NAME		"ZYFER"	/* shortname */
 #define	DESCRIPTION	"Zyfer GPStarplus" /* WRU */
 
 #define	LENZYFER	29	/* timecode length */
@@ -98,13 +99,13 @@ static	void	zyfer_poll	(int, struct peer *);
  * Transfer vector
  */
 struct	refclock refclock_zyfer = {
+	NAME,			/* basename of driver */
 	zyfer_start,		/* start up driver */
 	zyfer_shutdown,		/* shut down driver */
 	zyfer_poll,		/* transmit poll message */
 	noentry,		/* not used (old zyfer_control) */
 	noentry,		/* initialize driver (not used) */
-	noentry,		/* not used (old zyfer_buginfo) */
-	noentry			/* not used */
+	noentry			/* timer - not used */
 };
 
 
@@ -127,12 +128,14 @@ zyfer_start(
 	 * Something like LDISC_ACTS that looked for ! would be nice...
 	 */
 	snprintf(device, sizeof(device), DEVICE, unit);
-	fd = refclock_open(device, SPEED232, LDISC_RAW);
+	fd = refclock_open(peer->path ? peer->path : device,
+			   peer->baud ? peer->baud : SPEED232,
+			   LDISC_RAW);
 	if (fd <= 0)
 		/* coverity[leaked_handle] */
 		return false;
 
-	msyslog(LOG_NOTICE, "zyfer(%d) fd: %d dev <%s>", unit, fd, device);
+	msyslog(LOG_NOTICE, "zyfer(%d) fd: %d", unit, fd);
 
 	/*
 	 * Allocate and initialize unit structure
@@ -156,6 +159,7 @@ zyfer_start(
 	 * Initialize miscellaneous variables
 	 */
 	peer->precision = PRECISION;
+	pp->clockname = NAME;
 	pp->clockdesc = DESCRIPTION;
 	memcpy((char *)&pp->refid, REFID, REFIDLEN);
 	peer->sstclktype = CTL_SST_TS_UHF;
@@ -242,7 +246,7 @@ zyfer_receive(
 	if (pp->lencode < LENZYFER)
 		return;
 
-	record_clock_stats(&peer->srcadr, pp->a_lastcode);
+	record_clock_stats(peer, pp->a_lastcode);
 
 	/*
 	 * We get down to business, check the timecode format and decode

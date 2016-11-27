@@ -66,7 +66,6 @@ static	void	doopeers	(int, FILE *, int);
 static	void	opeers		(struct parse *, FILE *);
 static	void	lopeers 	(struct parse *, FILE *);
 static	void	config		(struct parse *, FILE *);
-static	void	saveconfig	(struct parse *, FILE *);
 static	void	config_from_file(struct parse *, FILE *);
 static	void	mrulist		(struct parse *, FILE *);
 static	void	ifstats		(struct parse *, FILE *);
@@ -82,9 +81,6 @@ static	void	timerstats	(struct parse *, FILE *);
  * Commands we understand.	Ntpdc imports this.
  */
 struct xcmd opcmds[] = {
-	{ "saveconfig", saveconfig, { NTP_STR, NO, NO, NO },
-		{ "filename", "", "", ""}, 
-		"save ntpd configuration to file, . for current config file"},
 	{ "associations", associations, {  NO, NO, NO, NO },
 	  { "", "", "", "" },
 	  "print list of association ID's and statuses for the server's peers" },
@@ -1371,38 +1367,6 @@ lpassociations(
 }
 
 
-/*
- *  saveconfig - dump ntp server configuration to server file
- */
-static void
-saveconfig(
-	struct parse *pcmd,
-	FILE *fp
-	)
-{
-	const char *datap;
-	int res;
-	int dsize;
-	u_short rstatus;
-
-	if (0 == pcmd->nargs)
-		return;
-	
-	res = doquery(CTL_OP_SAVECONFIG, 0, 1,
-		      strlen(pcmd->argval[0].string),
-		      pcmd->argval[0].string, &rstatus, &dsize,
-		      &datap);
-
-	if (res != 0)
-		return;
-
-	if (0 == dsize)
-		fprintf(fp, "(no response message, curiously)");
-	else
-		fprintf(fp, "%.*s", dsize, datap);
-}
-
-
 #ifdef __UNUSED__
 /*
  * radiostatus - print the radio status returned by the server
@@ -1635,6 +1599,7 @@ doprintpeers(
 	char type = '?';
 	char whenbuf[8], pollbuf[8];
 	char clock_name[NI_MAXHOST];
+	char *displayname = NULL;
 
 	get_systime(&ts);
 	
@@ -1694,9 +1659,6 @@ doprintpeers(
 				} else if (decodenetnum(value, &refidadr)) {
 					if (SOCK_UNSPEC(&refidadr))
 						dstadr_refid = "0.0.0.0";
-					else if (ISREFCLOCKADR(&refidadr))
-						dstadr_refid =
-						    refnumtoa(&refidadr);
 					else
 						dstadr_refid =
 						    stoa(&refidadr);
@@ -1716,9 +1678,6 @@ doprintpeers(
 				} else if (decodenetnum(value, &refidadr)) {
 					if (SOCK_UNSPEC(&refidadr))
 						dstadr_refid = "0.0.0.0";
-					else if (ISREFCLOCKADR(&refidadr))
-						dstadr_refid =
-						    refnumtoa(&refidadr);
 					else {
 						char *buf = emalloc(10);
 						int i = ntohl(refidadr.sa4.sin_addr.s_addr);
@@ -1762,6 +1721,8 @@ doprintpeers(
 		} else if (!strcmp("reftime", name)) {
 			if (!decodets(value, &reftime))
 				L_CLR(&reftime);
+		} else if (!strcmp("displayname", name)) {
+			displayname = value;
 		} else {
 			// fprintf(stderr, "UNRECOGNIZED name=%s ", name);
 		}
@@ -1787,7 +1748,7 @@ doprintpeers(
 		break;
 
 	case MODE_CLIENT:
-		if (ISREFCLOCKADR(&srcadr))
+		if (displayname != NULL)
 			type = 'l';	/* local refclock*/
 		else if (SOCK_UNSPEC(&srcadr))
 			type = 'p';	/* pool */
@@ -1830,7 +1791,9 @@ doprintpeers(
 		fprintf(fp, "%-*s ", (int)maxhostlen, serverlocal);
 	}
 	if (AF_UNSPEC == af || AF(&srcadr) == af) {
-		if (!have_srchost)
+		if (displayname != NULL && showhostnames)
+			strlcpy(clock_name, displayname, sizeof(clock_name));
+		else if (!have_srchost)
 			strlcpy(clock_name, nntohost(&srcadr),
 				sizeof(clock_name));
 		if (wideremote && 15 < strlen(clock_name))
@@ -1888,17 +1851,8 @@ dogetpeers(
 	int dsize;
 	u_short rstatus;
 
-#ifdef __UNUSED__
-	res = doquerylist(pvl, CTL_OP_READVAR, associd, 0, &rstatus,
-			  &dsize, &datap);
-#else
-	/*
-	 * Damn fuzzballs
-	 */
 	res = doquery(CTL_OP_READVAR, associd, 0, 0, NULL, &rstatus,
-			  &dsize, &datap);
-#endif
-
+		&dsize, &datap);
 	if (res != 0)
 		return false;
 
@@ -2069,7 +2023,7 @@ apeers(
 
 
 /*
- * lpeers - print a peer spreadsheet including all fuzzball peers
+ * lpeers - print a peer spreadsheet
  */
 /*ARGSUSED*/
 static void
@@ -2158,7 +2112,7 @@ opeers(
 
 
 /*
- * lopeers - print a peer spreadsheet including all fuzzball peers
+ * lopeers - print a peer spreadsheet
  */
 /*ARGSUSED*/
 static void

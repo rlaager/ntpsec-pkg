@@ -1,5 +1,5 @@
 /*
- * refclock_hpgps - clock driver for HP 58503A GPS receiver
+ * refclock_hpgps - clock driver for HP GPS receivers
  */
 
 #include <config.h>
@@ -41,7 +41,7 @@
  * The same driver also handles the HP Z3801A which is available surplus
  * from the cell phone industry.  It's popular with hams.
  * It needs a different line setup: 19200 baud, 7 data bits, odd parity
- * That is selected by adding "mode 1" to the server line in ntp.conf
+ * That is selected by adding "subtype 1" to the server line in ntp.conf
  * HP Z3801A code from Jeff Mock added by Hal Murray, Sep 2005
  *
  *
@@ -77,10 +77,8 @@
  */
 
 /*
- * Fudge Factors
- *
  * Fudge time1 is used to accomodate the timecode serial interface adjustment.
- * Fudge flag4 can be set to request a receiver status screen summary, which
+ * Option flag4 can be set to request a receiver status screen summary, which
  * is recorded in the clockstats file.
  */
 
@@ -88,11 +86,12 @@
  * Interface definitions
  */
 #define	DEVICE		"/dev/hpgps%d" /* device name and unit */
-#define	SPEED232	B9600	/* uart speed (9600 baud) */
-#define	SPEED232Z	B19200	/* uart speed (19200 baud) */
-#define	PRECISION	(-10)	/* precision assumed (about 1 ms) */
-#define	REFID		"GPS\0"	/*  reference ID */
-#define	DESCRIPTION	"HP 58503A GPS Time and Frequency Reference Receiver" 
+#define	SPEED232	B9600		/* uart speed (9600 baud) */
+#define	SPEED232Z	B19200		/* uart speed (19200 baud) */
+#define	PRECISION	(-10)		/* precision assumed (about 1 ms) */
+#define	REFID		"GPS\0"		/* reference ID */
+#define NAME		"HPGPS"		/* shortname */
+#define	DESCRIPTION	"HP GPS Time and Frequency Reference Receiver"
 
 #define SMAX            23*80+1 /* for :SYSTEM:PRINT? status screen response */
 
@@ -131,13 +130,13 @@ static	void	hpgps_poll	(int, struct peer *);
  * Transfer vector
  */
 struct	refclock refclock_hpgps = {
+	NAME,			/* basename of driver */
 	hpgps_start,		/* start up driver */
 	hpgps_shutdown,		/* shut down driver */
 	hpgps_poll,		/* transmit poll message */
 	noentry,		/* not used (old hpgps_control) */
 	noentry,		/* initialize driver */
-	noentry,		/* not used (old hpgps_buginfo) */
-	noentry			/* not used */
+	noentry			/* timer - not used */
 };
 
 
@@ -153,7 +152,8 @@ hpgps_start(
 	register struct hpgpsunit *up;
 	struct refclockproc *pp;
 	int fd;
-	int speed, ldisc;
+	int ldisc;
+	unsigned int speed;
 	char device[20];
 
 	/*
@@ -163,12 +163,13 @@ hpgps_start(
 	snprintf(device, sizeof(device), DEVICE, unit);
 	ldisc = LDISC_CLK;
 	speed = SPEED232;
-	/* mode parameter to server config line shares ttl slot */
+	/* subtype parameter to server config line shares ttl slot */
 	if (1 == peer->ttl) {
 		ldisc |= LDISC_7O1;
 		speed = SPEED232Z;
 	}
-	fd = refclock_open(device, speed, ldisc);
+	fd = refclock_open(peer->path ? peer->path : device,
+			   peer->baud ? peer->baud : speed, ldisc);
 	if (fd <= 0)
 		/* coverity[leaked_handle] */
 		return false;
@@ -193,6 +194,7 @@ hpgps_start(
 	 * Initialize miscellaneous variables
 	 */
 	peer->precision = PRECISION;
+	pp->clockname = NAME;
 	pp->clockdesc = DESCRIPTION;
 	memcpy((char *)&pp->refid, REFID, REFIDLEN);
 	peer->sstclktype = CTL_SST_TS_UHF;
@@ -306,12 +308,12 @@ hpgps_receive(
 			up->lastptr += pp->lencode;
 		}
 		if (up->linecnt == 0) 
-		    record_clock_stats(&peer->srcadr, up->statscrn);
+		    record_clock_stats(peer, up->statscrn);
                
 		return;
 	}
 
-	record_clock_stats(&peer->srcadr, pp->a_lastcode);
+	record_clock_stats(peer, pp->a_lastcode);
 	pp->lastrec = trtmp;
             
 	up->lastptr = up->statscrn;

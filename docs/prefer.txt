@@ -38,7 +38,7 @@ principles and performance metrics, see the link:stats.html[Performance
 Metrics] page.
 
 Recall the suite of NTP data acquisition and grooming algorithms. These
-algorithms proceed in five phases. Phase one discovers the available
+algorithms proceed in four phases. Phase one discovers the available
 _sources_ and mobilizes an association for each source found. These
 sources can result from explicit configuration, broadcast discovery or
 the pool and manycast autonomous configuration schemes. See the
@@ -50,12 +50,14 @@ those sources showing one or more of the errors summarized on the
 link:select.html[Clock Select Algorithm] page and to determine the
 _truechimers_ from among the candidates, leaving behind the
 _falsetickers_. A server or peer configured with the +true+ option is
-declared a truechimer independent of this algorithm. Phase four uses the
-algorithm described on the link:cluster.html[Clock Cluster Algorithm]
-page to prune the statistical outliers from the truechimers, leaving the
-_survivor list_ as result.
+declared a truechimer independent of this algorithm.
 
-Phase five uses a set of algorithms and mitigation rules to combined the
+Phase three uses the algorithm described on the
+link:cluster.html[Clock Cluster Algorithm] page to prune the
+statistical outliers from the truechimers, leaving the _survivor list_
+as result.
+
+Phase four uses a set of algorithms and mitigation rules to combined the
 survivor statistics and discipline the system clock. The mitigation
 rules select from among the survivors a _system peer_ from which a set
 of system statistics can be inherited and passed along to dependent
@@ -135,12 +137,12 @@ Note that, as described on the link:orphan.html[Orphan Mode] page, all
 orphan children will select the same orphan parent for synchronization.
 3.  When a device driver has been configured for pulse-per-second (PPS)
 signals and PPS signals are being received, it is designated the _PPS
-driver._ Note that the Pulse-per-Second driver (type 22) is often used
+driver._ Note that the Pulse-per-Second driver is often used
 as a PPS driver, but any driver can be configure as a PPS driver if the
 hardware facilities are available. The PPS driver provides precision
 clock discipline only within ±0.4 s, so it is always associated with
 another source or sources that provide the seconds numbering function.
-4.  When the Undisciplined Local Clock driver (type 1) is configured, it
+4.  When the Undisciplined Local Clock driver is configured, it
 is designated the _local driver_. It can be used either as a backup
 source (stratum greater than zero) should all sources fail, or as the
 primary source (stratum zero) whether or not other sources are available
@@ -149,7 +151,7 @@ kernel time is disciplined by some other means of synchronization, such
 as the NIST +lock clock+ scheme, or another synchronization protocol
 such as the IEEE 1588 Precision Time Protocol (PTP) or Digital Time
 Synchronization Service (DTSS).
-5.  When the Automated Computer Time Service driver (type 18) is
+5.  When the Automated Computer Time Service driver is
 configured, it is designated the _modem driver_. It is used either as a
 backup source, should all other sources fail, or as the primary source
 if the +prefer+ option is present.
@@ -245,7 +247,7 @@ system variables remain as they are.
 
 The +minsane+ option of the link:miscopt.html#tos[+tos+] command, the
 +prefer+ option of the +server+ and +peer+ commands and the +flag+
-option of the +fudge+ command for a selected driver can be used with the
+option of the +refclock+ command for a selected driver can be used with the
 mitigation rules to provide many useful configurations. The +minsane+
 option specifies the minimum number of survivors required to synchronize
 the system clock. The +prefer+ option operates as described in previous

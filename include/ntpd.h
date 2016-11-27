@@ -55,7 +55,6 @@ extern	void	win_time_stepped(void);
 /* ntp_config.c */
 #define	TAI_1972	10	/* initial TAI offset (s) */
 extern	char	*keysdir;	/* crypto keys and leaptable directory */
-extern	char *	saveconfigdir;	/* ntpq saveconfig output directory */
 
 extern	const char	*getconfig	(const char *);
 extern	void	readconfig(const char *);
@@ -121,13 +120,14 @@ extern	void	interface_update	(interface_receiver_t, void *);
 extern  void    io_handler              (void);
 #endif
 extern	void	init_io 	(void);
+extern  SOCKET	open_socket	(sockaddr_u *, bool, bool, endpt *);
 extern	void	io_open_sockets	(void);
 extern	void	io_clr_stats	(void);
 extern	void	io_setbclient	(void);
 extern	void	io_unsetbclient	(void);
 extern	void	io_multicast_add(sockaddr_u *);
 extern	void	io_multicast_del(sockaddr_u *);
-extern	void	sendpkt 	(sockaddr_u *, struct interface *, int, struct pkt *, int);
+extern	void	sendpkt 	(sockaddr_u *, struct interface *, int, void *, int);
 #ifdef DEBUG
 extern	void	collect_timing  (struct recvbuf *, const char *, int, l_fp *);
 #endif
@@ -175,13 +175,9 @@ extern  void	set_peerdstadr	(struct peer *, endpt *);
 extern	struct peer *newpeer	(sockaddr_u *, const char *,
 				 endpt *, uint8_t, uint8_t,
 				 uint8_t, uint8_t, u_int, uint8_t, uint32_t,
-				 keyid_t);
+				 keyid_t, const bool);
 extern	void	peer_all_reset	(void);
 extern	void	peer_clr_stats	(void);
-extern	struct peer *peer_config(sockaddr_u *, const char *,
-				 endpt *, uint8_t, uint8_t,
-				 uint8_t, uint8_t, u_int, uint32_t,
-				 keyid_t);
 extern	void	peer_reset	(struct peer *);
 extern	void	refresh_all_peerinterfaces(void);
 extern	void	unpeer		(struct peer *);
@@ -193,7 +189,7 @@ extern	void	peer_cleanup	(void);
 /* ntp_proto.c */
 extern	void	transmit	(struct peer *);
 extern	void	receive 	(struct recvbuf *);
-extern	void	peer_clear	(struct peer *, const char *);
+extern	void	peer_clear	(struct peer *, const char *, const bool);
 extern	void 	process_packet	(struct peer *, struct pkt *, u_int);
 extern	void	clock_select	(void);
 extern	void	set_sys_leap	(uint8_t);
@@ -216,7 +212,7 @@ extern  void    proto_dump(FILE *);
 
 /* ntp_refclock.c */
 #ifdef	REFCLOCK
-extern	bool	refclock_newpeer (struct peer *);
+extern	bool	refclock_newpeer (uint8_t, int, struct peer *);
 extern	void	refclock_unpeer (struct peer *);
 extern	void	refclock_receive (struct peer *);
 extern	void	refclock_transmit (struct peer *);
@@ -233,7 +229,7 @@ extern	void	init_restrict	(void);
 extern	u_short	restrictions	(sockaddr_u *);
 extern	void	hack_restrict	(int, sockaddr_u *, sockaddr_u *,
 				 u_short, u_short, u_long);
-extern	void	restrict_source	(sockaddr_u *, int, u_long);
+extern	void	restrict_source	(sockaddr_u *, bool, u_long);
 
 /* ntp_timer.c */
 extern	void	init_timer	(void);
@@ -248,11 +244,11 @@ extern	u_long	orphwait;		/* orphan wait time */
 extern	void	init_util	(void);
 extern	void	write_stats	(void);
 extern	void	stats_config	(int, const char *);
-extern	void	record_peer_stats (sockaddr_u *, int, double, double, double, double);
+extern	void	record_peer_stats (struct peer *, int);
 extern	void	record_proto_stats (char *);
 extern	void	record_loop_stats (double, double, double, double, int);
-extern	void	record_clock_stats (sockaddr_u *, const char *);
-extern	int	mprintf_clock_stats(sockaddr_u *, const char *, ...)
+extern	void	record_clock_stats (struct peer *, const char *);
+extern	int	mprintf_clock_stats(struct peer *, const char *, ...)
 			NTP_PRINTF(2, 3);
 extern	void	record_raw_stats (sockaddr_u *srcadr, sockaddr_u *dstadr, l_fp *t1, l_fp *t2, l_fp *t3, l_fp *t4, int leap, int version, int mode, int stratum, int ppoll, int precision, double root_delay, double root_dispersion, uint32_t refid, u_int outcount);
 extern	void	check_leap_file	(int is_daily_check, uint32_t ntptime, const time_t * systime);
@@ -271,10 +267,9 @@ extern	char *	fstostr(time_t);	/* NTP timescale seconds */
  * Signals which terminate us gracefully.
  */
 #ifndef SYS_WINNT
-# define SIGDIE1	SIGHUP
-# define SIGDIE2	SIGINT
-# define SIGDIE3	SIGQUIT
-# define SIGDIE4	SIGTERM
+# define SIGDIE1	SIGINT
+# define SIGDIE2	SIGQUIT
+# define SIGDIE3	SIGTERM
 #endif /* SYS_WINNT */
 
 
@@ -341,7 +336,6 @@ extern double	clock_max_fwd;		/* max forward offset before step (s) */
 extern double	clock_panic;		/* max offset before panic (s) */
 extern double	clock_phi;		/* dispersion rate (s/s) */
 extern double	clock_minstep;		/* step timeout (s) */
-extern double	clock_codec;		/* codec frequency */
 #ifdef HAVE_KERNEL_PLL
 extern int	pll_status;		/* status bits for kernel pll */
 #endif /* HAVE_KERNEL_PLL */
@@ -455,6 +449,8 @@ extern u_long	sys_badauth;		/* bad authentication */
 extern u_long	sys_declined;		/* declined */
 extern u_long	sys_limitrejected;	/* rate exceeded */
 extern u_long	sys_kodsent;		/* KoD sent */
+extern u_long	use_stattime;		/* time since reset */
+
 
 /* ntp_restrict.c */
 extern restrict_u *	restrictlist4;	/* IPv4 restriction list */
@@ -517,6 +513,6 @@ extern int accept_wildcard_if_for_winnt;
 #ifdef REFCLOCK
 /* refclock configuration table */
 extern struct refclock * const refclock_conf[];
-extern uint8_t	num_refclock_conf;
+extern const uint8_t	num_refclock_conf;
 #endif
 

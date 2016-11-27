@@ -20,24 +20,6 @@
 				pp->codeproc = (pp->codeproc + 1) % MAXSTAGE;
 
 /*
- * Macros to determine the clock type and unit numbers from a
- * 127.127.t.u address
- */
-#define	REFCLOCKTYPE(srcadr)	((SRCADR(srcadr) >> 8) & 0xff)
-#define REFCLOCKUNIT(srcadr)	(SRCADR(srcadr) & 0xff)
-
-/*
- * List of reference clock names and descriptions. These must agree with
- * lib/clocktypes.c and ntpd/refclock_conf.c.
- */
-struct clktype {
-	int code;		/* driver "major" number */
-	const char *clocktype;	/* long description */
-	const char *abbrev;	/* short description */
-};
-extern struct clktype clktypes[];
-
-/*
  * Configuration flag values
  */
 #define	CLK_HAVETIME1	0x1
@@ -49,6 +31,7 @@ extern struct clktype clktypes[];
 #define	CLK_FLAG2	0x2
 #define	CLK_FLAG3	0x4
 #define	CLK_FLAG4	0x8
+#define CLK_HOLDOVER	0x10	/* no corresponding HAVE_ flag */
 
 #define	CLK_HAVEFLAG1	0x10
 #define	CLK_HAVEFLAG2	0x20
@@ -66,7 +49,6 @@ extern struct clktype clktypes[];
  * Structure for returning clock status
  */
 struct refclockstat {
-	uint8_t	type;		/* clock type */
 	uint8_t	flags;		/* clock flags */
 	uint8_t	haveflags;	/* bit array of valid flags */
 	u_short	lencode;	/* length of last timecode */
@@ -76,6 +58,7 @@ struct refclockstat {
 	uint32_t	badformat;	/* bad format timecode received */
 	uint32_t	baddata;	/* invalid data timecode received */
 	uint32_t	timereset;	/* driver resets */
+	const char *clockname;	/* refclockname */
 	const char *clockdesc;	/* ASCII description */
 	double	fudgetime1;	/* configure fudge time1 */
 	double	fudgetime2;	/* configure fudge time2 */
@@ -147,12 +130,12 @@ extern	HANDLE	WaitableIoEventHandle;
 
 struct refclockproc {
 	void *	unitptr;	/* pointer to unit structure */
-	struct refclock * conf;	/* refclock_conf[type] */
+	struct refclock * conf;	/* pointer to driver method table */
 	struct refclockio io;	/* I/O handler structure */
 	uint8_t	leap;		/* leap/synchronization code */
 	uint8_t	currentstatus;	/* clock status */
 	uint8_t	lastevent;	/* last exception event */
-	uint8_t	type;		/* clock type */
+	const char *clockname;	/* clock name (tag for logging) */
 	const char *clockdesc;	/* clock description */
 	u_long	nextaction;	/* local activity timeout */
 	void	(*action)(struct peer *); /* timeout callback */
@@ -166,7 +149,7 @@ struct refclockproc {
 	int	minute;		/* minute of hour */
 	int	second;		/* second of minute */
 	long	nsec;		/* nanosecond of second */
-	u_long	yearstart;	/* beginning of year */
+	uint32_t	yearstart;	/* beginning of year */
 	int	coderecv;	/* put pointer */
 	int	codeproc;	/* get pointer */
 	l_fp	lastref;	/* reference timestamp */
@@ -183,7 +166,7 @@ struct refclockproc {
 	double	fudgetime2;	/* fudge time2 */
 	uint8_t	stratum;	/* server stratum */
 	uint32_t	refid;		/* reference identifier */
-	uint8_t	sloppyclockflag; /* fudge flags */
+	uint8_t	sloppyclockflag; /* driver options */
 
 	/*
 	 * Status tallies
@@ -200,16 +183,16 @@ struct refclockproc {
  * ntp_refclock.c and particular clock drivers. This must agree with the
  * structure defined in the driver.
  */
-#define	noentry	0		/* flag for null routine */
+#define	noentry	NULL		/* flag for null routine */
 
 struct refclock {
+	const char *basename;
 	bool (*clock_start)	(int, struct peer *);
 	void (*clock_shutdown)	(int, struct peer *);
 	void (*clock_poll)	(int, struct peer *);
 	void (*clock_control)	(int, const struct refclockstat *,
 				 struct refclockstat *, struct peer *);
 	void (*clock_init)	(void);
-	void (*clock_buginfo)	(int, struct refclockbug *, struct peer *);
 	void (*clock_timer)	(int, struct peer *);
 };
 
@@ -220,8 +203,6 @@ extern	bool	io_addclock	(struct refclockio *);
 extern	void	io_closeclock	(struct refclockio *);
 
 #ifdef REFCLOCK
-extern	void	refclock_buginfo(sockaddr_u *,
-				 struct refclockbug *);
 extern	void	refclock_control(sockaddr_u *,
 				 const struct refclockstat *,
 				 struct refclockstat *);
@@ -234,6 +215,7 @@ extern 	bool	refclock_process_f(struct refclockproc *, double);
 extern 	void	refclock_process_offset(struct refclockproc *, l_fp,
 					l_fp, double);
 extern	void	refclock_report	(struct peer *, int);
+extern	char	*refclock_name	(const struct peer *);
 extern	int	refclock_gtlin	(struct recvbuf *, char *, int, l_fp *);
 extern	size_t	refclock_gtraw	(struct recvbuf *, char *, size_t, l_fp *);
 extern	bool	indicate_refclock_packet(struct refclockio *,

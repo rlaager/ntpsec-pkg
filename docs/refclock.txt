@@ -8,7 +8,6 @@ Laboratory]
 
 include::includes/hand.txt[]
 include::includes/refclock.txt[]
-include::includes/audio.txt[]
 
 == Table of Contents ==
 
@@ -30,7 +29,7 @@ A general description of the reference clock support is on this
 page. Additional information about each reference clock driver can be
 found via links from here. Additional information is on the
 link:rdebug.html[Debugging Hints for Reference Clock Drivers] and
-link:howto.html[How To Write a Reference Clock Driver] pages.
+link:driver_howto.html[How To Write a Reference Clock Driver] pages.
 Information on how to support pulse-per-second (PPS) signals produced by
 some devices is on the link:pps.html[Pulse-per-second (PPS) Signal
 Interfacing] page. All reference clock drivers require that the
@@ -55,57 +54,44 @@ clock when the driver has not been compiled or the hardware port has
 not been appropriately configured results in a scalding remark to the
 system log file, but is otherwise non hazardous.
 
-Reference clocks are supported in the same way as ordinary NTP clients
-and use the same filter, select, cluster and combine algorithms. Drivers
-have addresses in the form 127.127._t.u_, where _t_ is the driver type
-and _u_ is a unit number to distinguish multiple
-instances of the same driver. The connection to the computer is device
-dependent, usually a serial port, parallel port or special bus
-peripheral, but some can work directly from an audio codec or sound
-card. The particular device is specified by adding a soft link from the
-name used by the driver to the particular device name.
+Reference clocks are supported in the same way as ordinary NTP servers
+and use the same filter, select, cluster and combine algorithms. The
+connection to the computer is device dependent - usually a serial
+port. The particular device is specified by adding a soft link from
+the name used by the driver to the particular device name.
 
-The +server+ command is used to configure a reference clock. Only the
-+mode+, +minpoll+, +maxpoll+, and +prefer+ options are supported for
-reference clocks, as described on the link:clockopt.html[Reference
-Clock Commands] page. The +prefer+ option can be useful to persuade
-the server to cherish a reference clock with somewhat more enthusiasm
-than other reference clocks or peers. It is further discussed on the
+The +refclock+ command is used to configure a reference clock. The
+options resemble those of the +server+ directives, but +mode+,
++minpoll+, +maxpoll+, and +prefer+ options are supported for reference
+clocks, as described on the link:clockopt.html[Reference Clock
+Commands] page. The +prefer+ option can be useful to persuade the
+server to cherish a reference clock with somewhat more enthusiasm than
+other reference clocks or peers. It is further discussed on the
 link:prefer.html[Mitigation Rules and the +prefer+ Keyword] page. The
 +minpoll+ and +maxpoll+ options have meaning only for selected clock
 drivers.
 
-The +fudge+ command is used to provide additional information for
-individual clock drivers and normally follows immediately after the
-+server+ command. The +address+ argument specifies the clock address.
-The +refid+ and +stratum+ options can be used to override the defaults
-for the device. There are two optional device-dependent time offsets and
-four flags that can be included in the +fudge+ command as well.
+Additionally, the +refid+ and +stratum+ options can be used to
+override the defaults for the device. There are two optional
+device-dependent time offsets and four flags that can be included in
+the +refclock+ command as well.
 
 The stratum number of a reference clock is by default zero. Since the
 {ntpdman} daemon adds one to the stratum of each peer, a primary
 server ordinarily displays an external stratum of one. In order to
-provide engineered backups, it is often useful to specify the reference
-clock stratum as greater than zero. The stratum option is used for this
-purpose. Also, in cases involving both a reference clock and a
-pulse-per-second (PPS) discipline signal, it is useful to specify the
-reference clock identifier as other than the default, depending on the
-driver. The refid option is used for this purpose. Except where noted,
-these options apply to all clock drivers.
+provide engineered backups, it is often useful to specify the
+reference clock stratum as greater than zero. The stratum option is
+used for this purpose. Also, in cases involving both a reference clock
+and a pulse-per-second (PPS) discipline signal, it may be useful to
+specify the reference clock identifier as other than the default,
+depending on the driver. The refid option is used for this
+purpose. Except where noted, these options apply to all clock drivers.
 
 
 [[spec]]
 == Special Considerations ==
 
-The link:audio.html[Audio Drivers] page describes three software drivers
-that process audio signals from an audio codec or sound card. One is for
-the NIST time and frequency stations WWV and WWVH, another for the
-Canadian time and frequency station CHU. These require an external
-shortwave radio and antenna. A third is for the generic IRIG signal
-produced by some timing devices. Currently, these are supported in
-FreeBSD, Solaris and SunOS and likely in other system as well.
-
-The link:driver1.html[Undisciplined Local Clock] driver can
+The link:driver_local.html[Undisciplined Local Clock] driver can
 simulate a reference clock when no external synchronization sources are
 available. If a server with this driver is connected directly or
 indirectly to the public Internet, there is some danger that it can
@@ -123,7 +109,7 @@ page.
 Several drivers make use of the pulse-per-second (PPS) signal
 discipline, which is part of the generic driver interface, so require no
 specific configuration. For those drivers that do not use this
-interface, the link:driver22.html[PPS Clock Discipline] driver
+interface, the link:driver_pps.html[PPS Clock Discipline] driver
 can be can provide this function. It normally works in conjunction with
 the reference clock that produces the timecode signal, but can work with
 another driver or remote server. When PPS kernel features are present,
@@ -151,56 +137,55 @@ driver relative to an association designated the prefer peer.
 [[list]]
 == List of Reference Clock Drivers ==
 
-Following is a list showing the type and title of each driver currently
-implemented. The default compile-time identifier for each is shown in
-under +RefID+. Click on a selected type for specific description and
-configuration documentation, including the clock address, reference ID,
-driver ID, device name and serial line speed. For those drivers without
-specific documentation, please contact the author listed in the
-link:copyright.html[Copyright Notice] page.
+Following is a list showing the type name and title of each driver
+currently implemented. Click on a selected type for specific
+description and configuration documentation.
 
 If you have seen older versions of NTP, this list may have fewer
 entries than you expected.  Support for some very ancient drivers
 (notably, those rendered obsolete by the WWVB modulation change at
 2012-10-29T15:00:00Z) has been dropped in order to reduce our
-maintainence load.
+maintainence load. So have some other drivers (notably the Austron
+2200A/2201A) after having been end-of-lifed with no sign of
+aftermarket activity for more than ten years. Several others have been
+removed for relying on obsolete buses or hardware classes that no
+longer exist.
 
 For security reasons, we will no longer support any refclock that requires
 a closed-source driver to run.  This filtered out the
-Datum/Bancomm/Symmetricom bc600-series GPS/IRIG Receiver.
+Datum/Bancomm/Symmetricom bc600-series GPS/IRIG Receiver,
+the Hopf GPS/DCF77 6039 for PCI-Bus,
+and the Spectracom TSYNC PCI.  The Hopf 6021 driver has also been
+removed because it duplicates support for the 6021 in the generic
+parse driver.
 
 [options="header"]
-[cols="10%,5%,5%,80%",options="header"]
+[cols="15%,5%,80%",options="header"]
 |====================================================================
-| Number                      | Flags |RefID| Driver
-| link:driver1.html[Type 1]   | D     |LOCL | Undisciplined Local Clock
-| link:driver4.html[Type 4]   | -     |SPECTRACOM| Generic Spectracom Receivers
-| link:driver5.html[Type 5]   | D     |TRUE | TrueTime GPS/GOES Receivers
-| link:driver6.html[Type 6]   | D     |IRIG | IRIG Audio Decoder
-| link:driver7.html[Type 7]   | D     |CHU  | Radio CHU Audio Demodulator/Decoder
-| link:driver8.html[Type 8]   | TR    |DCFx | Generic Reference Driver (Parse)
-| link:driver9.html[Type 9]   | D     |GPS  | Magnavox MX4200 GPS Receiver
-| link:driver10.html[Type 10] | D     |GPS  | Austron 2200A/2201A GPS Receivers
-| link:driver11.html[Type 11] | D     |GPS  | Arbiter 1088A/B GPS Receiver
-| link:driver18.html[Type 18] | R     |NIST | NIST/USNO/PTB Modem Time Services
-| link:driver20.html[Type 20] | T     |GPS  | Generic NMEA GPS Receiver
-| link:driver22.html[Type 22] | T     |PPS  | PPS Clock Discipline
-| link:driver26.html[Type 26] | T     |GPS  | Hewlett Packard 58503A GPS Receiver
-| link:driver27.html[Type 27] | DR    |MSF  | Arcron MSF Receiver
-| link:driver28.html[Type 28] | T     |SHM  | Shared Memory Driver
-| link:driver29.html[Type 29] | TM    |GPS  | Trimble Navigation Palisade GPS
-| link:driver30.html[Type 30] | -     |GPS  | Motorola UT Oncore GPS
-| link:driver31.html[Type 31] | D     |GPS  | Rockwell Jupiter GPS
-| link:driver33.html[Type 33] | D     |DUMB | Dumb Clock
-| link:driver35.html[Type 35] | D     |PCF  | Conrad Parallel Port Radio Clock
-| link:driver38.html[Type 38] | D     |hopf | hopf GPS/DCF77 6021/komp for Serial Line
-| link:driver39.html[Type 39] | -     |hopf | hopf GPS/DCF77 6039 for PCI-Bus
-| link:driver40.html[Type 40] | T     |JJY  | JJY Receivers
-| link:driver42.html[Type 42] | -     |GPS  | Zyfer GPStarplus Receiver
-| link:driver44.html[Type 44] | -     |neol | NeoClock4X - DCF77 / TDF serial line
-| link:driver45.html[Type 45] | R     |GPS  | Spectracom TSYNC PCI
-| link:driver46.html[Type 46] | T     |GPSD | GPSD NG client protocol
-|====================================================================
+| Name                                  | Flags | Driver
+|link:driver_local.html[local]          | - | Undisciplined Local Clock
+|link:driver_spectracom.html[spectracom]| - | Generic Spectracom Receivers
+|link:driver_truetime.html[truetime]    | D | TrueTime GPS/GOES Receivers
+|link:driver_generic.html[generic]      | T | Generic Reference Driver (Parse)
+|link:driver_magnavox.html[magnavox]    | D | MX4200 and compatible GPS receivers
+|link:driver_arbiter.html[arbiter]      | - | Arbiter 1088A/B GPS Receiver
+|link:driver_acts.html[acts]            | - | NIST/USNO/PTB Modem Time Services
+|link:driver_nmea.html[nmea]            | T | Generic NMEA GPS Receiver
+|link:driver_pps.html[pps]              | T | PPS Clock Discipline
+|link:driver_hpgps.html[hpgps]          | T | Hewlett Packard GPS Receivers
+|link:driver_shm.html[shm]              | T | Shared Memory Driver
+|link:driver_trimble.html[trimble]      | T | Trimble Palisade/Thunderbolt/Acutime GPSes
+|link:driver_oncore.html[oncore]        | - | Motorola UT Oncore GPS
+|link:driver_jupiter.html[jupiter]      | D | Rockwell Jupiter GPS
+|link:driver_dumbclock.html[dumbclock]  | D | Dumb Clock
+|link:driver_jjy.html[jjy]              | T | JJY Receivers
+|link:driver_zyfer.html[zyfer]          | - | Zyfer GPStarplus Receiver
+|link:driver_neoclock.html[neoclock]    | - | NeoClock4X DCF77 / TDF Receiver
+|link:driver_gpsd.html[gpsd]            | T | GPSD client protocol
+|==========================================================================
+
+The name in the left column is the driver type to be used in the
+refclock declaration. Matching to these names is case-insensitive.
 
 The flags field should be interpreted as follows:
 
@@ -209,14 +194,7 @@ The flags field should be interpreted as follows:
 |Flag| Meaning
 | D | Deprecated.  May be removed in a future release
 | T | Regularly tested by an active maintainer (some devices/modes)
-| M | The driver supports multiple devices or major modes
-| R | Multiple Reference IDs supported, please check the driver page
 |====================================================================
-
-Driver numbers 2, 3, 12, 13, 14, 15, 16, 17, 19, 21, 23, 24, 25, 32, 34,
-36, 37, 41, and 43 (all unused numbers below 46) are reserved. Some of
-these were used by refclock types (now obsolete) in older NTP versions.
-
 
 '''''
 

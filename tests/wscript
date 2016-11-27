@@ -57,7 +57,7 @@ def build(ctx):
 		"libntp/a_md5encrypt.c",
 		"libntp/authkeys.c",
 		"libntp/calendar.c",
-		"libntp/caljulian.c",
+		"libntp/calgregorian.c",
 		"libntp/caltontp.c",
 		"libntp/calyearstart.c",
 		"libntp/clocktime.c",
@@ -85,9 +85,6 @@ def build(ctx):
 		"libntp/vi64ops.c",
 		"libntp/ymd2yd.c"
 	] + common_source
-
-	if ctx.env.REFCLOCK_ENABLE:
-		libntp_source += ["libntp/refnumtoa.c"]
 
 	ctx.ntp_test(
 		features    = "c cprogram bld_include src_include libisc_include test",

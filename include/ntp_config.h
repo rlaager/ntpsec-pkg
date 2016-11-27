@@ -2,10 +2,17 @@
 #define GUARD_NTP_CONFIG_H
 
 #include <sys/resource.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <math.h>
 
+#include "ntp_syslog.h"
+#include "ntp_fp.h"
+#include "ntp.h"
+#include "ntp_malloc.h"
+#include "ntp_refclock.h"
+#include "ntp_stdlib.h"
 #include "ntp_machine.h"
-#include "ntpsim.h"
-
 
 /*
  * Configuration file name
@@ -20,18 +27,6 @@
 # endif /* SYS_WINNT */
 #endif /* not CONFIG_FILE */
 
-
-/*
- * We keep config trees around for possible saveconfig use.  When
- * built with configure --disable-saveconfig, and when built with
- * debugging enabled, include the free_config_*() routines.  In the
- * DEBUG case, they are used in an atexit() cleanup routine to make
- * postmortem leak check reports more interesting.
- */
-#if !defined(FREE_CFG_T) && (!defined(SAVECONFIG) || defined(DEBUG))
-#define FREE_CFG_T
-#endif
-
 /* Limits */
 #define MAXLINE 1024
 
@@ -44,9 +39,6 @@
 extern	int	cmdline_server_count;
 extern	char **	cmdline_servers;
 extern	bool	force_synchronous_dns;
-
-/* set to false if admin doesn't want memory locked */
-extern	bool	do_memlock;
 
 typedef struct int_range_tag {
 	int	first;
@@ -107,17 +99,29 @@ struct restrict_node_tag {
 
 typedef DECL_FIFO_ANCHOR(restrict_node) restrict_fifo;
 
+/*
+ * Read-only control knobs for a peer structure.
+ * Packaging these makes context copies a bit more succinct.
+ */
+struct peer_ctl {
+	uint8_t		version;
+	int		flags;
+	uint8_t		minpoll;
+	uint8_t		maxpoll;
+	uint32_t	ttl;
+	keyid_t		peerkey;
+	uint32_t	baud;
+	char		*path;
+	char		*ppspath;
+};
+
 typedef struct peer_node_tag peer_node;
 struct peer_node_tag {
 	peer_node *	link;
-	int		host_mode;
 	address_node *	addr;
-	attr_val_fifo *	peerflags;
-	uint8_t		minpoll;
-	uint8_t		maxpoll;
-	uint32_t		ttl;
-	uint8_t		peerversion;
-	keyid_t		peerkey;
+	int		host_mode;
+	struct peer_ctl	ctl;
+	struct refclockstat clock_stat;
 	char *		group;
 };
 
@@ -186,7 +190,6 @@ typedef struct sim_node_tag sim_node;
 struct sim_node_tag {
 	sim_node *		link;
 	attr_val_fifo *		init_opts;
-	server_info_fifo *	servers;
 };
 
 typedef DECL_FIFO_ANCHOR(sim_node) sim_fifo;
@@ -295,28 +298,14 @@ restrict_node *create_restrict_node(address_node *addr,
 int_node *create_int_node(int val);
 addr_opts_node *create_addr_opts_node(address_node *addr,
 				      attr_val_fifo *options);
-sim_node *create_sim_node(attr_val_fifo *init_opts,
-			  server_info_fifo *servers);
 setvar_node *create_setvar_node(char *var, char *val, int isdefault);
 nic_rule_node *create_nic_rule_node(int match_class, char *if_name,
 				    int action);
-
-script_info *create_sim_script_info(double duration,
-				    attr_val_fifo *script_queue);
-server_info *create_sim_server(address_node *addr, double server_offset,
-			       script_info_fifo *script);
 
 extern struct REMOTE_CONFIG_INFO remote_config;
 void config_remotely(sockaddr_u *);
 
 extern bool have_interface_option;
-extern bool saveconfigquit;
-extern const char *saveconfigfile;
-
-#ifdef SAVECONFIG
-int dump_config_tree(config_tree *ptree, FILE *df, bool comment);
-int dump_all_config_trees(FILE *df, bool comment);
-#endif
 
 void ntp_rlimit(int, rlim_t, int, const char *);
 

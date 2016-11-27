@@ -99,9 +99,6 @@
     <ClCompile Include="..\..\ntpd\ntservice.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\ntpd\hopf_PCI_io.c">
-      <Filter>Reference Clock</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\..\ntpd\refclock_acts.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
@@ -111,19 +108,13 @@
     <ClCompile Include="..\..\..\..\ntpd\refclock_arc.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\ntpd\refclock_as2201.c">
-      <Filter>Reference Clock</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\ntpd\refclock_atom.c">
+    <ClCompile Include="..\..\..\..\ntpd\refclock_pps.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\ntpd\refclock_bancomm.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\ntpd\refclock_chronolog.c">
-      <Filter>Reference Clock</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\ntpd\refclock_chu.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\ntpd\refclock_conf.c">
@@ -141,16 +132,7 @@
     <ClCompile Include="..\..\..\..\ntpd\refclock_gpsvme.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\ntpd\refclock_hopfpci.c">
-      <Filter>Reference Clock</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\ntpd\refclock_hopfser.c">
-      <Filter>Reference Clock</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\..\ntpd\refclock_hpgps.c">
-      <Filter>Reference Clock</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\ntpd\refclock_irig.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\ntpd\refclock_jjy.c">
@@ -168,7 +150,7 @@
     <ClCompile Include="..\..\..\..\ntpd\refclock_msfees.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\ntpd\refclock_mx4200.c">
+    <ClCompile Include="..\..\..\..\ntpd\refclock_magnavox.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\ntpd\refclock_neoclock4x.c">
@@ -180,13 +162,10 @@
     <ClCompile Include="..\..\..\..\ntpd\refclock_oncore.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\ntpd\refclock_palisade.c">
+    <ClCompile Include="..\..\..\..\ntpd\refclock_trimble.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\ntpd\refclock_parse.c">
-      <Filter>Reference Clock</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\ntpd\refclock_pcf.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\ntpd\refclock_pst.c">
@@ -205,9 +184,6 @@
       <Filter>Reference Clock</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\ntpd\refclock_true.c">
-      <Filter>Reference Clock</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\ntpd\refclock_tsyncpci.c">
       <Filter>Reference Clock</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\ntpd\refclock_tt560.c">
@@ -303,9 +279,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\ntpd\declcond.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\include\hopf_PCI_io.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\include\ieee754io.h">
@@ -441,9 +414,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\include\recvbuff.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\ntpd\refclock_palisade.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\..\lib\isc\include\isc\result.h">

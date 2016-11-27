@@ -214,12 +214,11 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\..\libntp\adjtime.c" />
     <ClCompile Include="..\..\..\..\libntp\atolfp.c" />
-    <ClCompile Include="..\..\..\..\libntp\audio.c" />
     <ClCompile Include="..\..\..\..\libntp\authkeys.c" />
     <ClCompile Include="..\..\..\..\libntp\authreadkeys.c" />
     <ClCompile Include="..\..\..\..\libntp\authusekey.c" />
     <ClCompile Include="..\..\..\..\libntp\a_md5encrypt.c" />
-    <ClCompile Include="..\..\..\..\libntp\caljulian.c" />
+    <ClCompile Include="..\..\..\..\libntp\calgregorian.c" />
     <ClCompile Include="..\..\..\..\libntp\caltontp.c" />
     <ClCompile Include="..\..\..\..\libntp\calyearstart.c" />
     <ClCompile Include="..\..\..\..\libntp\clocktime.c" />
@@ -253,7 +252,6 @@
     <ClCompile Include="..\..\..\..\libntp\octtoint.c" />
     <ClCompile Include="..\..\..\..\libntp\prettydate.c" />
     <ClCompile Include="..\..\..\..\libntp\recvbuff.c" />
-    <ClCompile Include="..\..\..\..\libntp\refnumtoa.c" />
     <ClCompile Include="..\..\..\..\libntp\snprintf.c" />
     <ClCompile Include="..\..\..\..\libntp\socket.c" />
     <ClCompile Include="..\..\..\..\libntp\socktoa.c" />

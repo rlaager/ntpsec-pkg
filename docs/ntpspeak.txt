@@ -28,6 +28,11 @@ association::
   for discovering association partners, creating and maintaining
   associations, and preventing attackers from forming associations.
 
+[[atom]]
+atom::
+  Old name for the PPS driver.  Origin lost in the mists of history,
+  but probably related in some way to cesium atomic clocks.
+
 [[drift]]
 drift::
   In an NTP context, drift refers to the frequency offset of a clock crystal
@@ -51,10 +56,11 @@ falseticker::
 
 [[fudge]]
 fudge::
-  Can have one of two senses.  Either (1) an offset configured for
-  a <<refclock>> or server to correct its time, reversing a fixed or
-  nearly-fixed propagation delay, or (2) a "fudge bit" set in
-  a configuration file to change the refclock's behavior in some
+  Can have one of two senses.  Either (1) an offset configured for a
+  <<refclock>> or server to correct its time, reversing a fixed or
+  nearly-fixed propagation delay, or (2) in the old config syntax, a "fudge
+  bit" was what is now called a driver option - set in a refclock
+  declaration to change the refclock's behavior in some
   driver-dependent way.
 
 [[fuzzball]]
@@ -88,8 +94,8 @@ GPSDO::
 GPSD::
    The http://www.catb.org/gpsd/[GPS Daemon], an open-source device
    manager for GPSes and other geodetic sensors. Frequently used as
-   a clock source by Stratum 1 sites via the SHM
-   link:driver28.html[(Type 28)] interface.
+   a clock source by Stratum 1 sites via the link:driver_shm.html[SHM]
+   interface.
 
 [[holdover]]
 holdover::
@@ -98,6 +104,15 @@ holdover::
    delivering accurate time from an internal oscillator. Due to
    <<drift>> in the oscillator, accuracy drops as holdover time (time
    since last signal lock) increases.
+
+[[in-band time]]
+in-band time::
+   GPS-based time sources often deliver two channels of time
+   information. The timestamp delivered as ASCII data over the
+   serial link is called "in-band time" to contrast it with the
+   out-of-band <<PPS>> signal.  Abbreviated IBT. Seldom useful
+   by itself as it tends to have a large random wander from top
+   of second.
 
 [[leap second]]
 leap second::
@@ -154,11 +169,19 @@ nonce::
 
 [[parse-driver]]
 parse driver::
-  A refclock link:driver8.html[(type 8)] which, uniquely, handles
-  multiple <<time radio>> protocols - two dozen mostly European
-  precision time radios mostly using DCF, the broadcast time from the
-  German national authority. Each clock type is internally represented
-  as a few parse methods and table entries in a table-driven parser.
+  A refclock, now known as link:driver_generic.html[generic], which
+  handles multiple <<time radio>> protocols - two dozen mostly
+  European precision time radios mostly using DCF, the broadcast time
+  from the German national authority. Each clock type is internally
+  represented as a few parse methods and table entries in a
+  table-driven parser. Older documentation used the term "parse
+  driver" interchangeably with "generic driver".
+
+[[popcorn spike]]
+popcorn spike::
+  A packet from a particular peer that has a computed theta more than
+  three standard deviations from the prevous sample.  These are
+  normally treated as random outliers and suppressed.
 
 [[PPS]]
 PPS::
@@ -167,11 +190,10 @@ PPS::
   is often connected to a RS-232 modem control signal pin.
   A PPS signal doesn't tell you which second a pulse corresponds to
   so it must be used with an ancillary signal, typically text over
-  the same RS-232 connector.
+  the same RS-232 connector (see <<in-band time>>).
   The advantage of a PPS signal is improved accuracy.  Most OSes have
   provisions to grab a timestamp at interrupt time.  The API is described
   in RFC-2783.
-
 
 [[PTP]]
 PTP::
@@ -199,15 +221,6 @@ proventic::
 refclock::
   Shorthand for a "reference clock", a primary time source. A computer
   with a refclock is implicitly Stratum 1.
-
-[[SADA]]
-SADA::
-   Sun Audio Driver API, a software interface to audio devices
-   directly supported by NTP and used by the Irig Audio Decoder (type
-   6) and IRIG (type 7) refclocks. Originating in SunOS, it was later
-   implemented in Solaris and OpenSolaris, supported in the Linux OSS
-   sound layer, and is still used by the *BSD family of open-source
-   operating systems.
 
 [[stratum]]
 stratum::
