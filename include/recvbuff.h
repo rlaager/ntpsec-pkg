@@ -50,11 +50,9 @@ struct recvbuf {
 	recvbuf_t *	link;	/* next in list */
 	union {
 		sockaddr_u	X_recv_srcadr;
-		void *		X_recv_srcclock;
 		struct peer *	X_recv_peer;
 	} X_from_where;
 #define recv_srcadr		X_from_where.X_recv_srcadr
-#define	recv_srcclock		X_from_where.X_recv_srcclock
 #define recv_peer		X_from_where.X_recv_peer
 #ifndef HAVE_IO_COMPLETION_PORT
 	sockaddr_u	srcadr;		/* where packet came from */
@@ -63,10 +61,10 @@ struct recvbuf {
 #endif
 	endpt *		dstadr;		/* address pkt arrived on */
 	SOCKET		fd;		/* fd on which it was received */
-	int		msg_flags;	/* Flags received about the packet */
+	int		cast_flags;	/* unicast/broadcast/manycast mode */
 	l_fp		recv_time;	/* time of arrival */
 	void		(*receiver)(struct recvbuf *); /* callback */
-	u_int		recv_length;	/* number of octets received */
+	size_t		recv_length;	/* number of octets received */
 	union {
 		struct pkt	X_recv_pkt;
 		uint8_t		X_recv_buffer[RX_BUFF_SIZE];

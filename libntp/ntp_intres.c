@@ -414,6 +414,8 @@ blocking_getaddrinfo(
 		return -1;
 	}
 
+	/* FIXME: might be a real resource leak, not a Coverity false positive */
+	/* coverity[leaked_storage] */
 	return 0;
 }
 
@@ -440,6 +442,10 @@ getaddrinfo_sometime_complete(
 	int			af;
 	const char *		fam_spec;
 	int			i;
+
+	UNUSED_ARG(context);
+	UNUSED_ARG(rtype);
+	UNUSED_ARG(respsize);
 
 	gai_req = context;
 	gai_resp = resp;
@@ -728,6 +734,9 @@ getnameinfo_sometime_complete(
 	time_t			time_now;
 	int			again;
 
+	UNUSED_ARG(rtype);
+	UNUSED_ARG(respsize);
+
 	gni_req = context;
 	gni_resp = resp;
 
@@ -989,6 +998,8 @@ should_retry_dns(
 #if defined (EAI_SYSTEM) && defined(DEBUG)
 	char		msg[256];
 #endif
+
+	UNUSED_ARG(res_errno);
 
 	/*
 	 * If the resolver failed, see if the failure is

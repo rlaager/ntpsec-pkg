@@ -46,9 +46,6 @@
 /*
  * Global variables
  */
-#ifdef HAVE_SYS_AUDIOIO_H
-static struct audio_device device; /* audio device ident */
-#endif /* HAVE_SYS_AUDIOIO_H */
 #ifdef USE_PCM_STYLE_SOUND
 # define INIT_FILE "/etc/ntp.audio"
 int agc =	SOUND_MIXER_WRITE_RECLEV; /* or IGAIN or LINE */
@@ -118,6 +115,8 @@ audio_config_read(
 	FILE *fd;
 	char device[20], line[100], ab[100];
 
+	UNUSED_ARG(c_dev);
+	UNUSED_ARG(i_dev);
 	snprintf(device, sizeof(device), "%s%d", INIT_FILE, unit);
 	if ((fd = fopen(device, "r")) == NULL) {
 		printf("audio_config_read: <%s> NO\n", device);
@@ -479,6 +478,7 @@ audio_show(void)
 
 #else /* not USE_PCM_STYLE_SOUND */
 # ifdef HAVE_SYS_AUDIOIO_H
+	struct audio_device device; /* audio device ident */
 	ioctl(ctl_fd, (int)AUDIO_GETDEV, &device);
 	printf("audio: name %s, version %s, config %s\n",
 	    device.name, device.version, device.config);

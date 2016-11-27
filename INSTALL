@@ -1,6 +1,6 @@
 = Installation instructions =
 
-== Prerequsites ==
+== Prerequisites ==
 
 This software should build on any operating system conformant to
 POSIX.1-2001 and ISO/IEC 9899:1999 (C99).  In addition, the
@@ -10,8 +10,9 @@ or a BSD-like pair of ntp_gettime(2)/ntp_adjtime(2) calls.
 There are some prerequisites.  Libraries need the library installed
 to run and in addition, the development headers installed to build.
 
-Python >= 2.5::
-   Required to build.  May be needed by some utilities.
+Python 2.x, x >= 5::
+   Required to build.  May be needed by some utilities.  Note, we don't
+   play well with Python 3 yet.
 
 bison::
    Required to build.
@@ -19,9 +20,14 @@ bison::
    Debian: bison
 
 libevent 2.x::
-   Required.
+   Optional. Without it, ntpdig won't build. 
    Fedora: libevent and libevent-devel
    Debian: libevent and libevent-dev
+
+   NetBSD: As installed, libevent is broken.  It links, but doesn't run.
+     Here is a workaround:
+      # cd /usr/lib
+      # ln -s /usr/pkg/lib/libevent_core-2.0.so.5
 
 libcap::
    Optional, required for -u user:group on Linux
@@ -88,6 +94,9 @@ this library if you wish and they have it available.
 
 These are generic Unix installation instructions.
 
+If your default python is Python 3, replace "./waf" with "python2 waf"
+or whatever else is locally required to get python2 interpretation.
+
 Under Unix, the simplest way to compile this package is:
 
   1. `cd' to the directory containing the package's source code and
@@ -104,7 +113,7 @@ Under Unix, the simplest way to compile this package is:
   5. You can remove the program binaries and object files from the
      source code directory by typing `./waf clean'.
 
-  6. To also remove the files that `waf configure' created (so you can
+  6. To also remove the files that `./waf configure' created (so you can
      configure and compile the package for a different kind of
      computer), type `./waf distclean'.
 
@@ -128,7 +137,7 @@ Please report this as a bug, along with your platform details.
 
 == Installation Names ==
 
-By default, `make install' will install the package's files in
+By default, `waf install' will install the package's files in
 `/usr/local/bin', `/usr/local/man', etc.  You can specify an
 installation prefix other than `/usr/local' by giving waf the
 option `--prefix=PATH'.
@@ -137,7 +146,7 @@ option `--prefix=PATH'.
 
 Due to variations in Perl library paths, our stock source distribution
 makes no attempt to install certain Perl scripts: notably
-ntpleapfetch, ntpwait, and ntptrace.  If you installed this sotware
+ntpleapfetch, ntpwait, and ntptrace.  If you installed this software
 from a binary package prepared by your OS distributor, the OS
 distributor may install them, arranging a rendezvous with the
 Perl implementation's library path.
@@ -154,15 +163,20 @@ of options.
 refclocks are enabled with `--refclock=<n1,n2,n3..> or --refclock=all'
 `waf configure --list' will print a list of available refclocks.
 
+== Developer options ==
+
+--enable-debug-gdb::
+     Enable GDB debugging symbols.
+
 == Operation Controls ==
 
 The waf builder recognizes the following options to control how it
 operates.
 
-`--help'
+--help::
      Print a summary of the options to `waf configure', and exit.
 
-`--version'
+--version::
      Print the version of waf used to generate the `configure'
      script, and exit.
 

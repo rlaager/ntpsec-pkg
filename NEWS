@@ -6,14 +6,122 @@ Much of the traditional function of a news file is now better addressed
 by browsing the comments in the revision history.  This file will focus
 on user-visible changes.
 
+== 2016-01-25: 0.9.1 ==
+
+Point release for security. Fixes:
+
+* CVE-2015-7973: Replay attack on authenticated broadcast mode
+  (Aanchal Malhotra)
+* CVE-2015-7975: nextvar() missing length check (Jonathan Gardner)
+* CVE-2015-7979: Off-path Denial of Service (DoS) attack on
+  authenticated broadcast and other preemptable modes (Aanchal
+  Malhotra)
+* CVE-2015-8138: Zero Origin Timestamp Bypass (Matthew van Gundy &
+  Jonathan Gardner)
+* CVE-2015-8139: Origin Leak: ntpq and ntpdc Disclose Origin Timestamp
+  to Unauthenticated Clients (Matthew van Gundy)
+* CVE-2015-8158: Potential Infinite Loop in ntpq (Jonathan Gardner)
+* Timing attack on MAC verification (Daniel Franke)
+* Missing length checks in decodearr() and outputarr() (Daniel Franke)
+
+Two additional security issues have been reported to us for which we
+are not implementing code changes, but the user should be aware of
+their impact.
+
+The first (CVE-2015-8140) pertains to NTP's dynamic reconfiguration
+feature, which permits on-the-fly modification of NTP's configuration
+via ntpq. This feature is rarely used, typically disabled, and can
+only be enabled when authentication is configured. ntpd has no means
+of detecting that a request to change its configuration is a replay of
+an old packet. Therefore, if an administrator sets ntpd to
+configuration A and then to configuration B, an attacker who captures
+the packets commanding these changes can replay the first one and
+restore ntpd's state to configuration A. This is only a concern when
+the configuration commands are sent over an untrusted
+network. Configuration changes made via localhost are not susceptible.
+
+This is an inherent design flaw in NTP cryptography and in the remote
+reconfiguration protocol, and can be fixed only with a considerable
+reworking and by changing the protocol in a way that is neither
+forward nor backward compatible. This cryptographic rework is on the
+horizon in the form of Network Time Security (currently a draft in the
+IETF network time working group). Given that this vulnerability
+impacts few if any real users, we have chosen to defer fixing it until
+we have tools more suitable to the task. For the mean time, if you
+rely on NTP's reconfiguration support, we recommend either restricting
+its use to localhost or trusted networks, or tunneling through SSH or
+a VPN. The 'nomodify' option to the 'restrict' directive may be used
+to enforce this policy.
+
+The second (CVE-2015-7974) pertains to the fact that when multiple
+trusted keys are configured, no mechanism exists to associate
+particular keys with particular peers or assign particular privileges.
+This is not a bug, per se, but rather a lack of expressiveness in
+NTP's configuration language. We intend to address in a future release
+as part of a larger redesign aimed at giving clearer semantics to the
+configuration language and making it easier to write safe
+configurations.
+
+Note that NTPsec is not impacted by CVE-2015-7976, CVE-2015-7977, or
+CVE-2015-7978. CVE-2015-7977 and CVE-2015-7978 both pertain to mode 7
+packets, support for which was completely removed before NTPsec's
+first beta. CVE-2015-7976 is a feature request to restrict the format
+of filenames used in saveconfig commands. Saveconfig support is
+disabled at compile time in NTPsec and will not be re-enabled without
+much more extensive hardening.
+
+== 2015-11-16: 0.9.0 ==
+
+Initial NTPsec beta release.
+
+* Canonical forge for git clones and issue tracking is
+  https://gitlab.com/NTPsec/ntpsec
+
+* The documentation has been extensively updated and revised.  One
+  important change is that manual pages are now generated from the
+  same masters as this web documentation, so the two will no longer
+  drift out of synchronization.
+
+* Internally, there is more consistent use of nanosecond precision.
+  A visible effect of this is that time stepping with sufficiently
+  high-precision time sources could be accurate down to nanoseconds
+  rather than microseconds; this might actually matter for GPSDOs
+  and high-quality radio clocks.
+
+* The deprecated 'ntpdc' utility, long since replaced by 'ntpq', has
+  been removed.
+
+* The 'ntpsnmpd' daemon, incomplete and not conformant with RFC 5907,
+  has been removed.
+
+* A number of obsolete refclocks have been removed.
+
+* The 'sntp' program has been renamed 'ntpdig' in order to make
+  NTP installables have a uniform name prefix and take up less
+  namespace. Also, ntp-keygen is now 'ntpkeygen', ntp-wait
+  is 'ntpwait', and update-leap is now 'ntpleapfetch'.
+
+* A new utility, 'ntpfrob', collects several small diagnostic functions
+  for reading and tweaking the local clock hardware, including reading
+  the clock tick rate, precision, and jitter. Part of it formerly
+  traveled as 'tickadj'.
+
+* The deprecated 'ntpdate' program has been replaced with a shell
+  wrapper around 'ntpdig'.
+
+* Log timestamps look a little different; they are now in ISO8601 format.
+
+* Autokey is not supported in this release.
+
 == Bugfixes either ported from NTP Classic or fixed by NTPsec changes ==
 
-These reflect fixes to NTP Classic since the 2015-06-06 fork point.
+These reflect fixes to NTP Classic between the 2015-06-06 fork point and
+the 0.9.0 beta release.
 
 * [Bug 2625] Deprecate flag1 in local refclock.  Hal Murray, Harlan Stenn.
 * [Bug 2778] Implement "apeers"  ntpq command to include associd.
 * [Bug 2823] ntpsweep with recursive peers option doesn't work.  H.Stenn.
-* [Bug 2836] DFC77 patches from Frank Kardel to make decoding more
+* [Bug 2836] DCF77 patches from Frank Kardel to make decoding more
   robust, and require 2 consecutive timestamps to be consistent.
 * [Bug 2845] Harden memory allocation in ntpd; implement and
   use 'eallocarray(...)' where appropriate.

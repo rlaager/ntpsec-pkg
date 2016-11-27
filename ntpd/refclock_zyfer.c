@@ -17,9 +17,6 @@
 #include <ctype.h>
 
 #include <termios.h>
-#ifdef HAVE_SYS_PPSCLOCK_H
-# include <sys/ppsclock.h>
-#endif
 
 /*
  * This driver provides support for the TOD serial port of a Zyfer GPStarplus.
@@ -181,6 +178,8 @@ zyfer_shutdown(
 	register struct zyferunit *up;
 	struct refclockproc *pp;
 
+	UNUSED_ARG(unit);
+
 	pp = peer->procptr;
 	up = pp->unitptr;
 	if (pp->io.fd != -1)
@@ -306,6 +305,8 @@ zyfer_poll(
 {
 	register struct zyferunit *up;
 	struct refclockproc *pp;
+
+	UNUSED_ARG(unit);
 
 	/*
 	 * We don't really do anything here, except arm the receiving

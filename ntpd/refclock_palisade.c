@@ -363,6 +363,9 @@ palisade_shutdown (
 {
 	struct palisade_unit *up;
 	struct refclockproc *pp;
+
+	UNUSED_ARG(unit);
+
 	pp = peer->procptr;
 	up = pp->unitptr;
 	if (-1 != pp->io.fd)
@@ -854,7 +857,7 @@ TSIP_decode (
 #ifdef DEBUG
 	printf("TSIP_decode: unit %d: bad packet %02x-%02x event %d len %d\n", 
 	       up->unit, up->rpt_buf[0] & 0xff, mb(0) & 0xff, 
-	       event, up->rpt_cnt);
+	       event, (int)up->rpt_cnt);
 #endif
 	return 0;
 }
@@ -1059,8 +1062,9 @@ palisade_io (
 		    case TSIP_PARSED_DLE_2:
 			if (*c == DLE) {
 				up->rpt_status = TSIP_PARSED_DATA;
-				mb(up->rpt_cnt++) = 
-				    *c;
+				/* prevent overrun - should never happen */
+				if (up->rpt_cnt < BMAX - 2)
+					mb(up->rpt_cnt++) = *c;
 			}
 			else if (*c == ETX) 
 				up->rpt_status = TSIP_PARSED_FULL;
@@ -1092,7 +1096,7 @@ palisade_io (
 		else if (up->rpt_status == TSIP_PARSED_EMPTY)
 			up->rpt_cnt = 0;
 
-		else if (up->rpt_cnt > BMAX) 
+		else if (up->rpt_cnt > sizeof(up->rpt_buf)) 
 			up->rpt_status =TSIP_PARSED_EMPTY;
 
 		if (up->rpt_status == TSIP_PARSED_FULL) 

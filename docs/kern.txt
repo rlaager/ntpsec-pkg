@@ -24,7 +24,7 @@ resolution. The new code described in [1] is in FreeBSD, Linux and
 Tru64. The software and documentation, including a simulator used to
 verify correct behavior, but not involving licensed code, is available
 in the
-ftp://ftp.udel.edu/pub/ntp/software/nanokernel.tar.gz[nanokernel.tar.gz]
+https://www.eecis.udel.edu/~ntp/ntp_spool/software/nanokernel.tar.gz[nanokernel.tar.gz]
 distribution
 
 Ordinarily, the kernel clock discipline function is used with the NTP
@@ -50,7 +50,6 @@ November 2000). Paper:
 |
 {millshome}database/papers/nano/nano2.pdf[PDF],
 Slides:
-{millshome}database/brief/nano/nano.html[HTML] |
 {millshome}database/brief/nano/nano.ps[PostScript]
 | {millshome}database/brief/nano/nano.pdf[PDF] |
 {millshome}database/brief/nano/nano.ppt[PowerPoint]

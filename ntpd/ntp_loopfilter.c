@@ -10,6 +10,7 @@
 #include "ntp_io.h"
 #include "ntp_unixtime.h"
 #include "ntp_stdlib.h"
+#include "ntp_intercept.h"
 
 #include <limits.h>
 #include <stdio.h>
@@ -17,10 +18,6 @@
 
 #include <signal.h>
 #include <setjmp.h>
-
-#ifdef HAVE_KERNEL_PLL
-#include "ntp_syscall.h"
-#endif /* HAVE_KERNEL_PLL */
 
 /*
  * This is an implementation of the clock discipline algorithm described
@@ -183,6 +180,7 @@ static sigjmp_buf env;		/* environment var. for pll_trap() */
 #endif /* SIGSYS */
 #endif /* HAVE_KERNEL_PLL */
 
+#ifdef HAVE_KERNEL_PLL
 static void
 sync_status(const char *what, int ostatus, int nstatus)
 {
@@ -192,6 +190,7 @@ sync_status(const char *what, int ostatus, int nstatus)
 	snprintf(tbuf, sizeof(tbuf), "%s status: %s -> %s", what, obuf, nbuf);
 	report_event(EVNT_KERN, NULL, tbuf);
 }
+#endif /* HAVE_KERNEL_PLL */
 
 /*
  * file_name - return pointer to non-relative portion of this C file pathname
@@ -341,7 +340,7 @@ or, from ntp_adjtime():
 
 	if (  (time_status & (STA_UNSYNC | STA_CLOCKERR))
 	    || (time_status & (STA_PPSFREQ | STA_PPSTIME)
-		&& !(time_status & STA_PPSSIGNAL)) 
+		&& !(time_status & STA_PPSSIGNAL))
 	    || (time_status & STA_PPSTIME
 		&& time_status & STA_PPSJITTER)
 	    || (time_status & STA_PPSFREQ
@@ -443,7 +442,9 @@ local_clock(
 {
 	int	rval;		/* return code */
 	int	osys_poll;	/* old system poll */
+#ifdef HAVE_KERNEL_PLL
 	int	ntp_adj_ret;	/* returned by ntp_adjtime */
+#endif /* HAVE_KERNEL_PLL */
 	double	mu;		/* interval since last update */
 	double	clock_frequency; /* clock frequency */
 	double	dtemp, etemp;	/* double temps */
@@ -495,19 +496,21 @@ local_clock(
 	if (mode_ntpdate) {
 		if (  ( fp_offset > clock_max_fwd  && clock_max_fwd  > 0)
 		   || (-fp_offset > clock_max_back && clock_max_back > 0)) {
-			step_systime(fp_offset);
+			step_systime(fp_offset, intercept_set_tod);
 			msyslog(LOG_NOTICE, "ntpd: time set %+.6f s",
 			    fp_offset);
-			printf("ntpd: time set %+.6fs\n", fp_offset);
+			if (intercept_get_mode() == none)
+				printf("ntpd: time set %+.6fs\n", fp_offset);
 		} else {
-			adj_systime(fp_offset);
+			adj_systime(fp_offset, intercept_adjtime);
 			msyslog(LOG_NOTICE, "ntpd: time slew %+.6f s",
 			    fp_offset);
-			printf("ntpd: time slew %+.6fs\n", fp_offset);
+			if (intercept_get_mode() == none)
+				printf("ntpd: time slew %+.6fs\n", fp_offset);
 		}
 		record_loop_stats(fp_offset, drift_comp, clock_jitter,
 		    clock_stability, sys_poll);
-		exit (0);
+		intercept_exit(0);
 	}
 
 	/*
@@ -628,8 +631,9 @@ local_clock(
 			snprintf(tbuf, sizeof(tbuf), "%+.6f s",
 			    fp_offset);
 			report_event(EVNT_CLOCKRESET, NULL, tbuf);
-			step_systime(fp_offset);
-			reinit_timer();
+			step_systime(fp_offset, intercept_set_tod);
+			if (intercept_get_mode() != replay)
+			    reinit_timer();
 			tc_counter = 0;
 			clock_jitter = LOGTOD(sys_precision);
 			rval = 2;
@@ -660,7 +664,7 @@ local_clock(
 		 * the stepout threshold.
 		 */
 		case EVNT_NSET:
-			adj_systime(fp_offset);
+			adj_systime(fp_offset, intercept_adjtime);
 			rstclock(EVNT_FREQ, fp_offset);
 			break;
 
@@ -803,7 +807,7 @@ local_clock(
 		 * the pps. In any case, fetch the kernel offset,
 		 * frequency and jitter.
 		 */
-		ntp_adj_ret = ntp_adjtime(&ntv);
+		ntp_adj_ret = intercept_ntp_adjtime(&ntv);
 		/*
 		 * A squeal is a return status < 0, or a state change.
 		 */
@@ -838,7 +842,7 @@ local_clock(
 			loop_tai = sys_tai;
 			ntv.modes = MOD_TAI;
 			ntv.constant = sys_tai;
-			if ((ntp_adj_ret = ntp_adjtime(&ntv)) != 0) {
+			if ((ntp_adj_ret = intercept_ntp_adjtime(&ntv)) != 0) {
 			    ntp_adjtime_error_handler(__func__, &ntv, ntp_adj_ret, errno, false, true, __LINE__ - 1);
 			}
 		}
@@ -995,7 +999,7 @@ adj_host_clock(
 	 * but does not automatically stop slewing when an offset
 	 * has decayed to zero.
 	 */
-	adj_systime(offset_adj + freq_adj);
+	adj_systime(offset_adj + freq_adj, intercept_adjtime);
 #endif /* ENABLE_LOCKCLOCK */
 }
 
@@ -1063,19 +1067,19 @@ set_freq(
 	)
 {
 	const char *	loop_desc;
-	int ntp_adj_ret;
 
 	drift_comp = freq;
 	loop_desc = "ntpd";
 #ifdef HAVE_KERNEL_PLL
 	if (pll_control) {
+		int ntp_adj_ret;
 		ZERO(ntv);
 		ntv.modes = MOD_FREQUENCY;
 		if (kern_enable) {
 			loop_desc = "kernel";
 			ntv.freq = DTOFREQ(drift_comp);
 		}
-		if ((ntp_adj_ret = ntp_adjtime(&ntv)) != 0) {
+		if ((ntp_adj_ret = intercept_ntp_adjtime(&ntv)) != 0) {
 		    ntp_adjtime_error_handler(__func__, &ntv, ntp_adj_ret, errno, false, false, __LINE__ - 1);
 		}
 	}
@@ -1112,7 +1116,7 @@ start_kern_loop(void)
 		pll_control = false;
 	} else {
 		if (sigsetjmp(env, 1) == 0) {
-			if ((ntp_adj_ret = ntp_adjtime(&ntv)) != 0) {
+			if ((ntp_adj_ret = intercept_ntp_adjtime(&ntv)) != 0) {
 			    ntp_adjtime_error_handler(__func__, &ntv, ntp_adj_ret, errno, false, false, __LINE__ - 1);
 			}
 		}
@@ -1123,7 +1127,7 @@ start_kern_loop(void)
 		}
 	}
 #else /* SIGSYS */
-	if ((ntp_adj_ret = ntp_adjtime(&ntv)) != 0) {
+	if ((ntp_adj_ret = intercept_ntp_adjtime(&ntv)) != 0) {
 	    ntp_adjtime_error_handler(__func__, &ntv, ntp_adj_ret, errno, false, false, __LINE__ - 1);
 	}
 #endif /* SIGSYS */
@@ -1272,7 +1276,7 @@ loop_config(
 			memset((char *)&ntv, 0, sizeof(ntv));
 			ntv.modes = MOD_STATUS;
 			ntv.status = STA_UNSYNC;
-			ntp_adjtime(&ntv);
+			intercept_ntp_adjtime(&ntv);
 			sync_status("kernel time sync disabled",
 				pll_status,
 				ntv.status);
@@ -1375,6 +1379,7 @@ pll_trap(
 	int arg
 	)
 {
+	UNUSED_ARG(arg);
 	pll_control = false;
 	siglongjmp(env, 1);
 }

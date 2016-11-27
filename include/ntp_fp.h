@@ -9,7 +9,7 @@
 
 /*
  * NTP uses two fixed point formats.  The first (l_fp) is the "long"
- * format and is 64 bits long with the decimal between bits 31 and 32.
+ * format and is 64 bits wide with the decimal between bits 31 and 32.
  * This is used for time stamps in the NTP packet header (in network
  * byte order) and for internal computations of offsets (in local host
  * byte order). We use the same structure for both signed and unsigned
@@ -40,7 +40,7 @@ typedef struct {
 
 /*
  * Fractional precision (of an l_fp) is actually the number of
- * bits in a long.
+ * bits in an int32_t/uint32_t.
  */
 #define	FRACTION_PREC	(32)
 
@@ -65,7 +65,7 @@ typedef int32_t s_fp;
 typedef uint32_t u_fp;
 
 /*
- * A unit second in fp format.	Actually 2**(half_the_bits_in_a_long)
+ * A unit second in fp format.	Actually 2**(half_the_bits_in_int32)
  */
 #define	FP_SECOND	(0x10000)
 
@@ -335,8 +335,8 @@ typedef uint32_t u_fp;
 /*
  * Prototypes
  */
-extern	char *	dofptoa		(u_fp, int, short, int);
-extern	char *	dolfptoa	(uint32_t, uint32_t, int, short, int);
+extern	char *	dofptoa		(u_fp, bool, short, bool);
+extern	char *	dolfptoa	(uint32_t, uint32_t, bool, short, bool);
 
 extern	bool	atolfp		(const char *, l_fp *);
 extern	char *	fptoa		(s_fp, short);
@@ -355,10 +355,8 @@ extern	void	init_systime	(void);
 extern  void	get_ostime	(struct timespec *tsp);
 extern	void	normalize_time	(struct timespec, long, l_fp *);
 extern	void	get_systime	(l_fp *);
-extern	bool	step_systime	(double);
-extern	bool	adj_systime	(double);
-
-extern	struct tm * ntp2unix_tm (uint32_t ntp, int local);
+extern	bool	step_systime	(double, int (*settime)(struct timespec *));
+extern	bool	adj_systime	(double, int (*adjtime)(const struct timeval *, struct timeval *));
 
 #define	lfptoa(fpv, ndec)	mfptoa((fpv)->l_ui, (fpv)->l_uf, (ndec))
 #define	lfptoms(fpv, ndec)	mfptoms((fpv)->l_ui, (fpv)->l_uf, (ndec))
@@ -368,8 +366,8 @@ extern	struct tm * ntp2unix_tm (uint32_t ntp, int local);
 #define sptoa(addr)		sockporttoa(addr)
 #define stohost(addr)		socktohost(addr)
 
-#define	ufptoa(fpv, ndec)	dofptoa((fpv), 0, (ndec), 0)
-#define	ufptoms(fpv, ndec)	dofptoa((fpv), 0, (ndec), 1)
+#define	ufptoa(fpv, ndec)	dofptoa((fpv), false, (ndec), false)
+#define	ufptoms(fpv, ndec)	dofptoa((fpv), false, (ndec), true)
 #define	ulfptoa(fpv, ndec)	dolfptoa((fpv)->l_ui, (fpv)->l_uf, 0, (ndec), 0)
 #define	ulfptoms(fpv, ndec)	dolfptoa((fpv)->l_ui, (fpv)->l_uf, 0, (ndec), 1)
 #define	umfptoa(fpi, fpf, ndec) dolfptoa((fpi), (fpf), 0, (ndec), 0)

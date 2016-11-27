@@ -620,6 +620,7 @@ addvars(
 	FILE *fp
 	)
 {
+	UNUSED_ARG(fp);
 	doaddvlist(g_varlist, pcmd->argval[0].string);
 }
 
@@ -634,6 +635,7 @@ rmvars(
 	FILE *fp
 	)
 {
+	UNUSED_ARG(fp);
 	dormvlist(g_varlist, pcmd->argval[0].string);
 }
 
@@ -648,6 +650,8 @@ clearvars(
 	FILE *fp
 	)
 {
+	UNUSED_ARG(pcmd);
+	UNUSED_ARG(fp);
 	doclearvlist(g_varlist);
 }
 
@@ -662,6 +666,7 @@ showvars(
 	FILE *fp
 	)
 {
+	UNUSED_ARG(pcmd);
 	doprintvlist(g_varlist, fp);
 }
 
@@ -1314,6 +1319,7 @@ associations(
 	FILE *fp
 	)
 {
+	UNUSED_ARG(pcmd);
 	if (dogetassoc(fp))
 		printassoc(0, fp);
 }
@@ -1329,6 +1335,7 @@ lassociations(
 	FILE *fp
 	)
 {
+	UNUSED_ARG(pcmd);
 	if (dogetassoc(fp))
 		printassoc(1, fp);
 }
@@ -1344,6 +1351,7 @@ passociations(
 	FILE *fp
 	)
 {
+	UNUSED_ARG(pcmd);
 	printassoc(0, fp);
 }
 
@@ -1358,6 +1366,7 @@ lpassociations(
 	FILE *fp
 	)
 {
+	UNUSED_ARG(pcmd);
 	printassoc(1, fp);
 }
 
@@ -1857,6 +1866,7 @@ doprintpeers(
 		return true;
 	}
 	else
+		/* coverity[leaked_storage] */
 		return true;
 }
 
@@ -2187,6 +2197,8 @@ config (
 	int col;
 	int i;
 
+	UNUSED_ARG(fp);
+
 	cfgcmd = pcmd->argval[0].string;
 
 	if (debug > 2)
@@ -2253,6 +2265,8 @@ config_from_file (
 	size_t config_len;
 	int i;
 	int retry_limit;
+
+	UNUSED_ARG(fp);
 
 	if (debug > 2)
 		fprintf(stderr,
@@ -3315,6 +3329,8 @@ ifstats(
 	bool		comprende;
 	size_t		len;
 
+	UNUSED_ARG(pcmd);
+
 	qres = doquery(CTL_OP_READ_ORDLIST_A, 0, true, 0, NULL, &rstatus,
 		       &dsize, &datap);
 	if (qres)	/* message already displayed */
@@ -3530,6 +3546,8 @@ reslist(
 	reslist_row	row;
 	int		comprende;
 	size_t		len;
+
+	UNUSED_ARG(pcmd);
 
 	qres = doquery(CTL_OP_READ_ORDLIST_A, 0, true, qdata_chars,
 		       qdata, &rstatus, &dsize, &datap);
@@ -3800,6 +3818,7 @@ sysstats(
 	VDC_INIT(NULL,			NULL,			  0)
     };
 
+	UNUSED_ARG(pcmd);
 	collect_display_vdc(0, sysstats_vdc, false, fp);
 }
 
@@ -3831,6 +3850,7 @@ sysinfo(
 	VDC_INIT(NULL,			NULL,		      0)
     };
 
+	UNUSED_ARG(pcmd);
 	collect_display_vdc(0, sysinfo_vdc, true, fp);
 }
 
@@ -3864,6 +3884,7 @@ kerninfo(
 	VDC_INIT(NULL,			NULL,			 0)
     };
 
+	UNUSED_ARG(pcmd);
 	collect_display_vdc(0, kerninfo_vdc, true, fp);
 }
 
@@ -3889,6 +3910,7 @@ monstats(
 	VDC_INIT(NULL,			NULL,			0)
     };
 
+	UNUSED_ARG(pcmd);
 	collect_display_vdc(0, monstats_vdc, false, fp);
 }
 
@@ -3918,6 +3940,7 @@ iostats(
 	VDC_INIT(NULL,			NULL,			  0)
     };
 
+	UNUSED_ARG(pcmd);
 	collect_display_vdc(0, iostats_vdc, false, fp);
 }
 
@@ -3938,6 +3961,7 @@ timerstats(
 	VDC_INIT(NULL,			NULL,		       0)
     };
 
+	UNUSED_ARG(pcmd);
 	collect_display_vdc(0, timerstats_vdc, false, fp);
 }
 
@@ -3964,6 +3988,7 @@ authinfo(
 	VDC_INIT(NULL,			NULL,		     0)
     };
 
+	UNUSED_ARG(pcmd);
 	collect_display_vdc(0, authinfo_vdc, false, fp);
 }
 

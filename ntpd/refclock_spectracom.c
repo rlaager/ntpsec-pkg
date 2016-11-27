@@ -25,7 +25,7 @@
  *
  * In former times this driver supported the Spectracom 9300 (now
  * end-of-lifed) and several models of Spectracom radio clocks that were
- * obsolesced by the WWVB modulation change in 2013.
+ * obsolesced by the WWVB modulation change at 2012-10-29T15:00:00Z.
  *
  * There are two timecode formats used by these clocks:
  *
@@ -216,6 +216,8 @@ spectracom_shutdown(
 {
 	struct refclockproc *	pp;
 	struct spectracomunit *	up;
+
+	UNUSED_ARG(unit);
 
 	pp = peer->procptr;
 	up = pp->unitptr;
@@ -437,6 +439,8 @@ spectracom_timer(
 	struct peer *peer
 	)
 {
+	UNUSED_ARG(unit);
+
 	register struct spectracomunit *up;
 	struct refclockproc *pp;
 	char	pollchar;	/* character sent to clock */
@@ -486,6 +490,8 @@ spectracom_poll(
 {
 	register struct spectracomunit *up;
 	struct refclockproc *pp;
+
+	UNUSED_ARG(unit);
 
 	/*
 	 * Sweep up the samples received since the last poll. If none
@@ -550,6 +556,10 @@ spectracom_control(
 	register struct spectracomunit *up;
 	struct refclockproc *pp;
 	
+	UNUSED_ARG(unit);
+	UNUSED_ARG(in_st);
+	UNUSED_ARG(out_st);
+
 	pp = peer->procptr;
 	up = pp->unitptr;
 

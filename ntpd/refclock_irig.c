@@ -385,6 +385,8 @@ irig_shutdown(
 	struct refclockproc *pp;
 	struct irigunit *up;
 
+	UNUSED_ARG(unit);
+
 	pp = peer->procptr;
 	up = pp->unitptr;
 	if (-1 != pp->io.fd)
@@ -414,7 +416,7 @@ irig_receive(
 	 */
 	double	sample;		/* codec sample */
 	uint8_t	*dpt;		/* buffer pointer */
-	int	bufcnt;		/* buffer counter */
+	size_t	bufcnt;		/* buffer counter */
 	l_fp	ltemp;		/* l_fp temp */
 
 	peer = rbufp->recv_peer;
@@ -749,6 +751,8 @@ irig_baud(
 	double	dtemp;
 	l_fp	ltemp;
 
+	UNUSED_ARG(bits);
+
         pp = peer->procptr;
 	up = pp->unitptr;
 
@@ -978,6 +982,8 @@ irig_poll(
 	)
 {
 	struct refclockproc *pp;
+
+	UNUSED_ARG(unit);
 
 	pp = peer->procptr;
 

@@ -590,6 +590,8 @@ chu_shutdown(
 	struct chuunit *up;
 	struct refclockproc *pp;
 
+	UNUSED_ARG(unit);
+
 	pp = peer->procptr;
 	up = pp->unitptr;
 	if (up == NULL)
@@ -1208,7 +1210,7 @@ chu_a(
 
 	/*
 	 * Extract the second number; it must be in the range 2 through
-	 * 9 and the two repititions must be the same.
+	 * 9 and the two repetitions must be the same.
 	 */
 	temp = (up->cbuf[k + 4] >> 4) & 0xf;
 	if (temp < 2 || temp > 9 || k + 9 >= nchar || temp !=
@@ -1307,6 +1309,8 @@ chu_poll(
 {
 	struct refclockproc *pp;
 
+	UNUSED_ARG(unit);
+
 	pp = peer->procptr;
 	pp->polls++;
 }
@@ -1327,6 +1331,8 @@ chu_second(
 	char	synchar, qual, leapchar;
 	int	minset, i;
 	double	dtemp;
+
+	UNUSED_ARG(unit);
 
 	pp = peer->procptr;
 	up = pp->unitptr;

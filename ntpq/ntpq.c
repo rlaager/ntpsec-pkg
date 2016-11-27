@@ -47,7 +47,7 @@ const char *prompt = "ntpq> ";	/* prompt to ask him about */
  * libntpq clients such as ntpsnmpd, which are free to reset it as
  * desired.
  */
-int	old_rv = 1;
+bool	old_rv = true;
 
 
 /*
@@ -404,18 +404,19 @@ void clear_globals(void)
 #endif /* !BUILD_AS_LIB */
 #endif /* NO_MAIN_ALLOWED */
 
-#define ALL_OPTIONS "46c:dD:inOpV"
+#define ALL_OPTIONS "46c:dD:inOpVw"
 static const struct option longoptions[] = {
     { "ipv4",		    0, 0, '4' },
     { "ipv6",		    0, 0, '6' },
     { "command",	    1, 0, 'c' },
     { "debug",		    0, 0, 'd' },
     { "set-debug-level",    1, 0, 'D' },
-    { "interactive",        1, 0, 'i' },
-    { "numeric",            1, 0, 'n' },
-    { "old-rv",             1, 0, 'O' },
-    { "peers",              1, 0, 'p' },
+    { "interactive",        0, 0, 'i' },
+    { "numeric",            0, 0, 'n' },
+    { "old-rv",             0, 0, 'O' },
+    { "peers",              0, 0, 'p' },
     { "version",	    0, 0, 'V' },
+    { "wide",		    0, 0, 'w' },
     { NULL,                 0, 0, '\0'},
 };
 
@@ -449,7 +450,7 @@ ntpqmain(
 	)
 {
 	u_int ihost;
-	int icmd;
+	size_t icmd;
 	int msglen;
 
 	delay_time.l_ui = 0;
@@ -540,6 +541,8 @@ ntpqmain(
 			opt_wide = true;
 			break;
 		    default :
+			/* chars not in table get converted to ? */
+			printf("Unknown command line switch ignored.\n");
 			break;
 		    } /*switch*/
 		}
@@ -617,9 +620,10 @@ ntpqmain(
 		getcmds();
 	} else {
 		for (ihost = 0; ihost < numhosts; ihost++) {
+			int i;
 			if (openhost(chosts[ihost].name, chosts[ihost].fam))
-				for (icmd = 0; icmd < numcmds; icmd++)
-					docmd(ccmds[icmd]);
+				for (i = 0; i < numcmds; i++)
+					docmd(ccmds[i]);
 		}
 	}
 #ifdef SYS_WINNT
@@ -873,6 +877,7 @@ getresponse(
 	fd_set fds;
 	int n;
 	int errcode;
+	int bail = 0;
 
 	/*
 	 * This is pretty tricky.  We may get between 1 and MAXFRAG packets
@@ -896,6 +901,14 @@ getresponse(
 	 * code paths to loop again use continue.
 	 */
 	for (;;) {
+
+                /* Discarding various invalid packets can cause us to
+                   loop more than MAXFRAGS times, but enforce a sane bound
+                   on how long we're willing to spend here. */
+		if(bail++ >= (2*MAXFRAGS)) {
+                        warning("too many packets in response; bailing out");
+			return ERR_TOOMUCH;
+                }
 
 		if (numfrags == 0)
 			tvo = tvout;
@@ -1498,6 +1511,8 @@ abortcmd(
 	int sig
 	)
 {
+	UNUSED_ARG(sig);
+
 	if (current_output == stdout)
 	    (void) fflush(stdout);
 	putc('\n', stderr);
@@ -1851,6 +1866,8 @@ getnetnum(
 {
 	struct addrinfo hints, *ai = NULL;
 
+	UNUSED_ARG(af);
+
 	ZERO(hints);
 	hints.ai_flags = AI_CANONNAME;
 #ifdef AI_ADDRCONFIG
@@ -2058,8 +2075,12 @@ decodearr(
 		    break;
 
 		bp = buf;
-		while (!isspace((int)*cp) && *cp != '\0')
+		while (!isspace((int)*cp) && *cp != '\0') {
 		    *bp++ = *cp++;
+		    if(bp >= buf + sizeof buf)
+		        return false;
+		}
+
 		*bp++ = '\0';
 
 		if (!decodetime(buf, lfp))
@@ -2289,6 +2310,7 @@ ntp_poll(
 	FILE *fp
 	)
 {
+	UNUSED_ARG(pcmd);
 	(void) fprintf(fp, "poll not implemented yet\n");
 }
 
@@ -2450,6 +2472,8 @@ quit(
 	FILE *fp
 	)
 {
+	UNUSED_ARG(pcmd);
+	UNUSED_ARG(fp);
 	if (havehost)
 	    closesocket(sockfd);	/* cleanliness next to godliness */
 	exit(0);
@@ -2467,6 +2491,7 @@ version(
 	)
 {
 
+	UNUSED_ARG(pcmd);
 	(void) fprintf(fp, "ntpq %s\n", Version);
 	return;
 }
@@ -2481,6 +2506,7 @@ raw(
 	FILE *fp
 	)
 {
+	UNUSED_ARG(pcmd);
 	rawmode = true;
 	(void) fprintf(fp, "Output set to raw\n");
 }
@@ -2496,6 +2522,7 @@ cooked(
 	FILE *fp
 	)
 {
+	UNUSED_ARG(pcmd);
 	rawmode = false;
 	(void) fprintf(fp, "Output set to cooked\n");
 	return;
@@ -2847,6 +2874,8 @@ nextvar(
 	len = srclen;
 	while (len > 0 && isspace((unsigned char)cp[len - 1]))
 		len--;
+        if(len >= sizeof name)
+                return 0;
 	if (len > 0)
 		memcpy(name, cp, len);
 	name[len] = '\0';
@@ -2955,6 +2984,7 @@ rawprint(
 	const char *cp;
 	const char *cpend;
 
+	UNUSED_ARG(datatype);
 	/*
 	 * Essentially print the data as is.  We reformat unprintables, though.
 	 */
@@ -3062,7 +3092,11 @@ outputarr(
 	register char *cp;
 	register int i;
 	register int len;
-	char buf[256];
+	char *buf;
+
+	REQUIRE(narr >= 0 && narr <= MAXVALLEN);
+	buf = malloc(16 + 8*narr);
+	ENSURE(buf != NULL);
 
 	bp = buf;
 	/*
@@ -3090,6 +3124,7 @@ outputarr(
 	}
 	*bp = '\0';
 	output(fp, name, buf);
+	free(buf);
 }
 
 static char *
@@ -3352,6 +3387,9 @@ static void list_md_fn(const EVP_MD *m, const char *from, const char *to, void *
     u_int digest_len;
     uint8_t digest[EVP_MAX_MD_SIZE];
 
+    UNUSED_ARG(from);
+    UNUSED_ARG(to);
+
     if (!m)
         return; /* Ignore aliases */
 
@@ -3360,7 +3398,7 @@ static void list_md_fn(const EVP_MD *m, const char *from, const char *to, void *
     /* Lowercase names aren't accepted by keytype_from_text in ssl_init.c */
 
     for( cp = name; *cp; cp++ ) {
-	if( islower(*cp) )
+	if( islower((int)*cp) )
 	    return;
     }
     len = (cp - name) + 1;

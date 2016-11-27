@@ -26,26 +26,13 @@
 
 #include "mx4200.h"
 
-#ifdef HAVE_SYS_PPSCLOCK_H
-# include <sys/ppsclock.h>
-#endif
-
-struct ppsclockev {
-	struct timespec tv;
-	u_int serial;
-};
-
 #ifdef HAVE_PPSAPI
 # include "ppsapi_timepps.h"
 #endif /* HAVE_PPSAPI */
 
 /*
  * This driver supports the Magnavox Model MX 4200 GPS Receiver
- * adapted to precision timing applications.  It requires the
- * ppsclock line discipline or streams module described in the
- * Line Disciplines and Streams Drivers page. It also requires a
- * gadget box and 1-PPS level converter, such as described in the
- * Pulse-per-second (PPS) Signal Interfacing page.
+ * adapted to precision timing applications.  It requires the PPS API.
  *
  * It's likely that other compatible Magnavox receivers such as the
  * MX 4200D, MX 9212, MX 9012R, MX 9112 will be supported by this code.
@@ -86,7 +73,6 @@ struct mx4200unit {
 	u_int  pollcnt;			/* poll message counter */
 	u_int  polled;			/* Hand in a time sample? */
 	u_int  lastserial;		/* last pps serial number */
-	struct ppsclockev ppsev;	/* PPS control structure */
 	double avg_lat;			/* average latitude */
 	double avg_lon;			/* average longitude */
 	double avg_alt;			/* average height */
@@ -205,6 +191,8 @@ mx4200_shutdown(
 {
 	register struct mx4200unit *up;
 	struct refclockproc *pp;
+
+	UNUSED_ARG(unit);
 
 	pp = peer->procptr;
 	up = pp->unitptr;
@@ -546,6 +534,8 @@ mx4200_poll(
 {
 	register struct mx4200unit *up;
 	struct refclockproc *pp;
+
+	UNUSED_ARG(unit);
 
 	pp = peer->procptr;
 	up = pp->unitptr;
@@ -1074,7 +1064,7 @@ static int day1tab[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 static int day2tab[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 /*
- * Calculate the the Julian Day
+ * Calculate the Julian Day
  */
 static int
 mx4200_jday(
@@ -1439,7 +1429,7 @@ mx4200_pps(
 	struct peer *peer
 	)
 {
-	int temp_serial;
+	u_int temp_serial;
 	struct refclockproc *pp;
 	struct mx4200unit *up;
 
@@ -1502,7 +1492,10 @@ mx4200_pps(
 static void
 mx4200_debug(struct peer *peer, char *fmt, ...)
 {
-#ifdef DEBUG
+	UNUSED_ARG(peer);
+#ifndef DEBUG
+	UNUSED_ARG(fmt);
+#else
 	va_list ap;
 
 	if (debug) {

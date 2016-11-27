@@ -8,6 +8,7 @@
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
 #include "ntp_control.h"	/* for CTL_* clocktypes */
+#include "ntp_intercept.h"
 
 #include <stdio.h>
 #include <ctype.h>
@@ -80,7 +81,7 @@ static	void	local_poll	(int, struct peer *);
  * Local variables
  */
 static	u_long poll_time;	/* last time polled */
-	
+
 /*
  * Transfer vector
  */
@@ -105,6 +106,8 @@ local_start(
 	)
 {
 	struct refclockproc *pp;
+
+	UNUSED_ARG(unit);
 
 	pp = peer->procptr;
 
@@ -146,6 +149,8 @@ local_poll(
 #endif /* HAVE_KERNEL_PLL ENABLE_LOCKCLOCK */
 	struct refclockproc *pp;
 
+	UNUSED_ARG(unit);
+
 	/*
 	 * Do no evil unless the house is dark or lit with our own lamp.
 	 */
@@ -169,7 +174,7 @@ local_poll(
 	 */
 #if defined(HAVE_KERNEL_PLL) && defined(ENABLE_LOCKCLOCK)
 	memset(&ntv,  0, sizeof ntv);
-	switch (ntp_adjtime(&ntv)) {
+	switch (intercept_kernel_pll_adjtime(&ntv)) {
 	case TIME_OK:
 		pp->leap = LEAP_NOWARNING;
 		peer->stratum = pp->stratum;

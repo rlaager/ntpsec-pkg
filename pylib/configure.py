@@ -5,76 +5,39 @@ import sys, os
 
 
 def cmd_configure(ctx):
-	from check_type import check_type
-	from check_sizeof import check_sizeof
-	from check_structfield import check_structfield
+	srcnode = ctx.srcnode.abspath()
+	bldnode = ctx.bldnode.abspath()
 
-	if ctx.options.list:
-		from refclock import refclock_map
-		print "ID    Description"
-		print "~~    ~~~~~~~~~~~"
-		for id in refclock_map:
-			print "%-5s %s" % (id, refclock_map[id]["descr"])
+	opt_map = {}
+	# Wipe out and override flags with those from the commandline
+	for flag in ctx.env.OPT_STORE:
+		opt = flag.replace("--", "").upper() # XXX: find a better way.
+		opt_map[opt] = ctx.env.OPT_STORE[flag]
 
-		return
-
+	msg("--- Configuring host ---")
+	ctx.setenv('host', ctx.env.derive())
 
 	ctx.load('compiler_c')
 	ctx.load('bison')
 
-	# This needs to be at the top since it modifies CC and AR
-	if ctx.options.enable_fortify:
-		from check_fortify import check_fortify
-		check_fortify(ctx)
+	for opt in opt_map:
+		ctx.env[opt] = opt_map[opt]
+
+	from compiler import check_compiler
+	check_compiler(ctx)
 
 
-	if ctx.options.enable_debug_gdb:
-		ctx.env.CFLAGS += ["-g"]
 
-	if ctx.options.enable_saveconfig:
-		ctx.define("SAVECONFIG", 1)
-
-	if ctx.options.enable_debug:
-		ctx.define("DEBUG", 1)
-		ctx.env.BISONFLAGS += ["--debug"]
-
-	ctx.env.CFLAGS += ["-Wall"]	# Default CFLAGS.
-
-
-	# Check target platform.
-	ctx.start_msg("Checking build target")
-	from sys import platform
-	if platform == "win32":
-		ctx.env.PLATFORM_TARGET = "win"
-	elif platform == "darwin":
-		ctx.env.PLATFORM_TARGET = "osx"
-	elif platform.startswith("freebsd"):
-		ctx.env.PLATFORM_TARGET = "freebsd"
-	elif platform.startswith("netbsd"):
-		ctx.env.PLATFORM_TARGET = "netbsd"
-	else:
-		ctx.env.PLATFORM_TARGET = "unix"
-	ctx.end_msg(ctx.env.PLATFORM_TARGET	)
-
-
-	# XXX: hack
-	if ctx.env.PLATFORM_TARGET in ["freebsd", "osx"]:
-		ctx.env.PLATFORM_INCLUDES = ["/usr/local/include"]
-		ctx.env.PLATFORM_LIBPATH = ["/usr/local/lib"]
-	elif ctx.env.PLATFORM_TARGET == "netbsd":
-		ctx.env.PLATFORM_LIBPATH = ["/usr/pkg/lib"]
-	elif ctx.env.PLATFORM_TARGET == "win":
-		ctx.load("msvc")
-
-	# OS X needs this for IPV6
-	if ctx.env.PLATFORM_TARGET == "osx":
-		ctx.define("__APPLE_USE_RFC_3542", 1)
-
-	# Wipe out and override flags with those from the commandline
-	for flag in ctx.env.OPT_STORE:
-		opt = flag.replace("--", "").upper() # XXX: find a better way.
-		ctx.env[opt] = ctx.env.OPT_STORE[flag]
-
+	if ctx.options.enable_rtems_trace:
+		ctx.find_program("rtems-tld", var="BIN_RTEMS_TLD", path_list=[ctx.options.rtems_trace_path, ctx.env.BINDIR])
+		ctx.env.RTEMS_TEST_ENABLE = True
+		ctx.env.RTEMS_TEST_FLAGS = ["-C", "%s/devel/trace/ntpsec-trace.ini" % srcnode,
+									"-W", "%s/ntpsec-wrapper" % bldnode,
+									"-P", "%s/devel/trace/" % srcnode,
+									"-f", "-I%s" % bldnode,
+									"-f", "-I%s/include/" % srcnode,
+									"-f", "-I%s/libisc/include/" % srcnode,
+									"-f", "-I%s/libisc/unix/include/" % srcnode]
 
 	ctx.find_program("awk", var="BIN_AWK")
 	ctx.find_program("perl", var="BIN_PERL")
@@ -82,16 +45,23 @@ def cmd_configure(ctx):
 	ctx.find_program("asciidoc", var="BIN_ASCIIDOC", mandatory=False)
 	ctx.find_program("a2x", var="BIN_A2X", mandatory=False)
 
-	if ctx.options.enable_doc and not ctx.env.BIN_ASCIIDOC:
+	if (ctx.options.enable_doc or ctx.options.enable_doc_only) and not ctx.env.BIN_ASCIIDOC:
 		ctx.fatal("asciidoc is required in order to build documentation")
-	elif ctx.options.enable_doc:
-		ctx.env.ASCIIDOC_FLAGS = ["-f", "%s/docs/asciidoc.conf" % ctx.srcnode.abspath(), "-a", "stylesdir=%s/docs/" % ctx.srcnode.abspath()]
+	elif (ctx.options.enable_doc or ctx.options.enable_doc_only):
+		ctx.env.ASCIIDOC_FLAGS = ["-f", "%s/docs/asciidoc.conf" % ctx.srcnode.abspath()]
 		ctx.env.ENABLE_DOC = True
+		ctx.env.ENABLE_DOC_ONLY = ctx.options.enable_doc_only
+		ctx.env.PATH_DOC = ctx.options.path_doc
 
 	# XXX: conditionally build this with --disable-man?  Should it build without docs enabled?
 	ctx.env.A2X_FLAGS = ["--format", "manpage", "--asciidoc-opts=--conf-file=%s/docs/asciidoc.conf" % ctx.srcnode.abspath()]
+	if not ctx.options.enable_a2x_xmllint:
+		ctx.env.A2X_FLAGS += ["--no-xmllint"]
 
 
+	# Disable manpages within build()
+	if ctx.options.disable_manpage:
+		ctx.env.DISABLE_MANPAGE = True
 
 	from os.path import exists
 	from waflib.Utils import subprocess
@@ -115,11 +85,103 @@ def cmd_configure(ctx):
 	ctx.define("NTPS_VERSION_STRING", ctx.env.NTPS_VERSION_STRING)
 	ctx.end_msg(ctx.env.NTPS_VERSION_STRING)
 
+
+	msg("--- Configuring main ---")
+	ctx.setenv("main", ctx.env.derive())
+
+	# XXX: temp hack to fix --enable-doc-only
+	ctx.env.ENABLE_DOC_ONLY = ctx.options.enable_doc_only
+
+	# The rest is not needed for documentation building.
+	if ctx.options.enable_doc_only:
+		return
+
+	from check_type import check_type
+	from check_sizeof import check_sizeof
+	from check_structfield import check_structfield
+
+	for opt in opt_map:
+		ctx.env[opt] = opt_map[opt]
+
+	if ctx.options.cross_compiler:
+		ctx.env.ENABLE_CROSS = True
+
+		ctx.start_msg("Using Cross compiler CC:")
+#		ctx.get_cc_version(ctx.env.CC, gcc=True)
+		ctx.end_msg(ctx.options.cross_compiler)
+
+		ctx.env.CC = ctx.options.cross_compiler
+		ctx.env.LINK_CC = ctx.options.cross_compiler
+
+		if ctx.env["CROSS-CFLAGS"]:
+			ctx.env.CFLAGS = opt_map["CROSS-CFLAGS"]
+
+		if ctx.env["CROSS-LDFLAGS"]:
+			ctx.env.LDFLAGS = opt_map["CROSS-LDFLAGS"]
+
+
+	if ctx.options.list:
+		from refclock import refclock_map
+		print "ID    Description"
+		print "~~    ~~~~~~~~~~~"
+		for id in refclock_map:
+			print "%-5s %s" % (id, refclock_map[id]["descr"])
+
+		return
+
+	# This needs to be at the top since it modifies CC and AR
+	if ctx.options.enable_fortify:
+		from check_fortify import check_fortify
+		check_fortify(ctx)
+
+
+	if ctx.options.enable_debug_gdb:
+		ctx.env.CFLAGS += ["-g"]
+
+	if not ctx.options.disable_debug:
+		ctx.define("DEBUG", 1)
+		ctx.env.BISONFLAGS += ["--debug"]
+
+	ctx.env.CFLAGS += ["-Wall", "-Wextra"]	# Default CFLAGS.
+
+
+	# Check target platform.
+	ctx.start_msg("Checking build target")
+	from sys import platform
+	if platform == "win32":
+		ctx.env.PLATFORM_TARGET = "win"
+	elif platform == "darwin":
+		ctx.env.PLATFORM_TARGET = "osx"
+	elif platform.startswith("freebsd"):
+		ctx.env.PLATFORM_TARGET = "freebsd"
+	elif platform.startswith("netbsd"):
+		ctx.env.PLATFORM_TARGET = "netbsd"
+	else:
+		ctx.env.PLATFORM_TARGET = "unix"
+	ctx.end_msg(ctx.env.PLATFORM_TARGET	)
+
+
+	# XXX: hack
+	if ctx.env.PLATFORM_TARGET in ["freebsd", "osx"]:
+		ctx.env.PLATFORM_INCLUDES = ["/usr/local/include"]
+		ctx.env.PLATFORM_LIBPATH = ["/usr/local/lib"]
+	elif ctx.env.PLATFORM_TARGET == "netbsd":
+		ctx.env.PLATFORM_LIBPATH = ["/usr/lib"]
+	elif ctx.env.PLATFORM_TARGET == "win":
+		ctx.load("msvc")
+
+	# OS X needs this for IPV6
+	if ctx.env.PLATFORM_TARGET == "osx":
+		ctx.define("__APPLE_USE_RFC_3542", 1)
+
 	# int32_t and uint32_t probes aren't really needed, POSIX guarantees
 	# them.  But int64_t and uint64_t are not guaranteed to exist on 32-bit
 	# machines.
-	types = ["int32_t", "uint32_t", "int64_t", "uint64_t",
-		 "uint_t", "size_t", "wint_t", "pid_t", "intptr_t", "uintptr_t"]
+#HGM	types = ["int32_t", "uint32_t", "int64_t", "uint64_t",
+#HGM		 "uint_t", "size_t", "wint_t", "pid_t", "intptr_t", "uintptr_t"]
+	# Used by timevalops and timespecops in tests/libntp/
+	# May go away when that is cleaned up.
+	types = ["uint64_t"]
 
 	for inttype in sorted(types):
 		ctx.check_type(inttype, ["stdint.h", "sys/types.h"])
@@ -146,14 +208,15 @@ def cmd_configure(ctx):
 	for (f, s, h) in structure_fields:
 		ctx.check_structfield(f, s, h)
 
+	# mostly used by timetoa.h and timespecops.h
 	sizeofs = [
 		("time.h",		"time_t"),
 		(None,			"int"),
-		(None,			"short"),
+#HGM		(None,                  "short"),
 		(None,			"long"),
 		(None,			"long long"),
-		("pthread.h",	"pthread_t"),
-		(None,			"signed char"),
+#HGM		("pthread.h",   "pthread_t"),
+#HGM		(None,                  "signed char"),
 	]
 
 	for header, sizeof in sorted(sizeofs):
@@ -166,7 +229,7 @@ def cmd_configure(ctx):
 	ctx.define("GETSOCKNAME_SOCKLEN_TYPE", "socklen_t", quote=False)
 	ctx.define("DFLT_RLIMIT_STACK", 50)
 	ctx.define("DFLT_RLIMIT_MEMLOCK", 32)
-	ctx.define("POSIX_SHELL", "/bin/sh")
+#HGM	ctx.define("POSIX_SHELL", "/bin/sh")
 
 	ctx.define("OPENSSL_VERSION_TEXT", "#XXX: Fixme")
 
@@ -180,7 +243,8 @@ def cmd_configure(ctx):
 
 	ctx.check_cc(lib="edit", mandatory=False)
 	ctx.check_cc(lib="m")
-	ctx.check_cc(lib="pthread")
+	ctx.check_cc(lib="ossaudio", mandatory=False)  # NetBSD audio
+	ctx.check_cc(lib="pthread", mandatory=False)
 	ctx.check_cc(lib="rt", mandatory=False)
 	ctx.check_cc(lib="readline", mandatory=False)
 	ctx.check_cc(lib="thr", mandatory=False)
@@ -197,28 +261,25 @@ def cmd_configure(ctx):
 	# we're likely to duplicate them.
 	functions = (
 		('adjtimex', ["sys/time.h", "sys/timex.h"]),
-		('arc4random', ["stdlib.h"]),
-		('arc4random_buf', ["stdlib.h"]),
+#HGM		('arc4random', ["stdlib.h"]),
+#HGM		('arc4random_buf', ["stdlib.h"]),
 		('closefrom', ["stdlib.h"]),
 		('clock_gettime', ["time.h"], "RT"),
 		('clock_settime', ["time.h"], "RT"),
 		('EVP_MD_do_all_sorted', ["openssl/evp.h"], "CRYPTO"),
 		('getclock', ["sys/timers.h"]),
-		('getdtablesize', ["unistd.h"]),		# SVr4, 4.2BSD
+#HGM		('getdtablesize', ["unistd.h"]),                # SVr4, 4.2BSD
 		('getpassphrase', ["stdlib.h"]),		# Sun systems
 		('MD5Init', ["md5.h"], "CRYPTO"),
 		('ntp_adjtime', ["sys/time.h", "sys/timex.h"]),		# BSD
 		('ntp_gettime', ["sys/time.h", "sys/timex.h"]),		# BSD
-		('pthread_attr_getstacksize', ["pthread.h"], "PTHREAD"),
-		('pthread_attr_setstacksize', ["pthread.h"], "PTHREAD"),
 		('res_init', ["resolv.h"]),
 		("rtprio", ["sys/rtprio.h"]),		# Sun/BSD
 		('sched_setscheduler', ["sched.h"]),
-		('settimeofday', ["sys/time.h"], "RT"),	# BSD - remove?
+		('settimeofday', ["sys/time.h"], "RT"),	# BSD
 		('strlcpy', ["string.h"]),
 		('strlcat', ["string.h"]),
-		('sysconf', ["unistd.h"]),
-		('timegm', ["time.h"]),
+#HGM		('sysconf', ["unistd.h"]),
 		('timer_create', ["time.h"]),
 		('updwtmpx', ["utmpx.h"]),		# glibc
 		)
@@ -231,6 +292,7 @@ def cmd_configure(ctx):
 							  prerequisites=ft[1],
 							  use=ft[2])
 
+	# Nobody uses the symbol, but this seems like a good sanity check.
 	ctx.check_cc(header_name="stdbool.h", mandatory=True)
 
 	# This is a list of every optional include header in the
@@ -245,13 +307,13 @@ def cmd_configure(ctx):
 	# Some of these are cruft from ancient big-iron systems and should
 	# be removed.
 	optional_headers = (
-		"alloca.h",
-		"arpa/nameser.h",
+#HGM		"alloca.h",
+#HGM		"arpa/nameser.h",
 		"dns_sd.h",
 		"histedit.h",
 		"ieeefp.h",
 		("ifaddrs.h", ["sys/types.h"]),
-		"libintl.h",
+#HGM		"libintl.h",
 		"libscf.h",
 		"linux/if_addr.h",
 		"linux/rtnetlink.h",
@@ -272,12 +334,11 @@ def cmd_configure(ctx):
 		"sys/ioctl.h",
 		"sys/modem.h",
 		"sys/prctl.h",
-		"sys/ppsclock.h",
-		"sys/procset.h",
+#HGM		"sys/procset.h",
 		"sys/sockio.h",
 		"sys/soundcard.h",
 		("sys/sysctl.h", ["sys/types.h"]),
-		"sys/systune.h",
+#HGM		"sys/systune.h",
 		("timepps.h", ["inttypes.h"]),
 		("sys/timepps.h", ["inttypes.h", "sys/time.h"]),
 	)
@@ -294,23 +355,11 @@ def cmd_configure(ctx):
 			print "Compilation check failed but include exists %s" % hdr
 
 	if ctx.get_define("HAVE_TIMEPPS_H") or ctx.get_define("HAVE_SYS_TIMEPPS_H"):
+#HGM		from pylib.check_timepps import check_timepps
+#HGM		check_timepps(ctx)
+#HGM  Can delete pylib/check_timepps.py
 		ctx.define("HAVE_PPSAPI", 1)
 
-
-	ctx.check_cc(header_name="event2/event.h", includes=ctx.env.PLATFORM_INCLUDES)
-	ctx.check_cc(feature="c cshlib", lib="event", libpath=ctx.env.PLATFORM_LIBPATH, uselib_store="LIBEVENT")
-	ctx.check_cc(feature="c cshlib", lib="event_core", libpath=ctx.env.PLATFORM_LIBPATH, uselib_store="LIBEVENT_CORE")
-	ctx.check_cc(feature="c cshlib", lib="event_pthreads", libpath=ctx.env.PLATFORM_LIBPATH, uselib_store="LIBEVENT_PTHREADS", use="LIBEVENT")
-
-
-	# Check for Linux capability.
-	ctx.check_cc(header_name="sys/capability.h", mandatory=False)
-	ctx.check_cc(lib="cap", mandatory=False)
-	if ctx.env.LIB_CAP:
-		from check_cap import check_cap
-		check_cap(ctx)
-	if ctx.get_define("HAVE_CAPABILITY") and ctx.get_define("HAVE_SYS_CAPABILITY_H") and ctx.get_define("HAVE_SYS_PRCTL_H"):
-		ctx.define("HAVE_LINUX_CAPABILITY", 1)
 
 	# Check for Solaris capabilities
 	if ctx.get_define("HAVE_PRIV_H") and sys.platform == "Solaris":
@@ -319,14 +368,21 @@ def cmd_configure(ctx):
 	from check_sockaddr import check_sockaddr
 	check_sockaddr(ctx)
 
-	from check_posix_thread_version import check_posix_thread_version
+#HGM	from check_posix_thread_version import check_posix_thread_version
 
-	check_posix_thread_version(ctx)
-	ctx.define('HAVE_PTHREADS', ctx.env.POSIX_THREAD_VERISON)
+#HGM	check_posix_thread_version(ctx)
+#HGM	ctx.define('HAVE_PTHREADS', ctx.env.POSIX_THREAD_VERISON)
 
 
 	if ctx.options.refclocks:
 		from refclock import refclock_config
+
+		# Enable audio when the right headers exist.
+		if ctx.get_define("HAVE_SYS_AUDIOIO_H") or \
+				ctx.get_define("HAVE_SYS_SOUNDCARD_H") or \
+				ctx.get_define("HAVE_MACHINE_SOUNDCARD_H"):
+			ctx.env.AUDIO_ENABLE = True
+
 		refclock_config(ctx)
 
 	# FIXME: These other things should be derived,
@@ -359,10 +415,6 @@ def cmd_configure(ctx):
 
 	if not ctx.options.disable_dns_retry:
 		ctx.define("ENABLE_DNS_RETRY", 1)
-
-	if not ctx.options.disable_mdns_registration:
-		from check_mdns import check_mdns
-		check_mdns(ctx)
 
 
 	# There is an ENABLE_AUTOKEY as well, but as that feature
@@ -446,7 +498,6 @@ def cmd_configure(ctx):
 
 	ctx.define("DIR_SEP", "'%s'" % sep, quote=False)
 
-
 	# libisc/
 	# XXX: Hack that needs to be fixed properly for all platforms
 	ctx.define("ISC_PLATFORM_NORETURN_PRE", "", quote=False)
@@ -457,6 +508,31 @@ def cmd_configure(ctx):
 	ctx.define("ISC_PLATFORM_HAVESCOPEID", 1)
 	ctx.define("ISC_PLATFORM_USETHREADS", 1)
 	ctx.define("HAVE_IFLIST_SYSCTL", 1)
+
+
+	# Header checks
+	from pylib.check_cap import check_cap_header
+	check_cap_header(ctx)
+
+	from pylib.check_libevent2 import check_libevent2_header
+	check_libevent2_header(ctx)
+
+	if not ctx.options.disable_mdns_registration:
+		from pylib.check_mdns import check_mdns_header
+		check_mdns_header(ctx)
+
+
+	# Run checks
+	from pylib.check_cap import check_cap_run
+	check_cap_run(ctx)
+
+	from pylib.check_libevent2 import check_libevent2_run
+	check_libevent2_run(ctx)
+
+	if not ctx.options.disable_mdns_registration:
+		from pylib.check_mdns import check_mdns_run
+		check_mdns_run(ctx)
+
 
 	ctx.start_msg("Writing configuration header:")
 	ctx.write_config_header("config.h")
@@ -475,6 +551,12 @@ def cmd_configure(ctx):
 	msg_setting("CFLAGS", " ".join(ctx.env.CFLAGS))
 	msg_setting("LDFLAGS", " ".join(ctx.env.LDFLAGS))
 	msg_setting("PREFIX", ctx.env.PREFIX)
-	msg_setting("Debug Support", yesno(ctx.options.enable_debug))
-	msg_setting("Refclocks", ctx.options.refclocks)
-	msg_setting("Build Manpages", yesno(ctx.env.BIN_A2X))
+	msg_setting("Debug Support", yesno(not ctx.options.disable_debug))
+	msg_setting("Refclocks", ", ".join(ctx.env.REFCLOCK_LIST))
+	msg_setting("Build Manpages", yesno(ctx.env.BIN_A2X and not ctx.env.DISABLE_MANPAGE))
+
+	if ctx.options.enable_debug:
+		msg("")
+		msg("*** --enable-debug ignored.  (default on now)")
+		msg("")
+

@@ -62,6 +62,7 @@ static int err(int out, const char *legend)
 void ppscheck(char *device)
 {
 #ifndef HAVE_SYS_TIMEPPS_H
+	(void)device;
  	fputs("ntpfrob: PPS is not available.\n", stderr);
 	exit(1);
 #else
@@ -87,7 +88,7 @@ void ppscheck(char *device)
 	if (i < 0)
 		err(1, "time_pps_getcap");
 
-	pp.mode = PPS_CAPTUREASSERT | PPS_ECHOASSERT;
+	/* pp.mode = PPS_CAPTUREASSERT | PPS_ECHOASSERT; */
 	pp.mode = PPS_CAPTUREBOTH;
 	/* pp.mode = PPS_CAPTUREASSERT; */
 

@@ -348,7 +348,7 @@ maintain_activefds(
 {
 	int i;
 
-	if (fd < 0 || fd >= FD_SETSIZE) {
+	if (fd < 0 || fd >= (int)FD_SETSIZE) {
 		msyslog(LOG_ERR,
 			"Too many sockets in use, FD_SETSIZE %d exceeded by fd %d",
 			FD_SETSIZE, fd);
@@ -716,7 +716,7 @@ addr_samesubnet(
  * and set the return value
  * see the bind9/getaddresses.c for details
  */
-int
+bool
 is_ip_address(
 	const char *	host,
 	u_short		af,
@@ -1094,12 +1094,12 @@ log_listen_address(
 	)
 {
 	msyslog(LOG_INFO, "%s on %d %s %s",
-		(ep->ignore_packets)
-		    ? "Listen and drop"
-		    : "Listen normally",
-		ep->ifnum,
-		ep->name,
-		sptoa(&ep->sin));
+			(ep->ignore_packets)
+			    ? "Listen and drop"
+			    : "Listen normally",
+			ep->ifnum,
+			ep->name,
+			sptoa(&ep->sin));
 }
 
 
@@ -1679,6 +1679,10 @@ check_flags6(
 	close(fd);
 	if ((ifr6.ifr_ifru.ifru_flags6 & flags6) != 0)
 		return true;
+#else
+	UNUSED_ARG(psau);
+	UNUSED_ARG(name);
+	UNUSED_ARG(flags6);
 #endif	/* USE_IPV6_SUPPORT && SIOCGIFAFLAG_IN6 */
 	return false;
 }
@@ -1692,6 +1696,8 @@ is_anycast(
 #ifdef IN6_IFF_ANYCAST
 	return check_flags6(psau, name, IN6_IFF_ANYCAST);
 #else
+	UNUSED_ARG(psau);
+	UNUSED_ARG(name);
 	return false;
 #endif
 }
@@ -3276,6 +3282,7 @@ read_refclock_packet(
 	rb->recv_length = buflen;
 	rb->recv_peer = rp->srcclock;
 	rb->dstadr = 0;
+	rb->cast_flags = 0;
 	rb->fd = fd;
 	rb->recv_time = ts;
 	rb->receiver = rp->clock_recv;
@@ -3318,6 +3325,10 @@ fetch_timestamp(
 	l_fp			nts;
 #ifdef DEBUG_TIMING
 	l_fp			dts;
+#endif
+
+#ifndef DEBUG_TIMING
+	UNUSED_ARG(rb);
 #endif
 
 	cmsghdr = CMSG_FIRSTHDR(msghdr);
@@ -3384,7 +3395,11 @@ fetch_timestamp(
 				break;
 #endif  /* USE_SCM_TIMESTAMP */
 			}
-			fuzz = intercept_ntp_random(__func__) * 2. / FRAC * sys_fuzz;
+			/*
+			 * RNG call does not have to be recorded for replay
+			 * because the fuzzed timestamp is recorded.
+			 */
+			fuzz = ntp_random() * 2. / FRAC * sys_fuzz;
 			DTOLFP(fuzz, &lfpfuzz);
 			L_ADD(&nts, &lfpfuzz);
 #ifdef DEBUG_TIMING
@@ -3474,9 +3489,9 @@ read_network_packet(
 	msghdr.msg_namelen    = fromlen;
 	msghdr.msg_iov        = &iovec;
 	msghdr.msg_iovlen     = 1;
+	msghdr.msg_flags      = 0;
 	msghdr.msg_control    = (void *)&control;
 	msghdr.msg_controllen = sizeof(control);
-	msghdr.msg_flags      = 0;
 	rb->recv_length       = recvmsg(fd, &msghdr, 0);
 #endif
 
@@ -3530,13 +3545,16 @@ read_network_packet(
 	 * put it on the full list and do bookkeeping.
 	 */
 	rb->dstadr = itf;
+	rb->cast_flags = (uint8_t)(((rb->dstadr->flags &
+				     INT_MCASTOPEN) && rb->fd == rb->dstadr->fd) ? MDF_MCAST
+				   : rb->fd == rb->dstadr->bfd ? MDF_BCAST : MDF_UCAST);
 	rb->fd = fd;
 #ifdef USE_PACKET_TIMESTAMP
 	/* pick up a network time stamp if possible */
 	ts = fetch_timestamp(rb, &msghdr, ts);
 #endif
 	rb->recv_time = ts;
-	rb->receiver = receive;
+	rb->receiver = intercept_receive;
 
 	add_full_recv_buffer(rb);
 
@@ -3569,7 +3587,12 @@ io_handler(void)
 	if (nfound > 0) {
 		l_fp ts;
 
-		intercept_get_systime(__func__, &ts);
+		/*
+		 * Doesn't need to be intercepted, because the time
+		 * algorithms don't use it.  It's strictly internal
+		 * to the I/O handling.
+		 */
+		get_systime(&ts);
 
 		input_handler(&ts);
 	} else if (nfound == -1 && errno != EINTR) {
@@ -3785,11 +3808,12 @@ input_handler(
 	}
 	/* We've done our work */
 #ifdef DEBUG_TIMING
-	intercept_get_systime(__func__, &ts_e);
+	get_systime(&ts_e);
 	/*
 	 * (ts_e - ts) is the amount of time we spent
 	 * processing this gob of file descriptors.  Log
-	 * it.
+	 * it.  Because it's only used for logging, this
+	 * get_systime doesn't have to be captured/replayed.
 	 */
 	L_SUB(&ts_e, &ts);
 	collect_timing(NULL, "input handler", 1, &ts_e);
@@ -4361,6 +4385,8 @@ kill_asyncio(
 	int	startfd
 	)
 {
+	UNUSED_ARG(startfd);
+
 	BLOCKIO();
 
 	/*

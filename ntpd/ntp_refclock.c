@@ -508,7 +508,7 @@ refclock_sample(
  * This routine simulates the NTP receive and packet procedures for a
  * reference clock. This provides a mechanism in which the ordinary NTP
  * filter, selection and combining algorithms can be used to suppress
- * misbehaving radios and to mitigate between them when more than one is
+ * misbehaving time sources and to mitigate between them when more than one is
  * available for backup.
  */
 void
@@ -626,11 +626,11 @@ refclock_gtlin(
  *
  * *tsptr receives a copy of the buffer timestamp.
  */
-int
+size_t
 refclock_gtraw(
 	struct recvbuf *rbufp,	/* receive buffer pointer */
 	char	*lineptr,	/* current line pointer */
-	int	bmax,		/* remaining characters in line */
+	size_t	bmax,		/* remaining characters in line */
 	l_fp	*tsptr		/* pointer to timestamp returned */
 	)
 {
@@ -643,7 +643,7 @@ refclock_gtraw(
 	lineptr[bmax] = '\0';
 
 	*tsptr = rbufp->recv_time;
-	DPRINTF(2, ("refclock_gtraw: fd %d time %s timecode %d %s\n",
+	DPRINTF(2, ("refclock_gtraw: fd %d time %s timecode %zd %s\n",
 		    rbufp->fd, ulfptoa(&rbufp->recv_time, 6), bmax,
 		    lineptr));
 	return (bmax);
@@ -902,6 +902,10 @@ refclock_ioctl(
 	u_int	lflags		/* line discipline flags */
 	)
 {
+	UNUSED_ARG(fd);
+#ifndef DEBUG
+	UNUSED_ARG(lflags);
+#endif /* DEBUG */
 	/*
 	 * simply return true if no UNIX line discipline is supported
 	 */
@@ -1165,7 +1169,7 @@ refclock_params(
  * timestamp from the kernel and saves the sign-extended fraction in
  * a circular buffer for processing at the next poll event.
  */
-bool
+pps_status
 refclock_pps(
 	struct peer *peer,		/* peer structure pointer */
 	struct refclock_atom *ap,	/* atom structure pointer */
@@ -1177,6 +1181,8 @@ refclock_pps(
 	struct timespec timeout;
 	double	dtemp;
 
+	UNUSED_ARG(mode);
+
 	/*
 	 * We require the clock to be synchronized before setting the
 	 * parameters. When the parameters have been set, fetch the
@@ -1184,11 +1190,11 @@ refclock_pps(
 	 */ 
 	pp = peer->procptr;
 	if (ap->handle == 0)
-		return false;
+		return PPS_SETUP;
 
 	if (ap->pps_params.mode == 0 && sys_leap != LEAP_NOTINSYNC) {
 		if (refclock_params(pp->sloppyclockflag, ap) < 1)
-			return false;
+			return PPS_SETUP;
 	}
 	timeout.tv_sec = 0;
 	timeout.tv_nsec = 0;
@@ -1196,18 +1202,26 @@ refclock_pps(
 	if (time_pps_fetch(ap->handle, PPS_TSFMT_TSPEC, &pps_info,
 	    &timeout) < 0) {
 		refclock_report(peer, CEVNT_FAULT);
-		return false;
+		return PPS_KERNEL;
 	}
 	timeout = ap->ts;
-	if (ap->pps_params.mode & PPS_CAPTUREASSERT)
+	if (ap->pps_params.mode & PPS_CAPTUREASSERT) {
 		ap->ts = pps_info.assert_timestamp;
-	else if (ap->pps_params.mode & PPS_CAPTURECLEAR)
+		ap->sequence = pps_info.assert_sequence;
+	}
+	else if (ap->pps_params.mode & PPS_CAPTURECLEAR) {
 		ap->ts = pps_info.clear_timestamp;
+		ap->sequence = pps_info.clear_sequence;
+	}
 	else
-		return false;
+		return PPS_NREADY;
 
+	/* Check for duplicates.
+	 * Sequence number might not be implemented.
+	 * saved (above) for debugging.
+	 */
 	if (0 == memcmp(&timeout, &ap->ts, sizeof(timeout)))
-		return false;
+		return PPS_NREADY;
 
 	/*
 	 * Convert to signed fraction offset and stuff in median filter.
@@ -1223,7 +1237,7 @@ refclock_pps(
 		printf("refclock_pps: %lu %f %f\n", current_time,
 		    dtemp, pp->fudgetime1);
 #endif
-	return true;
+	return PPS_OK;
 }
 #endif /* HAVE_PPSAPI */
 #endif /* REFCLOCK */

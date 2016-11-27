@@ -6,7 +6,7 @@ from waflib.Task import Task
 @before_method('apply_incpaths')
 @feature('bld_include')
 def insert_blddir(self):
-	bldnode = self.bld.bldnode.abspath()
+	bldnode = self.bld.bldnode.parent.abspath()
 	self.includes += [bldnode]
 
 @before_method('apply_incpaths')
@@ -56,7 +56,7 @@ def manpage_subst_fun(task, text):
 @conf
 def manpage(ctx, section, source):
 
-	if not ctx.env.BIN_A2X:
+	if (not ctx.env.BIN_A2X) or ctx.env.DISABLE_MANPAGE:
 		return
 
 	ctx(
@@ -70,11 +70,13 @@ def manpage(ctx, section, source):
 
 @conf
 def ntp_test(ctx, **kwargs):
+	bldnode = ctx.bldnode.abspath()
 	tg = ctx(**kwargs)
 
-	if hasattr(tg, "test_data"):
-		test_data = tg.test_data
-	else:
-		test_data = None
+	args = ["%s/tests/%s" % (bldnode, tg.target), "-v"]
 
-	ctx.env.TEST_BIN += [("%s/tests/%s" % (ctx.bldnode.abspath(), tg.target), test_data)]
+	if hasattr(tg, "test_args"):
+		args += tg.test_args
+
+	tg.ut_exec = args
+

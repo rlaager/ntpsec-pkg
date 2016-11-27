@@ -106,8 +106,8 @@ int	waitsync_fd_to_close = -1;	/* -w/--wait-sync */
  */
 bool initializing;
 
-extern bool config_priority_override;
-static int config_priority;
+bool config_priority_override = false;
+int config_priority;
 
 char const *progname;
 
@@ -116,10 +116,6 @@ extern bool	check_netinfo;
 #endif
 
 bool was_alarmed;
-
-#if !defined(SIM) && defined(SIGDIE1)
-static	void	finish		(int);
-#endif
 
 #if !defined(SIM) && defined(HAVE_WORKING_FORK)
 static int	wait_child_sync_if	(int, long);
@@ -139,6 +135,7 @@ char **	saved_argv;
 
 #ifndef SIM
 int		ntpdmain		(int, char **);
+static void	mainloop		(void);
 static void	set_process_priority	(void);
 static void	assertion_failed	(const char *, int,
 					 isc_assertiontype_t,
@@ -378,10 +375,12 @@ parse_cmdline_opts(
 		/* defer */
 		break;
 	    case 'y':
-		/* processed by interception code */
+		nofork = true;
+		/* further processed by interception code */
 		break;
 	    case 'Y':
-		/* processed by interception code */
+		nofork = true;
+		/* further processed by interception code */
 		break;
 	    case 'z':
 		/* defer */
@@ -548,7 +547,6 @@ ntpdmain(
 	char *argv[]
 	)
 {
-	struct recvbuf *rbuf;
 	mode_t		uv;
 	uid_t		uid;
 # if defined(HAVE_WORKING_FORK)
@@ -580,10 +578,11 @@ ntpdmain(
 	/* honor -l/--logfile option to log to a file */
 	if (logfilename != NULL) {
 		syslogit = false;
+		termlogit = false;
 		change_logfile(logfilename, false);
 	} else {
 		if (nofork)
-			msyslog_term = true;
+		    termlogit = (intercept_get_mode() == none || debug > 0);
 		if (saveconfigquit || dumpopts)
 			syslogit = false;
 	}
@@ -617,11 +616,22 @@ ntpdmain(
 	isc_error_setunexpected(library_unexpected_error);
 
 	uid = getuid();
-	if (uid && !saveconfigquit && !dumpopts) {
-		msyslog_term = true;
+	if (uid && intercept_get_mode() != replay && !saveconfigquit && !dumpopts) {
+		termlogit = true;
 		msyslog(LOG_ERR,
 			"must be run as root, not uid %ld", (long)uid);
 		exit(1);
+	}
+	switch (intercept_get_mode())
+	{
+	case none:
+	    break;
+	case replay:
+	    msyslog(LOG_NOTICE, "setting replay mode.");
+	    break;
+	case capture:
+	    msyslog(LOG_NOTICE, "setting capture mode.");
+	    break;
 	}
 
 # ifdef HAVE_WORKING_FORK
@@ -757,7 +767,6 @@ ntpdmain(
 	init_util();
 	init_restrict();
 	init_mon();
-	init_timer();
 	init_control();
 	init_peer();
 # ifdef REFCLOCK
@@ -791,6 +800,7 @@ ntpdmain(
 		stats_config(STATS_FREQ_FILE, driftfile);
 		break;
 	    case 'I':
+		if (intercept_get_mode() != replay)
 	        {
 		    sockaddr_u	addr;
 		    add_nic_rule(
@@ -801,7 +811,7 @@ ntpdmain(
 	        }
 		break;
 	    case 'k':
-		getauthkeys(ntp_optarg);
+		intercept_getauthkeys(ntp_optarg);
 		break;
 	    case 'M':
 # ifdef SYS_WINNT
@@ -925,8 +935,23 @@ ntpdmain(
 		msyslog(LOG_INFO, "running as non-root disables dynamic interface tracking");
 	}
 
-# ifdef HAVE_IO_COMPLETION_PORT
+	if (intercept_get_mode() == replay)
+	    intercept_replay();
+	else
+	    mainloop();
+	return 1;
+}
 
+/*
+ * Process incoming packets until exit or interrupted.
+ */
+static void mainloop(void)
+{
+	struct recvbuf *rbuf;
+
+	init_timer();
+
+# ifdef HAVE_IO_COMPLETION_PORT
 	for (;;) {
 		GetReceivedBuffers();
 # else /* normal I/O */
@@ -953,7 +978,6 @@ ntpdmain(
 		}
 
 		if (was_alarmed) {
-			intercept_alarm();
 			UNBLOCK_IO_AND_ALARM();
 			/*
 			 * Out here, signals are unblocked.  Call timer routine
@@ -1046,7 +1070,6 @@ ntpdmain(
 
 	}
 	UNBLOCK_IO_AND_ALARM();
-	return 1;
 }
 #endif	/* !SIM */
 
@@ -1055,15 +1078,13 @@ ntpdmain(
 /*
  * finish - exit gracefully
  */
-static void
+void
 finish(
 	int sig
 	)
 {
 	const char *sig_desc;
 
-	intercept_log("event shutdown 0\n");
-	sig_desc = NULL;
 	sig_desc = strsignal(sig);
 	if (sig_desc == NULL)
 		sig_desc = "";
@@ -1075,7 +1096,7 @@ finish(
 		DNSServiceRefDeallocate(mdns);
 # endif
 	peer_cleanup();
-	exit(0);
+	intercept_exit(0);
 }
 #endif	/* !SIM && SIGDIE1 */
 
@@ -1248,6 +1269,7 @@ moredebug(
 {
 	int saved_errno = errno;
 
+	UNUSED_ARG(sig);
 	if (debug < 255)
 	{
 		debug++;
@@ -1267,6 +1289,7 @@ lessdebug(
 {
 	int saved_errno = errno;
 
+	UNUSED_ARG(sig);
 	if (debug > 0)
 	{
 		debug--;

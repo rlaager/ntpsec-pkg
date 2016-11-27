@@ -1,5 +1,10 @@
 /*
  * dolfptoa - do the grunge work of converting an l_fp number to decimal
+ *
+ * Warning: this conversion is lossy in the low-order bits of the fractional
+ * part.  It's good enough for statistics and logging, but do not expect 
+ * it to round-trip through atolfp(). 1444359386.1798776096, for example, may
+ * dump as ...095 or ...097.
  */
 #include <config.h>
 #include <stdio.h>
@@ -13,9 +18,9 @@ char *
 dolfptoa(
 	uint32_t fpi,
 	uint32_t fpv,
-	int neg,
+	bool neg,
 	short ndec,
-	int msec
+	bool msec
 	)
 {
 	uint8_t *cp, *cpend, *cpdec;
@@ -143,7 +148,7 @@ mfptoa(
 	short	ndec
 	)
 {
-	int	isneg;
+	bool	isneg;
 
 	isneg = M_ISNEG(fpi);
 	if (isneg) {
@@ -161,7 +166,7 @@ mfptoms(
 	short	ndec
 	)
 {
-	int	isneg;
+	bool	isneg;
 
 	isneg = M_ISNEG(fpi);
 	if (isneg) {

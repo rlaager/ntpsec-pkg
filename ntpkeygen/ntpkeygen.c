@@ -759,7 +759,7 @@ main(
 	 * stream. The parameter file is the server key file with the
 	 * private key obscured.
 	 */
-	if (pkey_gqkey != NULL && opt_id_key)) {
+	if (pkey_gqkey != NULL && opt_id_key) {
 		RSA	*rsa;
 
 		snprintf(filename, sizeof(filename),
@@ -980,7 +980,7 @@ gen_md5(
 	}
 #ifdef HAVE_OPENSSL
 	for (i = 1; i <= MD5KEYS; i++) {
-		RAND_bytes(keystr, 20);
+		RAND_bytes(keystr, sizeof(keystr));
 		for (j = 0; j < MD5SIZE; j++) {
 			hexstr[2 * j] = hex[keystr[j] >> 4];
 			hexstr[2 * j + 1] = hex[keystr[j] & 0xf];

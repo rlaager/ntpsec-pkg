@@ -35,6 +35,7 @@
 #include "lib_strbuf.h"
 #include "ntp_assert.h"
 #include "ntp_random.h"
+#include "ntp_intercept.h"
 /*
  * [Bug 467]: Some linux headers collide with CONFIG_PHONE and CONFIG_KEYS
  * so #include these later.
@@ -52,6 +53,7 @@
 /* list of servers from command line for config_peers() */
 int	cmdline_server_count;
 char **	cmdline_servers;
+bool	force_synchronous_dns;
 
 /* set to false if admin doesn't want memory locked */
 bool	do_memlock = true;
@@ -142,10 +144,7 @@ char	*sys_phone[MAXPHONE] = {NULL};	/* ACTS phone numbers */
 char	default_keysdir[] = NTP_KEYSDIR;
 char	*keysdir = default_keysdir;	/* crypto keys directory */
 char *	saveconfigdir;
-bool	config_priority_override = false;
-int	config_priority;
 
-const char *config_file;
 static char default_ntp_signd_socket[] =
 #ifdef MSSNTP_PATH
 					MSSNTP_PATH;
@@ -155,14 +154,8 @@ static char default_ntp_signd_socket[] =
 char *ntp_signd_socket = default_ntp_signd_socket;
 #ifdef HAVE_NETINFO_NI_H
 struct netinfo_config_state *config_netinfo = NULL;
-int check_netinfo = true;
+bool check_netinfo = true;
 #endif /* HAVE_NETINFO_NI_H */
-#ifdef SYS_WINNT
-char *alt_config_file;
-LPTSTR temp;
-char config_file_storage[MAX_PATH];
-char alt_config_file_storage[MAX_PATH];
-#endif /* SYS_WINNT */
 
 #ifdef HAVE_NETINFO_NI_H
 /*
@@ -282,6 +275,7 @@ static void config_rlimit(config_tree *);
 static void config_system_opts(config_tree *);
 static void config_tinker(config_tree *);
 static void config_tos(config_tree *);
+static void config_logfile(config_tree *);
 static void config_vars(config_tree *);
 
 #ifdef SIM
@@ -1891,7 +1885,7 @@ config_auth(
 
 	/* Keys Command */
 	if (ptree->auth.keys)
-		getauthkeys(ptree->auth.keys);
+		intercept_getauthkeys(ptree->auth.keys);
 
 	/* Control Key Command */
 	if (ptree->auth.control_key)
@@ -2437,7 +2431,8 @@ config_access(
 					    : "default";
 			const char *kod_warn = "KOD does nothing without LIMITED.";
 
-			fprintf(stderr, "restrict %s: %s\n", kod_where, kod_warn);
+			if (intercept_get_mode() == none)
+			    fprintf(stderr, "restrict %s: %s\n", kod_where, kod_warn);
 			msyslog(LOG_WARNING, "restrict %s: %s", kod_where, kod_warn);
 		}
 
@@ -2555,6 +2550,7 @@ config_access(
 		if (ai_list != NULL)
 			freeaddrinfo(ai_list);
 	}
+	/* coverity[leaked_storage] */
 }
 #endif	/* !SIM */
 
@@ -2733,6 +2729,10 @@ config_nic_rules(
 	int		addrbits;
 
 	curr_node = HEAD_PFIFO(ptree->nic_rules);
+
+	/* we don't want to accept packets if we're replaying a log */
+	if (intercept_get_mode() == replay)
+	    return;
 
 	if (curr_node != NULL && have_interface_option) {
 		msyslog(LOG_ERR,
@@ -3017,6 +3017,8 @@ config_mdnstries(
 #if defined(HAVE_DNS_SD_H) && defined(ENABLE_MDNS_REGISTRATION)
 	extern int mdnstries;
 	mdnstries = ptree->mdnstries;
+#else
+	UNUSED_ARG(ptree);
 #endif  /* ENABLE_MDNS_REGISTRATION */
 }
 
@@ -3421,6 +3423,33 @@ free_config_fudge(
 #endif	/* FREE_CFG_T */
 
 
+/* Clone of config_vars that only does log file. */
+static void
+config_logfile(
+	config_tree *ptree
+	)
+{
+	attr_val *curr_var;
+
+	curr_var = HEAD_PFIFO(ptree->vars);
+	for (; curr_var != NULL; curr_var = curr_var->link) {
+		/* Determine which variable to set and set it */
+		switch (curr_var->attr) {
+
+		case T_Logfile:
+			if (-1 == change_logfile(curr_var->value.s, true))
+				msyslog(LOG_ERR,
+					"Cannot open logfile %s: %m",
+					curr_var->value.s);
+			break;
+
+		default:
+			break;
+		}
+	}
+}
+
+
 static void
 config_vars(
 	config_tree *ptree
@@ -3480,10 +3509,7 @@ config_vars(
 			break;
 
 		case T_Logfile:
-			if (-1 == change_logfile(curr_var->value.s, true))
-				msyslog(LOG_ERR,
-					"Cannot open logfile %s: %m",
-					curr_var->value.s);
+			/* processed in config_logfile */
 			break;
 
 		case T_Saveconfigdir:
@@ -3661,7 +3687,6 @@ peerflag_bits(
 	return peerflags;
 }
 
-
 static void
 config_peers(
 	config_tree *ptree
@@ -3702,6 +3727,21 @@ config_peers(
 					0,
 					0,
 					NULL);
+		} else if (force_synchronous_dns) {
+			if (intercept_getaddrinfo(*cmdline_servers, &peeraddr)) {
+				peer_config(
+					&peeraddr,
+					NULL,
+					NULL,
+					MODE_CLIENT,
+					NTP_VERSION,
+					0,
+					0,
+					FLAG_IBURST,
+					0,
+					0,
+					NULL);
+			}
 		} else {
 			/* we have a hostname to resolve */
 # ifdef USE_WORKER
@@ -3724,8 +3764,8 @@ config_peers(
 					     (void *)ctx);
 # else	/* !USE_WORKER follows */
 			msyslog(LOG_ERR,
-				"hostname %s can not be used, please use IP address instead.",
-				curr_peer->addr->address);
+				"hostname %s can not be used (%s), please use IP address instead.",
+				curr_peer->addr->address, gai_strerror(a_info));
 # endif
 		}
 	}
@@ -3754,8 +3794,7 @@ config_peers(
 				curr_peer->group);
 		/*
 		 * If we have a numeric address, we can safely
-		 * proceed in the mainline with it.  Otherwise, hand
-		 * the hostname off to the blocking child.
+		 * proceed in the mainline with it.
 		 */
 		} else if (is_ip_address(curr_peer->addr->address,
 				  curr_peer->addr->type, &peeraddr)) {
@@ -3775,8 +3814,26 @@ config_peers(
 					curr_peer->ttl,
 					curr_peer->peerkey,
 					curr_peer->group);
+		/*
+		 * synchronous lookup may be forced.
+		 */
+		} else if (force_synchronous_dns) {
+			if (intercept_getaddrinfo(curr_peer->addr->address, &peeraddr)) {
+				peer_config(
+					&peeraddr,
+					NULL,
+					NULL,
+					hmode,
+					curr_peer->peerversion,
+					curr_peer->minpoll,
+					curr_peer->maxpoll,
+					peerflag_bits(curr_peer),
+					curr_peer->ttl,
+					curr_peer->peerkey,
+					curr_peer->group);
+			}
 		} else {
-			/* we have a hostname to resolve */
+			/* hand the hostname off to the blocking child */
 # ifdef USE_WORKER
 			ctx = emalloc_zero(sizeof(*ctx));
 			ctx->family = curr_peer->addr->type;
@@ -4015,7 +4072,9 @@ unpeer_name_resolved(
 	u_short		af;
 	const char *	fam_spec;
 
+	(void)gai_errno;
 	(void)context;
+	(void)service;
 	(void)hints;
 	DPRINTF(1, ("unpeer_name_resolved(%s) rescode %d\n", name, rescode));
 
@@ -4259,6 +4318,11 @@ config_ntpd(
 	bool input_from_files
 	)
 {
+
+/* Do this early so most errors go to new log file */
+/* Command line arg is earlier. */
+	config_logfile(ptree);
+
 	config_nic_rules(ptree, input_from_files);
 	config_monitor(ptree);
 	config_auth(ptree);
@@ -4275,7 +4339,7 @@ config_ntpd(
 	config_trap(ptree);
 	config_vars(ptree);
 
-	if (!saveconfigquit)
+	if (!saveconfigquit && intercept_get_mode() != replay)
 		io_open_sockets();
 
 	config_other_modes(ptree);
@@ -4337,19 +4401,21 @@ config_remotely(
 
 
 /*
- * getconfig() - process startup configuration file e.g /etc/ntp.conf
+ * getconfig() - return name of configuration file e.g /etc/ntp.conf
  */
-void
+const char *
 getconfig(const char *explicit_config)
 {
-	char	line[256];
+	const char *config_file;
 
-#ifdef FREE_CFG_T
-	atexit(free_all_config_trees);
-#endif
 #ifndef SYS_WINNT
 	config_file = CONFIG_FILE;
 #else
+	char *alt_config_file;
+	LPTSTR temp;
+	char config_file_storage[MAX_PATH];
+	char alt_config_file_storage[MAX_PATH];
+
 	temp = CONFIG_FILE;
 	if (!ExpandEnvironmentStringsA(temp, config_file_storage,
 				       sizeof(config_file_storage))) {
@@ -4367,6 +4433,27 @@ getconfig(const char *explicit_config)
 	alt_config_file = alt_config_file_storage;
 #endif /* SYS_WINNT */
 
+	if (explicit_config) {
+#ifdef HAVE_NETINFO_NI_H
+	    check_netinfo = false;
+#endif
+	    config_file = explicit_config;
+	}
+
+#ifdef SYS_WINNT
+	if (access(config_file, R_OK) != 0)
+	    config_file = alt_config_file;
+#endif /* SYS_WINNT */
+
+	return config_file;
+}
+
+/*
+ * readconfig() - process startup configuration file
+ */
+void readconfig(const char *config_file)
+{
+	char	line[256];
 	/*
 	 * install a non default variable with this daemon version
 	 */
@@ -4380,13 +4467,6 @@ getconfig(const char *explicit_config)
 	 */
 	set_tod_using = &ntpd_set_tod_using;
 
-	if (explicit_config) {
-#ifdef HAVE_NETINFO_NI_H
-	    check_netinfo = false;
-#endif
-	    config_file = explicit_config;
-	}
-
 	init_syntax_tree(&cfgt);
 	if (
 		!lex_init_stack(config_file, "r")
@@ -4397,29 +4477,17 @@ getconfig(const char *explicit_config)
 		) {
 		msyslog(LOG_INFO, "getconfig: Couldn't open <%s>: %m", config_file);
 #ifndef SYS_WINNT
-		if (!saveconfigquit)
+		if (!saveconfigquit && intercept_get_mode() != replay)
 			io_open_sockets();
 
 		return;
-#else
-		/* Under WinNT try alternate_config_file name, first NTP.CONF, then NTP.INI */
-
-		if (!lex_init_stack(alt_config_file, "r"))  {
-			/*
-			 * Broadcast clients can sometimes run without
-			 * a configuration file.
-			 */
-			msyslog(LOG_INFO, "getconfig: Couldn't open <%s>: %m", alt_config_file);
-			if (!saveconfigquit)
-				io_open_sockets();
-
-			return;
-		}
-		cfgt.source.value.s = estrdup(alt_config_file);
 #endif	/* SYS_WINNT */
 	} else
 		cfgt.source.value.s = estrdup(config_file);
 
+#ifdef FREE_CFG_T
+	atexit(free_all_config_trees);
+#endif
 
 	/*** BULK OF THE PARSER ***/
 #ifdef DEBUG
@@ -4829,6 +4897,9 @@ getnetnum(
 	enum gnn_type a_type	/* ignored */
 	)
 {
+	UNUSED_ARG(complain);
+	UNUSED_ARG(a_type);
+
 	NTP_REQUIRE(AF_UNSPEC == AF(addr) ||
 		    AF_INET == AF(addr) ||
 		    AF_INET6 == AF(addr));
@@ -4859,6 +4930,11 @@ ntp_rlimit(
 	)
 {
 	struct rlimit	rl;
+
+#ifndef DEBUG
+	UNUSED_ARG(rl_scale);
+	UNUSED_ARG(rl_sstr);
+#endif
 
 	switch (rl_what) {
 #ifdef RLIMIT_MEMLOCK

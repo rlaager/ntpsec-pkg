@@ -1,6 +1,5 @@
 #include <config.h>
 
-#include <event2/util.h>
 #include <event2/event.h>
 
 #include "ntp_workimpl.h"
@@ -557,6 +556,10 @@ ntpdig_name_resolved(
 	u_int			xmt_delay;
 	size_t			octets;
 
+	UNUSED_ARG(name);
+	UNUSED_ARG(service);
+	UNUSED_ARG(hints);
+
 	xmt_delay_v4 = 0;
 	xmt_delay_v6 = 0;
 	dctx = context;
@@ -645,6 +648,8 @@ queue_xmt(
 	struct timeval	start_cb;
 	struct timeval	delay;
 
+	UNUSED_ARG(dctx);
+
 	dest = &spkt->addr;
 	if (IS_IPV6(dest))
 		pkt_listp = &v6_pkts_list;
@@ -720,6 +725,7 @@ xmt_timer_cb(
 	xmt_ctx *	x;
 
 	UNUSED_ARG(fd);
+	UNUSED_ARG(what);
 	UNUSED_ARG(ctx);
 	DEBUG_INSIST(EV_TIMEOUT == what);
 
@@ -954,6 +960,8 @@ sock_cb(
 	int		rpktl;
 	int		rc;
 
+	UNUSED_ARG(ptr);
+
 	INSIST(sock4 == fd || sock6 == fd);
 
 	TRACE(3, ("sock_cb: event on sock%s:%s%s%s%s\n",
@@ -1102,6 +1110,8 @@ worker_resp_cb(
 {
 	blocking_child *	c;
 
+	UNUSED_ARG(fd);
+	UNUSED_ARG(what);
 	DEBUG_INSIST(EV_READ & what);
 	c = ctx;
 	DEBUG_INSIST(fd == c->resp_read_pipe);
@@ -1149,6 +1159,9 @@ worker_timeout(
 	)
 {
 	UNUSED_ARG(fd);
+#ifndef DEBUG
+	UNUSED_ARG(what);
+#endif /* DEBUG */
 	UNUSED_ARG(ctx);
 
 	DEBUG_REQUIRE(EV_TIMEOUT & what);
@@ -1361,12 +1374,17 @@ handle_pkt(
 		    	   leaptxt,
 		    	   time_adjusted ? "true" : "false");
 		}
-		else
-		    msyslog(LOG_INFO, "%s %+.*f%s %s s%d %s%s", ts_str,
+		else {
+		    char msgbuf[132];
+		    snprintf(msgbuf, sizeof(msgbuf),
+			    "%s %+.*f%s %s s%d %s%s", ts_str,
 			    digits, offset, disptxt,
 			    hostnameaddr(hostname, host), stratum,
 			    leaptxt,
 			    time_adjusted ? " [excess]" : "");
+		    printf("%s\n", msgbuf);
+		    msyslog(LOG_INFO, "%s", msgbuf);
+		}
 		free(ts_str);
 
 		if (p_NTPDIG_PRETEND_TIME)
@@ -1395,6 +1413,10 @@ offset_calculation(
 	l_fp p_rec, p_xmt, p_ref, p_org, tmp, dst;
 	u_fp p_rdly, p_rdsp;
 	double t21, t34, delta;
+
+#ifndef DEBUG
+	UNUSED_ARG(rpktl);
+#endif /* DEBUG */
 
 	/* Convert timestamps from network to host byte order */
 	p_rdly = NTOHS_FP(rpkt->rootdelay);
@@ -1533,7 +1555,7 @@ set_time(
 	    (   !opt_slew
 	     || (opt_slew && (fabs(offset) > steplimit))
 	    )) {
-		rc = step_systime(offset);
+		rc = step_systime(offset, ntp_set_tod);
 
 		/* If there was a problem, can we rely on errno? */
 		if (1 == rc)
@@ -1550,7 +1572,7 @@ set_time(
 	}
 
 	if (opt_slew) {
-		rc = adj_systime(offset);
+		rc = adj_systime(offset, adjtime);
 
 		/* If there was a problem, can we rely on errno? */
 		if (rc)

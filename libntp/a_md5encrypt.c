@@ -4,11 +4,37 @@
 #include <config.h>
 
 #include <string.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #include "ntp_fp.h"
 #include "ntp_stdlib.h"
 #include "ntp.h"
 #include "ntp_md5.h"	/* provides OpenSSL digest API */
+
+/* ctmemeq - test two blocks memory for equality without leaking
+ * timing information.
+ *
+ * Return value: true if the two blocks of memory are equal, false
+ * otherwise.
+ *
+ * TODO: find out if this is useful elsewhere and if so move
+ * it to a more appropriate place and give it a prototype in a
+ * header file.
+ */
+static bool ctmemeq(const void *s1, const void *s2, size_t n) {
+	const uint8_t *a = s1;
+	const uint8_t *b = s2;
+	uint8_t accum = 0;
+        size_t i;
+
+	for(i=0; i<n; i++) {
+		accum |= a[i] ^ b[i];
+	}
+
+	return accum == 0;
+}
 
 /*
  * MD5authencrypt - generate message digest
@@ -27,6 +53,7 @@ MD5authencrypt(
 	u_int	len;
 	EVP_MD_CTX ctx;
 
+	UNUSED_ARG(type);
 	/*
 	 * Compute digest of key concatenated with packet. Note: the
 	 * key type and digest type have been verified when the key
@@ -68,6 +95,7 @@ MD5authdecrypt(
 	u_int	len;
 	EVP_MD_CTX ctx;
 
+	UNUSED_ARG(type);
 	/*
 	 * Compute digest of key concatenated with packet. Note: the
 	 * key type and digest type have been verified when the key
@@ -91,7 +119,7 @@ MD5authdecrypt(
 		    "MAC decrypt: MAC length error");
 		return (0);
 	}
-	return !memcmp(digest, (char *)pkt + length + 4, len);
+	return (int)ctmemeq(digest, (char *)pkt + length + 4, len);
 }
 
 /*
