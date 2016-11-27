@@ -22,9 +22,10 @@
 #endif
 
 
-bool	syslogit = true;
-bool	msyslog_term = false;	/* duplicate to stdout/err */
-bool	msyslog_term_pid = true;
+bool	syslogit = true;	/* log messages to syslog */
+bool	termlogit = false;	/* duplicate to stdout/err */
+bool	hashprefix = false;	/* prefix with hash, for repolay use */
+bool	termlogit_pid = true;
 bool	msyslog_include_timestamp = true;
 FILE *	syslog_file;
 char *	syslog_fname;
@@ -142,15 +143,13 @@ addto_syslog(
 			prog = progname;
 	}
 
-	log_to_term = msyslog_term;
+	log_to_term = termlogit;
 	log_to_file = false;
 	if (syslogit)
 		syslog(level, "%s", msg);
 	else
 		if (syslog_file != NULL)
 			log_to_file = true;
-		else
-			log_to_term = true;
 #if DEBUG
 	if (debug > 0)
 		log_to_term = true;
@@ -163,7 +162,7 @@ addto_syslog(
 		human_time = humanlogtime();
 	else	/* suppress gcc pot. uninit. warning */
 		human_time = NULL;
-	if (msyslog_term_pid || log_to_file)
+	if (termlogit_pid || log_to_file)
 		pid = getpid();
 	else	/* suppress gcc pot. uninit. warning */
 		pid = -1;
@@ -178,9 +177,11 @@ addto_syslog(
 		term_file = (level <= LOG_ERR)
 				? stderr
 				: stdout;
+		if (hashprefix)
+			fputc('#', term_file);
 		if (msyslog_include_timestamp)
 			fprintf(term_file, "%s ", human_time);
-		if (msyslog_term_pid)
+		if (termlogit_pid)
 			fprintf(term_file, "%s[%d]: ", prog, pid);
 		fprintf(term_file, "%s%s", msg, nl_or_empty);
 		fflush(term_file);

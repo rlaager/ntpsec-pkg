@@ -10,9 +10,10 @@
 
 #include "ntp_types.h"		/* uint32_t type */
 
-extern bool	syslogit;
-extern bool	msyslog_term;	/* duplicate to stdout/err */
-extern bool	msyslog_term_pid;
+extern bool	syslogit;	/* log to syslogit */
+extern bool	termlogit;	/* duplicate to stdout/err */
+extern bool	hashprefix;	/* prefix with comment leader */
+extern bool	termlogit_pid;
 extern bool	msyslog_include_timestamp;
 extern FILE *	syslog_file;	/* if syslogit is false, log to
 				   this file and not syslog */

@@ -212,7 +212,7 @@ stats_config(
 	FILE	*fp;
 	const char *value;
 	int	len;
-	double	new_drift;
+	double	new_drift = 0;
 	l_fp	now;
 	time_t  ttnow;
 	const char temp_ext[] = ".TEMP";
@@ -349,7 +349,7 @@ stats_config(
 		leapfile_name = erealloc(leapfile_name, len + 1);
 		memcpy(leapfile_name, value, len + 1);
 
-		if (leapsec_load_file(
+		if (intercept_leapsec_load_file(
 			    leapfile_name, &leapfile_stat, true, true))
 		{
 			leap_signature_t lsig;
@@ -548,7 +548,9 @@ record_raw_stats(
 	int	precision,
 	double	root_delay,	/* seconds */
 	double	root_dispersion,/* seconds */
-	uint32_t	refid
+	uint32_t	refid,
+	u_int	outcount
+
 	)
 {
 	l_fp	now;
@@ -562,13 +564,14 @@ record_raw_stats(
 	day = now.l_ui / 86400 + MJD_1900;
 	now.l_ui %= 86400;
 	if (rawstats.fp != NULL) {
-		fprintf(rawstats.fp, "%lu %s %s %s %s %s %s %s %d %d %d %d %d %d %.6f %.6f %s\n",
+		fprintf(rawstats.fp, "%lu %s %s %s %s %s %s %s %d %d %d %d %d %d %.6f %.6f %s %d\n",
 		    day, ulfptoa(&now, 3),
 		    stoa(srcadr), dstadr ?  stoa(dstadr) : "-",
 		    ulfptoa(t1, 9), ulfptoa(t2, 9),
 		    ulfptoa(t3, 9), ulfptoa(t4, 9),
 		    leap, version, mode, stratum, ppoll, precision,
-		    root_delay, root_dispersion, refid_str(refid, stratum));
+		    root_delay, root_dispersion, refid_str(refid, stratum),
+		    outcount);
 		fflush(rawstats.fp);
 	}
 }
@@ -745,7 +748,7 @@ check_leap_file(
 		return;
 	
 	/* try to load leapfile, force it if no leapfile loaded yet */
-	if (leapsec_load_file(
+	if (intercept_leapsec_load_file(
 		    leapfile_name, &leapfile_stat,
 		    !have_leapfile, is_daily_check))
 		have_leapfile = true;

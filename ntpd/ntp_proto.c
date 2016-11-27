@@ -355,10 +355,10 @@ transmit(
 				if (peer_ntpdate == 0) {
 					msyslog(LOG_NOTICE,
 					    "ntpd: no servers found");
-					if (!msyslog_term)
+					if (!termlogit)
 						printf(
 						    "ntpd: no servers found\n");
-					exit (0);
+					intercept_exit(0);
 				}
 			}
 		}
@@ -391,7 +391,7 @@ receive(
 	uint8_t	hisstratum;		/* packet stratum */
 	u_short	restrict_mask;		/* restrict bits */
 	int	has_mac;		/* length of MAC field */
-	int	authlen;		/* offset of MAC field */
+	size_t	authlen;		/* offset of MAC field */
 	int	is_authentic = 0;	/* cryptosum ok */
 	int	retcode = AM_NOMATCH;	/* match code */
 	keyid_t	skeyid = 0;		/* key IDs */
@@ -671,7 +671,7 @@ receive(
 #ifdef DEBUG
 		if (debug)
 			printf(
-			    "receive: at %ld %s<-%s mode %d len %d\n",
+			    "receive: at %ld %s<-%s mode %d len %zd\n",
 			    current_time, stoa(dstadr_sin),
 			    stoa(&rbufp->recv_srcadr), hismode,
 			    authlen);
@@ -682,7 +682,7 @@ receive(
 #ifdef DEBUG
 		if (debug)
 			printf(
-			    "receive: at %ld %s<-%s mode %d keyid %08x len %d auth %d\n",
+			    "receive: at %ld %s<-%s mode %d keyid %08x len %zd auth %d\n",
 			    current_time, stoa(dstadr_sin),
 			    stoa(&rbufp->recv_srcadr), hismode, skeyid,
 			    authlen + has_mac, is_authentic);
@@ -778,7 +778,7 @@ receive(
 			 * purposes is zero. Note the hash is saved for
 			 * use later in the autokey mambo.
 			 */
-			if (authlen > (int)LEN_PKT_NOMAC && pkeyid != 0) {
+			if (authlen > LEN_PKT_NOMAC && pkeyid != 0) {
 				session_key(&rbufp->recv_srcadr,
 				    dstadr_sin, skeyid, 0, 2);
 				tkeyid = session_key(
@@ -812,7 +812,7 @@ receive(
 #ifdef DEBUG
 		if (debug)
 			printf(
-			    "receive: at %ld %s<-%s mode %d keyid %08x len %d auth %d\n",
+			    "receive: at %ld %s<-%s mode %d keyid %08x len %zd auth %d\n",
 			    current_time, stoa(dstadr_sin),
 			    stoa(&rbufp->recv_srcadr), hismode, skeyid,
 			    authlen + has_mac, is_authentic);
@@ -1147,7 +1147,7 @@ receive(
 			if (debug) {
 				 printf(
 					 "receive: at %ld refusing to mobilize passive association"
-					 " with unknown peer %s mode %d keyid %08x len %d auth %d\n",
+					 " with unknown peer %s mode %d keyid %08x len %zd auth %d\n",
 					 current_time, stoa(&rbufp->recv_srcadr), hismode, skeyid,
 					 authlen + has_mac, is_authentic);
 			}
@@ -1249,9 +1249,8 @@ receive(
 		peer->flash |= BOGON3;			/* unsynch */
 
 	/*
-	 * If the transmit timestamp duplicates a previous one, the
-	 * packet is a replay. This prevents the bad guys from replaying
-	 * the most recent packet, authenticated or not.
+	 * If the transmit timestamp duplicates the previous one, the
+	 * packet is a duplicate.
 	 */
 	} else if (L_ISEQU(&peer->xmt, &p_xmt)) {
 		peer->flash |= BOGON1;			/* duplicate */
@@ -1273,13 +1272,33 @@ receive(
 			return;
 		}
 
+		/* In basic (non-interleaved) broadcast mode, origin
+		 * timestamps are zero. This is problematic because,
+		 * when authentication is not enabled, origin timestamp
+		 * checking is our only real line of defense to prevent
+		 * spoofing by off-path attackers. Enabling
+		 * authentication helps, but then we need some means
+		 * of replay detection. Our solution is to reject
+		 * packets whose transmit timestamp is earlier than
+		 * one which was previously seen. This should be enforced
+		 * *only* if authentication is enabled, because otherwise
+		 * it results in an easy DoS by sending a spoofed packet
+		 * with the transmit timestamp far in the future.
+		 */
+		
+		if((restrict_mask & RES_DONTTRUST) &&
+		   L_ISGEQ(&peer->xmt, &p_xmt)) {
+			peer->flash |= BOGON1;
+			peer->oldpkt++;
+			return;
+		}
 	/*
 	 * Check for bogus packet in basic mode. If found, switch to
 	 * interleaved mode and resynchronize, but only after confirming
 	 * the packet is not bogus in symmetric interleaved mode.
 	 */
 	} else if (peer->flip == 0) {
-		if (!L_ISEQU(&p_org, &peer->aorg)) {
+		if (!L_ISEQU(&p_org, &peer->aorg) || L_ISZERO(&p_org)) {
 			peer->bogusorg++;
 			peer->flash |= BOGON2;	/* bogus */
 			if (!L_ISZERO(&peer->dst) && L_ISEQU(&p_org,
@@ -1319,14 +1338,6 @@ receive(
 		report_event(PEVNT_AUTH, peer, "crypto_NAK");
 		peer->flash |= BOGON5;		/* bad auth */
 		peer->badauth++;
-		if (peer->flags & FLAG_PREEMPT) {
-			unpeer(peer);
-			return;
-		}
-#ifdef ENABLE_AUTOKEY
-		if (peer->crypto)
-			peer_clear(peer, "AUTH");
-#endif	/* ENABLE_AUTOKEY */
 		return;
 
 	/*
@@ -1345,10 +1356,6 @@ receive(
 		if (has_mac &&
 		    (hismode == MODE_ACTIVE || hismode == MODE_PASSIVE))
 			fast_xmit(rbufp, MODE_ACTIVE, 0, restrict_mask);
-		if (peer->flags & FLAG_PREEMPT) {
-			unpeer(peer);
-			return;
-		}
 #ifdef ENABLE_AUTOKEY
 		if (peer->crypto)
 			peer_clear(peer, "AUTH");
@@ -1565,6 +1572,8 @@ process_packet(
 	double	etemp, ftemp, td;
 #endif /* ENABLE_ASYMMETRIC */
 
+	UNUSED_ARG(len);
+
 	sys_processed++;
 	peer->processed++;
 	p_del = FPTOD(NTOHS_FP(pkt->rootdelay));
@@ -1578,6 +1587,7 @@ process_packet(
 	pleap = PKT_LEAP(pkt->li_vn_mode);
 	pversion = PKT_VERSION(pkt->li_vn_mode);
 	pstratum = PKT_TO_STRATUM(pkt->stratum);
+	if (peer->outcount) peer->outcount--;  /* dup, peer with shorter poll */
 
 	/*
 	 * Capture the header values in the client/peer association..
@@ -1586,7 +1596,7 @@ process_packet(
 	    &peer->dstadr->sin : NULL,
 	    &p_org, &p_rec, &p_xmt, &peer->dst,
 	    pleap, pversion, pmode, pstratum, pkt->ppoll, pkt->precision,
-	    p_del, p_disp, pkt->refid);
+	    p_del, p_disp, pkt->refid, peer->outcount);
 	peer->leap = pleap;
 	peer->stratum = min(pstratum, STRATUM_UNSPEC);
 	peer->pmode = pmode;
@@ -1595,6 +1605,7 @@ process_packet(
 	peer->rootdisp = p_disp;
 	peer->refid = pkt->refid;		/* network byte order */
 	peer->reftime = p_reftime;
+	peer->outcount = 0;
 
 	/*
 	 * First, if either burst mode is armed, enable the burst.
@@ -2022,12 +2033,12 @@ clock_update(
 		if (leapsec == LSPROX_NOWARN) {
 			if (leap_vote_ins > leap_vote_del
 			    && leap_vote_ins > sys_survivors / 2) {
-				intercept_get_systime(__func__, &now);
+				get_systime(&now);
 				leapsec_add_dyn(true, now.l_ui, NULL);
 			}
 			if (leap_vote_del > leap_vote_ins
 			    && leap_vote_del > sys_survivors / 2) {
-				intercept_get_systime(__func__, &now);
+				get_systime(&now);
 				leapsec_add_dyn(false, now.l_ui, NULL);
 			}
 		}
@@ -2140,7 +2151,11 @@ poll_update(
 			next = 1 << hpoll;
 		else
 #endif /* REFCLOCK */
-			next = ((0x1000UL | (intercept_ntp_random(__func__) & 0x0ff)) <<
+			/*
+			 * Doesn't need to be captured, because the poll interval
+			 * has no effect on replay.
+			 */
+			next = ((0x1000UL | (ntp_random() & 0x0ff)) <<
 			    hpoll) >> 12;
 		next += peer->outdate;
 		if (next > utemp)
@@ -2238,7 +2253,19 @@ peer_clear(
 	} else if (MODE_PASSIVE == peer->hmode) {
 		peer->nextdate += ntp_minpkt;
 	} else {
-		peer->nextdate += intercept_ntp_random(__func__) % peer->minpoll;
+	    /*
+	     * Randomizing the next poll interval used to be done with
+	     * ntp_random(); this leads to replay-mode problems and is
+	     * unnecessary, any deterministic but uniformly
+	     * distributed function of the peer state would be good
+	     * enough.  Furthermore, changing the function creates no
+	     * interop problems. For security reasons (to prevent
+	     * hypothetical timing attacks) we want at least one input
+	     * to be invisible from outside ntpd; the internal
+	     * association ID fits the bill.
+	     */
+	    int pseudorandom = peer->associd ^ sock_hash(&peer->srcadr);
+	    peer->nextdate += pseudorandom % peer->minpoll;
 	}
 #ifdef ENABLE_AUTOKEY
 	peer->refresh = current_time + (1 << NTP_REFRESH);
@@ -2389,7 +2416,7 @@ clock_filter(
 	peer->jitter = max(SQRT(peer->jitter), LOGTOD(sys_precision));
 
 	/*
-	 * If the the new sample and the current sample are both valid
+	 * If the new sample and the current sample are both valid
 	 * and the difference between their offsets exceeds CLOCK_SGATE
 	 * (3) times the jitter and the interval between them is less
 	 * than twice the host poll interval, consider the new sample
@@ -3089,9 +3116,10 @@ peer_xmit(
 #endif	/* !ENABLE_AUTOKEY */
 
 		/*
-		 * Transmit a-priori timestamps
+		 * Transmit a-priori timestamps.  This is paired with
+		 * a later call used to record transmission time.
 		 */
-		intercept_get_systime(__func__, &xmt_tx);
+		get_systime(&xmt_tx);
 		if (peer->flip == 0) {	/* basic mode */
 			peer->aorg = xmt_tx;
 			HTONL_FP(&xmt_tx, &xpkt.xmt);
@@ -3117,12 +3145,13 @@ peer_xmit(
 		intercept_sendpkt(__func__, &peer->srcadr, peer->dstadr, sys_ttl[peer->ttl],
 		    &xpkt, sendlen);
 		peer->sent++;
+		peer->outcount++;
 		peer->throttle += (1 << peer->minpoll) - 2;
 
 		/*
 		 * Capture a-posteriori timestamps
 		 */
-		intercept_get_systime(__func__, &xmt_ty);
+		get_systime(&xmt_ty);
 		if (peer->flip != 0) {		/* interleaved modes */
 			if (peer->flip > 0)
 				peer->aorg = xmt_ty;
@@ -3469,6 +3498,7 @@ peer_xmit(
 
 static void
 leap_smear_add_offs(l_fp *t, l_fp *t_recv) {
+	UNUSED_ARG(t_recv);
 	L_ADD(t, &leap_smear.offset);
 }
 
@@ -3489,7 +3519,7 @@ fast_xmit(
 	struct pkt xpkt;	/* transmit packet structure */
 	struct pkt *rpkt;	/* receive packet structure */
 	l_fp	xmt_tx, xmt_ty;
-	int	sendlen;
+	size_t	sendlen;
 #ifdef ENABLE_AUTOKEY
 	uint32_t	temp32;
 #endif
@@ -3612,7 +3642,7 @@ fast_xmit(
 #ifdef DEBUG
 		if (debug)
 			printf(
-			    "transmit: at %ld %s->%s mode %d len %d\n",
+			    "transmit: at %ld %s->%s mode %d len %zd\n",
 			    current_time, stoa(&rbufp->dstadr->sin),
 			    stoa(&rbufp->recv_srcadr), xmode, sendlen);
 #endif
@@ -3669,7 +3699,7 @@ fast_xmit(
 #ifdef DEBUG
 	if (debug)
 		printf(
-		    "transmit: at %ld %s->%s mode %d keyid %08x len %d\n",
+		    "transmit: at %ld %s->%s mode %d keyid %08x len %zd\n",
 		    current_time, ntoa(&rbufp->dstadr->sin),
 		    ntoa(&rbufp->recv_srcadr), xmode, xkeyid, sendlen);
 #endif
@@ -3810,6 +3840,10 @@ pool_name_resolved(
 {
 	struct peer *	pool;	/* pool solicitor association */
 	associd_t	assoc;
+
+	UNUSED_ARG(gai_errno);
+	UNUSED_ARG(service);
+	UNUSED_ARG(hints);
 
 	if (rescode) {
 		msyslog(LOG_ERR,
@@ -4022,7 +4056,11 @@ measure_tick_fuzz(void)
 	DTOLFP(MINSTEP, &minstep);
 	intercept_get_systime(__func__, &last);
 	for (i = 0; i < MAXLOOPS && changes < MINCHANGES; i++) {
-		intercept_get_systime(__func__, &val);
+		/*
+		 * Not intercepted because it's called a variable
+		 * number of times, which screws up replay.
+		 */
+		get_systime(&val);
 		ldiff = val;
 		L_SUB(&ldiff, &last);
 		last = val;

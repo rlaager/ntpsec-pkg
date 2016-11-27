@@ -115,57 +115,6 @@ init_systime(void)
 
 #ifndef SIM	/* ntpsim.c has get_systime() and friends for sim */
 
-/*
- * Simulate ANSI/POSIX conformance on platforms that don't have it
- */
-#ifndef HAVE_CLOCK_GETTIME
-#ifdef __MACH__
-#include <mach/clock.h>
-#include <mach/mach.h>
-#elif HAVE_GETCLOCK
-#include <sys/timers.h>
-#endif
-
-int clock_gettime(clockid_t clk_id, struct timespec *tp)
-{
-#ifdef __MACH__ // OS X does not have clock_gettime, use clock_get_time
-    clock_serv_t cclock;
-    mach_timespec_t mts;
-    int mode;
-    switch (clk_id) {
-    case CLOCK_REALTIME:
-	mode = CALENDAR_CLOCK;
-	break;
-    case CLOCK_MONOTONIC:
-	/* http://stackoverflow.com/questions/11680461/monotonic-clock-on-osx */
-	mode = SYSTEM_CLOCK;
-	break;
-    default:
-	return -1;
-    }
-    host_get_clock_service(mach_host_self(), mode, &cclock);
-    clock_get_time(cclock, &mts);
-    mach_port_deallocate(mach_task_self(), cclock);
-    tp->tv_sec = mts.tv_sec;
-    tp->tv_nsec = mts.tv_nsec;
-#elif HAVE_GETCLOCK
-    (void) getclock(TIMEOFDAY, &tp);
-#else
-#error Either POSIX clock_gettime(2) or Tru64/HP-UX getclock(2) is required
-/*
- * Note: as a result of the refactoring of time handing, the support for
- * compiling ntpdsim is currently broken.  It used to have an intercept point
- * in unixtime.h, these definitions:
-   #define GETTIMEOFDAY(a, b) (node_gettime(&ntp_node, a))
-   #define SETTIMEOFDAY(a, b) (node_settime(&ntp_node, a))
-   #define ADJTIMEOFDAY(a, b) (node_adjtime(&ntp_node, a, b))
- * To work again it will need one here. 
- */
-#endif
-    return 0;
-}
-#endif /* HAVE_CLOCK_GETTIME */
-
 void
 get_ostime(
 	struct timespec *	tsp
@@ -200,7 +149,7 @@ get_systime(
 {
 	struct timespec ts;	/* seconds and nanoseconds */
 	get_ostime(&ts);
-	normalize_time(ts, ntp_random(), now);
+	normalize_time(ts, sys_fuzz > 0.0 ? ntp_random() : 0, now);
 }
 
 void
@@ -321,7 +270,8 @@ normalize_time(
 #if !defined SYS_WINNT
 bool				/* true on okay, false on error */
 adj_systime(
-	double now		/* adjustment (s) */
+	double now,		/* adjustment (s) */
+	int (*ladjtime)(const struct timeval *, struct timeval *)
 	)
 {
 	struct timeval adjtv;	/* new adjustment */
@@ -376,7 +326,7 @@ adj_systime(
 		sys_residual = -sys_residual;
 	}
 	if (adjtv.tv_sec != 0 || adjtv.tv_usec != 0) {
-		if (adjtime(&adjtv, &oadjtv) < 0) {
+		if (ladjtime(&adjtv, &oadjtv) < 0) {
 			msyslog(LOG_ERR, "adj_systime: %m");
 			return false;
 		}
@@ -392,7 +342,8 @@ adj_systime(
 
 bool
 step_systime(
-	double step
+	double step,
+	int (*settime)(struct timespec *)
 	)
 {
 	time_t pivot; /* for ntp era unfolding */
@@ -460,7 +411,7 @@ step_systime(
 	timets = lfp_stamp_to_tspec(fp_sys, &pivot);
 
 	/* now set new system time */
-	if (ntp_set_tod(&timets, NULL) != 0) {
+	if (settime(&timets) != 0) {
 		msyslog(LOG_ERR, "step-systime: %m");
 		return false;
 	}

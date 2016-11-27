@@ -33,11 +33,10 @@
 
 /*
  * This driver supports the Rockwell Jupiter GPS Receiver board
- * adapted to precision timing applications.  It requires the
- * ppsclock line discipline or streams module described in the
- * Line Disciplines and Streams Drivers page. It also requires a
- * gadget box and 1-PPS level converter, such as described in the
- * Pulse-per-second (PPS) Signal Interfacing page.
+ * adapted to precision timing applications.  It requires the PPS API
+ * support. It also requires a gadget box and 1-PPS level converter,
+ * such as described in the Pulse-per-second (PPS) Signal Interfacing
+ * page.
  *
  * It may work (with minor modifications) with other Rockwell GPS
  * receivers such as the CityTracker.
@@ -225,6 +224,8 @@ jupiter_shutdown(int unit, struct peer *peer)
 	struct instance *instance;
 	struct refclockproc *pp;
 
+	UNUSED_ARG(unit);
+
 	pp = peer->procptr;
 	instance = pp->unitptr;
 	if (!instance)
@@ -408,6 +409,8 @@ jupiter_poll(int unit, struct peer *peer)
 	struct instance *instance;
 	struct refclockproc *pp;
 
+	UNUSED_ARG(unit);
+
 	pp = peer->procptr;
 	instance = pp->unitptr;
 
@@ -452,6 +455,10 @@ jupiter_control(
 	struct refclockproc *pp;
 	struct instance *instance;
 	uint8_t sloppyclockflag;
+
+	UNUSED_ARG(unit);
+	UNUSED_ARG(in);
+	UNUSED_ARG(out);
 
 	pp = peer->procptr;
 	instance = pp->unitptr;
@@ -824,6 +831,7 @@ jupiter_parse_gpos(struct instance *instance, u_short *sp)
 
 	instance->gpos_gweek = jg->gweek;
 	instance->gpos_sweek = DS2UI(jg->sweek);
+	/* coverity[tainted_data] */
 	while(instance->gpos_sweek >= WEEKSECS) {
 		instance->gpos_sweek -= WEEKSECS;
 		++instance->gpos_gweek;
@@ -853,6 +861,8 @@ jupiter_debug(
 {
 	char	buffer[200];
 	va_list	ap;
+
+	UNUSED_ARG(function);
 
 	va_start(ap, fmt);
 	/*

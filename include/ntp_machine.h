@@ -15,7 +15,7 @@
 
 #include "ntp_proto.h"
 
-int ntp_set_tod (struct timespec *tvs, void *tzp);
+int ntp_set_tod (struct timespec *tvs);
 
 #ifdef NO_MAIN_ALLOWED
 /* we have no main routines so lets make a plan */
@@ -63,10 +63,6 @@ int ntp_set_tod (struct timespec *tvs, void *tzp);
 
 #ifdef HAVE_RTPRIO
 # define HAVE_NO_NICE
-#endif
-
-#ifndef HAVE_TIMEGM
-extern time_t	timegm		(struct tm *);
 #endif
 
 

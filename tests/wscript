@@ -2,9 +2,10 @@ def build(ctx):
 	srcnode = ctx.srcnode.abspath()
 	bldnode = ctx.bldnode.abspath()
 
+	# Unity source
 	unity_source = [
 		"unity/unity.c",
-		"unity/unity_fixture.c"
+		"unity/unity_fixture.c",
 	]
 
 	ctx(
@@ -14,24 +15,109 @@ def build(ctx):
 	)
 
 
-	test_source = [
-		"ntpdig/fileHandlingTest.c",
-		"ntpdig/keyFile.c",
-		"ntpdig/crypto.c",
-		"ntpdig/tests_main.c"
+	# Test main.
+	common_source = [
+		"common/tests_main.c",
+		"common/caltime.c",
+		"common/sockaddrtest.c",
+		"common/file_handling.c"
 	]
 
 
+	ntpdig_source = [
+		"ntpdig/crypto.c",
+		"ntpdig/key_file.c",
+		"ntpdig/kod_database.c",
+		"ntpdig/kod_file.c",
+		"ntpdig/packet_handling.c",
+		"ntpdig/packet_processing.c",
+		"ntpdig/utilities.c",
+	] + common_source
+
+
+	# ntpdig/
+	if ctx.env.LIBEVENT2_ENABLE:
+		ctx.ntp_test(
+			features    = "c cprogram bld_include src_include libisc_include test",
+	        target      = "test_ntpdig",
+			defines		= ["TEST_NTPDIG=1"],
+			includes	= [
+				"%s/tests/unity/" % srcnode,
+				"%s/tests/common/" % srcnode,
+				"%s/ntpdig/" % srcnode
+			],
+			use			= "unity ntpdig_obj ntp",
+	        source      = ntpdig_source,
+			test_args	= ["%s/tests/ntpdig/data/" % srcnode, "%s/tests/ntpdig/" % bldnode]
+		)
+
+
+	# libntp/
+	libntp_source = [
+		"libntp/a_md5encrypt.c",
+		"libntp/authkeys.c",
+		"libntp/calendar.c",
+		"libntp/caljulian.c",
+		"libntp/caltontp.c",
+		"libntp/calyearstart.c",
+		"libntp/clocktime.c",
+		"libntp/decodenetnum.c",
+		"libntp/hextolfp.c",
+		"libntp/humandate.c",
+#		"libntp/lfpfunc.c",
+		"libntp/lfptostr.c",
+		"libntp/modetoa.c",
+		"libntp/msyslog.c",
+		"libntp/netof.c",
+		"libntp/numtoa.c",
+		"libntp/numtohost.c",
+		"libntp/prettydate.c",
+		"libntp/recvbuff.c",
+		"libntp/sfptostr.c",
+		"libntp/socktoa.c",
+		"libntp/ssl_init.c",
+		"libntp/statestr.c",
+		"libntp/strtolfp.c",
+#		"libntp/timespecops.c",
+#		"libntp/timevalops.c",
+		"libntp/tstotv.c",
+		"libntp/tvtots.c",
+		"libntp/vi64ops.c",
+		"libntp/ymd2yd.c"
+	] + common_source
+
+	if ctx.env.REFCLOCK_ENABLE:
+		libntp_source += ["libntp/refnumtoa.c"]
+
 	ctx.ntp_test(
-		features    = "c cprogram bld_include src_include libisc_include",
-        target      = "ntpdig_crypto",
+		features    = "c cprogram bld_include src_include libisc_include test",
+        target      = "test_libntp",
+		defines		= ["TEST_LIBNTP=1"],
 		includes	= [
 			"%s/tests/unity/" % srcnode,
-			"%s/ntpdig/" % srcnode
+			"%s/tests/libntp/" % srcnode,
+			"%s/tests/ntpdig/" % srcnode,
+			"%s/tests/common/" % srcnode
 		],
-		use			= "unity ntpdig_obj ntp isc M",
-        source      = test_source,
-		test_data	= "%s/tests/ntpdig/data/" % srcnode
+		use			= "unity ntp isc M PTHREAD CRYPTO RT",
+        source      = libntp_source,
 	)
 
-#	ctx.env.TEST_BIN += [("%s/tests/%s" % (bldnode, tg.target), "%s/tests/ntpdig/data/" % srcnode)]
+
+	ntpd_source = [
+		"ntpd/leapsec.c"
+	] + common_source
+
+	ctx.ntp_test(
+		features    = "c cprogram bld_include src_include libisc_include test",
+        target      = "test_ntpd",
+		defines		= ["TEST_NTPD=1"],
+		includes	= [
+			"%s/tests/unity/" % srcnode,
+			"%s/ntpd/" % srcnode,
+			"%s/tests/libntp/" % srcnode,
+			"%s/tests/common/" % srcnode
+		],
+		use			= "ntpd_lib libntpd_obj unity ntp isc M PTHREAD CRYPTO RT",
+        source      = ntpd_source,
+	)

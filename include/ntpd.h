@@ -57,7 +57,8 @@ extern	void	win_time_stepped(void);
 extern	char	*keysdir;	/* crypto keys and leaptable directory */
 extern	char *	saveconfigdir;	/* ntpq saveconfig output directory */
 
-extern	void	getconfig	(const char *);
+extern	const char	*getconfig	(const char *);
+extern	void	readconfig(const char *);
 extern	void	ctl_clr_stats	(void);
 extern	bool	ctlclrtrap	(sockaddr_u *, struct interface *, int);
 extern	u_short ctlpeerstatus	(struct peer *);
@@ -287,7 +288,7 @@ extern	void	record_loop_stats (double, double, double, double, int);
 extern	void	record_clock_stats (sockaddr_u *, const char *);
 extern	int	mprintf_clock_stats(sockaddr_u *, const char *, ...)
 			NTP_PRINTF(2, 3);
-extern	void	record_raw_stats (sockaddr_u *srcadr, sockaddr_u *dstadr, l_fp *t1, l_fp *t2, l_fp *t3, l_fp *t4, int leap, int version, int mode, int stratum, int ppoll, int precision, double root_delay, double root_dispersion, uint32_t refid);
+extern	void	record_raw_stats (sockaddr_u *srcadr, sockaddr_u *dstadr, l_fp *t1, l_fp *t2, l_fp *t3, l_fp *t4, int leap, int version, int mode, int stratum, int ppoll, int precision, double root_delay, double root_dispersion, uint32_t refid, u_int outcount);
 extern	void	check_leap_file	(int is_daily_check, uint32_t ntptime, const time_t * systime);
 extern	void	record_crypto_stats (sockaddr_u *, const char *);
 #ifdef DEBUG
@@ -319,7 +320,6 @@ extern	char *	fstostr(time_t);	/* NTP timescale seconds */
 /* ntp_config.c */
 extern char const *	progname;
 extern char	*sys_phone[];		/* ACTS phone numbers */
-extern bool	config_priority_override;
 extern char *ntp_signd_socket;
 extern struct config_tree_tag *cfg_tree_history;
 
@@ -540,6 +540,7 @@ extern const char *chrootdir;	/* directory to chroot() to */
 #ifdef HAVE_WORKING_FORK
 extern	int	waitsync_fd_to_close;	/* -w/--wait-sync */
 #endif
+extern  void	finish		(int sig);
 
 /* ntservice.c */
 #ifdef SYS_WINNT

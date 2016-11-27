@@ -562,7 +562,7 @@ jjy_receive ( struct recvbuf *rbufp )
 	 */
 	if ( up->linediscipline == LDISC_RAW ) {
 
-		pp->lencode  = refclock_gtraw ( rbufp, pp->a_lastcode, BMAX-1, &tRecvTimestamp ) ;
+		pp->lencode  = (int)refclock_gtraw ( rbufp, pp->a_lastcode, BMAX-1, &tRecvTimestamp ) ;
 		/* 3rd argument can be BMAX, but the coverity scan tool claim "Memory - corruptions  (OVERRUN)" */
 		/* "a_lastcode" is defined as "char a_lastcode[BMAX]" in the ntp_refclock.h */
 		/* To avoid its claim, pass the value BMAX-1. */
@@ -661,7 +661,7 @@ jjy_receive ( struct recvbuf *rbufp )
 				up->iLineBufLen ++ ;
 
 				/* Copy printable characters */
-				if ( ! iscntrl( up->sRawBuf[i] ) ) {
+				if ( ! iscntrl( (int)up->sRawBuf[i] ) ) {
 					up->sTextBuf[up->iTextBufLen] = up->sRawBuf[i] ;
 					up->iTextBufLen ++ ;
 				}
@@ -1089,6 +1089,7 @@ static  struct
 static int
 jjy_start_tristate_jjy01 ( int unit, struct peer *peer, struct jjyunit *up )
 {
+	UNUSED_ARG(unit);
 
 	jjy_write_clockstats( peer, JJY_CLOCKSTATS_MARK_JJY, "Refclock: Tristate Ltd. TS-JJY01, TS-JJY02" ) ;
 
@@ -1311,6 +1312,8 @@ jjy_poll_tristate_jjy01  ( int unit, struct peer *peer )
 	static const char *sFunctionName = "jjy_poll_tristate_jjy01" ;
 #endif
 
+	UNUSED_ARG(unit);
+
 	struct refclockproc *pp ;
 	struct jjyunit	    *up ;
 
@@ -1381,6 +1384,8 @@ jjy_start_cdex_jst2000 ( int unit, struct peer *peer, struct jjyunit *up )
 {
 
 	jjy_write_clockstats( peer, JJY_CLOCKSTATS_MARK_JJY, "Refclock: C-DEX Co. Ltd. JST2000" ) ;
+
+	UNUSED_ARG(unit);
 
 	up->unittype  = UNITTYPE_CDEX_JST2000 ;
 	up->linespeed = SPEED232_CDEX_JST2000 ;
@@ -1490,6 +1495,8 @@ jjy_poll_cdex_jst2000 ( int unit, struct peer *peer )
 	struct refclockproc *pp ;
 	struct jjyunit      *up ;
 
+	UNUSED_ARG(unit);
+
 	pp = peer->procptr ;
 	up = pp->unitptr ;
 
@@ -1545,6 +1552,7 @@ jjy_poll_cdex_jst2000 ( int unit, struct peer *peer )
 static int
 jjy_start_echokeisokuki_lt2000 ( int unit, struct peer *peer, struct jjyunit *up )
 {
+	UNUSED_ARG(unit);
 
 	jjy_write_clockstats( peer, JJY_CLOCKSTATS_MARK_JJY, "Refclock: Echo Keisokuki Co. Ltd. LT2000" ) ;
 
@@ -1713,6 +1721,8 @@ jjy_poll_echokeisokuki_lt2000 ( int unit, struct peer *peer )
 
 	char	sCmd[2] ;
 
+	UNUSED_ARG(unit);
+
 	pp = peer->procptr ;
 	up = pp->unitptr ;
 
@@ -1760,6 +1770,7 @@ jjy_poll_echokeisokuki_lt2000 ( int unit, struct peer *peer )
 static int
 jjy_start_citizentic_jjy200 ( int unit, struct peer *peer, struct jjyunit *up )
 {
+	UNUSED_ARG(unit);
 
 	jjy_write_clockstats( peer, JJY_CLOCKSTATS_MARK_JJY, "Refclock: CITIZEN T.I.C CO. LTD. JJY200" ) ;
 
@@ -1869,6 +1880,7 @@ jjy_receive_citizentic_jjy200 ( struct recvbuf *rbufp )
 static void
 jjy_poll_citizentic_jjy200 ( int unit, struct peer *peer )
 {
+	UNUSED_ARG(unit);
 
 	struct refclockproc *pp ;
 	struct jjyunit	    *up ;
@@ -1941,6 +1953,7 @@ static  struct
 static int
 jjy_start_tristate_gpsclock01 ( int unit, struct peer *peer, struct jjyunit *up )
 {
+	UNUSED_ARG(unit);
 
 	jjy_write_clockstats( peer, JJY_CLOCKSTATS_MARK_JJY, "Refclock: Tristate Ltd. TS-GPS01" ) ;
 
@@ -2197,6 +2210,8 @@ jjy_poll_tristate_gpsclock01 ( int unit, struct peer *peer )
 	const char	*pCmd ;
 	int 	iCmdLen ;
 
+	UNUSED_ARG(unit);
+
 	pp = peer->procptr ;
 	up = pp->unitptr ;
 
@@ -2261,6 +2276,7 @@ static struct jjyRawDataBreak seiko_tsys_tdc_300_raw_break [ ] =
 static int
 jjy_start_seiko_tsys_tdc_300 ( int unit, struct peer *peer, struct jjyunit *up )
 {
+	UNUSED_ARG(unit);
 
 	jjy_write_clockstats( peer, JJY_CLOCKSTATS_MARK_JJY, "Refclock: SEIKO TIME SYSTEMS TDC-300" ) ;
 
@@ -2449,6 +2465,7 @@ jjy_receive_seiko_tsys_tdc_300 ( struct recvbuf *rbufp )
 static void
 jjy_poll_seiko_tsys_tdc_300 ( int unit, struct peer *peer )
 {
+	UNUSED_ARG(unit);
 
 	struct refclockproc *pp ;
 	struct jjyunit	    *up ;
@@ -2638,10 +2655,13 @@ jjy_start_telephone ( int unit, struct peer *peer, struct jjyunit *up )
 {
 
 	char	sLog [ 80 ], sFirstThreeDigits [ 4 ] ;
-	int	i, iNumberOfDigitsOfPhoneNumber, iCommaCount, iCommaPosition ;
+	int	iNumberOfDigitsOfPhoneNumber, iCommaCount, iCommaPosition ;
+	size_t	i;
 	int	iFirstThreeDigitsCount ;
 
 	jjy_write_clockstats( peer, JJY_CLOCKSTATS_MARK_JJY, "Refclock: Telephone JJY" ) ;
+
+	UNUSED_ARG(unit);
 
 	up->unittype  = UNITTYPE_TELEPHONE ;
 	up->linespeed = SPEED232_TELEPHONE ;
@@ -2671,8 +2691,8 @@ jjy_start_telephone ( int unit, struct peer *peer, struct jjyunit *up )
 
 	iNumberOfDigitsOfPhoneNumber = iCommaCount = iCommaPosition = iFirstThreeDigitsCount = 0 ;
 	for ( i = 0 ; i < strlen( sys_phone[0] ) ; i ++ ) {
-		if ( isdigit( *(sys_phone[0]+i) ) ) {
-			if ( iFirstThreeDigitsCount < sizeof(sFirstThreeDigits)-1 ) {
+		if ( isdigit( (int)*(sys_phone[0]+i) ) ) {
+		    if ( iFirstThreeDigitsCount < (int)sizeof(sFirstThreeDigits)-1 ) {
 				sFirstThreeDigits[iFirstThreeDigitsCount++] = *(sys_phone[0]+i) ;
 			}
 			iNumberOfDigitsOfPhoneNumber ++ ;
@@ -2755,7 +2775,7 @@ jjy_receive_telephone ( struct recvbuf *rbufp )
 	struct	refclockproc *pp ;
 	struct	jjyunit      *up ;
 	char	*pBuf ;
-	int	iLen ;
+	size_t	iLen ;
 	short	iPreviousModemState ;
 
 	peer = rbufp->recv_peer ;
@@ -2818,6 +2838,8 @@ jjy_poll_telephone ( int unit, struct peer *peer )
 
 	struct	refclockproc *pp ;
 	struct	jjyunit      *up ;
+
+	UNUSED_ARG(unit);
 
 	pp = peer->procptr ;
 	up = pp->unitptr ;
@@ -3068,6 +3090,9 @@ teljjy_getDelay ( struct peer *peer, struct jjyunit *up )
 static int
 teljjy_idle_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_idle_ignore" ) ;
 
@@ -3079,6 +3104,9 @@ teljjy_idle_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit 
 static int
 teljjy_idle_dialout ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_idle_dialout" ) ;
 
@@ -3092,6 +3120,9 @@ teljjy_idle_dialout ( struct peer *peer, struct refclockproc *pp, struct jjyunit
 static int
 teljjy_dial_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_dial_ignore" ) ;
 
@@ -3103,6 +3134,9 @@ teljjy_dial_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit 
 static int
 teljjy_dial_login ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_dial_login" ) ;
 
@@ -3114,6 +3148,9 @@ teljjy_dial_login ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 static int
 teljjy_dial_disc ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_dial_disc" ) ;
 
@@ -3125,6 +3162,9 @@ teljjy_dial_disc ( struct peer *peer, struct refclockproc *pp, struct jjyunit *u
 static int
 teljjy_login_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_login_ignore" ) ;
 
@@ -3136,6 +3176,9 @@ teljjy_login_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit
 static int
 teljjy_login_disc ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_login_disc" ) ;
 
@@ -3149,6 +3192,9 @@ teljjy_login_conn ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 {
 
 	int	i ;
+
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_login_conn" ) ;
 
@@ -3171,6 +3217,10 @@ teljjy_login_login ( struct peer *peer, struct refclockproc *pp, struct jjyunit 
 
 	char	*pCmd ;
 	int	iCmdLen ;
+
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_login_login" ) ;
 
@@ -3213,6 +3263,10 @@ static int
 teljjy_login_error ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
 
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
+
 	DEBUG_TELJJY_PRINTF( "teljjy_login_error" ) ;
 
 	return TELJJY_CHANGE_CLOCK_STATE ;
@@ -3223,6 +3277,9 @@ teljjy_login_error ( struct peer *peer, struct refclockproc *pp, struct jjyunit 
 static int
 teljjy_conn_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_conn_ignore" ) ;
 
@@ -3234,6 +3291,9 @@ teljjy_conn_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit 
 static int
 teljjy_conn_disc ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_conn_disc" ) ;
 
@@ -3520,6 +3580,9 @@ teljjy_conn_silent ( struct peer *peer, struct refclockproc *pp, struct jjyunit 
 static int
 teljjy_conn_error ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_conn_error" ) ;
 
@@ -3531,6 +3594,9 @@ teljjy_conn_error ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 static int
 teljjy_bye_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_bye_ignore" ) ;
 
@@ -3542,6 +3608,9 @@ teljjy_bye_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 static int
 teljjy_bye_disc ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_bye_disc" ) ;
 
@@ -3553,6 +3622,9 @@ teljjy_bye_disc ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up
 static int
 teljjy_bye_modem ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_TELJJY_PRINTF( "teljjy_bye_modem" ) ;
 
@@ -3733,6 +3805,8 @@ modem_connect ( int unit, struct peer *peer )
 	struct	refclockproc	*pp;
 	struct	jjyunit 	*up;
 
+	UNUSED_ARG(unit);
+
 	pp = peer->procptr ;
 	up = pp->unitptr ;
 
@@ -3751,6 +3825,8 @@ modem_disconnect ( int unit, struct peer *peer )
 {
 	struct	refclockproc	*pp;
 	struct	jjyunit 	*up;
+
+	UNUSED_ARG(unit);
 
 	pp = peer->procptr ;
 	up = pp->unitptr ;
@@ -3807,10 +3883,10 @@ modem_receive ( struct recvbuf *rbufp )
 #ifdef DEBUG
 	if ( debug ) {
 		char	sResp [ 40 ] ;
-		int	iCopyLen ;
-		iCopyLen = ( iLen <= sizeof(sResp)-1 ? iLen : sizeof(sResp)-1 ) ;
+		size_t	iCopyLen ;
+		iCopyLen = ( iLen <= (int)sizeof(sResp)-1 ? iLen : (int)sizeof(sResp)-1 ) ;
 		strlcpy( sResp, pBuf, sizeof(sResp) ) ;
-		printf ( "refclock_jjy.c : modem_receive : iLen=%d pBuf=[%s] iModemEvent=%d\n", iCopyLen, sResp, up->iModemEvent ) ;
+		printf ( "refclock_jjy.c : modem_receive : iLen=%zd pBuf=[%s] iModemEvent=%d\n", iCopyLen, sResp, up->iModemEvent ) ;
 	}
 #endif
 	modem_control ( peer, pp, up ) ;
@@ -3827,6 +3903,8 @@ modem_timer ( int unit, struct peer *peer )
 
 	struct	refclockproc *pp ;
 	struct	jjyunit      *up ;
+
+	UNUSED_ARG(unit);
 
 	pp = peer->procptr ;
 	up = pp->unitptr ;
@@ -3895,6 +3973,9 @@ modem_control ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 static int
 modem_disc_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_MODEM_PRINTF( "modem_disc_ignore" ) ;
 
@@ -3906,6 +3987,9 @@ modem_disc_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 static int
 modem_disc_init ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_MODEM_PRINTF( "modem_disc_init" ) ;
 
@@ -3917,6 +4001,9 @@ modem_disc_init ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up
 static int
 modem_init_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_MODEM_PRINTF( "modem_init_ignore" ) ;
 
@@ -3928,6 +4015,8 @@ modem_init_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 static int
 modem_init_start ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
 
 	DEBUG_MODEM_PRINTF( "modem_init_start" ) ;
 
@@ -4065,6 +4154,9 @@ modem_init_resp04 ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 static int
 modem_init_disc ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_MODEM_PRINTF( "modem_init_disc" ) ;
 #ifdef DEBUG
@@ -4081,6 +4173,9 @@ modem_init_disc ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up
 static int
 modem_dial_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_MODEM_PRINTF( "modem_dial_ignore" ) ;
 
@@ -4092,6 +4187,7 @@ modem_dial_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 static int
 modem_dial_dialout ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(up);
 
 	char	sCmd [ 46 ] ;
 	int	iCmdLen ;
@@ -4143,6 +4239,9 @@ modem_dial_escape ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 static int
 modem_dial_connect ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_MODEM_PRINTF( "modem_dial_connect" ) ;
 
@@ -4172,6 +4271,9 @@ modem_dial_disc ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up
 static int
 modem_conn_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_MODEM_PRINTF( "modem_conn_ignore" ) ;
 
@@ -4183,6 +4285,9 @@ modem_conn_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 static int
 modem_conn_escape ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_MODEM_PRINTF( "modem_conn_escape" ) ;
 
@@ -4194,6 +4299,9 @@ modem_conn_escape ( struct peer *peer, struct refclockproc *pp, struct jjyunit *
 static int
 modem_esc_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
+	UNUSED_ARG(up);
 
 	DEBUG_MODEM_PRINTF( "modem_esc_ignore" ) ;
 
@@ -4205,6 +4313,7 @@ modem_esc_ignore ( struct peer *peer, struct refclockproc *pp, struct jjyunit *u
 static int
 modem_esc_escape ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(up);
 
 	char	*pCmd ;
 	int	iCmdLen ;
@@ -4230,6 +4339,8 @@ modem_esc_escape ( struct peer *peer, struct refclockproc *pp, struct jjyunit *u
 static int
 modem_esc_data ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
+	UNUSED_ARG(peer);
+	UNUSED_ARG(pp);
 
 	DEBUG_MODEM_PRINTF( "modem_esc_data" ) ;
 
@@ -4243,7 +4354,6 @@ modem_esc_data ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up 
 static int
 modem_esc_silent ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up )
 {
-
 	DEBUG_MODEM_PRINTF( "modem_esc_silent" ) ;
 
 	up->iModemSilentCount ++ ;
@@ -4274,6 +4384,8 @@ modem_esc_disc ( struct peer *peer, struct refclockproc *pp, struct jjyunit *up 
 
 	char	*pCmd ;
 	int	iCmdLen ;
+
+	UNUSED_ARG(up);
 
 	DEBUG_MODEM_PRINTF( "modem_esc_disc" ) ;
 

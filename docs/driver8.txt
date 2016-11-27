@@ -78,7 +78,7 @@ hardware and kindly lent me their time and patience during the
 development and debugging cycle. Thus for continued support and quality,
 direct access to the receivers is a big help. Nevertheless I am not
 prepared to buy these reference clocks - donations to
-(mailto:kardel%20%3CAT%3E%20ntp.org[kardel <AT> ntp.org]) are welcome as
+(mailto:kardel@ntp.org[kardel@ntp.org]) are welcome as
 long as they work within Europe 8-).
 +
 Verified implementations are:
@@ -120,7 +120,7 @@ image::pic/pzf511.jpg[http://www.meinberg.de/english/products/pzf-eurocard.htm]
 
 * *server 127.127.8.0-3 mode 2*
 +
-*http://www.meinberg.de[Meinberg] http://www.meinberg.de/english/products/c51.html[DCF C51 receiver and similar] (AM demodulation / 4ms)*
+*http://www.meinberg.de[Meinberg] https://www.meinbergglobal.com/english/archive/c51.htm[DCF C51 receiver and similar] (AM demodulation / 4ms)*
 +
 image:pic/c51.jpg[http://www.meinberg.de/english/products/c51.htm]
 +
@@ -181,11 +181,11 @@ image:pic/igclock.gif[http://www.igel.de/eigelmn.html]
 
 * *server 127.127.8.0-3 mode 9*
 +
-*http://www.trimble.com[Trimble] http://www.trimble.com/cgi/omprod.cgi/pd_om011.html[SVeeSix GPS receiver] TAIP protocol (GPS / <<1&mu;s)*
+*http://www.trimble.com[Trimble] ftp://ftp.trimble.com/pub/sct/embedded/bin/Data%20Sheets/SveeSix2.PDF[SVeeSix GPS receiver] TAIP protocol (GPS / <<1&mu;s)*
 
 * *server 127.127.8.0-3 mode 10*
 +
-*http://www.trimble.com[Trimble] http://www.trimble.com/cgi/omprod.cgi/pd_om011.html[SVeeSix GPS receiver] (GPS / <<1&mu;s) (no kernel support yet)*
+*http://www.trimble.com[Trimble] ftp://ftp.trimble.com/pub/sct/embedded/bin/Data%20Sheets/SveeSix2.PDF[SVeeSix GPS receiver] (GPS / <<1&mu;s) (no kernel support yet)*
 +
 image:pic/pd_om011.gif[http://www.trimble.com/cgi/omprod.cgi/pd_om011.html]
 +
@@ -197,7 +197,7 @@ image:pic/pd_om006.gif[http://www.trimble.com/cgi/omprod.cgi/pd_om006.html]
 
 * *server 127.127.8.0-3 mode 12*
 +
-*http://www.hopf-time.com[HOPF] http://www.hopf-time.com/engl/kart6021.html[Funkuhr 6021]*
+*http://www.hopf-time.com[HOPF] http://hopf.com/manuals/english/pdf_6---/e6021gps_0601.pdf[Funkuhr 6021]*
 +
 image:pic/fg6021.gif[http://www.hopf-time.com/engl/kart6021.html]
 

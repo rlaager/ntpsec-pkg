@@ -25,10 +25,6 @@
 #include "ntp_md5.h"	/* provides OpenSSL digest API */
 #include "ntp_intercept.h"
 #include "lib_strbuf.h"
-#ifdef HAVE_KERNEL_PLL
-# include "ntp_syscall.h"
-#endif
-
 
 /*
  * Structure to hold request procedure information
@@ -495,7 +491,9 @@ static const struct ctl_var peer_var[] = {
 	{ CP_ROOTDISPERSION, RO, "rootdisp" },	/* 15 */
 	{ CP_REFID,	RO, "refid" },		/* 16 */
 	{ CP_REFTIME,	RO, "reftime" },	/* 17 */
-	{ CP_ORG,	RO, "org" },		/* 18 */
+        /* Placeholder. Reporting of this variable is disabled because
+           leaking it creates a vulnerability */
+        { CP_ORG,	RO, "org" },	        /* 18 */
 	{ CP_REC,	RO, "rec" },		/* 19 */
 	{ CP_XMT,	RO, "xleave" },		/* 20 */
 	{ CP_REACH,	RO, "reach" },		/* 21 */
@@ -865,7 +863,7 @@ save_config(
 	 * backslashes as equivalent directory separators at the API
 	 * level.  On POSIX systems we could allow '\\' but such
 	 * filenames are tricky to manipulate from a shell, so just
-	 * reject both types of slashes on all platforms.  We add 
+	 * reject both types of slashes on all platforms.  We add
 	 * DIR_SEP anyway so we don't have a vulnerability pop up
 	 * in case the code is ported to OpenVMS or Stratus VOS or
 	 * something.
@@ -1006,7 +1004,7 @@ process_control(
 	dataend = &rpkt.u.data[CTL_MAX_DATA_LEN];
 
 	if ((rbufp->recv_length & 0x3) != 0)
-		DPRINTF(3, ("Control packet length %d unrounded\n",
+		DPRINTF(3, ("Control packet length %zd unrounded\n",
 			    rbufp->recv_length));
 
 	/*
@@ -1031,7 +1029,7 @@ process_control(
 		res_authenticate = true;
 		pkid = (void *)((char *)pkt + properlen);
 		res_keyid = ntohl(*pkid);
-		DPRINTF(3, ("recv_len %d, properlen %d, wants auth with keyid %08x, MAC length=%zu\n",
+		DPRINTF(3, ("recv_len %zd, properlen %d, wants auth with keyid %08x, MAC length=%zu\n",
 			    rbufp->recv_length, properlen, res_keyid,
 			    maclen));
 
@@ -1701,7 +1699,7 @@ ctl_putsys(
 	if (CS_KERN_FIRST <= varid && varid <= CS_KERN_LAST &&
 	    current_time != ntp_adjtime_time) {
 		ZERO(ntx);
-		if (ntp_adjtime(&ntx) < 0)
+		if (intercept_ntp_adjtime(&ntx) < 0)
 			msyslog(LOG_ERR, "ntp_adjtime() for mode 6 query failed: %m");
 		else
 			ntp_adjtime_time = current_time;
@@ -2451,10 +2449,6 @@ ctl_putpeer(
 		ctl_putts(peer_var[id].text, &p->reftime);
 		break;
 
-	case CP_ORG:
-		ctl_putts(peer_var[id].text, &p->aorg);
-		break;
-
 	case CP_REC:
 		ctl_putts(peer_var[id].text, &p->dst);
 		break;
@@ -2910,6 +2904,9 @@ control_unspec(
 {
 	struct peer *peer;
 
+	UNUSED_ARG(rbufp);
+	UNUSED_ARG(restrict_mask);
+
 	/*
 	 * What is an appropriate response to an unspecified op-code?
 	 * I return no errors and no data, unless a specified assocation
@@ -2945,6 +2942,8 @@ read_status(
 	/* a_st holds association ID, status pairs alternating */
 	u_short a_st[CTL_MAX_DATA_LEN / sizeof(u_short)];
 
+	UNUSED_ARG(rbufp);
+	UNUSED_ARG(restrict_mask);
 #ifdef DEBUG
 	if (debug > 2)
 		printf("read_status: ID %d\n", res_associd);
@@ -3115,6 +3114,9 @@ read_variables(
 	int restrict_mask
 	)
 {
+	UNUSED_ARG(rbufp);
+	UNUSED_ARG(restrict_mask);
+
 	if (res_associd)
 		read_peervars();
 	else
@@ -3141,6 +3143,9 @@ write_variables(
 	char *vareqv;
 	const char *t;
 	char *tt;
+
+	UNUSED_ARG(rbufp);
+	UNUSED_ARG(restrict_mask);
 
 	val = 0;
 	/*
@@ -3441,7 +3446,7 @@ send_random_tag_value(
 	int	noise;
 	char	buf[32];
 
-	noise = rand() ^ (rand() << 16);
+	noise = intercept_ntp_random("send_random_tag");
 	buf[0] = 'a' + noise % 26;
 	noise >>= 5;
 	buf[1] = 'a' + noise % 26;
@@ -3481,7 +3486,7 @@ send_mru_entry(
 
 	remaining = COUNTOF(sent);
 	ZERO(sent);
-	noise = (uint32_t)(rand() ^ (rand() << 16));
+	noise = intercept_ntp_random("send_mru_entry");
 	while (remaining > 0) {
 		which = (noise & 7) % COUNTOF(sent);
 		noise >>= 3;
@@ -3916,7 +3921,7 @@ send_ifstats_entry(
 	noisebits = 0;
 	while (remaining > 0) {
 		if (noisebits < 4) {
-			noise = rand() ^ (rand() << 16);
+			noise = intercept_ntp_random("send_ifstats_entry");
 			noisebits = 31;
 		}
 		which = (noise & 0xf) % COUNTOF(sent);
@@ -4012,6 +4017,8 @@ read_ifstats(
 	u_int	ifidx;
 	endpt *	la;
 
+	UNUSED_ARG(rbufp);
+
 	/*
 	 * loop over [0..sys_ifnum] searching ep_list for each
 	 * ifnum in turn.
@@ -4093,7 +4100,7 @@ send_restrict_entry(
 	noisebits = 0;
 	while (remaining > 0) {
 		if (noisebits < 2) {
-			noise = rand() ^ (rand() << 16);
+			noise = intercept_ntp_random("send_restrict_entry");
 			noisebits = 31;
 		}
 		which = (noise & 0x3) % COUNTOF(sent);
@@ -4168,6 +4175,8 @@ read_addr_restrictions(
 {
 	u_int idx;
 
+	UNUSED_ARG(rbufp);
+
 	idx = 0;
 	send_restrict_list(restrictlist4, false, &idx);
 	send_restrict_list(restrictlist6, true, &idx);
@@ -4190,6 +4199,9 @@ read_ordlist(
 	const size_t a_r_chars = COUNTOF(addr_rst_s) - 1;
 	struct ntp_control *	cpkt;
 	u_short			qdata_octets;
+
+	UNUSED_ARG(rbufp);
+	UNUSED_ARG(restrict_mask);
 
 	/*
 	 * CTL_OP_READ_ORDLIST_A was first named CTL_OP_READ_IFSTATS and
@@ -4228,6 +4240,8 @@ static void req_nonce(
 {
 	char	buf[64];
 
+	UNUSED_ARG(restrict_mask);
+
 	generate_nonce(rbufp, buf, sizeof(buf));
 	ctl_putunqstr("nonce", buf, strlen(buf));
 	ctl_flushpkt(0);
@@ -4245,6 +4259,8 @@ read_clockstatus(
 	)
 {
 #ifndef REFCLOCK
+	UNUSED_ARG(rbufp);
+	UNUSED_ARG(restrict_mask);
 	/*
 	 * If no refclock support, no data to return
 	 */
@@ -4260,6 +4276,9 @@ read_clockstatus(
 	const uint8_t *		cc;
 	struct ctl_var *	kv;
 	struct refclockstat	cs;
+
+	UNUSED_ARG(rbufp);
+	UNUSED_ARG(restrict_mask);
 
 	if (res_associd != 0) {
 		peer = findpeerbyassoc(res_associd);
@@ -4351,6 +4370,9 @@ write_clockstatus(
 	int restrict_mask
 	)
 {
+	UNUSED_ARG(rbufp);
+	UNUSED_ARG(restrict_mask);
+
 	ctl_error(CERR_PERMISSION);
 }
 

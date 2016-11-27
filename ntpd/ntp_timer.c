@@ -115,6 +115,8 @@ set_timer_or_die(
 	const char *	setfunc;
 	int		rc;
 
+	UNUSED_ARG(ptimer);
+
 #ifdef HAVE_TIMER_CREATE
 	setfunc = "timer_settime";
 	rc = timer_settime(timer_id, 0, &itimer, NULL);
@@ -329,7 +331,7 @@ timer(void)
 		sys_rootdisp = 0;
 	}
 
-	intercept_get_systime(__func__, &now);
+	get_systime(&now);
 	time(&tnow);
 
 	/*
@@ -419,6 +421,8 @@ alarming(
 # ifdef DEBUG
 	const char *msg = "alarming: initializing TRUE\n";
 # endif
+
+	UNUSED_ARG(sig);
 
 	if (!initializing) {
 		if (alarm_flag) {
@@ -580,16 +584,16 @@ check_leapsec(
 			const char *leapmsg = NULL;
 			if (lsdata.warped < 0) {
 				if (clock_max_back > 0.0 &&
-				    clock_max_back < fabs(lsdata.warped)) {
-					step_systime(lsdata.warped);
+				    clock_max_back < abs(lsdata.warped)) {
+					step_systime(lsdata.warped, intercept_set_tod);
 					leapmsg = leapmsg_p_step;
 				} else {
 					leapmsg = leapmsg_p_slew;
 				}
 			} else 	if (lsdata.warped > 0) {
 				if (clock_max_fwd > 0.0 &&
-				    clock_max_fwd < fabs(lsdata.warped)) {
-					step_systime(lsdata.warped);
+				    clock_max_fwd < abs(lsdata.warped)) {
+					step_systime(lsdata.warped, intercept_set_tod);
 					leapmsg = leapmsg_n_step;
 				} else {
 					leapmsg = leapmsg_n_slew;

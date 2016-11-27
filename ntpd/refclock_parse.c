@@ -8,6 +8,11 @@
  * Copyright (c) 1989-2015 by Frank Kardel <kardel@ntp.org>
  * Copyright 2015 by the NTPsec project contributors
  * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Note: some modes are obsolete and could probably stand to be removed
+ * next time this code gets serious attention.  In particular, modes 9 and 10
+ * support the Trimble SVeeSix, which was discontinued before 2003. Related
+ * code in the parse library could also be dropped.
  */
 
 #include "config.h"
@@ -84,9 +89,6 @@
 # include "refclock_atom.h"
 #endif
 
-#ifdef HAVE_SYS_PPSCLOCK_H
-#  include <sys/ppsclock.h>
-#endif
 #ifdef HAVE_LINUX_SERIAL_H
 #  include <linux/serial.h>
 #endif
@@ -216,7 +218,7 @@ typedef struct bind
 
 struct errorregression
 {
-	u_long err_count;	/* number of repititions per class */
+	u_long err_count;	/* number of repetitions per class */
 	u_long err_delay;	/* minimum delay between messages */
 };
 
@@ -286,7 +288,7 @@ struct errorinfo
 {
 	u_long err_started;	/* begin time (ntp) of error condition */
 	u_long err_last;	/* last time (ntp) error occurred */
-	u_long err_cnt;	/* number of error repititions */
+	u_long err_cnt;	/* number of error repetitions */
 	u_long err_suppressed;	/* number of suppressed messages */
 	struct errorregression *err_stage; /* current error stage */
 };
@@ -1685,6 +1687,8 @@ local_nop(
 	struct parseunit *parse
 	)
 {
+	UNUSED_ARG(parse);
+
 	return true;
 }
 
@@ -1774,7 +1778,7 @@ local_input(
 			if (!PARSE_PPS(parse->parseio.parse_dtime.parse_state))
 			{
 #ifdef HAVE_PPSAPI
-				if (parse->flags & PARSE_PPSCLOCK)
+				if (parse->flags & PARSE_PPSAPI)
 				{
 					struct timespec pps_timeout;
 					pps_info_t      pps_info;
@@ -1910,8 +1914,8 @@ local_receive(
 	if (rbufp->recv_length != sizeof(parsetime_t))
 	{
 		ERR(ERR_BADIO)
-			msyslog(LOG_ERR,"PARSE receiver #%d: local_receive: bad size (got %d expected %d)",
-				CLK_UNIT(parse->peer), rbufp->recv_length, (int)sizeof(parsetime_t));
+			msyslog(LOG_ERR,"PARSE receiver #%d: local_receive: bad size (got %zd expected %zd)",
+				CLK_UNIT(parse->peer), rbufp->recv_length, sizeof(parsetime_t));
 		parse_event(parse, CEVNT_BADREPLY);
 		return;
 	}
@@ -2293,7 +2297,7 @@ parse_shutdown(
 	}
 
 #ifdef HAVE_PPSAPI
-	if (parse->flags & PARSE_PPSCLOCK)
+	if (parse->flags & PARSE_PPSAPI)
 	{
 		(void)time_pps_destroy(parse->atom.handle);
 	}
@@ -2388,7 +2392,7 @@ parse_ppsapi(
 	int cap, mode_ppsoffset;
 	const char *cp;
 
-	parse->flags &= (uint8_t) (~PARSE_PPSCLOCK);
+	parse->flags &= (uint8_t) (~PARSE_PPSAPI);
 
 	/*
 	 * collect PPSAPI offset capability - should move into generic handling
@@ -2451,7 +2455,7 @@ parse_ppsapi(
 		return false;
 	}
 
-	parse->flags |= PARSE_PPSCLOCK;
+	parse->flags |= PARSE_PPSAPI;
 	return true;
 }
 #else
@@ -2475,6 +2479,8 @@ parse_start(
 	char parseppsdev[sizeof(PARSEPPSDEVICE)+20];
 	parsectl_t tmp_ctl;
 	u_int type;
+
+	UNUSED_ARG(sysunit);
 
 	/*
 	 * get out Copyright information once
@@ -2642,7 +2648,7 @@ parse_start(
 				msyslog(LOG_NOTICE,
 					"refclock_parse: optional PPS processing not available");
 			} else {
-				parse->flags    |= PARSE_PPSCLOCK;
+				parse->flags    |= PARSE_PPSAPI;
 #ifdef ASYNC_PPS_CD_NEG
 				NLOG(NLOG_CLOCKINFO)
 				  msyslog(LOG_INFO,

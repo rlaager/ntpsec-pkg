@@ -152,7 +152,7 @@ GENERAL
 	significant.
 
      c) Note that the bit time of 3.3ms adds to the potential error in
-	the the clock timestamp, since the bit clock of the serial link
+	the clock timestamp, since the bit clock of the serial link
 	may effectively be free-running with respect to the host clock
 	and the MSF clock.  Actually, the error is probably 1/16th of
 	the above, since the input data is probably sampled at at least
@@ -257,8 +257,6 @@ TO-DO LIST
   * Add very slow auto-adjustment up to a value of +/- time2 to correct
     for long-term errors in the clock value (time2 defaults to 0 so the
     correction would be disabled by default).
-
-  * Consider trying to use the tty_clk/ppsclock support.
 
   * Possibly use average or maximum signal quality reported during
     resync, rather than just the last one, which may be atypical.
@@ -547,6 +545,8 @@ dummy_event_handler(
 	struct peer *peer
 	)
 {
+	UNUSED_ARG(peer);
+
 #ifdef DEBUG
 	if(debug) { printf("arc: dummy_event_handler() called.\n"); }
 #endif
@@ -745,6 +745,8 @@ arc_shutdown(
 	register struct arcunit *up;
 	struct refclockproc *pp;
 
+	UNUSED_ARG(unit);
+
 	peer->procptr->action = dummy_event_handler;
 
 	pp = peer->procptr;
@@ -786,6 +788,8 @@ send_slow(
 {
 	int sl = strlen(s);
 	int spaceleft = space_left(up);
+
+	UNUSED_ARG(fd);
 
 #ifdef DEBUG
 	if(debug > 1) { printf("arc: spaceleft = %d.\n", spaceleft); }
@@ -839,7 +843,8 @@ arc_receive(
 	struct refclockproc *pp;
 	struct peer *peer;
 	char c;
-	int i, wday, month, flags, status;
+	int wday, month, flags, status;
+	size_t i;
 	int arc_last_offset;
 	static int quality_average = 0;
 	static int quality_sum = 0;
@@ -907,7 +912,7 @@ arc_receive(
 		timestamp = rbufp->recv_time;
 #ifdef DEBUG
 		if(debug) { /* Show \r as `R', other non-printing char as `?'. */
-			printf("arc: stamp -->%c<-- (%d chars rcvd)\n",
+			printf("arc: stamp -->%c<-- (%zd chars rcvd)\n",
 			       ((c == '\r') ? 'R' : (isgraph((unsigned char)c) ? c : '?')),
 			       rbufp->recv_length);
 		}
@@ -938,7 +943,7 @@ arc_receive(
 #ifdef DEBUG
 		if(debug > 1) {
 			printf(
-				"arc: %s%d char(s) rcvd, the last for lastcode[%d]; -%sms offset applied.\n",
+				"arc: %s%zd char(s) rcvd, the last for lastcode[%d]; -%sms offset applied.\n",
 				((rbufp->recv_length > 1) ? "*** " : ""),
 				rbufp->recv_length,
 				arc_last_offset,
@@ -1245,7 +1250,7 @@ arc_receive(
 	if(peer->ttl > 0) {
 		if(pp->sloppyclockflag & CLK_FLAG1) {
 			struct tm  local;
-			struct tm *gmtp;
+			struct tm *gmtp, mygm;
 			time_t	   unixtime;
 
 			/*
@@ -1312,7 +1317,7 @@ arc_receive(
 				break;
 			}
 			unixtime = mktime (&local);
-			if ((gmtp = gmtime (&unixtime)) == NULL)
+			if ((gmtp = gmtime_r (&unixtime, &mygm)) == NULL)
 			{
 				pp->lencode = 0;
 				refclock_report (peer, CEVNT_FAULT);
@@ -1421,6 +1426,9 @@ request_time(
 {
 	struct refclockproc *pp = peer->procptr;
 	register struct arcunit *up = pp->unitptr;
+
+	UNUSED_ARG(unit);
+
 #ifdef DEBUG
 	if(debug) { printf("arc: unit %d: requesting time.\n", unit); }
 #endif

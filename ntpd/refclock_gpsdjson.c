@@ -88,17 +88,6 @@
 #include "ntp_types.h"
 #include "ntp_control.h"	/* for CTL_* clocktypes */
 
-#ifndef LLONG_MAX
-  /* ntp_types.h includes limits.h
-   * On NetBSD, that includes machine/limits.h
-   * Normally, that provides LLONG_MAX and LLONG_MIN 
-   * But that doesn't work on NetBSD.  It needs _NETBSD_SOURCE or such.
-   * These are the same on both 32 and 64 bit systems.
-   */
-#define  LLONG_MAX    0x7fffffffffffffffLL    /* max signed long long */
-#define  LLONG_MIN  (-0x7fffffffffffffffLL-1) /* min signed long long */
-#endif
-
 /* =====================================================================
  * Get the little JSMN library directly into our guts. Use the 'parent
  * link' feature for maximum speed.
@@ -123,8 +112,8 @@ typedef int tok_ref;
 
 /* We roll our own integer number parser.
  */
-typedef signed   long long int json_int;
-typedef unsigned long long int json_uint;
+typedef signed   long int json_int;
+typedef unsigned long int json_uint;
 #define JSON_INT_MAX LONG_MAX
 #define JSON_INT_MIN LONG_MIN
 
@@ -751,6 +740,7 @@ poll_secondary(
 	clockprocT * const pp   ,
 	gpsd_unitT * const up   )
 {
+	UNUSED_ARG(up);
 	if (pp->coderecv != pp->codeproc) {
 		/* all is well */
 		pp->lastref = pp->lastrec;
@@ -771,6 +761,8 @@ gpsd_poll(
 	clockprocT * const pp = peer->procptr;
 	gpsd_unitT * const up = (gpsd_unitT *)pp->unitptr;
 
+	UNUSED_ARG(unit);
+
 	++pp->polls;
 	if (peer == up->pps_peer)
 		poll_secondary(peer, pp, up);
@@ -789,6 +781,10 @@ gpsd_control(
 {
 	clockprocT * const pp = peer->procptr;
 	gpsd_unitT * const up = (gpsd_unitT *)pp->unitptr;
+
+	UNUSED_ARG(unit);
+	UNUSED_ARG(in_st);
+	UNUSED_ARG(out_st);
 
 	if (peer == up->pps_peer) {
 		DTOLFP(pp->fudgetime1, &up->pps_fudge2);
@@ -888,6 +884,8 @@ gpsd_timer(
 {
 	clockprocT * const pp = peer->procptr;
 	gpsd_unitT * const up = (gpsd_unitT *)pp->unitptr;
+
+	UNUSED_ARG(unit);
 
 	if (peer == up->pps_peer)
 		timer_secondary(peer, pp, up);
@@ -1193,7 +1191,7 @@ json_object_lookup(
 			tid = json_token_skip(ctx, tid); /* skip val */
 		} else if (strcmp(key, ctx->buf + ctx->tok[tid].start)) {
 			tid = json_token_skip(ctx, tid+1); /* skip key+val */
-		} else if (what < 0 || what == ctx->tok[tid+1].type) {
+		} else if (what < 0 || what == (int)ctx->tok[tid+1].type) {
 			return tid + 1;
 		} else {
 			break;
@@ -1426,6 +1424,8 @@ process_watch(
 
 	const char * path;
 
+	UNUSED_ARG(rtime);
+
 	path = json_object_lookup_string(jctx, 0, "device");
 	if (NULL == path || strcmp(path, up->device))
 		return;
@@ -1455,6 +1455,8 @@ process_version(
 	const char *revision;
 	const char *release;
 	uint16_t    pvhi, pvlo;
+
+	UNUSED_ARG(rtime);
 
 	/* get protocol version number */
 	revision = json_object_lookup_string_default(
@@ -1589,7 +1591,7 @@ process_tpv(
 	/* Set the precision from the GPSD data
 	 * Use the ETP field for an estimation of the precision of the
 	 * serial data. If ETP is not available, use the default serial
-	 * data presion instead. (Note: The PPS branch has a different
+	 * data precision instead. (Note: The PPS branch has a different
 	 * precision estimation, since it gets the proper value directly
 	 * from GPSD!)
 	 */

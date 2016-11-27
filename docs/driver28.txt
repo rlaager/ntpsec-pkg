@@ -81,7 +81,7 @@ discarded. This check is disabled when _flag1_ is set to 1.
 
 == GPSD ==
 
-http://gpsd.berlios.de/[_GPSD_] knows how to talk to many GPS devices.
+http://www.catb.org/gpsd/[_GPSD_] knows how to talk to many GPS devices.
 It can work with _{ntpd}_ through the SHM driver.
 
 The _GPSD_ man page suggests setting minpoll and maxpoll to 4. That was
@@ -109,7 +109,7 @@ The 4th field is the number of second ticks since the last poll. The 5th
 field is the number of good data samples found. The last 64 will be used
 by _{ntpd}_. The 6th field is the number of sample that didn't have valid
 data ready. The 7th field is the number of bad samples. The 8th field is
-the number of times the the mode 1 info was update while _{ntpd}_ was
+the number of times the mode 1 info was update while _{ntpd}_ was
 trying to grab a sample.
 
 Here is a sample showing the GPS reception fading out:
