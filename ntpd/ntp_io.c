@@ -273,9 +273,9 @@ static	bool	addr_eqprefix	(const sockaddr_u *, const sockaddr_u *,
 static  bool	addr_samesubnet	(const sockaddr_u *, const sockaddr_u *,
 				 const sockaddr_u *, const sockaddr_u *);
 static	int	create_sockets	(u_short);
-static	SOCKET	open_socket	(sockaddr_u *, int, int, endpt *);
+static	SOCKET	open_socket	(sockaddr_u *, bool, bool, endpt *);
 static	char *	fdbits		(int, fd_set *);
-static	void	set_reuseaddr	(int);
+static	void	set_reuseaddr	(bool);
 static	bool	socket_broadcast_enable	 (struct interface *, SOCKET, sockaddr_u *);
 #ifdef  OS_MISSES_SPECIFIC_ROUTE_UPDATES
 static	bool	socket_broadcast_disable (struct interface *, sockaddr_u *);
@@ -487,7 +487,7 @@ io_open_sockets(void)
 	if (already_opened)
 		return;
 
-	already_opened = 1;
+	already_opened = true;
 
 	/*
 	 * Create the sockets
@@ -2080,7 +2080,7 @@ create_sockets(
 	 * Now that we have opened all the sockets, turn off the reuse
 	 * flag for security.
 	 */
-	set_reuseaddr(0);
+	set_reuseaddr(false);
 
 	DPRINTF(2, ("create_sockets: Total interfaces = %d\n", ninterfaces));
 
@@ -2235,7 +2235,7 @@ set_excladdruse(
  */
 static void
 set_reuseaddr(
-	int flag
+	bool flag
 	)
 {
 #ifndef SO_EXCLUSIVEADDRUSE
@@ -2872,8 +2872,8 @@ io_multicast_del(
 static SOCKET
 open_socket(
 	sockaddr_u *	addr,
-	int		bcast,
-	int		turn_off_reuse,
+	bool		bcast,
+	bool		turn_off_reuse,
 	endpt *		interf
 	)
 {
@@ -2883,8 +2883,8 @@ open_socket(
 	 * int is OK for REUSEADR per
 	 * http://www.kohala.com/start/mcast.api.txt
 	 */
-	int	on = 1;
-	int	off = 0;
+	const int	on = 1;
+	const int	off = 0;
 
 	if (IS_IPV6(addr) && !ipv6_works)
 		return INVALID_SOCKET;

@@ -6,6 +6,16 @@ Much of the traditional function of a news file is now better addressed
 by browsing the comments in the revision history.  This file will focus
 on user-visible changes.
 
+== 2016-03-15: 0.9.2 ==
+
+Point release.
+
+* can now cross-compile
+* many documentation fixes
+* Coverity is even more strict
+* remove WWV, transmitter protocol changed, nobody builds receivers
+* remove updwtmpx stuff, no longer useful
+
 == 2016-01-25: 0.9.1 ==
 
 Point release for security. Fixes:
@@ -69,6 +79,10 @@ first beta. CVE-2015-7976 is a feature request to restrict the format
 of filenames used in saveconfig commands. Saveconfig support is
 disabled at compile time in NTPsec and will not be re-enabled without
 much more extensive hardening.
+
+Other fixes:
+
+Coverity found a slow memory leak in the asynchronous-DNS code.
 
 == 2015-11-16: 0.9.0 ==
 

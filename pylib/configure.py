@@ -18,7 +18,9 @@ def cmd_configure(ctx):
 	ctx.setenv('host', ctx.env.derive())
 
 	ctx.load('compiler_c')
-	ctx.load('bison')
+
+	if not ctx.env.NTPS_RELEASE:
+		ctx.load('bison')
 
 	for opt in opt_map:
 		ctx.env[opt] = opt_map[opt]
@@ -39,9 +41,12 @@ def cmd_configure(ctx):
 									"-f", "-I%s/libisc/include/" % srcnode,
 									"-f", "-I%s/libisc/unix/include/" % srcnode]
 
-	ctx.find_program("awk", var="BIN_AWK")
-	ctx.find_program("perl", var="BIN_PERL")
-	ctx.find_program("sh", var="BIN_SH")
+	# Not needed to build.  Used by utility scripts.
+	ctx.find_program("awk", var="BIN_AWK", mandatory=False)
+	ctx.find_program("perl", var="BIN_PERL", mandatory=False)
+	ctx.find_program("sh", var="BIN_SH", mandatory=False)
+
+	# used to make man and html pages
 	ctx.find_program("asciidoc", var="BIN_ASCIIDOC", mandatory=False)
 	ctx.find_program("a2x", var="BIN_A2X", mandatory=False)
 
@@ -110,8 +115,8 @@ def cmd_configure(ctx):
 #		ctx.get_cc_version(ctx.env.CC, gcc=True)
 		ctx.end_msg(ctx.options.cross_compiler)
 
-		ctx.env.CC = ctx.options.cross_compiler
-		ctx.env.LINK_CC = ctx.options.cross_compiler
+		ctx.env.CC = [ctx.options.cross_compiler]
+		ctx.env.LINK_CC = [ctx.options.cross_compiler]
 
 		if ctx.env["CROSS-CFLAGS"]:
 			ctx.env.CFLAGS = opt_map["CROSS-CFLAGS"]
@@ -156,13 +161,17 @@ def cmd_configure(ctx):
 		ctx.env.PLATFORM_TARGET = "freebsd"
 	elif platform.startswith("netbsd"):
 		ctx.env.PLATFORM_TARGET = "netbsd"
+	elif platform.startswith("openbsd"):
+		ctx.env.PLATFORM_TARGET = "openbsd"
 	else:
 		ctx.env.PLATFORM_TARGET = "unix"
 	ctx.end_msg(ctx.env.PLATFORM_TARGET	)
 
+	ctx.define("PLATFORM_%s" % ctx.env.PLATFORM_TARGET.upper(), 1)
+
 
 	# XXX: hack
-	if ctx.env.PLATFORM_TARGET in ["freebsd", "osx"]:
+	if ctx.env.PLATFORM_TARGET in ["freebsd", "osx", "openbsd"]:
 		ctx.env.PLATFORM_INCLUDES = ["/usr/local/include"]
 		ctx.env.PLATFORM_LIBPATH = ["/usr/local/lib"]
 	elif ctx.env.PLATFORM_TARGET == "netbsd":
@@ -177,8 +186,6 @@ def cmd_configure(ctx):
 	# int32_t and uint32_t probes aren't really needed, POSIX guarantees
 	# them.  But int64_t and uint64_t are not guaranteed to exist on 32-bit
 	# machines.
-#HGM	types = ["int32_t", "uint32_t", "int64_t", "uint64_t",
-#HGM		 "uint_t", "size_t", "wint_t", "pid_t", "intptr_t", "uintptr_t"]
 	# Used by timevalops and timespecops in tests/libntp/
 	# May go away when that is cleaned up.
 	types = ["uint64_t"]
@@ -194,7 +201,7 @@ def cmd_configure(ctx):
 		ctx.check_type(f, h)
 
 	structures = (
-		("struct timex", ["sys/timex.h"]),
+		("struct timex", ["sys/time.h", "sys/timex.h"]),
 		("struct ntptimeval", ["sys/time.h", "sys/timex.h"]),
 		)
 	for (s, h) in structures:
@@ -212,11 +219,8 @@ def cmd_configure(ctx):
 	sizeofs = [
 		("time.h",		"time_t"),
 		(None,			"int"),
-#HGM		(None,                  "short"),
 		(None,			"long"),
 		(None,			"long long"),
-#HGM		("pthread.h",   "pthread_t"),
-#HGM		(None,                  "signed char"),
 	]
 
 	for header, sizeof in sorted(sizeofs):
@@ -229,9 +233,8 @@ def cmd_configure(ctx):
 	ctx.define("GETSOCKNAME_SOCKLEN_TYPE", "socklen_t", quote=False)
 	ctx.define("DFLT_RLIMIT_STACK", 50)
 	ctx.define("DFLT_RLIMIT_MEMLOCK", 32)
-#HGM	ctx.define("POSIX_SHELL", "/bin/sh")
 
-	ctx.define("OPENSSL_VERSION_TEXT", "#XXX: Fixme")
+#	ctx.define("OPENSSL_VERSION_TEXT", "#XXX: Fixme")
 
 	probe_multicast(ctx, "MCAST", "Checking for multicast capability")
 
@@ -246,7 +249,8 @@ def cmd_configure(ctx):
 	ctx.check_cc(lib="ossaudio", mandatory=False)  # NetBSD audio
 	ctx.check_cc(lib="pthread", mandatory=False)
 	ctx.check_cc(lib="rt", mandatory=False)
-	ctx.check_cc(lib="readline", mandatory=False)
+	ctx.check_cc(lib="curses", mandatory=False) # Required for readline on OpenBSD.
+	ctx.check_cc(lib="readline", use="CURSES", mandatory=False)
 	ctx.check_cc(lib="thr", mandatory=False)
 	ctx.check_cc(lib="gcc_s", mandatory=False)
 
@@ -261,14 +265,11 @@ def cmd_configure(ctx):
 	# we're likely to duplicate them.
 	functions = (
 		('adjtimex', ["sys/time.h", "sys/timex.h"]),
-#HGM		('arc4random', ["stdlib.h"]),
-#HGM		('arc4random_buf', ["stdlib.h"]),
 		('closefrom', ["stdlib.h"]),
 		('clock_gettime', ["time.h"], "RT"),
 		('clock_settime', ["time.h"], "RT"),
 		('EVP_MD_do_all_sorted', ["openssl/evp.h"], "CRYPTO"),
 		('getclock', ["sys/timers.h"]),
-#HGM		('getdtablesize', ["unistd.h"]),                # SVr4, 4.2BSD
 		('getpassphrase', ["stdlib.h"]),		# Sun systems
 		('MD5Init', ["md5.h"], "CRYPTO"),
 		('ntp_adjtime', ["sys/time.h", "sys/timex.h"]),		# BSD
@@ -279,9 +280,7 @@ def cmd_configure(ctx):
 		('settimeofday', ["sys/time.h"], "RT"),	# BSD
 		('strlcpy', ["string.h"]),
 		('strlcat', ["string.h"]),
-#HGM		('sysconf', ["unistd.h"]),
-		('timer_create', ["time.h"]),
-		('updwtmpx', ["utmpx.h"]),		# glibc
+		('timer_create', ["time.h"])
 		)
 	for ft in functions:
 		if len(ft) == 2:
@@ -307,14 +306,10 @@ def cmd_configure(ctx):
 	# Some of these are cruft from ancient big-iron systems and should
 	# be removed.
 	optional_headers = (
-#HGM		"alloca.h",
-#HGM		"arpa/nameser.h",
-		"dns_sd.h",
-		"histedit.h",
-		"ieeefp.h",
+		"dns_sd.h",		# NetBSD, Apple, mDNS
+		"histedit.h",		# Apple
 		("ifaddrs.h", ["sys/types.h"]),
-#HGM		"libintl.h",
-		"libscf.h",
+		"libscf.h",		# Solaris
 		"linux/if_addr.h",
 		"linux/rtnetlink.h",
 		"linux/serial.h",
@@ -323,24 +318,26 @@ def cmd_configure(ctx):
 		("md5.h", ["sys/types.h"]),
 		"net/if6.h",
 		("net/route.h", ["sys/types.h","sys/socket.h","net/if.h"]),
-		"netinfo/ni.h",
-		"priv.h",
+		"netinfo/ni.h",		# Apple
+		"priv.h",               # Solaris
 		("readline/readline.h",["stdio.h"]),
 		("readline/history.h", ["stdio.h","readline/readline.h"]),
 		("resolv.h", ["sys/types.h","netinet/in.h","arpa/nameser.h"]),
 		"semaphore.h",
 		"stdatomic.h",
 		"sys/audioio.h",
+		"sys/capability.h",     # Linux
 		"sys/ioctl.h",
-		"sys/modem.h",
-		"sys/prctl.h",
-#HGM		"sys/procset.h",
+		"sys/modem.h",          # Apple
+		"sys/prctl.h",          # Linux
 		"sys/sockio.h",
 		"sys/soundcard.h",
 		("sys/sysctl.h", ["sys/types.h"]),
-#HGM		"sys/systune.h",
 		("timepps.h", ["inttypes.h"]),
 		("sys/timepps.h", ["inttypes.h", "sys/time.h"]),
+		"utmpx.h",       # missing on RTEMS and OpenBSD
+		("sys/timex.h", ["sys/time.h"]),
+		"sys/audio.h"
 	)
 	for hdr in optional_headers:
 		if type(hdr) == type(""):
@@ -355,9 +352,6 @@ def cmd_configure(ctx):
 			print "Compilation check failed but include exists %s" % hdr
 
 	if ctx.get_define("HAVE_TIMEPPS_H") or ctx.get_define("HAVE_SYS_TIMEPPS_H"):
-#HGM		from pylib.check_timepps import check_timepps
-#HGM		check_timepps(ctx)
-#HGM  Can delete pylib/check_timepps.py
 		ctx.define("HAVE_PPSAPI", 1)
 
 
@@ -368,11 +362,15 @@ def cmd_configure(ctx):
 	from check_sockaddr import check_sockaddr
 	check_sockaddr(ctx)
 
-#HGM	from check_posix_thread_version import check_posix_thread_version
+	# Some systems don't have sys/timex.h eg OS X, OpenBSD...
+	if ctx.get_define("HAVE_SYS_TIMEX_H"):
+		ctx.env.HEADER_SYS_TIMEX_H = True
 
-#HGM	check_posix_thread_version(ctx)
-#HGM	ctx.define('HAVE_PTHREADS', ctx.env.POSIX_THREAD_VERISON)
-
+	# Some systems don't have sys/audio.h eg OS X, OpenBSD...
+	if ctx.get_define("HAVE_SYS_AUDIO_H") or \
+	   ctx.get_define("HAVE_SYS_SOUNDCARD_H") or \
+	   ctx.get_define("HAVE_MACHINE_SOUNDCARD_H"):
+		ctx.env.HAVE_AUDIO = True  # makes util/tg2
 
 	if ctx.options.refclocks:
 		from refclock import refclock_config
@@ -438,7 +436,7 @@ def cmd_configure(ctx):
 	# file /usr/include/sys/timex.h for the particular
 	# architecture to be in place."
 	#
-	if probe_header_with_prerequisites(ctx, "sys/timex.h", ["sys/time.h"]):
+	if ctx.get_define("HAVE_SYS_TIMEX_H"):
 		ctx.define("HAVE_KERNEL_PLL", 1)
 
 	# SO_REUSEADDR socket option is needed to open a socket on an
@@ -453,7 +451,7 @@ def cmd_configure(ctx):
 	# ctx.define("NEED_RCVBUF_SLOP", 1)
 
 	# It should be possible to use asynchrpnous I/O with notification
-	# by SIGIO on any Unix conformant to POSIX.1-2001. But she code to
+	# by SIGIO on any Unix conformant to POSIX.1-2001. But the code to
 	# do this is untested and there are historical reasons to suspect
 	# it might not work reliably on all platforms.  Enable cautiously
 	# and test carefully.
