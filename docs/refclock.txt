@@ -21,14 +21,14 @@ include::includes/audio.txt[]
 [[intro]]
 == Introduction ==
 
-{project-shortname} supports a large numberr of satellite, radio and
+{project-shortname} supports a large number of satellite, radio and
 telephone modem reference clocks plus several audio devices for
-instrumentation signals.plus a special pseudo-clock used for backup or
+instrumentation signals, plus a special pseudo-clock used for backup or
 when no other clock source is available.
 
 A general description of the reference clock support is on this
 page. Additional information about each reference clock driver can be
-found via links from this page. Additional information is on the
+found via links from here. Additional information is on the
 link:rdebug.html[Debugging Hints for Reference Clock Drivers] and
 link:howto.html[How To Write a Reference Clock Driver] pages.
 Information on how to support pulse-per-second (PPS) signals produced by
@@ -174,10 +174,10 @@ Datum/Bancomm/Symmetricom bc600-series GPS/IRIG Receiver.
 |====================================================================
 | Number                      | Flags |RefID| Driver
 | link:driver1.html[Type 1]   | D     |LOCL | Undisciplined Local Clock
-| link:driver4.html[Type 4]   | -     |+SPECTRACOM+| Generic Spectracom Receivers
+| link:driver4.html[Type 4]   | -     |SPECTRACOM| Generic Spectracom Receivers
 | link:driver5.html[Type 5]   | D     |TRUE | TrueTime GPS/GOES Receivers
 | link:driver6.html[Type 6]   | D     |IRIG | IRIG Audio Decoder
-| link:driver7.html[Type 7]   | D     |+CHU+| Radio CHU Audio Demodulator/Decoder
+| link:driver7.html[Type 7]   | D     |CHU  | Radio CHU Audio Demodulator/Decoder
 | link:driver8.html[Type 8]   | TR    |DCFx | Generic Reference Driver (Parse)
 | link:driver9.html[Type 9]   | D     |GPS  | Magnavox MX4200 GPS Receiver
 | link:driver10.html[Type 10] | D     |GPS  | Austron 2200A/2201A GPS Receivers

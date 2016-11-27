@@ -2869,7 +2869,7 @@ collect_mru_list(
 				 ri, sptoa(&recent->addr), ri,
 				 recent->last.l_ui, recent->last.l_uf);
 			chars = strlen(buf);
-			if (REQ_ROOM - chars < 1)
+			if (REQ_ROOM <= chars)
 				break;
 			memcpy(req, buf, chars + 1);
 			req += chars;
@@ -3186,8 +3186,12 @@ mrulist(
 		LFPTOD(&interval, favgint);
 		favgint /= recent->count;
 		avgint = (int)(favgint + 0.5);
-		fprintf(fp, "%6d %6d %4hx %c %d %d %6d %5u %s\n",
-			lstint, avgint, recent->rs,
+		fprintf(fp, "%6d", lstint);
+		if (5 < avgint || 1 == recent->count)
+		fprintf(fp, " %6d", avgint);
+		else fprintf(fp, " %6.2f", favgint);
+		fprintf(fp, " %4hx %c %d %d %6d %5u %s\n",
+			recent->rs,
 			(RES_KOD & recent->rs)
 			    ? 'K'
 			    : (RES_LIMITED & recent->rs)
