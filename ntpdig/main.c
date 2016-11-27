@@ -216,7 +216,7 @@ ntpdig_main (
 #endif
 		break;
 	    case 'g':
-		opt_gap = atoi(optarg);
+		opt_gap = atoi(ntp_optarg);
 		if (opt_gap <= 0) {
 			printf("%s: invalid gap value!\n", progname);
 			exit(1);
@@ -236,7 +236,7 @@ ntpdig_main (
 		opt_logfile = ntp_optarg;
 		break;
 	    case 'M':
-		opt_ntpversion = atoi(optarg);
+		opt_steplimit = atoi(ntp_optarg);
 		if (opt_steplimit <= 0) {
 			printf("%s: invalid steplimit value!\n", progname);
 			exit(1);
@@ -1365,7 +1365,7 @@ handle_pkt(
 		}
 
 		if (opt_json) {
-		    printf("{\"time\"\"%s\",\"offset\":%f,\"precision\":%f,",
+		    printf("{\"time\":\"%s\",\"offset\":%f,\"precision\":%f,",
 		    	ts_str, offset, synch_distance);
 		    printf("\"host\":\"%s\",\"ip\":\"%s\",",
 			   hostname, stoa(host));

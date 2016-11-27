@@ -100,10 +100,6 @@ and that file system links, symbolic or otherwise, should be avoided.
 The _leapfile_ is scanned when +{ntpd}+ processes the +leapfile+
 directive or when +{ntpd}+ detects that _leapfile_ has changed. +{ntpd}+
 checks once a day to see if the _leapfile_ has changed.
-+
-While not strictly a security function, the Autokey protocol provides
-means to securely retrieve the current or updated leapsecond values
-from a server.
 
 +leapsmearinterval+ 'interval'::
   This *experimental* option is only available if {ntpd} was built
@@ -244,7 +240,7 @@ The variables operate as follows:
 +allan+ _allan_;;
     The argument becomes the new value for the minimum Allan intercept,
     which is a parameter of the PLL/FLL clock discipline algorithm. The
-    value in log2 seconds defaults to 7 (1024 s), which is also the
+    value in log2 seconds defaults to 11 (2048 s), which is also the
     lower limit.
   +dispersion+ _dispersion_;;
     The argument becomes the new value for the dispersion increase rate,

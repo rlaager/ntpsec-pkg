@@ -4,148 +4,54 @@ from waflib import Context, Errors
 from waflib import Scripting
 from waflib.Logs import pprint
 
-config = {
-	"NTPS_RELEASE": True # Set to 'True' if this is a release
-}
+pprint.__doc__ = None
 
 out="build"
 
 from pylib.configure import cmd_configure
 from waflib.Tools import waf_unit_test
 from pylib.test import test_write_log, test_print_log
+from pylib.options import options_cmd
 
-OPT_STORE = {} # Storage for options to pass into configure
+config = {
+	"NTPS_RELEASE": True,
+	"out": out,
+	"OPT_STORE": {}
+}
 
-def parse_version():
-        with open("VERSION", "r") as f:
-                version_string = f.read().strip()
-        [major,minor,rev] = version_string.split(".")
-        return {
-                # "NTPS" for NTPSec -- this avoids any naming collisions
-                "NTPS_VERSION_MAJOR" : int(major),
-                "NTPS_VERSION_MINOR" : int(minor),
-                "NTPS_VERSION_REV" : int(rev)
-        }
+# Release procedure:
+#   1. waf configure
+#   2. waf build
+#   3. Edit wscript and set NTPS_RELEASE to True
+#   4. waf dist
 
-config.update(parse_version())
+# Snapshot procedure:
+#   Steps 1-3 as above.
+#   4. waf dist --build-snapshot
+
 
 def dist(ctx):
-		from os import path
-		from shutil import copyfile
-		files_man = []
+	from pylib.dist import dist_cmd
+	dist_cmd(ctx, config)
 
-		if not config["NTPS_RELEASE"]:
-			ctx.fatal("NTPS_RELEASE must be set to True")
-
-
-		# XXX: Redo to not use globs.
-		bldnode = ctx.path.make_node(out)
-		for section in [1, 5, 8]:
-			files_man += bldnode.ant_glob("**/*.%d" % section)
-
-		# Need a more reliable check.
-		if not files_man:
-			ctx.fatal("You must configure and build first with NTPS_RELEASE set to false")
-
-		for man in files_man:
-			src = man.abspath()
-			dst = src.replace("%s/main/" % bldnode.abspath(), "")
-			print "Copying %s -> %s" % (src, dst)
-			copyfile(src, dst)
-
-		files = [
-			("build/host/ntpd/ntp_parser.tab.c", "ntpd/ntp_parser.tab.c"),
-			("build/host/ntpd/ntp_parser.tab.h", "ntpd/ntp_parser.tab.h")
-		]
-
-		for src, dst in files:
-			if not path.exists(src):
-				ctx.fatal("%s doesn't exist please configure and build first.  NTPS_RELEASE must be set to False" % src)
-			print "Copying %s -> %s" % (src, dst)
-			copyfile(src, dst)
-
-		ctx.base_name = "ntpsec-%d.%d.%d" % \
-						(config["NTPS_VERSION_MAJOR"], \
-						config["NTPS_VERSION_MINOR"], \
-						config["NTPS_VERSION_REV"])
-		if ctx.options.build_version_tag:
-			ctx.base_name = "%s-%s" % (ctx.base_name, ctx.options.build_version_tag)
 
 def options(ctx):
-	ctx.load("compiler_c")
-	ctx.load("msvc")
-	ctx.load('waf_unit_test')
-
-	def callback_flags(option, opt, value, parser):
-		OPT_STORE.setdefault(opt, []).append(value)
-
-	grp = ctx.add_option_group("NTP configure options")
-	grp.add_option('--enable-debug', action='store_true', default=False, help="(ignored)")
-	grp.add_option('--disable-debug', action='store_true', default=False, help="Disable debugging code")
-	grp.add_option('--enable-debug-gdb', action='store_true', default=False, help="Enable GDB debugging symbols")
-	grp.add_option('--enable-crypto', action='store_true', default=False, help="Enable OpenSSL.")
-	grp.add_option('--disable-droproot', action='store_true', default=False, help="Disable dropping root.")
-	grp.add_option('--disable-dns-lookup', action='store_true', default=False, help="Disable DNS lookups.")
-	grp.add_option('--disable-dns-retry', action='store_true', default=False, help="Disable retrying DNS lookups.")
-	grp.add_option('--disable-mdns-registration', action='store_true', default=False, help="Disable MDNS registration.")
-
-	grp = ctx.add_option_group("NTP cross compile options")
-	grp.add_option('--cross-compiler', type='string', help="Path to cross compiler CC. (enables cross-compiling)")
-	grp.add_option('--cross-cflags', type='string',  action="callback", callback=callback_flags, help="Cross compiler CFLAGS.")
-	grp.add_option('--cross-ldflags', type='string', action="callback", callback=callback_flags, help="Cross compiler LDFLAGS.")
-
-	grp = ctx.add_option_group("NTP configure features")
-	grp.add_option('--enable-leap-smear', action='store_true', default=False, help="Enable Leap Smearing.")
-	grp.add_option('--enable-mssntp', action='store_true', default=False, help="Enable Samba MSS NTP support.")
-	grp.add_option('--enable-lockclock', action='store_true', default=False, help="Enable NIST lockclock scheme.")
-
-	grp = ctx.add_option_group("Refclock configure options")
-	grp.add_option('--refclock', dest='refclocks', help="Comma-separated list of Refclock IDs to build (or \"all\")", type='string')
-	grp.add_option('--list', action='store_true', default=False, help="List available Refclocks")
-
-	grp = ctx.add_option_group("NTP developer configure options")
-	grp.add_option('--enable-saveconfig', action='store_true', help="Enable configuration saving on exit.")
-	grp.add_option('--build-version-tag', type='string', help="Append a tag to the version string.")
-	grp.add_option('--cflags', type='string', action="callback", callback=callback_flags, help="Users should use CFLAGS in their environment.")
-	grp.add_option('--ldflags', type='string', action="callback", callback=callback_flags, help="Users should use LDFLAGS in their environment.")
-	grp.add_option('--enable-fortify', action='store_true', help="Enable HP Fortify.")
-	grp.add_option('--fortify-flags', type='string', action='store', help="Fortify flags.")
-	grp.add_option('--check', action='store_true', default=False, help="Run tests")
-	grp.add_option('--enable-rtems-trace', action='store_true', default=False, help="Enable RTEMS Trace.")
-	grp.add_option('--rtems-trace-path', type='string', default="", help="Path to rtems-tld.")
-
-	grp = ctx.add_option_group("NTP documentation configure options")
-	grp.add_option('--enable-doc', action='store_true', default=False, help="Build NTP documentation")
-	grp.add_option('--enable-doc-only', action='store_true', default=False, help="Only build NTP documentation")
-	grp.add_option('--enable-a2x-xmllint', action='store_true', default=False, help="Build NTP documentation with a2x XML lint")
-	grp.add_option('--disable-manpage', action='store_true', default=False, help="Disable Manpage building.")
-	grp.add_option('--path-doc', type='string', action='store', default=None, help="Force doc install directory.")
-
+	options_cmd(ctx, config)
 
 def configure(ctx):
-	ctx.env.NTPS_RELEASE = config["NTPS_RELEASE"]
-	ctx.env.NTPS_VERSION_MAJOR = config["NTPS_VERSION_MAJOR"]
-	ctx.env.NTPS_VERSION_MINOR = config["NTPS_VERSION_MINOR"]
-	ctx.env.NTPS_VERSION_REV = config["NTPS_VERSION_REV"]
-
-	ctx.env.NTPS_VERSION = "%s.%s.%s" % (ctx.env.NTPS_VERSION_MAJOR, ctx.env.NTPS_VERSION_MINOR, ctx.env.NTPS_VERSION_REV)
-	ctx.define("NTPS_VERSION_MAJOR", ctx.env.NTPS_VERSION_MAJOR)
-	ctx.define("NTPS_VERSION_MINOR", ctx.env.NTPS_VERSION_MINOR)
-	ctx.define("NTPS_VERSION_REV", ctx.env.NTPS_VERSION_REV)
-
-
-	ctx.load('waf', tooldir='pylib/')
-	ctx.load('waf_unit_test')
-
-	ctx.env.OPT_STORE = OPT_STORE
-
-	cmd_configure(ctx)
+	from pylib.configure import cmd_configure
+	cmd_configure(ctx, config)
 
 
 from waflib.Build import BuildContext
 class check(BuildContext):
 	cmd = 'check'
 	variant = "main"
+
+def bin_test(ctx):
+	from pylib.bin_test import cmd_bin_test
+	cmd_bin_test(ctx, config)
+bin_test.__doc__ = "Run binary check, use after tests."
 
 # Borrowed from https://www.rtems.org/
 variant_cmd = (
@@ -207,13 +113,12 @@ for command, func, descr in commands:
 
 
 def build(ctx):
-
 	ctx.load('waf', tooldir='pylib/')
 	ctx.load('bison')
 	ctx.load('asciidoc', tooldir='pylib/')
 	ctx.load('rtems_trace', tooldir='pylib/')
 
-	if ctx.env.ENABLE_DOC:
+	if ctx.env.ENABLE_DOC_USER:
 		if ctx.variant != "main":
 			ctx.recurse("docs")
 

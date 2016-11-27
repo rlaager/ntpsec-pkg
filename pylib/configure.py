@@ -2,11 +2,29 @@ from waflib.Configure import conf
 from util import msg, msg_setting
 from probes import *
 import sys, os
+from util import parse_version
 
-
-def cmd_configure(ctx):
+def cmd_configure(ctx, config):
 	srcnode = ctx.srcnode.abspath()
 	bldnode = ctx.bldnode.abspath()
+
+	ctx.load('waf', tooldir='pylib/')
+	ctx.load('waf_unit_test')
+
+	from pylib.util import parse_version
+	parse_version(config)
+
+	ctx.env.NTPS_RELEASE = config["NTPS_RELEASE"]
+	ctx.env.NTPS_VERSION_MAJOR = config["NTPS_VERSION_MAJOR"]
+	ctx.env.NTPS_VERSION_MINOR = config["NTPS_VERSION_MINOR"]
+	ctx.env.NTPS_VERSION_REV = config["NTPS_VERSION_REV"]
+
+	ctx.env.NTPS_VERSION = "%s.%s.%s" % (ctx.env.NTPS_VERSION_MAJOR, ctx.env.NTPS_VERSION_MINOR, ctx.env.NTPS_VERSION_REV)
+	ctx.define("NTPS_VERSION_MAJOR", ctx.env.NTPS_VERSION_MAJOR, comment="Major version number")
+	ctx.define("NTPS_VERSION_MINOR", ctx.env.NTPS_VERSION_MINOR, comment="Minor version number")
+	ctx.define("NTPS_VERSION_REV", ctx.env.NTPS_VERSION_REV, comment="Revision version number")
+
+	ctx.env.OPT_STORE = config["OPT_STORE"]
 
 	opt_map = {}
 	# Wipe out and override flags with those from the commandline
@@ -49,13 +67,19 @@ def cmd_configure(ctx):
 	# used to make man and html pages
 	ctx.find_program("asciidoc", var="BIN_ASCIIDOC", mandatory=False)
 	ctx.find_program("a2x", var="BIN_A2X", mandatory=False)
+	ctx.find_program("xsltproc", var="BIN_XSLTPROC", mandatory=False)
 
-	if (ctx.options.enable_doc or ctx.options.enable_doc_only) and not ctx.env.BIN_ASCIIDOC:
-		ctx.fatal("asciidoc is required in order to build documentation")
+	ctx.env.ENABLE_DOC = False
+	if ctx.env.BIN_ASCIIDOC and ctx.env.BIN_XSLTPROC and ctx.env.BIN_A2X:
+		ctx.env.ENABLE_DOC = True
+
+
+	if (ctx.options.enable_doc or ctx.options.enable_doc_only) and not ctx.env.ENABLE_DOC:
+		ctx.fatal("asciidoc and xsltproc are required in order to build documentation")
 	elif (ctx.options.enable_doc or ctx.options.enable_doc_only):
 		ctx.env.ASCIIDOC_FLAGS = ["-f", "%s/docs/asciidoc.conf" % ctx.srcnode.abspath()]
-		ctx.env.ENABLE_DOC = True
 		ctx.env.ENABLE_DOC_ONLY = ctx.options.enable_doc_only
+		ctx.env.ENABLE_DOC_USER = ctx.options.enable_doc
 		ctx.env.PATH_DOC = ctx.options.path_doc
 
 	# XXX: conditionally build this with --disable-man?  Should it build without docs enabled?
@@ -143,8 +167,11 @@ def cmd_configure(ctx):
 	if ctx.options.enable_debug_gdb:
 		ctx.env.CFLAGS += ["-g"]
 
+        if ctx.options.enable_saveconfig:
+                ctx.define("SAVECONFIG", 1)
+
 	if not ctx.options.disable_debug:
-		ctx.define("DEBUG", 1)
+		ctx.define("DEBUG", 1, comment="Enable debug mode")
 		ctx.env.BISONFLAGS += ["--debug"]
 
 	ctx.env.CFLAGS += ["-Wall", "-Wextra"]	# Default CFLAGS.
@@ -167,7 +194,7 @@ def cmd_configure(ctx):
 		ctx.env.PLATFORM_TARGET = "unix"
 	ctx.end_msg(ctx.env.PLATFORM_TARGET	)
 
-	ctx.define("PLATFORM_%s" % ctx.env.PLATFORM_TARGET.upper(), 1)
+	ctx.define("PLATFORM_%s" % ctx.env.PLATFORM_TARGET.upper(), 1, comment="Operating system detected by Python (%s)" % platform)
 
 
 	# XXX: hack
@@ -179,9 +206,9 @@ def cmd_configure(ctx):
 	elif ctx.env.PLATFORM_TARGET == "win":
 		ctx.load("msvc")
 
-	# OS X needs this for IPV6
+	# OS X needs this for IPv6
 	if ctx.env.PLATFORM_TARGET == "osx":
-		ctx.define("__APPLE_USE_RFC_3542", 1)
+		ctx.define("__APPLE_USE_RFC_3542", 1, comment="Needed for IPv6 support")
 
 	# int32_t and uint32_t probes aren't really needed, POSIX guarantees
 	# them.  But int64_t and uint64_t are not guaranteed to exist on 32-bit
@@ -227,39 +254,33 @@ def cmd_configure(ctx):
 		ctx.check_sizeof(header, sizeof)
 
 	# The protocol major number
-	ctx.define("NTP_API",	4)
+	ctx.define("NTP_API", 4, comment="Protocol major number.")
 
-	ctx.define("NTP_KEYSDIR", "%s/etc" % ctx.env.PREFIX)
-	ctx.define("GETSOCKNAME_SOCKLEN_TYPE", "socklen_t", quote=False)
-	ctx.define("DFLT_RLIMIT_STACK", 50)
-	ctx.define("DFLT_RLIMIT_MEMLOCK", 32)
-
-#	ctx.define("OPENSSL_VERSION_TEXT", "#XXX: Fixme")
+	ctx.define("NTP_KEYSDIR", "%s/etc" % ctx.env.PREFIX, comment="NTP key file directory")
+	ctx.define("GETSOCKNAME_SOCKLEN_TYPE", "socklen_t", quote=False, comment="socklen type")
+	ctx.define("DFLT_RLIMIT_STACK", 50, comment="Default stack size")
+	ctx.define("DFLT_RLIMIT_MEMLOCK", 32, comment="Locked memory size")
 
 	probe_multicast(ctx, "MCAST", "Checking for multicast capability")
 
-	ctx.define("TYPEOF_IP_MULTICAST_LOOP", "u_char", quote=False) #XXX: check for mcast type
+	ctx.define("TYPEOF_IP_MULTICAST_LOOP", "u_char", quote=False, comment="Multicast loop type") #XXX: check for mcast type
 
 	# These are helpful and don't break Linux or *BSD
-	ctx.define("OPEN_BCAST_SOCKET", 1)
-	ctx.define("HAS_ROUTING_SOCKET", 1)
+	ctx.define("OPEN_BCAST_SOCKET", 1, comment="Whether to open a broadcast socket")
+	ctx.define("HAS_ROUTING_SOCKET", 1, comment="Whether a routing socket exists")
 
-	ctx.check_cc(lib="edit", mandatory=False)
-	ctx.check_cc(lib="m")
-	ctx.check_cc(lib="ossaudio", mandatory=False)  # NetBSD audio
-	ctx.check_cc(lib="pthread", mandatory=False)
-	ctx.check_cc(lib="rt", mandatory=False)
-	ctx.check_cc(lib="curses", mandatory=False) # Required for readline on OpenBSD.
-	ctx.check_cc(lib="readline", use="CURSES", mandatory=False)
-	ctx.check_cc(lib="thr", mandatory=False)
-	ctx.check_cc(lib="gcc_s", mandatory=False)
+	ctx.check_cc(lib="edit", mandatory=False, comment="libedit library")
+	ctx.check_cc(lib="m", comment="Math library")
+	ctx.check_cc(lib="ossaudio", mandatory=False, comment="ossaudio for NetBSD")  # NetBSD audio
+	ctx.check_cc(lib="rt", mandatory=False, comment="realtime library")
+	ctx.check_cc(lib="curses", mandatory=False, comment="curses library, required for readline on OpenBSD") # Required for readline on OpenBSD.
+	ctx.check_cc(lib="readline", use="CURSES", mandatory=False, comment="readline library")
+	ctx.check_cc(lib="gcc_s", mandatory=False, comment="GCC runtime library.")
 
 	# Find OpenSSL. Must happen before function checks
 	if ctx.options.enable_crypto:
 		from check_openssl import configure_ssl
 		configure_ssl(ctx)
-		ctx.define("USE_OPENSSL_CRYPTO_RAND", 1)
-		ctx.define("ISC_PLATFORM_OPENSSLHASH", 1)
 
 	# Optional functions.  Do all function checks here, otherwise
 	# we're likely to duplicate them.
@@ -292,7 +313,7 @@ def cmd_configure(ctx):
 							  use=ft[2])
 
 	# Nobody uses the symbol, but this seems like a good sanity check.
-	ctx.check_cc(header_name="stdbool.h", mandatory=True)
+	ctx.check_cc(header_name="stdbool.h", mandatory=True, comment="Sanity check.")
 
 	# This is a list of every optional include header in the
 	# codebase that is guarded by a directly corresponding HAVE_*_H symbol.
@@ -341,7 +362,7 @@ def cmd_configure(ctx):
 	)
 	for hdr in optional_headers:
 		if type(hdr) == type(""):
-			if ctx.check_cc(header_name=hdr, mandatory=False):
+			if ctx.check_cc(header_name=hdr, mandatory=False, comment="<%s> header" % hdr):
 				continue
 		else:
 			(hdr, prereqs) = hdr
@@ -352,12 +373,12 @@ def cmd_configure(ctx):
 			print "Compilation check failed but include exists %s" % hdr
 
 	if ctx.get_define("HAVE_TIMEPPS_H") or ctx.get_define("HAVE_SYS_TIMEPPS_H"):
-		ctx.define("HAVE_PPSAPI", 1)
+		ctx.define("HAVE_PPSAPI", 1, comment="Enable the PPS API")
 
 
 	# Check for Solaris capabilities
 	if ctx.get_define("HAVE_PRIV_H") and sys.platform == "Solaris":
-		ctx.define("HAVE_SOLARIS_PRIVS", 1)
+		ctx.define("HAVE_SOLARIS_PRIVS", 1, comment="Enable Solaris Privileges (Solaris only)")
 
 	from check_sockaddr import check_sockaddr
 	check_sockaddr(ctx)
@@ -383,13 +404,6 @@ def cmd_configure(ctx):
 
 		refclock_config(ctx)
 
-	# FIXME: These other things should be derived,
-	# but the fate of the SYS_WINNT code
-	# needs to be decided before that will
-	# make sense.
-	ctx.define("ISC_PLATFORM_HAVEIPV6", 1)
-	ctx.define("ISC_PLATFORM_HAVEIN6PKTINFO", 1)
-
 	# NetBSD (used to) need to recreate sockets on changed routing.
 	# Perhaps it still does. If so, this should be set.  The autoconf
 	# build set it "if the OS clears cached routes when more specifics
@@ -397,27 +411,23 @@ def cmd_configure(ctx):
 	# ctx.define("OS_MISSES_SPECIFIC_ROUTE_UPDATES", 1)
 
 	if ctx.options.enable_leap_smear:
-		ctx.define("ENABLE_LEAP_SMEAR", 1)
+		ctx.define("ENABLE_LEAP_SMEAR", 1, comment="Enable experimental leap smearing code")
 
 	if ctx.options.enable_mssntp:
-		ctx.define("ENABLE_MSSNTP", 1)
+		ctx.define("ENABLE_MSSNTP", 1, comment="Enable MS-SNTP extensions https://msdn.microsoft.com/en-us/library/cc212930.aspx")
 
 	if ctx.options.enable_lockclock:
-		ctx.define("ENABLE_LOCKCLOCK", 1)
+		ctx.define("ENABLE_LOCKCLOCK", 1, comment="Enable NIST 'lockclock'")
 
 	if not ctx.options.disable_droproot:
-		ctx.define("ENABLE_DROPROOT", 1)
+		ctx.define("ENABLE_DROPROOT", 1, comment="Drop root after initialising")
 
 	if not ctx.options.disable_dns_lookup:
-		ctx.define("ENABLE_DNS_LOOKUP", 1)
+		ctx.define("ENABLE_DNS_LOOKUP", 1, comment="Enable DNS lookup of hostnames")
 
 	if not ctx.options.disable_dns_retry:
-		ctx.define("ENABLE_DNS_RETRY", 1)
+		ctx.define("ENABLE_DNS_RETRY", 1, comment="Retry DNS lookups after an initial failure")
 
-
-	# There is an ENABLE_AUTOKEY as well, but as that feature
-	# is not working and likely to be replaced it's not exposed
-	# and can't be enabled.
 
 	# There is an ENABLE_ASYMMETRIC that enables a section of the
 	# protocol code having to do with handling very long asymmetric
@@ -425,7 +435,7 @@ def cmd_configure(ctx):
 	# been enabled for production.
 
 	# Won't be true under Windows, but is under every Unix-like OS.
-	ctx.define("HAVE_WORKING_FORK", 1)
+	ctx.define("HAVE_WORKING_FORK", 1, comment="Whether a working fork() exists")
 
 	# Does the kernel implement a phase-locked loop for timing?
 	# All modern Unixes (in particular Linux and *BSD have this).
@@ -437,14 +447,14 @@ def cmd_configure(ctx):
 	# architecture to be in place."
 	#
 	if ctx.get_define("HAVE_SYS_TIMEX_H"):
-		ctx.define("HAVE_KERNEL_PLL", 1)
+		ctx.define("HAVE_KERNEL_PLL", 1, comment="Whether phase-locked loop for timing exists")
 
 	# SO_REUSEADDR socket option is needed to open a socket on an
 	# interface when the port number is already in use on another
 	# interface. Linux needs this, NetBSD does not, status on
 	# other platforms is unknown.  It is probably harmless to
 	# have it on everywhere.
-	ctx.define("NEED_REUSEADDR_FOR_IFADDRBIND", 1)
+	ctx.define("NEED_REUSEADDR_FOR_IFADDRBIND", 1, comment="Whether SO_REUSEADDR is needed to open same sockets on alternate interfaces, required by Linux at least")
 
 	# Not yet known how to detect HP-UX at version < 8, but that needs this.
 	# Shouldn't be an issue as 8.x shipped in January 1991!
@@ -484,8 +494,8 @@ def cmd_configure(ctx):
 			    "Checking for %m expansion in vsnprintf(3)")
 
 	# Define CFLAGS/LDCFLAGS for -vv support.
-	ctx.define("NTPS_CFLAGS", " ".join(ctx.env.CFLAGS).replace("\"", "\\\""))
-	ctx.define("NTPS_LDFLAGS", " ".join(ctx.env.LDFLAGS).replace("\"", "\\\""))
+	ctx.define("NTPS_CFLAGS", " ".join(ctx.env.CFLAGS).replace("\"", "\\\""), comment="CFLAGS used when compiled")
+	ctx.define("NTPS_LDFLAGS", " ".join(ctx.env.LDFLAGS).replace("\"", "\\\""), comment="LDFLAGS used when compiled")
 
 
 	# Check for directory separator
@@ -494,7 +504,7 @@ def cmd_configure(ctx):
 	else:
 		sep = "/"
 
-	ctx.define("DIR_SEP", "'%s'" % sep, quote=False)
+	ctx.define("DIR_SEP", "'%s'" % sep, quote=False, comment="Directory separator used")
 
 	# libisc/
 	# XXX: Hack that needs to be fixed properly for all platforms
@@ -504,8 +514,9 @@ def cmd_configure(ctx):
 	ctx.define("ISC_PLATFORM_HAVEIN6PKTINFO", 1)
 	ctx.define("ISC_PLATFORM_HAVEIPV6", 1)
 	ctx.define("ISC_PLATFORM_HAVESCOPEID", 1)
-	ctx.define("ISC_PLATFORM_USETHREADS", 1)
-	ctx.define("HAVE_IFLIST_SYSCTL", 1)
+
+	if ctx.get_define("HAVE_SYS_SYSCTL_H"):
+		ctx.define("HAVE_IFLIST_SYSCTL", 1, comment="Whether sysctl interface exists")
 
 
 	# Header checks
@@ -514,6 +525,9 @@ def cmd_configure(ctx):
 
 	from pylib.check_libevent2 import check_libevent2_header
 	check_libevent2_header(ctx)
+
+	from pylib.check_pthread import check_pthread_header_lib
+	check_pthread_header_lib(ctx)
 
 	if not ctx.options.disable_mdns_registration:
 		from pylib.check_mdns import check_mdns_header
@@ -527,9 +541,17 @@ def cmd_configure(ctx):
 	from pylib.check_libevent2 import check_libevent2_run
 	check_libevent2_run(ctx)
 
+
+	from pylib.check_pthread import check_pthread_run
+	check_pthread_run(ctx)
+
 	if not ctx.options.disable_mdns_registration:
 		from pylib.check_mdns import check_mdns_run
 		check_mdns_run(ctx)
+
+
+	if ctx.env.PTHREAD_ENABLE:
+		ctx.define("ISC_PLATFORM_USETHREADS", 1)
 
 
 	ctx.start_msg("Writing configuration header:")
@@ -551,7 +573,7 @@ def cmd_configure(ctx):
 	msg_setting("PREFIX", ctx.env.PREFIX)
 	msg_setting("Debug Support", yesno(not ctx.options.disable_debug))
 	msg_setting("Refclocks", ", ".join(ctx.env.REFCLOCK_LIST))
-	msg_setting("Build Manpages", yesno(ctx.env.BIN_A2X and not ctx.env.DISABLE_MANPAGE))
+	msg_setting("Build Manpages", yesno(ctx.env.ENABLE_DOC and not ctx.env.DISABLE_MANPAGE))
 
 	if ctx.options.enable_debug:
 		msg("")

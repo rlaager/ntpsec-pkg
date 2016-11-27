@@ -2586,7 +2586,7 @@ vwarning(const char *fmt, va_list ap)
 	int serrno = errno;
 	(void) fprintf(stderr, "%s: ", progname);
 	vfprintf(stderr, fmt, ap);
-	(void) fprintf(stderr, ": %s", strerror(serrno));
+	(void) fprintf(stderr, ": %s\n", strerror(serrno));
 }
 
 /*
@@ -2874,7 +2874,7 @@ nextvar(
 	len = srclen;
 	while (len > 0 && isspace((unsigned char)cp[len - 1]))
 		len--;
-        if(len >= sizeof name)
+        if (len >= sizeof(name))
                 return 0;
 	if (len > 0)
 		memcpy(name, cp, len);
