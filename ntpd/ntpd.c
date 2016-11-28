@@ -13,10 +13,8 @@
 #include "ntp_config.h"
 #include "ntp_syslog.h"
 #include "ntp_assert.h"
-#include "ntp_intercept.h"
 #include "isc/error.h"
 #include "isc/formatcheck.h"
-#include "iosignal.h"
 
 #include <unistd.h>
 #include <sys/stat.h>
@@ -38,12 +36,10 @@ extern bool sandbox(const bool droproot,
 		    const char *chrootdir,
 		    bool want_dynamic_interface_tracking);
 
-#if defined(SIGDIE1)
-static volatile bool signalled	= false;
-static volatile int signo	= 0;
+void catchQuit (int sig);
+static volatile int signo = 0;
 /* In an ideal world, 'finish_safe()' would declared as noreturn... */
 static	void		finish_safe	(int);
-#endif
 
 #ifdef SIGDANGER
 # include <ulimit.h>
@@ -55,6 +51,8 @@ DNSServiceRef mdns;
 #endif
 
 #include <sodium.h>
+
+static void check_minsane(void);
 
 static bool need_priority = false;
 static bool config_priority_override = false;
@@ -91,31 +89,24 @@ const char *chrootdir;	/* directory to chroot to */
 int	waitsync_fd_to_close = -1;	/* -w/--wait-sync */
 #endif
 
-char const *progname;
+char *progname;
 
 #ifdef HAVE_NETINFO_NI_H
 extern bool	check_netinfo;
 #endif
 
-bool was_alarmed;
-
 #if defined(HAVE_WORKING_FORK)
 static int	wait_child_sync_if	(int, long);
 #endif
 
-#if defined(SIGHUP)
 static	void	catchHUP	(int);
-volatile int sawHUP = false;
-#endif
 
-#if !defined(SYS_WINNT)
 # ifdef	DEBUG
 static	void	moredebug	(int);
 static	void	lessdebug	(int);
 # else	/* !DEBUG follows */
 static	void	no_debug	(int);
 # endif	/* !DEBUG */
-#endif	/* !SYS_WINNT */
 
 int	saved_argc;
 char **	saved_argv;
@@ -127,14 +118,14 @@ static void	assertion_failed	(const char *, int,
 					 isc_assertiontype_t,
 					 const char *)
 			__attribute__	((__noreturn__));
-static void	library_fatal_error	(const char *, int, 
+static void	library_fatal_error	(const char *, int,
 					 const char *, va_list)
 					ISC_FORMAT_PRINTF(3, 0);
 static void	library_unexpected_error(const char *, int,
 					 const char *, va_list)
 					ISC_FORMAT_PRINTF(3, 0);
 
-#define ALL_OPTIONS "46aAbc:dD:f:gGhi:I:k:l:LmMnNp:Pqr:Rs:t:u:UVw:xyYzZ"
+#define ALL_OPTIONS "46aAbc:dD:f:gGhi:I:k:l:LmnNp:Pqr:Rs:t:u:UVw:xyYzZ"
 static const struct option longoptions[] = {
     { "ipv4",		    0, 0, '4' },
     { "ipv6",		    0, 0, '6' },
@@ -144,7 +135,6 @@ static const struct option longoptions[] = {
     { "configfile",	    1, 0, 'c' },
     { "debug",		    0, 0, 'd' },
     { "set-debug-level",    1, 0, 'D' },
-    { "ipv4",		    0, 0, '4' },
     { "driftile",	    1, 0, 'f' },
     { "panicgate",	    0, 0, 'g' },
     { "help",	            0, 0, 'h' },
@@ -152,6 +142,7 @@ static const struct option longoptions[] = {
     { "interface",	    1, 0, 'I' },
     { "keyfile",	    1, 0, 'k' },
     { "logfile",	    1, 0, 'l' },
+    { "mdns",	            0, 0, 'm' },
     { "novirtualips",	    0, 0, 'L' },
     { "nofork",		    0, 0, 'n' },
     { "nice",		    0, 0, 'N' },
@@ -168,7 +159,7 @@ static const struct option longoptions[] = {
     { "dvar",		    1, 0, 'Z' },
     { "slew",		    0, 0, 'x' },
     { "version",	    0, 0, 'V' },
-    { NULL,                 0, 0, '\0'}, 
+    { NULL,                 0, 0, '\0'},
 };
 
 static void ntpd_usage(void)
@@ -193,13 +184,14 @@ static void ntpd_usage(void)
     P("   -f Str driftfile      frequency drift file name\n");
     P("   -g no  panicgate      Allow the first adjustment to be Big\n");
     P("				- may appear multiple times\n");
-    P("   -h no  --help         Display usage summary of options and exit.\n"); 
+    P("   -h no  --help         Display usage summary of options and exit.\n");
     P("   -i Str jaildir        Jail directory\n");
     P("   -I Str interface      Listen on an interface name or address\n");
     P("				- may appear multiple times\n");
     P("   -k Str keyfile        path to symmetric keys\n");
     P("   -l Str logfile        path to the log file\n");
     P("   -L no  novirtualips   Do not listen to virtual interfaces\n");
+    P("   -m no                 Enable mDNS registration\n");
     P("   -n no  nofork         Do not fork\n");
     P("   -N no  nice           Run at high priority\n");
     P("   -p Str pidfile        path to the PID file\n");
@@ -335,7 +327,7 @@ parse_cmdline_opts(
 		break;
 	    case 'q':
 		mode_ntpdate = true;
-		nofork = true; 
+		nofork = true;
 		break;
 	    case 'r':
 		{
@@ -434,12 +426,6 @@ parse_cmdline_opts(
 	}
 
 	/*
-	 * Two port-specific options for Windows (USEPCC and PCCFREQ)
-	 * have been omitted until the Windows port can be beaten back
-	 * into shape.
-	 */
-
-	/*
 	 * Sanity checks and derived options
 	 */
 
@@ -456,7 +442,6 @@ parse_cmdline_opts(
 #ifdef NO_MAIN_ALLOWED
 CALL(ntpd,"ntpd",ntpdmain);
 #else	/* !NO_MAIN_ALLOWED follows */
-#ifndef SYS_WINNT
 int
 main(
 	int argc,
@@ -465,7 +450,6 @@ main(
 {
 	return ntpdmain(argc, argv);
 }
-#endif /* !SYS_WINNT */
 #endif /* !NO_MAIN_ALLOWED */
 
 #ifdef SIGDANGER
@@ -551,7 +535,6 @@ ntpdmain(
 	saved_argc = argc;
 	saved_argv = argv;
 	progname = argv[0];
-	intercept_argparse(&argc, &argv);
 	parse_cmdline_opts(argc, argv);
 # ifdef DEBUG
 	setvbuf(stdout, NULL, _IOLBF, 0);
@@ -565,14 +548,13 @@ ntpdmain(
 		change_logfile(logfilename, false);
 	} else {
 		if (nofork)
-		    termlogit = (intercept_get_mode() == none || debug > 0);
+		    termlogit = true;
 		if (dumpopts)
 			syslogit = false;
 	}
 
 	if (!dumpopts)
 	{
-		int i;
 		char buf[1024];	/* Secret knowledge of msyslog buf length */
 		char *cp = buf;
 
@@ -582,7 +564,7 @@ ntpdmain(
 		snprintf(cp, sizeof(buf), "Command line:");
 		cp += strlen(cp);
 
-		for (i = 0; i < saved_argc ; ++i) {
+		for (int i = 0; i < saved_argc ; ++i) {
 			snprintf(cp, sizeof(buf) - (cp - buf),
 				" %s", saved_argv[i]);
 			cp += strlen(cp);
@@ -599,22 +581,11 @@ ntpdmain(
 	isc_error_setunexpected(library_unexpected_error);
 
 	uid = getuid();
-	if (uid && intercept_get_mode() != replay && !dumpopts) {
+	if (uid && !dumpopts) {
 		termlogit = true;
 		msyslog(LOG_ERR,
 			"must be run as root, not uid %ld", (long)uid);
 		exit(1);
-	}
-	switch (intercept_get_mode())
-	{
-	case none:
-	    break;
-	case replay:
-	    msyslog(LOG_NOTICE, "setting replay mode.");
-	    break;
-	case capture:
-	    msyslog(LOG_NOTICE, "setting capture mode.");
-	    break;
 	}
 
 # ifdef HAVE_WORKING_FORK
@@ -638,13 +609,7 @@ ntpdmain(
 # endif	/* HAVE_WORKING_FORK */
 
 	init_lib();
-# ifdef SYS_WINNT
-	/*
-	 * Start interpolation thread, must occur before first
-	 * get_systime()
-	 */
-	init_winnt_time();
-# endif
+	init_network();
 	/*
 	 * Detach us from the terminal.  May need an #ifndef GIZMO.
 	 */
@@ -665,7 +630,7 @@ ntpdmain(
 		}
 		
 		/*
-		 * child/daemon 
+		 * child/daemon
 		 * close all open files excepting waitsync_fd_to_close.
 		 * msyslog() unreliable until after init_logging().
 		 */
@@ -703,17 +668,11 @@ ntpdmain(
 	/*
 	 * Set up signals we pay attention to locally.
 	 */
-# ifdef SIGDIE1
-	signal_no_reset(SIGDIE1, finish);
-	signal_no_reset(SIGDIE2, finish);
-	signal_no_reset(SIGDIE3, finish);
-# endif
-# ifdef SIGHUP
+	signal_no_reset(SIGINT, catchQuit);
+	signal_no_reset(SIGQUIT, catchQuit);
+	signal_no_reset(SIGTERM, catchQuit);
 	signal_no_reset(SIGHUP, catchHUP);
-# endif
-# ifdef SIGBUS
-	signal_no_reset(SIGBUS, finish);
-# endif
+	signal_no_reset(SIGBUS, catchQuit);  /* FIXME: It's broken, can't continue. */
 
 # ifdef DEBUG
 	(void) signal_no_reset(MOREDEBUGSIG, moredebug);
@@ -726,9 +685,7 @@ ntpdmain(
 	/*
 	 * Set up signals we should never pay attention to.
 	 */
-# ifdef SIGPIPE
 	signal_no_reset(SIGPIPE, SIG_IGN);
-# endif
 
 	/*
 	 * Call the init_ routines to initialize the data structures.
@@ -773,7 +730,6 @@ ntpdmain(
 		stats_config(STATS_FREQ_FILE, driftfile);
 		break;
 	    case 'I':
-		if (intercept_get_mode() != replay)
 	        {
 		    sockaddr_u	addr;
 		    add_nic_rule(
@@ -784,12 +740,7 @@ ntpdmain(
 	        }
 		break;
 	    case 'k':
-		intercept_getauthkeys(ntp_optarg);
-		break;
-	    case 'M':
-# ifdef SYS_WINNT
-		set_mm_timer(MM_TIMER_HIRES);
-# endif
+		getauthkeys(ntp_optarg);
 		break;
 	    case 'p':
 		stats_config(STATS_PID_FILE, pidfile);
@@ -809,7 +760,7 @@ ntpdmain(
 				ntp_optarg);
 			exit(0);
 		    } else {
-			authtrust(tkey, 1);
+			authtrust(tkey, true);
 		    }
 	        }
 		break;
@@ -845,8 +796,14 @@ ntpdmain(
 #ifdef ENABLE_EARLY_DROPROOT
 	/* drop root privileges */
 	/* This doesn't work on NetBSD or with SHM */
-	if (sandbox(droproot, user, group, chrootdir, interface_interval!=0) && interface_interval) {
+	if (sandbox(droproot, user, group, chrootdir, interface_interval!=0)) {
 		interface_interval = 0;
+		/*
+		 * for now assume that the privilege to bind to privileged ports
+		 * is associated with running with uid 0 - should be refined on
+		 * ports that allow binding to NTP_PORT with uid != 0
+		 */
+		disable_dynamic_updates = true;
 		msyslog(LOG_INFO, "running as non-root disables dynamic interface tracking");
 	}
 #endif
@@ -881,9 +838,6 @@ ntpdmain(
 	    fprintf(stdout, "#mdnsreg = %s\n",
 		    mdnsreg ? "true" : "false");
 #endif  /* ENABLE_MDNS_REGISTRATION */
-# ifdef SYS_WINNT
-	    /* FIXME: dump the timer state */
-# endif
 	    if (pidfile)
 		fprintf(stdout, "pidfile \"%s\";\n", pidfile);
 	    /* FIXME: dump priority */
@@ -913,10 +867,11 @@ ntpdmain(
 	 * Get the configuration.
 	 */
 	have_interface_option = (!listen_to_virtual_ips || explicit_interface);
-	intercept_getconfig(explicit_config);
+	readconfig(getconfig(explicit_config));
+	check_minsane();
 
 	loop_config(LOOP_DRIFTINIT, 0);
-	report_event(EVNT_SYSRESTART, NULL, NULL);
+	/* report_event(EVNT_SYSRESTART, NULL, NULL); */
 
 #ifndef ENABLE_EARLY_DROPROOT
 	/* drop root privileges */
@@ -925,11 +880,8 @@ ntpdmain(
 		msyslog(LOG_INFO, "running as non-root disables dynamic interface tracking");
 	}
 #endif
-
-	if (intercept_get_mode() == replay)
-	    intercept_replay();
-	else
-	    mainloop();
+	
+	mainloop();
 	return 1;
 }
 
@@ -942,74 +894,42 @@ static void mainloop(void)
 
 	init_timer();
 
-# ifdef HAVE_IO_COMPLETION_PORT
 	for (;;) {
-#if defined(SIGDIE1)
-		if (signalled)
+		if (sawQuit)
 			finish_safe(signo);
-#endif
-		GetReceivedBuffers();
-# else /* normal I/O */
 
-	BLOCK_IO_AND_ALARM();
-	was_alarmed = false;
-
-	for (;;) {
-#if defined(SIGDIE1)
-		if (signalled)
-			finish_safe(signo);
-#endif
-		if (alarm_flag) {	/* alarmed? */
-			was_alarmed = true;
-			alarm_flag = false;
-		}
-
-		if (!was_alarmed && !has_full_recv_buffer()) {
+		if (!sawALRM && !has_full_recv_buffer()) {
 			/*
 			 * Nothing to do.  Wait for something.
 			 */
 			io_handler();
 		}
 
-		if (alarm_flag) {	/* alarmed? */
-			was_alarmed = true;
-			alarm_flag = false;
-		}
-
-		if (was_alarmed) {
-			UNBLOCK_IO_AND_ALARM();
+		if (sawALRM) {
 			/*
 			 * Out here, signals are unblocked.  Call timer routine
 			 * to process expiry.
 			 */
 			timer();
-			was_alarmed = false;
-			BLOCK_IO_AND_ALARM();
+			sawALRM = false;
 		}
 
-# endif		/* !HAVE_IO_COMPLETION_PORT */
-
-# ifdef DEBUG_TIMING
+# ifdef ENABLE_DEBUG_TIMING
 		{
 			l_fp pts;
 			l_fp tsa, tsb;
 			int bufcount = 0;
 
-			intercept_get_systime(__func__, &pts);
+			get_systime(&pts);
 			tsa = pts;
 # endif
 			rbuf = get_full_recv_buffer();
 			while (rbuf != NULL) {
-				if (alarm_flag) {
-					was_alarmed = true;
-					alarm_flag = false;
-				}
-				UNBLOCK_IO_AND_ALARM();
 
-				if (was_alarmed) {
+				if (sawALRM) {
 					/* avoid timer starvation during lengthy I/O handling */
 					timer();
-					was_alarmed = false;
+					sawALRM = false;
 				}
 
 				/*
@@ -1017,7 +937,7 @@ static void mainloop(void)
 				 * packet.
 				 */
 				if (rbuf->receiver != NULL) {
-# ifdef DEBUG_TIMING
+# ifdef ENABLE_DEBUG_TIMING
 					l_fp dts = pts;
 
 					L_SUB(&dts, &rbuf->recv_time);
@@ -1031,12 +951,11 @@ static void mainloop(void)
 					abort();
 				}
 
-				BLOCK_IO_AND_ALARM();
 				freerecvbuf(rbuf);
 				rbuf = get_full_recv_buffer();
 			}
-# ifdef DEBUG_TIMING
-			intercept_get_systime(__func__, &tsb);
+# ifdef ENABLE_DEBUG_TIMING
+			get_systime(&tsb);
 			L_SUB(&tsb, &tsa);
 			if (bufcount) {
 				collect_timing(NULL, "processing", bufcount, &tsb);
@@ -1071,7 +990,7 @@ static void mainloop(void)
 		if (mdnsreg && (current_time - mdnsreg ) > 60 && mdnstries && sys_leap != LEAP_NOTINSYNC) {
 			mdnsreg = current_time;
 			msyslog(LOG_INFO, "Attempting to register mDNS");
-			if ( DNSServiceRegister (&mdns, 0, 0, NULL, "_ntp._udp", NULL, NULL, 
+			if ( DNSServiceRegister (&mdns, 0, 0, NULL, "_ntp._udp", NULL, NULL,
 			    htons(NTP_PORT), 0, NULL, NULL, NULL) != kDNSServiceErr_NoError ) {
 				if (!--mdnstries) {
 					msyslog(LOG_ERR, "Unable to register mDNS, giving up.");
@@ -1086,13 +1005,11 @@ static void mainloop(void)
 # endif /* ENABLE_MDNS_REGISTRATION */
 
 	}
-	UNBLOCK_IO_AND_ALARM();
 }
 
 
-#if defined(SIGDIE1)
 /*
- * finish - exit gracefully
+ * finish_safe - exit gracefully
  */
 static void
 finish_safe(
@@ -1112,15 +1029,15 @@ finish_safe(
 		DNSServiceRefDeallocate(mdns);
 # endif
 	peer_cleanup();
-	intercept_exit(0);
+	exit(0);
 }
 
 void
-finish(
+catchQuit(
 	int	sig
 	)
 {
-	signalled = true;
+	sawQuit = true;
 	signo = sig;
 }
 
@@ -1132,8 +1049,6 @@ static void catchHUP(int sig)
 	UNUSED_ARG(sig);
 	sawHUP = true;
 }
-
-#endif	/* SIGDIE1 */
 
 
 /*
@@ -1152,9 +1067,9 @@ wait_child_sync_if(
 	time_t	cur_time;
 	time_t	wait_rem;
 	fd_set	readset;
-	struct timeval wtimeout;
+	struct timespec wtimeout;
 
-	if (0 == wait_sync) 
+	if (0 == wait_sync)
 		return 0;
 
 	/* waitsync_fd_to_close used solely by child */
@@ -1166,11 +1081,11 @@ wait_child_sync_if(
 				? (wait_end_time - cur_time)
 				: 0;
 		wtimeout.tv_sec = wait_rem;
-		wtimeout.tv_usec = 0;
+		wtimeout.tv_nsec = 0;
 		FD_ZERO(&readset);
 		FD_SET(pipe_read_fd, &readset);
-		rc = select(pipe_read_fd + 1, &readset, NULL, NULL,
-			    &wtimeout);
+		rc = pselect(pipe_read_fd + 1, &readset, NULL, NULL,
+			     &wtimeout, NULL);
 		if (-1 == rc) {
 			if (EINTR == errno)
 				continue;
@@ -1183,15 +1098,15 @@ wait_child_sync_if(
 			/*
 			 * select() indicated a timeout, but in case
 			 * its timeouts are affected by a step of the
-			 * system clock, select() again with a zero 
+			 * system clock, select() again with a zero
 			 * timeout to confirm.
 			 */
 			FD_ZERO(&readset);
 			FD_SET(pipe_read_fd, &readset);
 			wtimeout.tv_sec = 0;
-			wtimeout.tv_usec = 0;
-			rc = select(pipe_read_fd + 1, &readset, NULL,
-				    NULL, &wtimeout);
+			wtimeout.tv_nsec = 0;
+			rc = pselect(pipe_read_fd + 1, &readset, NULL,
+				     NULL, &wtimeout, NULL);
 			if (0 == rc)	/* select() timeout */
 				break;
 			else		/* readable */
@@ -1205,6 +1120,43 @@ wait_child_sync_if(
 	return ETIMEDOUT;
 }
 # endif	/* HAVE_WORKING_FORK */
+
+
+/*
+ * check_minsane - check peers to see if minsane should be bigger
+ *
+ * This is just a first cut.  It should probably fixup things automagically.
+ * We also need to do similar for maxclock when running a pool command.
+ *
+ * With 2 working servers:
+ *   if they don't agree, you can't tell which one is correct
+ * With 3 working servers, 2 can outvote a falseticker
+ * With 4 servers, you still have 3 if one is down.
+ */
+static void check_minsane()
+{
+    struct peer *peer;
+    int servers = 0;
+
+    if (sys_minsane > 1) return;  /* already adjusted, assume reasonable */
+
+    for (peer = peer_list; peer != NULL; peer = peer->p_link) {
+	if (peer->flags & FLAG_NOSELECT) continue;
+	servers++;
+	if (peer->cast_flags & MDF_POOL) {
+	    /* pool server */
+	    servers = sys_maxclock;
+	    break;
+	}
+	/* ?? multicast and such */
+    }
+
+    if (servers >= 5)
+	msyslog(LOG_ERR, "Found %d servers, suggest minsane at least 3", servers);
+    else if (servers == 4)
+        msyslog(LOG_ERR, "Found 4 servers, suggest minsane of 2");
+
+};
 
 
 /*
@@ -1223,11 +1175,6 @@ assertion_failed(
 	msyslog(LOG_ERR, "%s:%d: %s(%s) failed",
 		file, line, isc_assertion_typetotext(type), cond);
 	msyslog(LOG_ERR, "exiting (due to assertion failure)");
-
-#if defined(DEBUG) && defined(SYS_WINNT)
-	if (debug)
-		DebugBreak();
-#endif
 
 	abort();
 }
@@ -1252,11 +1199,6 @@ library_fatal_error(
 	vsnprintf(errbuf, sizeof(errbuf), format, args);
 	msyslog(LOG_ERR, "%s", errbuf);
 	msyslog(LOG_ERR, "exiting (due to fatal error in library)");
-
-#if defined(DEBUG) && defined(SYS_WINNT)
-	if (debug)
-		DebugBreak();
-#endif
 
 	abort();
 }
@@ -1289,7 +1231,6 @@ library_unexpected_error(
 
 }
 
-#if !defined(SYS_WINNT)
 # ifdef DEBUG
 
 /*
@@ -1348,4 +1289,3 @@ no_debug(
 	errno = saved_errno;
 }
 # endif	/* !DEBUG */
-#endif	/* !SYS_WINNT */

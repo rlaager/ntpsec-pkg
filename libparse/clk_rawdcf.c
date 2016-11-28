@@ -8,8 +8,7 @@
 
 #include <config.h>
 #include "ntp_fp.h"
-#include "timevalops.h"
-#include "ntp_unixtime.h"
+#include "timespecops.h"
 #include "ntp_calendar.h"
 
 #include "parse.h"
@@ -225,7 +224,6 @@ convert_rawdcf(
 	    pcheck(buffer, DCF_P_P2, dcfprm->zerobits) &&
 	    pcheck(buffer, DCF_P_P3, dcfprm->zerobits))
 	{
-#define TIMES10(_X_)	(((_X_) << 3) + ((_X_) << 1))
 
 		/*
 		 * buffer OK
@@ -237,16 +235,15 @@ convert_rawdcf(
 		clock_time->usecond= 0;
 		clock_time->second = 0;
 		clock_time->minute = ext_bf(buffer, DCF_M10, dcfprm->zerobits);
-		clock_time->minute = TIMES10(clock_time->minute) + ext_bf(buffer, DCF_M1, dcfprm->zerobits);
+		clock_time->minute = 10*(clock_time->minute) + ext_bf(buffer, DCF_M1, dcfprm->zerobits);
 		clock_time->hour   = ext_bf(buffer, DCF_H10, dcfprm->zerobits);
-		clock_time->hour   = TIMES10(clock_time->hour) + ext_bf(buffer, DCF_H1, dcfprm->zerobits);
+		clock_time->hour   = 10*(clock_time->hour) + ext_bf(buffer, DCF_H1, dcfprm->zerobits);
 		clock_time->day    = ext_bf(buffer, DCF_D10, dcfprm->zerobits);
-		clock_time->day    = TIMES10(clock_time->day) + ext_bf(buffer, DCF_D1, dcfprm->zerobits);
+		clock_time->day    = 10*(clock_time->day) + ext_bf(buffer, DCF_D1, dcfprm->zerobits);
 		clock_time->month  = ext_bf(buffer, DCF_MO0, dcfprm->zerobits);
-		clock_time->month  = TIMES10(clock_time->month) + ext_bf(buffer, DCF_MO, dcfprm->zerobits);
+		clock_time->month  = 10*(clock_time->month) + ext_bf(buffer, DCF_MO, dcfprm->zerobits);
 		clock_time->year   = ext_bf(buffer, DCF_Y10, dcfprm->zerobits);
-		clock_time->year   = TIMES10(clock_time->year) + ext_bf(buffer, DCF_Y1, dcfprm->zerobits);
-#undef TIMES10
+		clock_time->year   = 10*(clock_time->year) + ext_bf(buffer, DCF_Y1, dcfprm->zerobits);
 
 		switch (ext_bf(buffer, DCF_Z, dcfprm->zerobits))
 		{
@@ -507,16 +504,16 @@ calc_usecdiff(
 	long         offset
 	)
 {
-	struct timeval delta;
+	struct timespec delta;
 	long delta_usec = 0;
 	l_fp delt;
 
 	delt = ref->fp;
 	delt.l_i -= offset;
 	L_SUB(&delt, &base->fp);
-	TSTOTV(&delt, &delta);
+	delta = lfp_stamp_to_tspec(delt, NULL);
 
-	delta_usec = 1000000 * (int32_t)delta.tv_sec + delta.tv_usec;
+	delta_usec = 1000000 * (int32_t)delta.tv_sec + delta.tv_nsec/1000;
 	return delta_usec;
 }
 
@@ -570,7 +567,7 @@ inp_rawdcf(
 	  timestamp_t  *tstamp
 	  )
 {
-	static struct timeval timeout = { 1, 500000 }; /* 1.5 secongs denote second #60 */
+	static struct timespec timeout = { 1, 500000000 }; /* 1.5 secongs denote second #60 */
 
 	parseprintf(DD_PARSE, ("inp_rawdcf(0x%lx, 0x%x, ...)\n", (long)parseio, ch));
 

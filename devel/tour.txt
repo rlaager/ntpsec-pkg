@@ -32,7 +32,13 @@ seconds part - how it's interpreted depends on which member of a union
 is used.
 
 The comments in libntp/ntp_calendar.c are pretty illuminating about
-calendar representations.
+calendar representations.  A high-level point they don't make is
+that ignoring time cycles in l_fp is exactly how NTP gets around the
+Y2K38 problem. As long as the average clock skew between machines
+is much less than the length of a calendar cycle (which it generally
+will be, by a factor of at least five million) we can map all incoming
+timestamps from whatever cycle into the nearest time in modular
+arithmetic relative to the cycle length.
 
 === vint64 ===
 
@@ -72,7 +78,7 @@ one locally attached.
 The driver structure for reference clocks has a refid field that is
 (by default) copied into samples issued from that clock. It is
 not necessarily unique to a driver type; notably, all GPS driver
-types ship the ID "GPS". It is possible to fudge this ID to
+types ship the refid "GPS". It is possible to fudge this ID to
 something more informative in the ntpd configuration command
 for the driver.
 
@@ -95,12 +101,17 @@ the millennium.  The struct timespec is newer and associated with
 ANSI/POSIX standardization.
 
 The NTP code was written well before calls like clock_gettime(2) that
-use it were standardized.  Thus, when you see a struct timeval in the
-code, it can mean one of two things. Either it's related to a system
-call dating from the BSD era (usually select(2) or ntp_gettime(2)), or
-it's very old time-computation code that has never been updated to
-use nanosecond precision. As NTP is cleaned up, instances of the
-second kind will become less common.
+use it were standardized, but as part of of its general cleanup NTPsec
+has been updated to do all its internal computations at nanosecond
+precision or better.  
+
+Thus, when you see a struct timeval in the NTPsec code, it's due to
+a precision limit imposed by an external interface.  One such is in
+the code for using the old BSD adjtime(2) call; another is in getting
+packet timestamps from the IP layer.  Our practice is to convert from
+or to nanosecond precision as close to these callsites as possible;
+this doesn't pull additional accuracy out of thin air, but it does 
+avoid loss-of-precision bugs due to mixing these structures.
 
 === struct peer ===
 
@@ -134,7 +145,154 @@ and pool hostnames.  This is intended to avoid adding startup delay
 and jitter to the time synchronization logic due to address lookups
 of unpredictable length.
 
-=== Refclock management ===
+Input handling used to be a lot more complex.  Due to inability to get
+arrival timestamps from the host's UDP layer, the code used to do
+asynchronous I/O with packet I/O indicated by signal, with packets
+(and their arrival timestamps) being stashed in a ring of buffers that
+was consumed by the protocol main loop.
+
+This looked partly like a performance hack, but if so it was an
+ineffective one. Because there is necessarily a synchronous bottleneck
+at protocol handling, packets arriving faster than the main loop could
+cycle would pile up in the ring buffer and latecomers would be
+dropped.
+
+The new organization stops pretending; it simply spins on a select
+across all interfaces.  If inbound traffic is more than the daemon can
+handle, packets will pile up in the UDP layer and be dropped at that
+level. The main difference is that dropped packets are less likely to
+be visible in the statistics the server can gather. (In order to show,
+they'd have to make it out of the system IP layer to userland at a
+higher rate than ntpd can process; this is very unlikely.)
+
+There was internal evidence in the NTP Classic build machinery that
+asynchronous I/O on Unix machines probably hadn't actually worked for
+quite a while before NTPsec removed it.
+
+== System call interface and the PLL ==
+
+All of ntpd's clock management is done through four system calls:
+clock_gettime(2), clock_settime(2), and either ntp_adjtime(2) or the
+older BSD adjtime(2) call.  For ntp_adjtime(), ntpd actually uses a
+thin wrapper that hides the difference between systems with
+nanosecond-precision and those with only microsecond precision;
+internally, ntpd does all its calculations with nanosecond precision.
+
+The clock_gettime(2) and clock_settime(2) calls are standardized in
+POSIX; ntp_adjtime(2) is not, exhibiting some variability in
+behavior across platforms (in particular as to whether it supports
+nanosecond or microsecond precision).
+
+Where adjtimex(2) exists (notably under Linux), both ntp_adjtime()
+and adjtime() are implemented as library wrappers around it.  The
+need to implement adjtime() is why the Linux version of struct timex
+has a (non-portable) 'time' member;
+
+There is some confusion abroad about this interface because it has
+left a trail of abandoned experiments behind it.
+
+Older BSD systems read the clock using gettimeofday(2) 
+(in POSIX but deprecated) and set it using settimeofday(2),
+which was never standardized. Neither of these calls are still
+used in NTPsec, though the equally ancient BSD adjtime(2) call
+is, on systems without kernel PLL support.
+
+Also, glibc (and possibly other C libraries) implement two other
+related calls, ntp_gettime(3) and ntp_gettimex(3). These are not used
+by the NTP suite itself (except that the ntptime test program attempts
+to exercise ntp_gettime(3)), but rather are intended for time-using
+applications that also want an estimate of clock error and the
+leap-second offset.  Neither has been standardized by POSIX, and they
+have not achieved wide use in applications.
+
+Both ntp_gettime(3) and ntp_gettimex(3) can be implemented as wrappers
+around ntp_adjtime(2)/adjtimex(2).  Thus, on a Linux system, the
+library ntp_gettime(3) call could conceivably go through two levels 
+of indirection, being implemented in terms of ntp_adjtime(2) which
+is in turn implemented by adjtimex(2).
+
+Unhelpfully, the non-POSIX calls in the above assortment are very
+poorly documented.
+
+The roles of clock_gettime(2) and clock_settime(2) are simple.
+They're used for reading and setting ("stepping", in NTP jargon) the
+system clock.  Stepping is avoided whenever possible because it
+introduces discontinuities that may confuse applications.  Stepping is
+usually done only at ntpd startup (which is typically at boot time)
+and only when the skew between system and NTP time is relatively
+large.
+
+The sync algorithm prefers slewing to stepping.  Slewing speeds up or
+slows down the clock by a very small amount that will, after a
+relatively short time, sync the clock to NTP time.  The advantage of
+this method is that it doesn't introduce discontinuities that
+applications might notice. The slewing variations in clock speed are so
+small that they're generally invisible even to soft-realtime
+applications.
+
+The call ntp_adjtime(2) is for clock slewing; NTPsec never calls
+adjtimex(2) directly, but it may be used to implement
+ntp_adjtime(2). ntp_adjtime(2)/adjtimex(2) uses a kernel interface to
+do its work, using a control technique called a PLL/FLL (phase-locked
+loop/frequency-locked loop) to do it.
+
+The older BSD adjtime(2) can be used for slewing as well, but doesn't
+assume a kernel-level PLL is available.  Some platforms, like OpenBSD
+and Mac OS X, use only this call because they lack ntp_adjtime(2).
+Without the PLL calls, convergence to good time is observably a lot
+slower and tracking will accordingly be less reliable.
+
+Deep-in-the weeds details about the kernel PLL from Hal Murray follow.
+If you can follow these you may be qualified to maintain this code...
+
+Deep inside the kernel, there is code that updates the time by reading the
+cycle counter, subtracting off the previous cycle count and multiplying by
+the time/cycle.  The actual implementation is complicated mostly to maintain
+accuracy.  You need ballpark of 9 digits of accuracy on the time/cycle and
+that has to get carried through the calculations.
+
+On PCs, Linux measures the time/cycle at boot time by comparing with another
+clock with a known frequency.  If you are building for a specific hardware
+platform, you could compile it in as a constant.
+You see things like this in syslog:
+
+-----------------------------------------------------------
+tsc: Refined TSC clocksource calibration: 1993.548 MHz
+-----------------------------------------------------------
+
+You can grep for "MHz" to find these.
+
+(Side note.  1993 MHz is probably 2000 MHz rounded down slightly by
+the clock fuzzing to smear the EMI over a broader band to comply with
+FCC rules.  It rounds down to make sure the CPU isn't overclocked.)
+
+There is an API call to adjust the time/cycle.  That adjustment is ntpd's
+drift.  That covers manufacturing errors and temperature changes and such.
+The manufacturing error part is typically under 50 PPM.  I have a few systems
+off by over 100.  The temperature part varies by ballpark of 1 PPM / C.
+
+There is another error source which is errors in the calibration code and/or
+time keeping code.  If your timekeeping code rounds down occasionally, you
+can correct for that by tweaking the time/cycle.
+
+There is another API that says "slew the clock by X seconds".  That is
+implemented by tweaking the time/cycle slightly, waiting until the correct
+adjustment has happened, then restoring the correct time/cycle.  The "slight"
+is 500 PPM.  It takes a long time to make major corrections.
+
+That slewing has nothing (directly) to do with a PLL.  It could be
+implemented in user code with reduced accuracy.
+
+There is a PLL kernel option to track a PPS.  It's not compiled into most
+Linux kernels.  (It doesn't work with tickless.)  There is an API to turn it
+on.  Then ntpd basically sits off to the side and watches.
+
+RFC 1589 covers the above timekeeping and slewing and kernel PLL.
+
+RFC 2783 covers the API for reading a time stamp the kernel grabs when a PPS
+happens.
+
+== Refclock management ==
 
 There is an illuminating comment in ntpd/ntp_refclock.c that begins
 "Reference clock support is provided here by maintaining the fiction
@@ -169,5 +327,100 @@ The libevent API provides a mechanism to execute a callback function
 when a specific event occurs on a file descriptor or after a timeout
 has been reached.  Other NTP programs, notably ntpd and ntpq, could
 use it, but would require serious rewrites to do so.
+
+== Asynchronous DNS lookup ==
+
+There are great many complications in the code that arise from wanting
+to avoid stalling the main loop while it waits for a DNS lookup to
+return. And DNS lookups can take a *long* time.  Hal Murray notes that
+he thinks he's seen 40 seconds on a failing case.
+
+One reason for the complications is that the async-DNS support seems
+somewhat overengineered.  Whoever built it was thinking in terms of a
+general async-worker facility and implemented things that this use
+of it probably doesn't need - notably an input-buffer pool.
+
+This code is a candidate to be replaced by an async-DNS library such
+as cAres. One attempt at this has been made, but abandoned because
+the async-worker interface to the rest of the code is pretty gnarly.
+
+The DNS lookups during initialization - of hostnames specified on the
+coomand line of ntp.conf - could be done synchronously.  But there are
+two cases we know of where ntpd has to do a DNS lookup after its
+main loop gets started.
+
+One is the try again when DNS for the normal server case doesn't work during
+initialization.  It will try again occasionally until it gets an answer.
+(which might be negative)
+
+The main one is the pool code trying for a new server.  There are
+several possible extensions in this area.  The main one would be to verify that
+a server you are using is still in the pool.  (There isn't a way to do
+that yet - the pool doesn't have any DNS support for that.)  The other
+would be to try replacing the poorest server rather than only
+replacing dead servers.
+
+As long as we get packet receive timestamps from the OS, synchronous
+DNS delays probably won't introduce any lies on the normal path.  We
+could test that by putting a sleep in the main loop.  (There is a
+filter to reject packets that take too long, but Hal thinks that's
+time-in-flight and excludes time sitting on the server.)
+
+There are two known cases where a pause in ntpd would cause troubles.
+One is that it would mess up refclocks.  The other is that packets
+will get dropped if too many of them arrive during the stall.
+
+This probably means we could go synchronous-only and use the pool
+command on a system without refclocks.  That covers end nodes and
+maybe lightly loaded servers.
+
+== The build recipe ==
+
+The build recipe is, essentially, a big Python program using a set of
+specialized procedures caled 'waf'.  To learn about waf itself see
+the https://waf.io/book/[Waf Book]; this section is about the
+organization and particular quirks of NTPsec's build.
+
+If you are used to autoconf, you will find the waf recipe
+odd at first.  We replaced autoconf because with waf the
+build recipe is literally orders of magnitude less complex,
+faster, and more maintainable.
+
+The top level wscript calls wscript files in various subdirectories
+using the ctx.recurse() function. These subfiles are all relatively
+simple, consisting mainly of calls to the waf function ctx().  Each
+such call declares a build target to be composed (often using the
+compiler) from various prerequisites.
+
+The top-level wscript does not itself declare a lot of targets (the
+exceptions are a handful of installable shellscripts and man pages).
+It is mainly concerned with setting up various assumptions for the
+configure and build phases.
+
+If you are used to working with Makefiles, you may find the absence
+of object files and binaries from the source directory after a build
+surprising.  Look under the build/ directory.
+
+Most of the complexity in this build is in the configure phase, when
+the build engine is probing the environment.  The product of this
+phase is the file build/config.h, which the C programs include to
+get symbols that describe the environment's capabilities and
+quirks.
+
+The configuration logic consists of a largish number of Python files
+in the wafhelpers/ directory. The entire collection is structured as
+a loadable Python module.  Here are a few useful generalizations:
+
+* The main sequence of the configuration logic, and most of the simpler
+  checks, lives in configure.py.
+
+* Some generic but bulky helper functions live in probes.py.
+
+* The check_*.py files isolate checks for individual capabilities;
+  you can generally figure out which ones by looking at the name.
+
+* If you need to add a build or configure option, look in options.py.
+  You will usually be able to model your implementation on code that
+  is already there.
 
 // end

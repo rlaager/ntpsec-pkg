@@ -23,11 +23,10 @@ struct savekey {
 	symkey *	hlink;		/* next in hash bucket */
 	DECL_DLIST_LINK(symkey, llink);	/* for overall & free lists */
 	uint8_t *	secret;		/* shared secret */
-	u_long		lifetime;	/* remaining lifetime */
 	keyid_t		keyid;		/* key identifier */
-	u_short		type;		/* OpenSSL digest NID */
-	u_short		secretsize;	/* secret octets */
-	u_short		flags;		/* KEY_ flags that wave */
+	unsigned short	type;		/* OpenSSL digest NID */
+	unsigned short	secretsize;	/* secret octets */
+	unsigned short	flags;		/* KEY_ flags that wave */
 };
 
 /* define the payload region of symkey beyond the list pointers */
@@ -46,10 +45,10 @@ struct symkey_alloc_tag {
 symkey_alloc *	authallocs;
 #endif	/* DEBUG */
 
-static inline u_short	auth_log2(double x);
+static inline unsigned short	auth_log2(double x);
 static void		auth_resize_hashtable(void);
-static void		allocsymkey(symkey **, keyid_t,	u_short,
-				    u_short, u_long, u_short, uint8_t *);
+static void		allocsymkey(symkey **, keyid_t,	unsigned short,
+				    unsigned short, unsigned short, uint8_t *);
 static void		freesymkey(symkey *, symkey **);
 #ifdef DEBUG
 static void		free_auth_mem(void);
@@ -62,18 +61,17 @@ symkey key_listhead;		/* list of all in-use keys */
  */
 #define KEYHASH(keyid)	((keyid) & authhashmask)
 #define INIT_AUTHHASHSIZE 64
-u_short authhashbuckets = INIT_AUTHHASHSIZE;
-u_short authhashmask = INIT_AUTHHASHSIZE - 1;
+unsigned short authhashbuckets = INIT_AUTHHASHSIZE;
+unsigned short authhashmask = INIT_AUTHHASHSIZE - 1;
 symkey **key_hash;
 
-u_long authkeynotfound;		/* keys not found */
-u_long authkeylookups;		/* calls to lookup keys */
-u_long authnumkeys;		/* number of active keys */
-u_long authkeyexpired;		/* key lifetime expirations */
-u_long authkeyuncached;		/* cache misses */
-u_long authnokey;		/* calls to encrypt with no key */
-u_long authencryptions;		/* calls to encrypt */
-u_long authdecryptions;		/* calls to decrypt */
+unsigned int authkeynotfound;		/* keys not found */
+unsigned int authkeylookups;		/* calls to lookup keys */
+unsigned int authnumkeys;		/* number of active keys */
+unsigned int authkeyuncached;		/* cache misses */
+unsigned int authnokey;		/* calls to encrypt with no key */
+unsigned int authencryptions;		/* calls to encrypt */
+unsigned int authdecryptions;		/* calls to decrypt */
 
 /*
  * Storage for free symkey structures.  We malloc() such things but
@@ -87,11 +85,11 @@ int authnumfreekeys;
 /*
  * The key cache. We cache the last key we looked at here.
  */
-keyid_t	cache_keyid;		/* key identifier */
-uint8_t *cache_secret;		/* secret */
-u_short	cache_secretsize;	/* secret length */
-int	cache_type;		/* OpenSSL digest NID */
-u_short cache_flags;		/* flags that wave */
+keyid_t	cache_keyid;			/* key identifier */
+uint8_t *cache_secret;			/* secret */
+unsigned short cache_secretsize;	/* secret length */
+int cache_type;				/* OpenSSL digest NID */
+unsigned short cache_flags;		/* flags that wave */
 
 
 /*
@@ -205,10 +203,10 @@ auth_prealloc_symkeys(
 }
 
 
-static inline u_short
+static inline unsigned short
 auth_log2(double x)
 {
-	return (u_short)(log10(x) / log10(2));
+	return (unsigned short)(log10(x) / log10(2));
 }
 
 
@@ -222,9 +220,9 @@ auth_log2(double x)
 static void
 auth_resize_hashtable(void)
 {
-	u_long		totalkeys;
-	u_short		hashbits;
-	u_short		hash;
+	unsigned int	totalkeys;
+	unsigned short	hashbits;
+	unsigned short	hash;
 	size_t		newalloc;
 	symkey *	sk;
 
@@ -258,10 +256,9 @@ static void
 allocsymkey(
 	symkey **	bucket,
 	keyid_t		id,
-	u_short		flags,
-	u_short		type,
-	u_long		lifetime,
-	u_short		secretsize,
+	unsigned short	flags,
+	unsigned short	type,
+	unsigned short	secretsize,
 	uint8_t *	secret
 	)
 {
@@ -270,13 +267,12 @@ allocsymkey(
 	if (authnumfreekeys < 1)
 		auth_moremem(-1);
 	UNLINK_HEAD_SLIST(sk, authfreekeys, llink.f);
-	DEBUG_ENSURE(sk != NULL);
+	//DEBUG_ENSURE(sk != NULL);
 	sk->keyid = id;
 	sk->flags = flags;
 	sk->type = type;
 	sk->secretsize = secretsize;
 	sk->secret = secret;
-	sk->lifetime = lifetime;
 	LINK_SLIST(*bucket, sk, hlink);
 	LINK_TAIL_DLIST(key_listhead, sk, llink);
 	authnumfreekeys--;
@@ -301,7 +297,7 @@ freesymkey(
                 sk->secret = NULL;
 	}
 	UNLINK_SLIST(unlinked, *bucket, sk, hlink, symkey);
-	DEBUG_ENSURE(sk == unlinked);
+	//DEBUG_ENSURE(sk == unlinked);
 	UNLINK_DLIST(sk, llink);
 	memset((char *)sk + offsetof(symkey, symkey_payload), '\0',
 	       sizeof(*sk) - offsetof(symkey, symkey_payload));
@@ -319,9 +315,7 @@ auth_findkey(
 	keyid_t		id
 	)
 {
-	symkey *	sk;
-
-	for (sk = key_hash[KEYHASH(id)]; sk != NULL; sk = sk->hlink) {
+	for (symkey * sk = key_hash[KEYHASH(id)]; sk != NULL; sk = sk->hlink) {
 		if (id == sk->keyid) {
 			return sk;
 		}
@@ -339,13 +333,11 @@ auth_havekey(
 	keyid_t		id
 	)
 {
-	symkey *	sk;
-
 	if (0 == id || cache_keyid == id) {
 		return true;
 	}
 
-	for (sk = key_hash[KEYHASH(id)]; sk != NULL; sk = sk->hlink) {
+	for (symkey * sk = key_hash[KEYHASH(id)]; sk != NULL; sk = sk->hlink) {
 		if (id == sk->keyid) {
 			return true;
 		}
@@ -419,12 +411,11 @@ authhavekey(
 void
 authtrust(
 	keyid_t		id,
-	u_long		trust
+	bool		trust
 	)
 {
 	symkey **	bucket;
 	symkey *	sk;
-	u_long		lifetime;
 
 	/*
 	 * Search bin for key; if it does not exist and is untrusted,
@@ -450,15 +441,10 @@ authtrust(
 		}
 
 		/*
-		 * Key exists. If it is to be trusted, say so and
-		 * update its lifetime. 
+		 * Key exists. If it is to be trusted, say so.
 		 */
-		if (trust > 0) {
+		if (trust) {
 			sk->flags |= KEY_TRUSTED;
-			if (trust > 1)
-				sk->lifetime = current_time + trust;
-			else
-				sk->lifetime = 0;
 			return;
 		}
 
@@ -467,16 +453,7 @@ authtrust(
 		return;
 	}
 
-	/*
-	 * keyid is not present, but the is to be trusted.  We allocate
-	 * a new key, but do not specify a key type or secret.
-	 */
-	if (trust > 1) {
-		lifetime = current_time + trust;
-	} else {
-		lifetime = 0;
-	}
-	allocsymkey(bucket, id, KEY_TRUSTED, 0, lifetime, 0, NULL);
+	allocsymkey(bucket, id, KEY_TRUSTED, 0, 0, NULL);
 }
 
 
@@ -516,23 +493,22 @@ MD5auth_setkey(
 	size_t len
 	)
 {
-	symkey *	sk;
 	symkey **	bucket;
 	uint8_t *	secret;
 	size_t		secretsize;
 	
-	DEBUG_ENSURE(keytype <= USHRT_MAX);
-	DEBUG_ENSURE(len < 4 * 1024);
+	//DEBUG_ENSURE(keytype <= USHRT_MAX);
+	//DEBUG_ENSURE(len < 4 * 1024);
 	/*
 	 * See if we already have the key.  If so just stick in the
 	 * new value.
 	 */
 	bucket = &key_hash[KEYHASH(keyno)];
-	for (sk = *bucket; sk != NULL; sk = sk->hlink) {
+	for (symkey * sk = *bucket; sk != NULL; sk = sk->hlink) {
 		if (keyno == sk->keyid) {
-			sk->type = (u_short)keytype;
+			sk->type = (unsigned short)keytype;
 			secretsize = len;
-			sk->secretsize = (u_short)secretsize;
+			sk->secretsize = (unsigned short)secretsize;
                         free(sk->secret);
                         sk->secret = emalloc(secretsize);
 			memcpy(sk->secret, key, secretsize);
@@ -550,15 +526,13 @@ MD5auth_setkey(
 	secretsize = len;
 	secret = emalloc(secretsize);
 	memcpy(secret, key, secretsize);
-	allocsymkey(bucket, keyno, 0, (u_short)keytype, 0,
-		    (u_short)secretsize, secret);
+	allocsymkey(bucket, keyno, 0, (unsigned short)keytype,
+		    (unsigned short)secretsize, secret);
 #ifdef DEBUG
 	if (debug >= 4) {
-		size_t	j;
-
 		printf("auth_setkey: key %d type %d len %d ", (int)keyno,
 		    keytype, (int)secretsize);
-		for (j = 0; j < secretsize; j++)
+		for (size_t j = 0; j < secretsize; j++)
 			printf("%02x", secret[j]);
 		printf("\n");
 	}	
@@ -587,30 +561,10 @@ auth_delkeys(void)
 				sk->secret = NULL;
 			}
 			sk->secretsize = 0;
-			sk->lifetime = 0;
 		} else {
 			freesymkey(sk, &key_hash[KEYHASH(sk->keyid)]);
 		}
 	ITER_DLIST_END()
-}
-
-
-/*
- * auth_agekeys - delete keys whose lifetimes have expired
- */
-void
-auth_agekeys(void)
-{
-	symkey *	sk;
-
-	ITER_DLIST_BEGIN(key_listhead, sk, llink, symkey)
-		if (sk->lifetime > 0 && current_time > sk->lifetime) {
-			freesymkey(sk, &key_hash[KEYHASH(sk->keyid)]);
-			authkeyexpired++;
-		}
-	ITER_DLIST_END()
-	DPRINTF(1, ("auth_agekeys: at %lu keys %lu expired %lu\n",
-		    current_time, authnumkeys, authkeyexpired));
 }
 
 

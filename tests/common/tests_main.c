@@ -42,37 +42,31 @@ static void RunAllTests(void)
 	RUN_TEST_GROUP(a_md5encrypt);
 	RUN_TEST_GROUP(authkeys);
 	RUN_TEST_GROUP(calendar);
-	RUN_TEST_GROUP(calgregorian);
-	RUN_TEST_GROUP(caltontp);
-	RUN_TEST_GROUP(calyearstart);
 	RUN_TEST_GROUP(clocktime);
 	RUN_TEST_GROUP(decodenetnum);
 	RUN_TEST_GROUP(hextolfp);
 	RUN_TEST_GROUP(humandate);
-//	RUN_TEST_GROUP(lfp);
+	RUN_TEST_GROUP(lfpfunc);
 	RUN_TEST_GROUP(lfptostr);
-	RUN_TEST_GROUP(modetoa);
 	RUN_TEST_GROUP(msyslog);
 	RUN_TEST_GROUP(netof);
 	RUN_TEST_GROUP(numtoa);
-	RUN_TEST_GROUP(numtohost);
 	RUN_TEST_GROUP(prettydate);
 	RUN_TEST_GROUP(recvbuff);
+	RUN_TEST_GROUP(refidsmear);
 	RUN_TEST_GROUP(sfptostr);
 	RUN_TEST_GROUP(socktoa);
 	RUN_TEST_GROUP(ssl_init);
 	RUN_TEST_GROUP(statestr);
 	RUN_TEST_GROUP(strtolfp);
-//	RUN_TEST_GROUP(timespec);
-//	RUN_TEST_GROUP(timevalops);
-	RUN_TEST_GROUP(tstotv);
-	RUN_TEST_GROUP(tvtots);
+	RUN_TEST_GROUP(timespecops);
 	RUN_TEST_GROUP(vi64ops);
 	RUN_TEST_GROUP(ymd2yd);
 #endif
 
 #ifdef TEST_NTPD
 	RUN_TEST_GROUP(leapsec);
+	RUN_TEST_GROUP(hackrestrict);
 #endif
 
 }
@@ -82,6 +76,7 @@ int main(int argc, const char * argv[]) {
 
 	init_lib();
 	init_auth();
+	init_network();
 
 	args_argc = argc;
 	args_argv = argv;

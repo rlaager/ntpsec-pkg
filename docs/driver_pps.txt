@@ -44,7 +44,7 @@ The PPS source can be connected via a serial or parallel port, depending
 on the hardware and operating system. A serial port can be dedicated to
 the PPS source or shared with another device; however, if dedicated the
 data leads should not be connected, as noise or unexpected signals can
-cause +{ntpd}+ to exit.
+cause +ntpd+ to exit.
 
 A radio clock is usually connected via a serial port and the PPS source
 connected via a level converter to the data carrier detect (DCD) pin
@@ -104,14 +104,10 @@ synchronization without needing the Internet at all.
   Not used by this driver.
 +flag2 {0 | 1}+::
   Specifies PPS capture on the rising (assert) pulse edge if 0 (default)
-  or falling (clear) pulse edge if 1. Not used under Windows - if the
-  special +serialpps.sys+ serial port driver is installed then the
-  leading edge will _always_ be used.
+  or falling (clear) pulse edge if 1.
 +flag3 {0 | 1}+::
   Controls the kernel PPS discipline: 0 for disable (default), 1 for
-  enable. Not used under Windows - if the special +serialpps.sys+
-  serial port driver is used then kernel PPS will be available and
-  used.
+  enable.
 +flag4 {0 | 1}+::
   Record a timestamp once for each second if 1. Useful for constructing
   Allan deviation plots.
@@ -165,7 +161,7 @@ If clockstats is enabled, the driver will log a few counters.  Examples:
 |=============================================================================
 
 The clock identification is normally the driver type and unit, but if
-your {ntpd} was built in strict Classic compatibility mode it will
+your ntpd was built in strict Classic compatibility mode it will
 be a magic clock address expressing the same information in a more
 opaque way.
 

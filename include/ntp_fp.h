@@ -38,6 +38,17 @@ typedef struct {
 #define l_ui	Ul_i.Xl_ui		/* unsigned integral part */
 #define	l_i	Ul_i.Xl_i		/* signed integral part */
 
+static inline uint64_t lfp_to_uint64(const l_fp *lfp) {
+  return
+    (uint64_t)lfp->l_ui << 32 |
+    (uint64_t)lfp->l_uf;
+}
+
+static inline void uint64_to_lfp(l_fp *lfp, uint64_t x) {
+  lfp->l_ui = x >> 32;
+  lfp->l_uf = x & 0xFFFFFFFFUL;
+}
+
 /*
  * Fractional precision (of an l_fp) is actually the number of
  * bits in an int32_t/uint32_t.
@@ -352,7 +363,6 @@ extern	char *	rfc3339date	(l_fp *);
 extern  void	mfp_mul		(int32_t *, uint32_t *, int32_t, uint32_t, int32_t, uint32_t);
 
 extern	void	set_sys_fuzz	(double);
-extern	void	init_systime	(void);
 extern  void	get_ostime	(struct timespec *tsp);
 extern	void	normalize_time	(struct timespec, long, l_fp *);
 extern	void	get_systime	(l_fp *);
@@ -361,11 +371,6 @@ extern	bool	adj_systime	(double, int (*adjtime)(const struct timeval *, struct t
 
 #define	lfptoa(fpv, ndec)	mfptoa((fpv)->l_ui, (fpv)->l_uf, (ndec))
 #define	lfptoms(fpv, ndec)	mfptoms((fpv)->l_ui, (fpv)->l_uf, (ndec))
-
-#define stoa(addr)		socktoa(addr)
-#define	ntoa(addr)		stoa(addr)
-#define sptoa(addr)		sockporttoa(addr)
-#define stohost(addr)		socktohost(addr)
 
 #define	ufptoa(fpv, ndec)	dofptoa((fpv), false, (ndec), false)
 #define	ufptoms(fpv, ndec)	dofptoa((fpv), false, (ndec), true)
@@ -379,37 +384,5 @@ extern	bool	adj_systime	(double, int (*adjtime)(const struct timeval *, struct t
  */
 typedef void (*time_stepped_callback)(void);
 extern time_stepped_callback	step_callback;
-
-/*
- * Multi-thread locking for get_systime()
- *
- * On most systems, get_systime() is used solely by the main ntpd
- * thread, but on Windows it's also used by the dedicated I/O thread.
- * The [Bug 2037] changes to get_systime() have it keep state between
- * calls to ensure time moves in only one direction, which means its
- * use on Windows needs to be protected against simultaneous execution
- * to avoid falsely detecting Lamport violations by ensuring only one
- * thread at a time is in get_systime().
- */
-#ifdef SYS_WINNT
-extern CRITICAL_SECTION get_systime_cs;
-# define INIT_GET_SYSTIME_CRITSEC()				\
-		InitializeCriticalSection(&get_systime_cs)
-# define ENTER_GET_SYSTIME_CRITSEC()				\
-		EnterCriticalSection(&get_systime_cs)
-# define LEAVE_GET_SYSTIME_CRITSEC()				\
-		LeaveCriticalSection(&get_systime_cs)
-# define INIT_WIN_PRECISE_TIME()				\
-		init_win_precise_time()
-#else	/* !SYS_WINNT follows */
-# define INIT_GET_SYSTIME_CRITSEC()			\
-		do {} while (false)
-# define ENTER_GET_SYSTIME_CRITSEC()			\
-		do {} while (false)
-# define LEAVE_GET_SYSTIME_CRITSEC()			\
-		do {} while (false)
-# define INIT_WIN_PRECISE_TIME()			\
-		do {} while (false)
-#endif
 
 #endif /* GUARD_NTP_FP_H */

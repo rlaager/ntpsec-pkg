@@ -12,14 +12,6 @@
 #include "ntp_debug.h"
 
 /*
- * Windows C runtime ioctl() can't deal properly with sockets, 
- * map to ioctlsocket for this source file.
- */
-#ifdef SYS_WINNT
-#define ioctl(fd, opt, val)  ioctlsocket(fd, opt, (u_long *)(val))
-#endif
-
-/*
  * on Unix systems the stdio library typically
  * makes use of file descriptors in the lower
  * integer range.  stdio usually will make use
@@ -53,7 +45,7 @@ move_fd(
 	SOCKET fd
 	)
 {
-#if !defined(SYS_WINNT) && defined(F_DUPFD)
+#if defined(F_DUPFD)
 #ifdef OVERRIDE_FD_CHUNK
 #define FD_CHUNK	OVERRIDE_FD_CHUNK
 #else
@@ -116,7 +108,7 @@ move_fd(
 	} while (socket_boundary > 0);
 #else
 	NTP_REQUIRE((int)fd >= 0);
-#endif /* !defined(SYS_WINNT) && defined(F_DUPFD) */
+#endif /* defined(F_DUPFD) */
 	return fd;
 }
 
@@ -154,7 +146,7 @@ open_socket(
 void
 sendpkt(
 	sockaddr_u *		dest,
-	struct interface *	ep,
+	endpt *			ep,
 	int			ttl,
 	struct pkt *		pkt,
 	int			len
@@ -166,7 +158,7 @@ read_refclock_packet(SOCKET fd, struct refclockio *rp, l_fp ts)
 static inline int
 read_network_packet(
 	SOCKET			fd,
-	struct interface *	itf,
+	endpt *			itf,
 	l_fp			ts
 	)
 

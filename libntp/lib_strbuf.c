@@ -16,22 +16,15 @@
 int		debug;
 libbufstr	lib_stringbuf[LIB_NUMBUF];
 int		lib_nextbuf;
-bool		ipv4_works;
-bool		ipv6_works;
 
 
 /*
- * initialization routine.  Might be needed if the code is ROMized.
+ * This stub is required to pacify the Mac OS X linker, which will
+ * refuse to consider a module a candidate to be linked unless it
+ * has an executable entry point called from somewhere else that
+ * is linked.
  */
 void
 init_lib(void)
 {
-	static bool		lib_inited;
-
-	if (lib_inited)
-		return;
-	ipv4_works = isc_net_probeipv4_bool();
-	ipv6_works = isc_net_probeipv6_bool();
-	init_systime();
-	lib_inited = true;
 }

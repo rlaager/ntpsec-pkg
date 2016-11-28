@@ -21,16 +21,6 @@
 #define parseprintf(LEVEL, ARGS)
 #endif	/* DEBUG */
 
-#if defined(timercmp) && defined(__GNUC__)
-#undef timercmp
-#endif
-
-#if !defined(timercmp)
-#define	timercmp(tvp, uvp, cmp)	\
-	((tvp)->tv_sec cmp (uvp)->tv_sec || \
-	 ((tvp)->tv_sec == (uvp)->tv_sec && (tvp)->tv_usec cmp (uvp)->tv_usec))
-#endif
-
 /*
  * some constants useful for GPS time conversion
  */
@@ -305,7 +295,7 @@ extern void syn_simple (parse_t *, timestamp_t *, struct format *, unsigned long
 extern parse_pps_fnc_t pps_simple;
 extern parse_pps_fnc_t pps_one;
 extern parse_pps_fnc_t pps_zero;
-extern bool parse_timedout (parse_t *, timestamp_t *, struct timeval *);
+extern bool parse_timedout (parse_t *, timestamp_t *, struct timespec *);
 
 #endif
 

@@ -1,8 +1,3 @@
-from waflib.Configure import conf
-from util import msg, msg_setting
-
-import os
-
 # Versions older than 0.9.7d were deemed incompatible in NTP Classic.
 OPENSSL_FRAG = """
 %s
@@ -43,7 +38,6 @@ def configure_ssl(ctx):
 		if not ctx.check_cc(lib=lib, mandatory=False):
 			OPENSSL_LIB=False
 
-
 	if OPENSSL_HEADERS and OPENSSL_LIB:
 		ctx.check_cc(
 			fragment	= OPENSSL_FRAG % "\n".join(["#include <%s>" % x for x in headers]),
@@ -58,5 +52,4 @@ def configure_ssl(ctx):
 
 	if ctx.get_define("HAVE_OPENSSL"):
 		ctx.define("USE_OPENSSL_CRYPTO_RAND", 1, comment="Use OpenSSL pseudo-random number generator")
-		ctx.define("ISC_PLATFORM_OPENSSLHASH", 1, comment="Use OpenSSL for hashing")
-
+		ctx.define("USE_OPENSSL_HASH", 1, comment="Use OpenSSL for hashing")

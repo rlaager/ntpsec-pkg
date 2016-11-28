@@ -8,7 +8,6 @@
 
 #include <config.h>
 #include "ntp_fp.h"
-#include "ntp_unixtime.h"
 #include "ntp_calendar.h"
 
 #include "ntp_machine.h"
@@ -484,8 +483,8 @@ cvt_mgps(
 					return CVT_FAIL|CVT_BADFMT;
 				}
 
-				clock_time->utcoffset += TIMES60(h);
-				clock_time->utcoffset  = TIMES60(clock_time->utcoffset);
+				clock_time->utcoffset += h * 60;
+				clock_time->utcoffset  = clock_time->utcoffset * 60;
 
 				if (buffer[format->field_offsets[O_UTCSOFFSET].offset] != '-')
 				{

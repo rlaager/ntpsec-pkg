@@ -11,7 +11,6 @@
 #include "ntp_stdlib.h"
 #include "ntp_control.h"
 #include "ntp_random.h"
-#include "ntp_intercept.h"
 
 /*
  *		    Table of valid association combinations
@@ -145,7 +144,7 @@ init_peer(void)
 	 * Initialize our first association ID
 	 */
 	do
-		current_association_ID = intercept_ntp_random(__func__) & ASSOCID_MAX;
+		current_association_ID = ntp_random() & ASSOCID_MAX;
 	while (!current_association_ID);
 	initial_association_ID = current_association_ID;
 }
@@ -208,9 +207,9 @@ findexistingpeer_addr(
 	struct peer *peer;
 
 	DPRINTF(2, ("findexistingpeer_addr(%s, %s, %d, 0x%x)\n",
-		sptoa(addr),
+		sockporttoa(addr),
 		(start_peer)
-		    ? sptoa(&start_peer->srcadr)
+		    ? sockporttoa(&start_peer->srcadr)
 		    : "NULL",
 		mode, (u_int)cast_flags));
 
@@ -230,10 +229,10 @@ findexistingpeer_addr(
 		peer = start_peer->adr_link;
 	
 	while (peer != NULL) {
-		DPRINTF(3, ("%s %s %d %d 0x%x 0x%x ", sptoa(addr),
-			sptoa(&peer->srcadr), mode, peer->hmode,
+		DPRINTF(3, ("%s %s %d %d 0x%x 0x%x ", sockporttoa(addr),
+			sockporttoa(&peer->srcadr), mode, peer->hmode,
 			(u_int)cast_flags, (u_int)peer->cast_flags));
- 		if ((-1 == mode || peer->hmode == mode ||
+		if ((-1 == mode || peer->hmode == mode ||
 		     ((MDF_BCLNT & peer->cast_flags) &&
 		      (MDF_BCLNT & cast_flags))) &&
 		    ADDR_PORT_EQ(addr, &peer->srcadr)) {
@@ -289,62 +288,44 @@ findpeer(
 	findpeer_calls++;
 	srcadr = &rbufp->recv_srcadr;
 	hash = NTP_HASH_ADDR(srcadr);
-	for (p = peer_hash[hash]; p != NULL; p = p->adr_link) {
-		if (ADDR_PORT_EQ(srcadr, &p->srcadr)) {
+        for (p = peer_hash[hash]; p != NULL; p = p->adr_link) {
+                /* [Classic Bug 3072] ensure interface of peer matches */
+                if (p->dstadr != rbufp->dstadr) continue;
 
-			/*
-			 * if the association matching rules determine
-			 * that this is not a valid combination, then
-			 * look for the next valid peer association.
-			 */
-			*action = MATCH_ASSOC(p->hmode, pkt_mode);
+                /* ensure peer source address matches */
+                if (!ADDR_PORT_EQ(srcadr, &p->srcadr)) continue;
 
-			/*
-			 * A response to our manycastclient solicitation
-			 * might be misassociated with an ephemeral peer
-			 * already spun for the server.  If the packet's
-			 * org timestamp doesn't match the peer's, check
-			 * if it matches the ACST prototype peer's.  If
-			 * so it is a redundant solicitation response,
-			 * return AM_ERR to discard it.  [Bug 1762]
-			 */
-			if (MODE_SERVER == pkt_mode &&
-			    AM_PROCPKT == *action) {
-				pkt = &rbufp->recv_pkt;
-				NTOHL_FP(&pkt->org, &pkt_org);
-				if (!L_ISEQU(&p->aorg, &pkt_org) &&
-				    findmanycastpeer(rbufp))
-					*action = AM_ERR;
-			}
+                /* If the association matching rules determine that this
+                 * is not a valid combination, then look for the next
+                 * valid peer association.
+                 */
+                *action = MATCH_ASSOC(p->hmode, pkt_mode);
 
-			/*
-			 * if an error was returned, exit back right
-			 * here.
-			 */
-			if (*action == AM_ERR)
-				return NULL;
+                /* A response to our manycastclient solicitation might
+                 * be misassociated with an ephemeral peer already spun
+                 * for the server.  If the packet's org timestamp
+                 * doesn't match the peer's, check if it matches the
+                 * ACST prototype peer's.  If so it is a redundant
+                 * solicitation response, return AM_ERR to discard it.
+                 * [Bug 1762]
+                 */
+                if (MODE_SERVER == pkt_mode && AM_PROCPKT == *action) {
+                        pkt = &rbufp->recv_pkt;
+                        NTOHL_FP(&pkt->org, &pkt_org);
+                        if (!L_ISEQU(&p->org, &pkt_org) &&
+                            findmanycastpeer(rbufp))
+                                *action = AM_ERR;
+                }
 
-			/*
-			 * if a match is found, we stop our search.
-			 */
-			if (*action != AM_NOMATCH)
-				break;
-		}
-	}
+                /* If an error was returned, exit back right here. */
+                if (*action == AM_ERR) return NULL;
 
-	/*
-	 * If no matching association is found
-	 */
-	if (NULL == p) {
-		*action = MATCH_ASSOC(NO_PEER, pkt_mode);
-	} else if (p->dstadr != rbufp->dstadr) {
-		set_peerdstadr(p, rbufp->dstadr);
-		if (p->dstadr == rbufp->dstadr) {
-			DPRINTF(1, ("Changed %s local address to match response\n",
-				    stoa(&p->srcadr)));
-			return findpeer(rbufp, pkt_mode, action);
-		}
-	}
+                /* If a match is found, we stop our search. */
+                if (*action != AM_NOMATCH) break;
+        }
+
+	/* If no matching association is found */
+	if (NULL == p) *action = MATCH_ASSOC(NO_PEER, pkt_mode);
 	return p;
 }
 
@@ -477,7 +458,7 @@ free_peer(
 		if (NULL == unlinked) {
 			peer_hash_count[hash]++;
 			msyslog(LOG_ERR, "peer %s not in address table!",
-				stoa(&p->srcadr));
+				socktoa(&p->srcadr));
 		}
 
 		/*
@@ -492,7 +473,7 @@ free_peer(
 			assoc_hash_count[hash]++;
 			msyslog(LOG_ERR,
 				"peer %s not in association ID table!",
-				stoa(&p->srcadr));
+				socktoa(&p->srcadr));
 		}
 
 		/* Remove him from the overall list. */
@@ -500,7 +481,7 @@ free_peer(
 			     struct peer);
 		if (NULL == unlinked)
 			msyslog(LOG_ERR, "%s not in peer list!",
-				stoa(&p->srcadr));
+				socktoa(&p->srcadr));
 	}
 
 	if (p->hostname != NULL)
@@ -555,7 +536,7 @@ set_peerdstadr(
 {
 	struct peer *	unlinked;
 
-	if (p->dstadr == dstadr)
+	if (p == NULL || p->dstadr == dstadr)
 		return;
 
 	/*
@@ -571,7 +552,7 @@ set_peerdstadr(
 		UNLINK_SLIST(unlinked, p->dstadr->peers, p, ilink,
 			     struct peer);
 		msyslog(LOG_INFO, "%s local addr %s -> %s",
-			stoa(&p->srcadr), latoa(p->dstadr),
+			socktoa(&p->srcadr), latoa(p->dstadr),
 			latoa(dstadr));
 	}
 	p->dstadr = dstadr;
@@ -597,7 +578,7 @@ peer_refresh_interface(
 	DPRINTF(4, (
 	    "peer_refresh_interface: %s->%s mode %d vers %d poll %d %d flags 0x%x 0x%x ttl %u key %08x: new interface: ",
 	    p->dstadr == NULL ? "<null>" :
-	    stoa(&p->dstadr->sin), stoa(&p->srcadr), p->hmode,
+	    socktoa(&p->dstadr->sin), socktoa(&p->srcadr), p->hmode,
 	    p->version, p->minpoll, p->maxpoll, p->flags, p->cast_flags,
 	    p->ttl, p->keyid));
 	if (niface != NULL) {
@@ -605,11 +586,11 @@ peer_refresh_interface(
 		    "fd=%d, bfd=%d, name=%.16s, flags=0x%x, ifindex=%u, sin=%s",
 		    niface->fd,  niface->bfd, niface->name,
 		    niface->flags, niface->ifindex,
-		    stoa(&niface->sin)));
+		    socktoa(&niface->sin)));
 		if (niface->flags & INT_BROADCAST)
 			DPRINTF(4, (", bcast=%s",
-				stoa(&niface->bcast)));
-		DPRINTF(4, (", mask=%s\n", stoa(&niface->mask)));
+				socktoa(&niface->bcast)));
+		DPRINTF(4, (", mask=%s\n", socktoa(&niface->mask)));
 	} else {
 		DPRINTF(4, ("<NONE>\n"));
 	}
@@ -625,15 +606,15 @@ peer_refresh_interface(
 		    peer_clear(p, "XFAC", false);
 
 		/*
-	 	 * Broadcast needs the socket enabled for broadcast
-	 	 */
+		 * Broadcast needs the socket enabled for broadcast
+		 */
 		if (MDF_BCAST & p->cast_flags)
 			enable_broadcast(p->dstadr, &p->srcadr);
 
 		/*
-	 	 * Multicast needs the socket interface enabled for
+		 * Multicast needs the socket interface enabled for
 		 * multicast
-	 	 */
+		 */
 		if (MDF_MCAST & p->cast_flags)
 			enable_multicast_if(p->dstadr, &p->srcadr);
 	}
@@ -729,7 +710,7 @@ newpeer(
 		DPRINTF(2, ("newpeer(%s) found existing association\n",
 			(hostname)
 			    ? hostname
-			    : stoa(srcadr)));
+			    : socktoa(srcadr)));
 		return NULL;
 	}
 
@@ -762,31 +743,26 @@ newpeer(
 	set_peerdstadr(peer, 
 		       select_peerinterface(peer, srcadr, dstadr));
 
+        if (NTP_MAXPOLL_UNK == maxpoll)
+	    /* not set yet, set to default */
+	    maxpoll = NTP_MAXDPOLL;
 	/*
-	 * It is an error to set minpoll less than NTP_MINPOLL or to
-	 * set maxpoll greater than NTP_MAXPOLL. However, minpoll is
-	 * clamped not greater than NTP_MAXPOLL and maxpoll is clamped
-	 * not less than NTP_MINPOLL without complaint. Finally,
-	 * minpoll is clamped not greater than maxpoll.
+         * minpoll is clamped not greater than NTP_MAXPOLL
+         * maxpoll is clamped not less than NTP_MINPOLL
+         * minpoll is clamped not greater than maxpoll.
 	 */
-	if (minpoll == 0)
-		peer->minpoll = NTP_MINDPOLL;
-	else
-		peer->minpoll = min(minpoll, NTP_MAXPOLL);
-	if (maxpoll == 0)
-		peer->maxpoll = NTP_MAXDPOLL;
-	else
-		peer->maxpoll = max(maxpoll, NTP_MINPOLL);
+	peer->minpoll = min(minpoll, NTP_MAXPOLL);
+	peer->maxpoll = max(maxpoll, NTP_MINPOLL);
 	if (peer->minpoll > peer->maxpoll)
 		peer->minpoll = peer->maxpoll;
 
 	if (peer->dstadr != NULL)
 		DPRINTF(3, ("newpeer(%s): using fd %d and our addr %s\n",
-			stoa(srcadr), peer->dstadr->fd,
-			stoa(&peer->dstadr->sin)));
+			socktoa(srcadr), peer->dstadr->fd,
+			socktoa(&peer->dstadr->sin)));
 	else
 		DPRINTF(3, ("newpeer(%s): local interface currently not bound\n",
-			stoa(srcadr)));	
+			socktoa(srcadr)));
 
 	/*
 	 * Broadcast needs the socket enabled for broadcast
@@ -838,7 +814,7 @@ newpeer(
 	restrict_source(&peer->srcadr, false, 0);
 	mprintf_event(PEVNT_MOBIL, peer, "assoc %d", peer->associd);
 	DPRINTF(1, ("newpeer: %s->%s mode %u vers %u poll %u %u flags 0x%x 0x%x ttl %u key %08x\n",
-	    latoa(peer->dstadr), stoa(&peer->srcadr), peer->hmode,
+	    latoa(peer->dstadr), socktoa(&peer->srcadr), peer->hmode,
 	    peer->version, peer->minpoll, peer->maxpoll, peer->flags,
 	    peer->cast_flags, peer->ttl, peer->keyid));
 	return peer;
@@ -908,8 +884,8 @@ findmanycastpeer(
 	struct pkt *pkt;
 	l_fp p_org;
 
- 	/*
- 	 * This routine is called upon arrival of a server-mode response
+	/*
+	 * This routine is called upon arrival of a server-mode response
 	 * to a manycastclient multicast solicitation, or to a pool
 	 * server unicast solicitation.  Search the peer list for a
 	 * manycastclient association where the last transmit timestamp
@@ -922,7 +898,7 @@ findmanycastpeer(
 	for (peer = peer_list; peer != NULL; peer = peer->p_link)
 		if (MDF_SOLICIT_MASK & peer->cast_flags) {
 			NTOHL_FP(&pkt->org, &p_org);
-			if (L_ISEQU(&p_org, &peer->aorg))
+			if (L_ISEQU(&p_org, &peer->org))
 				break;
 		}
 

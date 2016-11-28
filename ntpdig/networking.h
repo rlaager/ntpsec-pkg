@@ -12,10 +12,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-#include <ntp_rfc2553.h>
 #include <ntp_stdlib.h>
 #include <ntp_machine.h>
-#include <ntp_unixtime.h>
 #include <ntp_fp.h>
 #include <ntp.h>
 
@@ -67,8 +65,7 @@ struct speer {
 	l_fp	rec;		/* receive time stamp */
 	l_fp	xmt;		/* transmit time stamp */
 	l_fp	dst;		/* destination timestamp */
-	l_fp	aorg;		/* origin timestamp */
-	l_fp	borg;		/* alternate origin timestamp */
+	l_fp	org;		/* origin timestamp */
 	double	offset;		/* peer clock offset */
 	double	delay;		/* peer roundtrip delay */
 };

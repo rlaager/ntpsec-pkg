@@ -173,14 +173,15 @@ static void ntpdig_usage(void)
     P("				- prohibits the option 'ipv4'\n");
     P("   -d no  normalverbose  Normal verbose\n");
     P("   -K Str kod            KoD history filename\n");
+    P("   -g yes gap            Set gap between requests\n");
     P("   -p no  syslog         Logging with syslog\n");
     P("				- prohibits the option 'logfile'\n");
     P("   -l Str logfile        Log to specified logfile\n");
     P("				- prohibits the option 'syslog'\n");
-    P("   -s no  settod         Set (step) the time with settimeofday()\n");
-    P("				- prohibits the option 'adjtime'\n");
+    P("   -s no  settod         Set (step) the time with clock_settime()\n");
+    P("				- prohibits the option 'slew'\n");
     P("   -j no  adjtime        Set (slew) the time with adjtime()\n");
-    P("				- prohibits the option 'settod'\n");
+    P("				- prohibits the option 'step'\n");
     P("   -b Str broadcast      Use broadcasts to the address specified for synchronisation\n");
     P("   -t Num timeout        Specify seconds to wait for broadcasts\n");
     P("   -a Num authentication Enable authentication with the numbered key\n");
@@ -310,13 +311,6 @@ ntpdig_main (
 	argc -= optct;
 	argv += optct;
 
-	TRACE(2, ("init_lib() done, %s%s\n",
-		  (ipv4_works)
-		      ? "ipv4_works "
-		      : "",
-		  (ipv6_works)
-		      ? "ipv6_works "
-		      : ""));
 	ntpver = opt_ntpversion;
 	steplimit = opt_steplimit / 1e3;
 	gap.tv_usec = max(0, opt_gap * 1000);
@@ -473,9 +467,9 @@ open_sockets(
 	}
 
 	/* We may not always have IPv6... */
-	if (-1 == sock6 && ipv6_works) {
+	if (-1 == sock6 && isc_net_probeipv6_bool()) {
 		sock6 = socket(PF_INET6, SOCK_DGRAM, 0);
-		if (-1 == sock6 && ipv6_works) {
+		if (-1 == sock6 && isc_net_probeipv6_bool()) {
 			/* error getting a socket */
 			msyslog(LOG_ERR, "open_sockets: socket(PF_INET6) failed: %m");
 			exit(1);
@@ -530,7 +524,7 @@ handle_lookup(
 
 	ZERO(hints);
 	hints.ai_family = ai_fam_pref;
-	hints.ai_flags = AI_CANONNAME | Z_AI_NUMERICSERV;
+	hints.ai_flags = AI_CANONNAME | AI_NUMERICSERV;
 	/*
 	** Unless we specify a socktype, we'll get at least two
 	** entries for each address: one for TCP and one for
@@ -630,7 +624,7 @@ ntpdig_name_resolved(
 				break;
 
 			case AF_INET6:
-				if (!ipv6_works)
+				if (!isc_net_probeipv6_bool())
 					continue;
 
 				sock = sock6;
@@ -699,12 +693,12 @@ queue_xmt(
 			if (strcasecmp(spkt->dctx->name,
 				       match->dctx->name))
 				printf("%s %s duplicate address from %s ignored.\n",
-				       sptoa(&match->addr),
+				       sockporttoa(&match->addr),
 				       match->dctx->name,
 				       spkt->dctx->name);
 			else
 				printf("%s %s, duplicate address ignored.\n",
-				       sptoa(&match->addr),
+				       sockporttoa(&match->addr),
 				       match->dctx->name);
 			dec_pending_ntp(spkt->dctx->name, &spkt->addr);
 			free(spkt);
@@ -772,7 +766,7 @@ xmt_timer_cb(
 	if (xmt_q->sched <= start_cb.tv_sec) {
 		UNLINK_HEAD_SLIST(x, xmt_q, link);
 		TRACE(2, ("xmt_timer_cb: at .%6.6u -> %s\n",
-			  (u_int)start_cb.tv_usec, stoa(&x->spkt->addr)));
+			  (u_int)start_cb.tv_usec, socktoa(&x->spkt->addr)));
 		xmt(x);
 		free(x);
 		if (NULL == xmt_q)
@@ -829,7 +823,7 @@ xmt(
 		spkt->stime = tv_xmt.tv_sec - JAN_1970;
 
 		TRACE(2, ("xmt: %lx.%6.6u %s %s\n", (u_long)tv_xmt.tv_sec,
-			  (u_int)tv_xmt.tv_usec, dctx->name, stoa(dst)));
+			  (u_int)tv_xmt.tv_usec, dctx->name, socktoa(dst)));
 	} else {
 		dec_pending_ntp(dctx->name, dst);
 	}
@@ -881,7 +875,7 @@ timeout_queries(void)
 				continue;
 			age = start_cb.tv_sec - spkt->stime;
 			TRACE(3, ("%s %s %cCST age %ld\n",
-				  stoa(&spkt->addr),
+				  socktoa(&spkt->addr),
 				  spkt->dctx->name, xcst, age));
 			if (age > response_timeout)
 				timeout_query(spkt);
@@ -1037,12 +1031,12 @@ sock_cb(
 	if (NULL == spkt) {
 		msyslog(LOG_WARNING,
 			"Packet from unexpected source %s dropped",
-			sptoa(&sender));
+			sockporttoa(&sender));
 		return;
 	}
 
 	TRACE(1, ("sock_cb: %s %s\n", spkt->dctx->name,
-		  sptoa(&sender)));
+		  sockporttoa(&sender)));
 
 	rpktl = process_pkt(&r_pkt, &sender, rpktl, MODE_SERVER,
 			    &spkt->x_pkt, "sock_cb", opt_authkey != NULL);
@@ -1293,7 +1287,7 @@ handle_pkt(
 	double		synch_distance;
 	char *		p_NTPDIG_PRETEND_TIME;
 	time_t		pretend_time;
-#if SIZEOF_TIME_T == 8
+#if NTP_SIZEOF_TIME_T == 8
 	long long	ll;
 #else
 	long		l;
@@ -1320,7 +1314,7 @@ handle_pkt(
 
 	case KOD_DEMOBILIZE:
 		/* Received a DENY or RESTR KOD packet */
-		addrtxt = stoa(host);
+		addrtxt = socktoa(host);
 		ref = (char *)&rpkt->refid;
 		add_entry(addrtxt, ref);
 		msyslog(LOG_WARNING, "KOD code %c%c%c%c from %s %s",
@@ -1338,17 +1332,17 @@ handle_pkt(
 
 	case 1:
 		TRACE(3, ("handle_pkt: %d bytes from %s %s\n",
-			  rpktl, stoa(host), hostname));
+			  rpktl, socktoa(host), hostname));
 
 		gettimeofday_cached(base, &tv_dst);
 
 		p_NTPDIG_PRETEND_TIME = getenv("NTPDIG_PRETEND_TIME");
 		if (p_NTPDIG_PRETEND_TIME) {
 			pretend_time = 0;
-#if SIZEOF_TIME_T == 4
+#if NTP_SIZEOF_TIME_T == 4
 			if (1 == sscanf(p_NTPDIG_PRETEND_TIME, "%ld", &l))
 				pretend_time = (time_t)l;
-#elif SIZEOF_TIME_T == 8
+#elif NTP_SIZEOF_TIME_T == 8
 			if (1 == sscanf(p_NTPDIG_PRETEND_TIME, "%lld", &ll))
 				pretend_time = (time_t)ll;
 #else
@@ -1405,7 +1399,7 @@ handle_pkt(
 		    printf("{\"time\":\"%s\",\"offset\":%f,\"precision\":%f,",
 		    	ts_str, offset, synch_distance);
 		    printf("\"host\":\"%s\",\"ip\":\"%s\",",
-			   hostname, stoa(host));
+			   hostname, socktoa(host));
 		    printf("\"stratum\":%d,\"leap\":\"%s\",\"adjusted\":%s}\n",
 			   stratum,
 		    	   leaptxt,

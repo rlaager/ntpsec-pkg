@@ -8,23 +8,6 @@
  * Special thanks to Gary Miller and Hal Murray for their comments and
  * ideas.
  *
- * Note: This will currently NOT work with Windows due to some
- * limitations:
- *
- *  - There is no GPSD for Windows. (There is an unofficial port to
- *    cygwin, but Windows is not officially supported.)
- *
- *  - To work properly, this driver needs PPS and TPV/TOFF sentences
- *    from GPSD. I don't see how the cygwin port should deal with the
- *    PPS signal.
- *
- *  - The device name matching must be done in a different way for
- *    Windows. (Can be done with COMxx matching, as done for NMEA.)
- *
- * Apart from those minor hickups, once GPSD has been fully ported to
- * Windows, there's no reason why this should not work there ;-) If this
- * is ever to happen at all is a different question.
- *
  * ---------------------------------------------------------------------
  *
  * This driver works slightly different from most others, as the PPS
@@ -137,7 +120,6 @@ typedef unsigned long int json_uint;
 
 #include "ntpd.h"
 #include "ntp_io.h"
-#include "ntp_unixtime.h"
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
 #include "ntp_calendar.h"
@@ -512,6 +494,7 @@ gpsd_start(
 		++up->refcount;
 
 		/* initialize the unit structure */
+		pp->clockname     = NAME; /* Hack, needed by refclock_name */
 		up->logname  = estrdup(refclock_name(peer));
 		up->unit     = unit & 0x7F;
 		up->fdt      = -1;
@@ -1967,13 +1950,13 @@ gpsd_test_socket(
 		    up->logname, up->fdt));
 
 	{
-		struct timeval tout;
+		struct timespec tout;
 		fd_set         wset;
 
 		memset(&tout, 0, sizeof(tout));
 		FD_ZERO(&wset);
 		FD_SET(up->fdt, &wset);
-		rc = select(up->fdt+1, NULL, &wset, NULL, &tout);
+		rc = pselect(up->fdt+1, NULL, &wset, NULL, &tout, NULL);
 		if (0 == rc || !(FD_ISSET(up->fdt, &wset)))
 			return;
 	}

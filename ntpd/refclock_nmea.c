@@ -28,7 +28,6 @@
 #include "ntp.h"
 #include "ntpd.h"
 #include "ntp_io.h"
-#include "ntp_unixtime.h"
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
 #include "ntp_calendar.h"
@@ -811,8 +810,8 @@ nmea_receive(
 	ZERO(date);
 	ZERO(gpsw);
 	sentence = 0;
-	rc_date = 0;
-	rc_time = 0;
+	rc_date = false;
+	rc_time = false;
 	/* 
 	 * Read the timecode and timestamp, then initialise field
 	 * processing. The <CR><LF> at the NMEA line end is translated
@@ -1813,7 +1812,7 @@ eval_gps_time(
 	/* If we fully trust the GPS receiver, just combine days and
 	 * seconds and be done. */
 	if (peer->ttl & NMEA_DATETRUST_MASK) {
-		retv.l_ui = ntpcal_dayjoin(gps_day, gps_sec).D_s.lo;
+		retv.l_ui = vint64lo(ntpcal_dayjoin(gps_day, gps_sec));
 		return retv;
 	}
 
@@ -1871,7 +1870,7 @@ eval_gps_time(
 	}
 
 	/* - build result and be done */
-	retv.l_ui = ntpcal_dayjoin(adj_day, gps_sec).D_s.lo;
+	retv.l_ui = vint64lo(ntpcal_dayjoin(adj_day, gps_sec));
 	return retv;
 }
 

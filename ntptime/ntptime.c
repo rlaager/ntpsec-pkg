@@ -10,7 +10,7 @@
 #include <config.h>
 
 #include "ntp_fp.h"
-#include "timevalops.h"
+#include "timespecops.h"
 #include "ntp_syscall.h"
 #include "ntp_stdlib.h"
 
@@ -25,6 +25,53 @@
 #else
 #define tv_frac_sec tv_usec
 #endif
+
+/* microseconds per second */
+#define MICROSECONDS 1000000
+
+/*
+ * Convert usec to a time stamp fraction.
+ */
+# define TVUTOTSF(tvu, tsf)						\
+	((tsf) = (uint32_t)						\
+		 ((((uint64_t)(tvu) << 32) + MICROSECONDS / 2) /		\
+		  MICROSECONDS))
+
+/*
+ * Convert a struct timeval to a time stamp.
+ */
+#define TVTOTS(tv, ts) \
+	do { \
+		(ts)->l_ui = (u_long)(tv)->tv_sec; \
+		TVUTOTSF((tv)->tv_usec, (ts)->l_uf); \
+	} while (false)
+
+#define NS_PER_MS_FLOAT	1000.0
+
+/* MUSL port shim */
+#ifndef HAVE_NTP_GETTIME
+#ifdef STRUCT_NTPTIMEVAL_HAS_TAI
+int ntp_gettime(struct ntptimeval *ntv)
+#else
+int ntp_gettime(struct timex *ntv)
+#endif
+{
+	struct timex tntx;
+	int result;
+
+	ZERO(tntx);
+	result = ntp_adjtime(&tntx);
+	ntv->time = tntx.time;
+	ntv->maxerror = tntx.maxerror;
+	ntv->esterror = tntx.esterror;
+#  ifdef NTP_API
+#   if NTP_API > 3
+	ntv->tai = tntx.tai;
+#   endif
+#  endif
+	return result;
+}
+#endif	/* !HAVE_NTP_GETTIME */
 
 
 #define TIMEX_MOD_BITS \
@@ -74,7 +121,11 @@ main(
 {
 	extern int ntp_optind;
 	extern char *ntp_optarg;
+#ifdef STRUCT_NTPTIMEVAL_HAS_TAI
 	struct ntptimeval ntv;
+#else
+	struct timex ntv;
+#endif
 	struct timeval tv;
 	struct timex ntx, _ntx;
 	int	times[20];
@@ -88,7 +139,7 @@ main(
 	int ch;
 	int errflg	= 0;
 	int cost	= 0;
-	bool json       = false;
+	volatile bool json      = false;
 	volatile int rawtime	= 0;
 	char ascbuf[BUFSIZ];
 
@@ -248,7 +299,7 @@ main(
 #ifdef SIGSYS
 	if (sigsetjmp(env, 1) == 0) {
 #endif
-		status = ntp_adjtime(&_ntx);
+		status = ntp_adjtime_ns(&_ntx);
 		if ((status < 0) && (errno == ENOSYS))
 			--pll_control;
 		flash = _ntx.status;
@@ -317,7 +368,7 @@ main(
 		printf(json ? jfmt6 : ofmt6);
 #endif /* NTP_API */
 	}
-	status = ntp_adjtime(&ntx);
+	status = ntp_adjtime_ns(&ntx);
 	if (status < 0) {
 		perror((errno == EPERM) ? 
 		   "Must be root to set kernel values\nntp_adjtime() call fails" :
@@ -349,11 +400,7 @@ main(
 		printf(json ? jfmt7 : ofmt7, status, timex_state(status));
 		printf(json ? jfmt8 : ofmt8,
 		       snprintb(sizeof(binbuf), binbuf, ntx.modes, TIMEX_MOD_BITS));
-		ftemp = (double)ntx.offset;
-#ifdef STA_NANO
-		if (flash & STA_NANO)
-			ftemp /= 1000.0;
-#endif
+		ftemp = (double)ntx.offset/NS_PER_MS_FLOAT;
 		printf(json ? jfmt9 : ofmt9, ftemp);
 		ftemp = (double)ntx.freq / SCALE_FREQ;
 		printf(json ? jfmt10 : ofmt10, ftemp, 1 << ntx.shift);
@@ -363,21 +410,20 @@ main(
 		       snprintb(sizeof(binbuf), binbuf,
 			       (u_int)ntx.status, TIMEX_STA_BITS));
 		ftemp = (double)ntx.tolerance / SCALE_FREQ;
+		/*
+		 * Before the introduction of ntp_adjtime_ns() the
+		 * ntptime code divided this by 1000 when the STA_NANO
+		 * flash bit was on.  This doesn't match the Linux
+		 * documentation; might have been an error, or
+		 * possibly some other systems behave differently.
+		 */
 		gtemp = (double)ntx.precision;
-#ifdef STA_NANO
-		if (flash & STA_NANO)
-			gtemp /= 1000.0;
-#endif
 		printf(json ? jfmt13 : ofmt13,
 			(u_long)ntx.constant, gtemp, ftemp);
 		if (ntx.shift != 0) {
 			ftemp = (double)ntx.ppsfreq / SCALE_FREQ;
 			gtemp = (double)ntx.stabil / SCALE_FREQ;
-			htemp = (double)ntx.jitter;
-#ifdef STA_NANO
-			if (flash & STA_NANO)
-				htemp /= 1000.0;
-#endif
+			htemp = (double)ntx.jitter/NS_PER_MS_FLOAT;
 			printf(json ? jfmt14 : ofmt14,
 			    ftemp, gtemp, htemp);
 			printf(json ? jfmt15 : ofmt15,
@@ -386,7 +432,7 @@ main(
 		}
 		if (json)
 		    /* hack to avoid trailing comma - not semabtically needed */ 
-		    fputs("\"version\":\""  NTPS_VERSION_STRING "\"}\n", stdout);
+		    fputs("\"version\":\""  NTPSEC_VERSION_STRING "\"}\n", stdout);
 		exit(EXIT_SUCCESS);
 	}
 

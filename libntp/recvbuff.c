@@ -7,37 +7,21 @@
 #include "ntp_stdlib.h"
 #include "ntp_lists.h"
 #include "recvbuff.h"
-#include "iosignal.h"
 
 
 /*
- * Memory allocation
+ * Memory allocation.
  */
-static u_long volatile full_recvbufs;	/* recvbufs on full_recv_fifo */
-static u_long volatile free_recvbufs;	/* recvbufs on free_recv_list */
-static u_long volatile total_recvbufs;	/* total recvbufs currently in use */
-static u_long volatile lowater_adds;	/* number of times we have added memory */
-static u_long volatile buffer_shortfall;/* number of missed free receive buffers
+static u_long full_recvbufs;	/* recvbufs on full_recv_fifo */
+static u_long free_recvbufs;	/* recvbufs on free_recv_list */
+static u_long total_recvbufs;	/* total recvbufs currently in use */
+static u_long lowater_adds;	/* number of times we have added memory */
+static u_long buffer_shortfall;	/* number of missed free receive buffers
 					   between replenishments */
 
 static DECL_FIFO_ANCHOR(recvbuf_t) full_recv_fifo;
 static recvbuf_t *		   free_recv_list;
 	
-#if defined(SYS_WINNT)
-
-/*
- * For Windows we need to set up a lock to manipulate the
- * recv buffers to prevent corruption. We keep it lock for as
- * short a time as possible
- */
-static CRITICAL_SECTION RecvLock;
-# define LOCK()		EnterCriticalSection(&RecvLock)
-# define UNLOCK()	LeaveCriticalSection(&RecvLock)
-#else
-# define LOCK()		do {} while (false)
-# define UNLOCK()	do {} while (false)
-#endif
-
 #ifdef DEBUG
 static void uninit_recvbuff(void);
 #endif
@@ -116,10 +100,6 @@ init_recvbuff(int nbufs)
 
 	create_buffers(nbufs);
 
-#if defined(SYS_WINNT)
-	InitializeCriticalSection(&RecvLock);
-#endif
-
 #ifdef DEBUG
 	atexit(&uninit_recvbuff);
 #endif
@@ -160,13 +140,11 @@ freerecvbuf(recvbuf_t *rb)
 		return;
 	}
 
-	LOCK();
 	rb->used--;
 	if (rb->used != 0)
 		msyslog(LOG_ERR, "******** freerecvbuff non-zero usage: %d *******", rb->used);
 	LINK_SLIST(free_recv_list, rb, link);
 	free_recvbufs++;
-	UNLOCK();
 }
 
 	
@@ -177,10 +155,8 @@ add_full_recv_buffer(recvbuf_t *rb)
 		msyslog(LOG_ERR, "add_full_recv_buffer received NULL buffer");
 		return;
 	}
-	LOCK();
 	LINK_FIFO(full_recv_fifo, rb, link);
 	full_recvbufs++;
-	UNLOCK();
 }
 
 
@@ -189,7 +165,6 @@ get_free_recv_buffer(void)
 {
 	recvbuf_t *buffer;
 
-	LOCK();
 	UNLINK_HEAD_SLIST(buffer, free_recv_list, link);
 	if (buffer != NULL) {
 		free_recvbufs--;
@@ -198,27 +173,9 @@ get_free_recv_buffer(void)
 	} else {
 		buffer_shortfall++;
 	}
-	UNLOCK();
 
 	return buffer;
 }
-
-
-#ifdef HAVE_IO_COMPLETION_PORT
-recvbuf_t *
-get_free_recv_buffer_alloc(void)
-{
-	recvbuf_t *buffer;
-	
-	buffer = get_free_recv_buffer();
-	if (NULL == buffer) {
-		create_buffers(RECV_INC);
-		buffer = get_free_recv_buffer();
-	}
-	NTP_ENSURE(buffer != NULL);
-	return (buffer);
-}
-#endif
 
 
 recvbuf_t *
@@ -226,32 +183,12 @@ get_full_recv_buffer(void)
 {
 	recvbuf_t *	rbuf;
 
-	LOCK();
-	
-#ifdef ENABLE_SIGNALED_IO
-	/*
-	 * make sure there are free buffers when we
-	 * wander off to do lengthy packet processing with
-	 * any buffer we grab from the full list.
-	 * 
-	 * fixes malloc() interrupted by SIGIO risk
-	 * (Bug 889)
-	 */
-	if (NULL == free_recv_list || buffer_shortfall > 0) {
-		/*
-		 * try to get us some more buffers
-		 */
-		create_buffers(RECV_INC);
-	}
-#endif
-
 	/*
 	 * try to grab a full buffer
 	 */
 	UNLINK_FIFO(rbuf, full_recv_fifo, link);
 	if (rbuf != NULL)
 		full_recvbufs--;
-	UNLOCK();
 
 	return rbuf;
 }
@@ -270,8 +207,6 @@ purge_recv_buffers_for_fd(
 	recvbuf_t *next;
 	recvbuf_t *punlinked;
 
-	LOCK();
-
 	for (rbufp = HEAD_FIFO(full_recv_fifo);
 	     rbufp != NULL;
 	     rbufp = next) {
@@ -284,8 +219,6 @@ purge_recv_buffers_for_fd(
 			freerecvbuf(rbufp);
 		}
 	}
-
-	UNLOCK();
 }
 
 

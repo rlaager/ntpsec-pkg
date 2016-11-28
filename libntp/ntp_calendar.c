@@ -4,6 +4,9 @@
  * Written by Juergen Perlinger <perlinger@ntp.org> for the NTP project.
  * Copyright 2015 by the NTPsec project contributors
  * SPDX-License-Identifier: NTP
+ *
+ * There is more about these types and calculations in the internals tour
+ * document distributed with the code.
  */
 #include <config.h>
 #include <sys/types.h>
@@ -12,7 +15,6 @@
 #include "ntp_calendar.h"
 #include "ntp_stdlib.h"
 #include "ntp_fp.h"
-#include "ntp_unixtime.h"
 
 /*
  *---------------------------------------------------------------------
@@ -61,20 +63,17 @@ time_to_vint64(
 
 	tt = *ptt;
 
-#if SIZEOF_TIME_T <= 4
-
-	res.D_s.hi = 0;
+#if NTP_SIZEOF_TIME_T <= 4
+	setvint64hiu(res, 0);
 	if (tt < 0) {
-		res.D_s.lo = (uint32_t)-tt;
-		M_NEG(res.D_s.hi, res.D_s.lo);
+		setvint64lo(res, (uint32_t)-tt);
+		negvint64(res);
 	} else {
-		res.D_s.lo = (uint32_t)tt;
+		setvint64lo(res, (uint32_t)tt);
 	}
 
 #else
-
-	res.q_s = tt;
-
+	setvint64s(res, tt);
 #endif
 
 	return res;
@@ -88,14 +87,11 @@ vint64_to_time(
 {
 	time_t res;
 
-#if SIZEOF_TIME_T <= 4
-
-	res = (time_t)tv->D_s.lo;
+#if NTP_SIZEOF_TIME_T <= 4
+	res = (time_t)vint64lo(*tv);
 
 #else
-
-	res = (time_t)tv->q_s;
-
+	res = (time_t)vint64s(*tv);
 #endif
 
 	return res;
@@ -386,13 +382,11 @@ ntpcal_ntp_to_time(
 {
 	vint64 res;
 
-	res.q_s = (pivot != NULL)
-		      ? *pivot
-		      : now();
-	res.Q_s -= 0x80000000;		/* unshift of half range */
-	ntp	-= (uint32_t)JAN_1970;	/* warp into UN*X domain */
-	ntp	-= res.D_s.lo;		/* cycle difference	 */
-	res.Q_s += (uint64_t)ntp;	/* get expanded time	 */
+	setvint64s(res, (pivot != NULL) ? *pivot : now());
+	setvint64u(res, vint64u(res)-0x80000000);	/* unshift of half range */
+	ntp	-= (uint32_t)JAN_1970;		/* warp into UN*X domain */
+	ntp	-= vint64lo(res);		/* cycle difference	 */
+	setvint64u(res, vint64u(res)+(uint64_t)ntp);	/* get expanded time */
 
 	return res;
 }
@@ -418,13 +412,12 @@ ntpcal_ntp_to_ntp(
 {
 	vint64 res;
 
-	res.q_s = (pivot)
-		      ? *pivot
-		      : now();
-	res.Q_s -= 0x80000000;		/* unshift of half range */
-	res.Q_s += (uint32_t)JAN_1970;	/* warp into NTP domain	 */
-	ntp	-= res.D_s.lo;		/* cycle difference	 */
-	res.Q_s += (uint64_t)ntp;	/* get expanded time	 */
+	setvint64s(res, (pivot) ? *pivot : now());
+	setvint64u(res, vint64u(res) - 0x80000000);		/* unshift of half range */
+	setvint64u(res, vint64u(res) + (uint32_t)JAN_1970);	/* warp into NTP domain	 */
+
+	ntp	-= vint64lo(res);				/* cycle difference	 */
+	setvint64u(res, vint64u(res) + (uint64_t)ntp);	/* get expanded time	 */
 
 	return res;
 }
@@ -454,8 +447,8 @@ ntpcal_daysplit(
 	ntpcal_split res;
 
 	/* manual floor division by SECSPERDAY */
-	res.hi = (int32_t)(ts->q_s / SECSPERDAY);
-	res.lo = (int32_t)(ts->q_s % SECSPERDAY);
+	res.hi = (int32_t)(vint64s(*ts) / SECSPERDAY);
+	res.lo = (int32_t)(vint64s(*ts) % SECSPERDAY);
 	if (res.lo < 0) {
 		res.hi -= 1;
 		res.lo += SECSPERDAY;
@@ -521,7 +514,7 @@ ntpcal_split_eradays(
 	 * Split off calendar cycles, using floor division in the first
 	 * step. After that first step, simple division does it because
 	 * all operands are positive; alas, we have to be aware of the
-	 * possibe cycle overflows for 100 years and 1 year, caused by
+	 * possible cycle overflows for 100 years and 1 year, caused by
 	 * the additional leap day.
 	 */
 	n400 = days / GREGORIAN_CYCLE_DAYS;
@@ -803,9 +796,9 @@ ntpcal_dayjoin(
 {
 	vint64 res;
 
-	res.q_s	 = days;
-	res.q_s *= SECSPERDAY;
-	res.q_s += secs;
+	setvint64s(res, days);
+	setvint64s(res, vint64s(res) * SECSPERDAY);
+	setvint64s(res, vint64s(res) + secs);
 
 	return res;
 }
@@ -1113,13 +1106,6 @@ ntpcal_date_to_time(
 }
 
 
-/*
- * ==================================================================
- *
- * extended and unchecked variants of calgregorian/caltontp
- *
- * ==================================================================
- */
 int
 ntpcal_ntp64_to_date(
 	struct calendar *jd,
@@ -1174,7 +1160,7 @@ ntpcal_date_to_ntp(
 	/*
 	 * Get lower half of 64-bit NTP timestamp from date/time.
 	 */
-	return ntpcal_date_to_ntp64(jd).d_s.lo;
+	return vint64lo(ntpcal_date_to_ntp64(jd));
 }
 
 
@@ -1405,7 +1391,7 @@ isocal_ntp64_to_date(
 	ds.lo = ds.lo % 7;			/* elapsed week days */
 	if (ds.lo < 0) {			/* floor division!   */
 		ds.hi -= 1;
-		ds.lo += 7;
+//		ds.lo += 7;
 	}
 	id->weekday = (uint8_t)ds.lo + 1;	/* weekday result    */
 
@@ -1461,7 +1447,7 @@ isocal_date_to_ntp(
 	/*
 	 * Get lower half of 64-bit NTP timestamp from date/time.
 	 */
-	return isocal_date_to_ntp64(id).d_s.lo;
+	return vint64lo(isocal_date_to_ntp64(id));
 }
 
 /* -*-EOF-*- */

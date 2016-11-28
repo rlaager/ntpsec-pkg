@@ -26,42 +26,6 @@
 
 #include "ntp_fp.h"
 #include "ntp_stdlib.h"
-#include "ntp_unixtime.h"
-
-/*
- * Given the size of time_t, guess what can be used as an unsigned value
- * to hold a time_t and the printf() format specifcation.
- *
- * These should be used with the string constant concatenation feature
- * of the compiler like this:
- *
- * printf("a time stamp: %" TIME_FORMAT " and more\n", a_time_t_value);
- *
- * It's not exactly nice, but there's not much leeway once we want to
- * use the printf() family on time_t values.
- */
-
-#if SIZEOF_TIME_T <= SIZEOF_INT
-
-typedef unsigned int u_time;
-#define TIME_FORMAT "d"
-#define UTIME_FORMAT "u"
-
-#elif SIZEOF_TIME_T <= SIZEOF_LONG
-
-typedef unsigned long u_time;
-#define TIME_FORMAT "ld"
-#define UTIME_FORMAT "lu"
-
-#elif defined(SIZEOF_LONG_LONG) && SIZEOF_TIME_T <= SIZEOF_LONG_LONG
-
-typedef unsigned long long u_time;
-#define TIME_FORMAT "lld"
-#define UTIME_FORMAT "llu"
-
-#else
-#include "GRONK: what size has a time_t here?"
-#endif
 
 /*
  * general fractional time stamp formatting.
@@ -82,4 +46,4 @@ typedef unsigned long long u_time;
 extern const char *
 format_time_fraction(time_t secs, long frac, int prec);
 
-#endif /* GUARD_!defined(TIMETOA_H) */
+#endif /* GUARD_TIMETOA_H */

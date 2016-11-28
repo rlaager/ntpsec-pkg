@@ -10,8 +10,6 @@
 #include "ntp_syslog.h"
 #include "ntp_stdlib.h"
 #include "ntp_random.h"
-#include "iosignal.h"
-#include "timevalops.h"
 #include "timespecops.h"
 #include "ntp_calendar.h"
 
@@ -59,37 +57,24 @@
  * input.  The remaining correction sys_residual is carried into the
  * next adjtime() and meanwhile is also factored into get_systime()
  * readings.
+ *
+ * adj_systime() and step_systime() will behave sanely with these
+ * variables not set, but the adjustments may be in larger steps.
  */
 double	sys_tick = 0;		/* tick size or time to read (s) */
 double	sys_fuzz = 0;		/* min. time to read the clock (s) */
-long	sys_fuzz_nsec = 0;	/* min. time to read the clock (ns) */
-double	measured_tick;		/* non-overridable sys_tick (s) */
-double	sys_residual = 0;	/* adjustment residue (s) */
 bool	trunc_os_clock;		/* sys_tick > measured_tick */
 time_stepped_callback	step_callback;
 
-/* perlinger@ntp.org: As 'get_sysime()' does its own check for clock
+static double	sys_residual = 0;	/* adjustment residue (s) */
+static long	sys_fuzz_nsec = 0;	/* min. time to read the clock (ns) */
+
+/* perlinger@ntp.org: As 'get_systime()' does its own check for clock
  * backstepping, this could probably become a local variable in
  * 'get_systime()' and the cruft associated with communicating via a
  * static value could be removed after the v4.2.8 release.
  */
 static bool lamport_violated;	/* clock was stepped back */
-
-#ifdef DEBUG
-static bool systime_init_done;
-# define DONE_SYSTIME_INIT()	systime_init_done = true
-#else
-# define DONE_SYSTIME_INIT()	do {} while (false)
-#endif
-
-#ifdef ENABLE_SIGNALED_IO
-bool using_sigio;
-#endif
-
-#ifdef SYS_WINNT
-CRITICAL_SECTION get_systime_cs;
-#endif
-
 
 void
 set_sys_fuzz(
@@ -97,18 +82,9 @@ set_sys_fuzz(
 	)
 {
 	sys_fuzz = fuzz_val;
-	INSIST(sys_fuzz >= 0);
-	INSIST(sys_fuzz <= 1.0);
+	//INSIST(sys_fuzz >= 0);
+	//INSIST(sys_fuzz <= 1.0);
 	sys_fuzz_nsec = (long)(sys_fuzz * 1e9 + 0.5);
-}
-
-
-void
-init_systime(void)
-{
-	INIT_GET_SYSTIME_CRITSEC();
-	INIT_WIN_PRECISE_TIME();
-	DONE_SYSTIME_INIT();
 }
 
 
@@ -169,9 +145,6 @@ normalize_time(
 	l_fp	lfpfuzz;
 	l_fp	lfpdelta;
 
-	DEBUG_REQUIRE(systime_init_done);
-	ENTER_GET_SYSTIME_CRITSEC();
-
         /* First check if here was a Lamport violation, that is, two
          * successive calls to 'get_ostime()' resulted in negative
          * time difference. Use a few milliseconds of permissible
@@ -191,29 +164,21 @@ normalize_time(
 	 * fuzzed result is strictly later than the prior.  Limit the
 	 * necessary fiction to 1 second.
 	 */
-	if (!USING_SIGIO()) {
-		ts_min = add_tspec_ns(ts_prev, sys_fuzz_nsec);
-		if (cmp_tspec(ts, ts_min) < 0) {
-			ts_lam = sub_tspec(ts_min, ts);
-			if (ts_lam.tv_sec > 0 && !lamport_violated) {
-				msyslog(LOG_ERR,
-					"get_systime Lamport advance exceeds one second (%.9f)",
-					ts_lam.tv_sec +
-					    1e-9 * ts_lam.tv_nsec);
-				exit(1);
-			}
-			if (!lamport_violated)
-				ts = ts_min;
+	ts_min = add_tspec_ns(ts_prev, sys_fuzz_nsec);
+	if (cmp_tspec(ts, ts_min) < 0) {
+		ts_lam = sub_tspec(ts_min, ts);
+		if (ts_lam.tv_sec > 0 && !lamport_violated) {
+			msyslog(LOG_ERR,
+				"get_systime Lamport advance exceeds one second (%.9f)",
+				ts_lam.tv_sec +
+				    1e-9 * ts_lam.tv_nsec);
+			exit(1);
 		}
-		ts_prev_log = ts_prev;
-		ts_prev = ts;
-	} else {
-		/*
-		 * Quiet "ts_prev_log.tv_sec may be used uninitialized"
-		 * warning from x86 gcc 4.5.2.
-		 */
-		ZERO(ts_prev_log);
+		if (!lamport_violated)
+			ts = ts_min;
 	}
+	ts_prev_log = ts_prev;
+	ts_prev = ts;
 
 	/* convert from timespec to l_fp fixed-point */
 	result = tspec_stamp_to_lfp(ts);
@@ -230,33 +195,30 @@ normalize_time(
 	 * sys_residual's effect for now) once sys_fuzz has been
 	 * determined.
 	 */
-	if (!USING_SIGIO()) {
-		if (!L_ISZERO(&lfp_prev) && !lamport_violated) {
-			if (!L_ISGTU(&result, &lfp_prev) &&
-			    sys_fuzz > 0.) {
-				msyslog(LOG_ERR, "ts_prev %s ts_min %s",
-					tspectoa(ts_prev_log),
-					tspectoa(ts_min));
-				msyslog(LOG_ERR, "ts %s", tspectoa(ts));
-				msyslog(LOG_ERR, "sys_fuzz %ld nsec, prior fuzz %.9f",
-					sys_fuzz_nsec, dfuzz_prev);
-				msyslog(LOG_ERR, "this fuzz %.9f",
-					dfuzz);
-				lfpdelta = lfp_prev;
-				L_SUB(&lfpdelta, &result);
-				LFPTOD(&lfpdelta, ddelta);
-				msyslog(LOG_ERR,
-					"prev get_systime 0x%x.%08x is %.9f later than 0x%x.%08x",
-					lfp_prev.l_ui, lfp_prev.l_uf,
-					ddelta, result.l_ui, result.l_uf);
-			}
+	if (!L_ISZERO(&lfp_prev) && !lamport_violated) {
+		if (!L_ISGTU(&result, &lfp_prev) &&
+		    sys_fuzz > 0.) {
+			msyslog(LOG_ERR, "ts_prev %s ts_min %s",
+				tspectoa(ts_prev_log),
+				tspectoa(ts_min));
+			msyslog(LOG_ERR, "ts %s", tspectoa(ts));
+			msyslog(LOG_ERR, "sys_fuzz %ld nsec, prior fuzz %.9f",
+				sys_fuzz_nsec, dfuzz_prev);
+			msyslog(LOG_ERR, "this fuzz %.9f",
+				dfuzz);
+			lfpdelta = lfp_prev;
+			L_SUB(&lfpdelta, &result);
+			LFPTOD(&lfpdelta, ddelta);
+			msyslog(LOG_ERR,
+				"prev get_systime 0x%x.%08x is %.9f later than 0x%x.%08x",
+				lfp_prev.l_ui, lfp_prev.l_uf,
+				ddelta, result.l_ui, result.l_uf);
 		}
-		lfp_prev = result;
-		dfuzz_prev = dfuzz;
-		if (lamport_violated) 
-			lamport_violated = false;
 	}
-	LEAVE_GET_SYSTIME_CRITSEC();
+	lfp_prev = result;
+	dfuzz_prev = dfuzz;
+	if (lamport_violated)
+		lamport_violated = false;
 	*now = result;
 }
 
@@ -264,7 +226,6 @@ normalize_time(
 /*
  * adj_systime - adjust system time by the argument.
  */
-#if !defined SYS_WINNT
 bool				/* true on okay, false on error */
 adj_systime(
 	double now,		/* adjustment (s) */
@@ -276,10 +237,13 @@ adj_systime(
 	double	quant;		/* quantize to multiples of */
 	double	dtemp;
 	long	ticks;
-	int	isneg = 0;
+	bool	isneg = false;
 
 	/*
-	 * The Windows port adj_systime() depends on being called each
+	 * FIXME: With the legacy Windows port gone, this might be removable.
+	 * See also the related FIXME comment in ntpd/ntp_loopfilter.c.
+	 *
+	 * The Windows port adj_systime() depended on being called each
 	 * second even when there's no additional correction, to allow
 	 * emulation of adjtime() behavior on top of an API that simply
 	 * sets the current rate.  This POSIX implementation needs to
@@ -298,7 +262,7 @@ adj_systime(
 	 */
 	dtemp = now + sys_residual;
 	if (dtemp < 0) {
-		isneg = 1;
+		isneg = true;
 		dtemp = -dtemp;
 	}
 	adjtv.tv_sec = (long)dtemp;
@@ -339,7 +303,6 @@ adj_systime(
 	}
 	return true;
 }
-#endif
 
 
 /*
@@ -353,8 +316,7 @@ step_systime(
 	)
 {
 	time_t pivot; /* for ntp era unfolding */
-	struct timeval timetv, tvlast, tvdiff;
-	struct timespec timets;
+	struct timespec timets, tslast, tsdiff;
 	struct calendar jd;
 	l_fp fp_ofs, fp_sys; /* offset and target system time in FP */
 
@@ -363,7 +325,7 @@ step_systime(
 	 * very often, we can afford to do the whole calculation from
 	 * scratch. And we're not in the time-critical path yet.
 	 */
-#if SIZEOF_TIME_T > 4
+#if NTP_SIZEOF_TIME_T > 4
 	/*
 	 * This code makes sure the resulting time stamp for the new
 	 * system time is in the 2^32 seconds starting at 1970-01-01,
@@ -411,8 +373,8 @@ step_systime(
 	fp_sys = tspec_stamp_to_lfp(timets);
 
 	/* only used for utmp/wtmpx time-step recording */
-	tvlast.tv_sec = timets.tv_sec;
-	tvlast.tv_usec = (timets.tv_nsec + 500) / 1000;
+	tslast.tv_sec = timets.tv_sec;
+	tslast.tv_nsec = timets.tv_nsec;
 
 	/* get the target time as l_fp */
 	L_ADD(&fp_sys, &fp_ofs);
@@ -455,10 +417,8 @@ step_systime(
 	 *
 	 * This might become even uglier...
 	 */
-	timetv.tv_sec = timets.tv_sec;
-	timetv.tv_usec = timets.tv_nsec / 1000;
-	tvdiff = abs_tval(sub_tval(timetv, tvlast));
-	if (tvdiff.tv_sec > 0) {
+	tsdiff = abs_tspec(sub_tspec(timets, tslast));
+	if (tsdiff.tv_sec > 0) {
 #ifdef HAVE_UTMPX_H
 # ifdef OVERRIDE_OTIME_MSG
 #  define OTIME_MSG OVERRIDE_OTIME_MSG
@@ -482,14 +442,14 @@ step_systime(
 		/* UTMPX - this is POSIX-conformant */
 		utx.ut_type = OLD_TIME;
 		strlcpy(utx.ut_line, OTIME_MSG, sizeof(utx.ut_line));
-		utx.ut_tv.tv_sec = tvlast.tv_sec;
-		utx.ut_tv.tv_usec = tvlast.tv_usec;
+		utx.ut_tv.tv_sec = tslast.tv_sec;
+		utx.ut_tv.tv_usec = (tslast.tv_nsec + 500) / 1000;
 		setutxent();
 		pututxline(&utx);
 		utx.ut_type = NEW_TIME;
 		strlcpy(utx.ut_line, NTIME_MSG, sizeof(utx.ut_line));
-		utx.ut_tv.tv_sec = timetv.tv_sec;
-		utx.ut_tv.tv_usec = timetv.tv_usec;
+		utx.ut_tv.tv_sec = timets.tv_sec;
+		utx.ut_tv.tv_usec = (timets.tv_nsec + 500) / 1000;
 		setutxent();
 		pututxline(&utx);
 		endutxent();

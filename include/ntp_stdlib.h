@@ -59,7 +59,7 @@ extern	int	authencrypt	(keyid_t, uint32_t *, int);
 extern	int	authhavekey	(keyid_t);
 extern	int	authistrusted	(keyid_t);
 extern	bool	authreadkeys	(const char *);
-extern	void	authtrust	(keyid_t, unsigned long);
+extern	void	authtrust	(keyid_t, bool);
 extern	bool	authusekey	(keyid_t, int, const uint8_t *);
 
 /*
@@ -77,6 +77,7 @@ extern	const char *clockname	(int);
 extern	int	clocktime	(int, int, int, int, int, uint32_t, uint32_t *, uint32_t *);
 extern	void	init_auth	(void);
 extern	void	init_lib	(void);
+extern	void	init_network	(void);
 extern	struct savekey *auth_findkey (keyid_t);
 extern	void	auth_moremem	(int);
 extern	void	auth_prealloc_symkeys(int);
@@ -141,7 +142,6 @@ extern	const char *	humanlogtime	(void);
 extern	const char *	humantime	(time_t);
 extern	char *	mfptoa		(uint32_t, uint32_t, short);
 extern	char *	mfptoms		(uint32_t, uint32_t, short);
-extern	const char * modetoa	(size_t);
 extern	const char * eventstr	(int);
 extern	const char * ceventstr	(int);
 extern	const char * res_match_flags(unsigned short);
@@ -152,12 +152,10 @@ extern	const char * k_st_flags	(uint32_t);
 extern	char *	statustoa	(int, int);
 extern	sockaddr_u * netof	(sockaddr_u *);
 extern	char *	numtoa		(uint32_t);
-extern	char *	numtohost	(uint32_t);
 extern	const char * socktoa	(const sockaddr_u *);
 extern	const char * sockporttoa(const sockaddr_u *);
 extern	unsigned short	sock_hash	(const sockaddr_u *);
 extern	int	sockaddr_masktoprefixlen(const sockaddr_u *);
-extern	const char * socktohost	(const sockaddr_u *);
 extern	bool	octtoint	(const char *, unsigned long *);
 extern	unsigned long	ranp2		(int);
 extern	const char *refid_str	(uint32_t, int);
@@ -168,7 +166,6 @@ extern	void	signal_no_reset (int, void (*func)(int));
 extern	void	set_ctrl_c_hook (ctrl_c_fn);
 
 extern	void	getauthkeys 	(const char *);
-extern	void	auth_agekeys	(void);
 extern	void	rereadkeys	(void);
 
 /*
@@ -176,13 +173,12 @@ extern	void	rereadkeys	(void);
  */
 
 /* authkeys.c */
-extern unsigned long	authkeynotfound;	/* keys not found */
-extern unsigned long	authkeylookups;		/* calls to lookup keys */
-extern unsigned long	authnumkeys;		/* number of active keys */
-extern unsigned long	authkeyexpired;		/* key lifetime expirations */
-extern unsigned long	authkeyuncached;	/* cache misses */
-extern unsigned long	authencryptions;	/* calls to encrypt */
-extern unsigned long	authdecryptions;	/* calls to decrypt */
+extern unsigned int	authkeynotfound;	/* keys not found */
+extern unsigned int	authkeylookups;		/* calls to lookup keys */
+extern unsigned int	authnumkeys;		/* number of active keys */
+extern unsigned int	authkeyuncached;	/* cache misses */
+extern unsigned int	authencryptions;	/* calls to encrypt */
+extern unsigned int	authdecryptions;	/* calls to decrypt */
 
 extern int	authnumfreekeys;
 
@@ -222,7 +218,6 @@ extern	bool	ssl_init_done;
 #endif
 extern	int	keytype_from_text	(const char *,	size_t *);
 extern	const char *keytype_name	(int);
-extern	char *	getpass_keytype		(int);
 
 /* strl-obsd.c */
 #ifndef HAVE_STRLCPY		/* + */
@@ -244,9 +239,11 @@ extern	size_t	strlcpy(char *dst, const char *src, size_t siz);
 extern	size_t	strlcat(char *dst, const char *src, size_t siz);
 #endif
 
+/* ntp_proto.c */
+extern double	measured_tick;		/* non-overridable sys_tick */
+
 /* systime.c */
 extern double	sys_tick;		/* tick size or time to read */
-extern double	measured_tick;		/* non-overridable sys_tick */
 extern double	sys_fuzz;		/* min clock read latency */
 extern bool	trunc_os_clock;		/* sys_tick > measured_tick */
 

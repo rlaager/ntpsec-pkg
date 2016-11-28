@@ -13,11 +13,6 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 
-#ifdef SYS_WINNT
-# include <io.h>
-# include "win32_io.h"
-#endif
-
 #include <isc/netaddr.h>
 
 #include "libntp.h"	/* This needs Something above for GETDTABLESIZE */
@@ -52,11 +47,7 @@ extern void	sau_from_netaddr(sockaddr_u *, const isc_netaddr_t *);
 extern void	add_nic_rule(nic_rule_match match_type,
 			     const char *if_name, int prefixlen,
 			     nic_rule_action action);
-#ifndef HAVE_IO_COMPLETION_PORT
 extern	void	maintain_activefds(int fd, int closing);
-#else
-#define		maintain_activefds(f, c)	do {} while (0)
-#endif
 
 /* hack to ignore GCC Unused Result */
 #define IGNORE(r) do{if(r){}}while(0)

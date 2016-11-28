@@ -6,13 +6,11 @@
 #include <stdbool.h>
 
 #include "ntp_fp.h"
-#include "ntp_unixtime.h"	/* includes <sys/time.h> */
 #include "lib_strbuf.h"
 #include "ntp_stdlib.h"
-#include "ntp_assert.h"
 #include "ntp_calendar.h"
 
-#if SIZEOF_TIME_T < 4
+#if NTP_SIZEOF_TIME_T < 4
 # error sizeof(time_t) < 4 -- this will not work!
 #endif
 
@@ -62,7 +60,7 @@ get_struct_tm(
 	time_t	   ts;
 
 	int64_t tl;
-	ts = tl = stamp->q_s;
+	ts = tl = vint64s(*stamp);
 
 	/*
 	 * If there is chance of truncation, try to fix it. Let the
@@ -107,7 +105,6 @@ get_struct_tm(
 			return NULL; /* That's truly pathological! */
 
 	/* 'tm' surely not NULL here! */
-	NTP_INSIST(tm != NULL);
 	if (folds != 0) {
 		tm->tm_year += folds * SOLAR_CYCLE_YEARS;
 		if (tm->tm_year <= 0 || tm->tm_year >= 200)

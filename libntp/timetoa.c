@@ -12,9 +12,7 @@
  * 32-bit signed int in the year 2038, implementations slowly move to
  * 64bit base types for time_t, even in 32-bit environments.
  *
- * As the printf() family has no standardised type specifier for time_t,
- * guessing the right output format specifier is a bit troublesome and
- * best done with the help of the preprocessor and "config.h".
+ * Here we take the easy way out and just use the widest possible int.
  *
  * Copyright 2015 by the NTPsec project contributors
  * SPDX-License-Identifier: NTP
@@ -28,6 +26,9 @@
 #include "timetoa.h"
 #include "ntp_assert.h"
 #include "lib_strbuf.h"
+
+/* longest possible unsigned int */
+typedef unsigned long long u_time;
 
 /*
  * Formatting to string needs at max 40 bytes (even with 64 bit time_t),
@@ -61,7 +62,7 @@ format_time_fraction(
 	int		notneg;	/* flag for non-negative value	*/
 	ldiv_t		qr;
 
-	DEBUG_REQUIRE(prec != 0);
+	//DEBUG_REQUIRE(prec != 0);
 
 	LIB_GETBUF(cp);
 	secs_u = (u_time)secs;
@@ -71,7 +72,7 @@ format_time_fraction(
 	prec_u = abs(prec);
 	/* fraclimit = (long)pow(10, prec_u); */
 	for (fraclimit = 10, u = 1; u < prec_u; u++) {
-		DEBUG_INSIST(fraclimit < fraclimit * 10);
+		//DEBUG_INSIST(fraclimit < fraclimit * 10);
 		fraclimit *= 10;
 	}
 
@@ -101,7 +102,7 @@ format_time_fraction(
 	}
 
 	/* finally format the data and return the result */
-	snprintf(cp, LIB_BUFLENGTH, "%s%" UTIME_FORMAT ".%0*ld",
+	snprintf(cp, LIB_BUFLENGTH, "%s%llu.%0*ld",
 	    notneg? "" : "-", secs_u, prec_u, frac);
 	
 	return cp;

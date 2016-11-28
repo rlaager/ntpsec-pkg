@@ -16,8 +16,10 @@ def options_cmd(ctx, config):
 	grp.add_option('--enable-seccomp', action='store_true', default=False, help="Enable seccomp (restricts syscalls).")
 	grp.add_option('--disable-dns-lookup', action='store_true', default=False, help="Disable DNS lookups.")
 	grp.add_option('--disable-dns-retry', action='store_true', default=False, help="Disable retrying DNS lookups.")
+	grp.add_option('--disable-kernel-pll', action='store_true', default=False, help="Disable kernel PLL.")
 	grp.add_option('--disable-mdns-registration', action='store_true', default=False, help="Disable MDNS registration.")
 	grp.add_option('--enable-classic-mode', action='store_true', default=False, help="Strict configuration and log-format compatibility with NTP Classic")
+	grp.add_option('--enable-debug-timing', action='store_true', default=False, help="Collect timing statistics for debugging.")
 
 	grp = ctx.add_option_group("NTP cross compile options")
 	grp.add_option('--cross-compiler', type='string', help="Path to cross compiler CC. (enables cross-compiling)")
@@ -26,7 +28,7 @@ def options_cmd(ctx, config):
 
 	grp = ctx.add_option_group("NTP configure features")
 	grp.add_option('--enable-leap-smear', action='store_true', default=False, help="Enable Leap Smearing.")
-	grp.add_option('--enable-mssntp', action='store_true', default=False, help="Enable Samba MSS NTP support.")
+	grp.add_option('--enable-mssntp', action='store_true', default=False, help="Enable Samba MS SNTP support.")
 	grp.add_option('--enable-lockclock', action='store_true', default=False, help="Enable NIST lockclock scheme.")
 
 	grp = ctx.add_option_group("Refclock configure options")
@@ -42,13 +44,17 @@ def options_cmd(ctx, config):
 	grp.add_option('--check', action='store_true', default=False, help="Run tests")
 	grp.add_option('--enable-rtems-trace', action='store_true', default=False, help="Enable RTEMS Trace.")
 	grp.add_option('--rtems-trace-path', type='string', default="", help="Path to rtems-tld.")
+	grp.add_option('--define', type='string', action="callback", callback=callback_flags, help="Force definition of symbol, wants value of form SYM=VAL.")
+	grp.add_option('--undefine', type='string', action="callback", callback=callback_flags, help="Force undefinition of symbol.")
+	grp.add_option('--sbindir', type='string', action='store', default=None, help="Force ntpd installation directory.")
 
 	grp = ctx.add_option_group("NTP documentation configure options")
 	grp.add_option('--enable-doc', action='store_true', default=False, help="Build NTP documentation")
 	grp.add_option('--enable-doc-only', action='store_true', default=False, help="Only build NTP documentation")
 	grp.add_option('--enable-a2x-xmllint', action='store_true', default=False, help="Build NTP documentation with a2x XML lint")
 	grp.add_option('--disable-manpage', action='store_true', default=False, help="Disable Manpage building.")
-	grp.add_option('--path-doc', type='string', action='store', default=None, help="Force doc install directory.")
+	grp.add_option('--path-doc', type='string', action='store', default=None, help="Force HTML installation directory.")
+	grp.add_option('--mandir', type='string', action='store', default=None, help="Force man page installation directory.")
 
 	grp = ctx.add_option_group("Not for general use")
 	grp.add_option('--build-snapshot', action='store_true', default=False, help="Generate source snapshot.")

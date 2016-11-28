@@ -1,7 +1,7 @@
 from waflib.Configure import conf
 from waflib.TaskGen import feature, before, after, extension, after_method, before_method
 from waflib.Task import Task
-
+import os
 
 @before_method('apply_incpaths')
 @feature('bld_include')
@@ -20,7 +20,7 @@ def insert_srcdir(self):
 @feature('libisc_include')
 def insert_libiscdir(self):
 	srcnode = self.bld.srcnode.abspath()
-	self.includes += ["%s/libisc/include/" % srcnode, "%s/libisc/unix/include/" % srcnode] # XXX: Must be fixed for Windows
+	self.includes += ["%s/libisc/include/" % srcnode]
 
 
 @before_method('apply_incpaths')
@@ -32,12 +32,13 @@ def insert_libiscpthreaddir(self):
 
 # Create version.c
 class version(Task):
-	vars = ['NTPS_VERSION_STRING', 'TARGET']
+	vars = ['NTPSEC_VERSION_STRING', 'TARGET']
+
 	def run(self):
 		self.outputs[0].write("""
 const char *Version = "%s " __DATE__ " " __TIME__;
 const char *VVersion = "CFLAGS=%s LDFLAGS=%s";
-""" % (self.env.NTPS_VERSION_STRING, "Need-CFLAGS", "Need-LDFLAGS"))
+""" % (self.env.NTPSEC_VERSION_STRING, "Need-CFLAGS", "Need-LDFLAGS"))
 
 # Use in features= to generate a version.c for that target.
 # This uses the target name for the version string.
@@ -56,8 +57,17 @@ def manpage_subst_fun(task, text):
 @conf
 def manpage(ctx, section, source):
 
-	if ctx.env.NTPS_RELEASE:
-		ctx.install_files("${PREFIX}/man/man%s/" % section, source.replace("-man.txt", ".%s" % section))
+	if ctx.env.MANDIR:
+		manprefix = ctx.env.MANDIR
+	elif os.path.isdir("/usr/man"):
+		manprefix = "/usr/man"
+	else:
+		manprefix = "/usr/share/man"
+	if not manprefix.endswith("/"):
+		manprefix += "/"
+
+	if ctx.env.NTPSEC_RELEASE:
+		ctx.install_files(manprefix + "man%s/" % section, source.replace("-man.txt", ".%s" % section))
 		return
 
 	if not ctx.env.ENABLE_DOC or ctx.env.DISABLE_MANPAGE:
@@ -69,8 +79,8 @@ def manpage(ctx, section, source):
 		target      = source + '.man-tmp',
 		subst_fun   = manpage_subst_fun
 	)
- 
-	ctx(source=source + '.man-tmp', section=section) 
+
+	ctx(source=source + '.man-tmp', section=section)
 
 
 @conf
@@ -84,4 +94,3 @@ def ntp_test(ctx, **kwargs):
 		args += tg.test_args
 
 	tg.ut_exec = args
-

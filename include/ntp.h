@@ -1,5 +1,7 @@
 /*
  * ntp.h - NTP definitions for the masses
+ *
+ * pythonize-header: start ignoring
  */
 #ifndef GUARD_NTP_H
 #define GUARD_NTP_H
@@ -83,12 +85,16 @@ typedef unsigned int	u_int;
  *		year += 1900;
  */
 
+/* pythonize-header: stop ignoring */
+
 /*
  * NTP protocol parameters.  See section 3.2.6 of the specification.
  */
-#define	NTP_VERSION	((uint8_t)4) /* current version number */
-#define	NTP_OLDVERSION	((uint8_t)1) /* oldest credible version */
+#define	NTP_VERSION	4	/* current version number */
+#define	NTP_OLDVERSION	1 	/* oldest credible version */
 #define	NTP_PORT	123	/* included for non-unix machines */
+
+/* pythonize-header: start ignoring */
 
 /*
  * Poll interval parameters
@@ -98,6 +104,7 @@ typedef unsigned int	u_int;
 #define NTP_MINDPOLL	6	/* log2 default min poll (64 s) */
 #define NTP_MAXDPOLL	10	/* log2 default max poll (~17 m) */
 #define	NTP_MAXPOLL	17	/* log2 max poll interval (~36 h) */
+#define	NTP_MAXPOLL_UNK	99	/* log2 max poll unset */
 #define	NTP_RETRY	3	/* max packet retries */
 #define	NTP_MINPKT	2	/* guard time (s) */
 
@@ -157,17 +164,13 @@ typedef unsigned int	u_int;
 
 
 /*
- * The interface structure is used to hold the addresses and socket
+ * The endpt structure is used to hold the addresses and socket
  * numbers of each of the local network addresses we are using.
- * Because "interface" is a reserved word in C++ and has so many
- * varied meanings, a change to "endpt" (via typedef) is under way.
- * Eventually the struct tag will change from interface to endpt_tag.
  * endpt is unrelated to the select algorithm's struct endpoint.
  */
-typedef struct interface endpt;
-struct interface {
-	endpt *		elink;		/* endpt list link */
-	endpt *		mclink;		/* per-AF_* multicast list */
+typedef struct __endpt {
+	struct __endpt *elink;		/* endpt list link */
+	struct __endpt *mclink;		/* per-AF_* multicast list */
 	SOCKET		fd;		/* socket descriptor */
 	SOCKET		bfd;		/* for receiving broadcasts */
 	uint32_t	ifnum;		/* endpt instance count */
@@ -189,10 +192,11 @@ struct interface {
 	bool	ignore_packets; /* listen-read-drop this? */
 	struct peer *	peers;		/* list of peers using endpt */
 	u_int		peercnt;	/* count of same */
-};
+} endpt;
 
 /*
- * Flags for interfaces
+ * Flags for interfaces. Do not change these casually as they will be visible
+ * in Mode 6 ifstats reports. 
  */
 #define INT_UP		0x001	/* Interface is up */
 #define	INT_PPP		0x002	/* Point-to-point interface */
@@ -312,7 +316,6 @@ struct peer {
 	u_long	epoch;		/* reference epoch */
 	int	burst;		/* packets remaining in burst */
 	int	retry;		/* retry counter */
-	int	flip;		/* interleave mode control */
 	int	filter_nextpt;	/* index into filter shift register */
 	double	filter_delay[NTP_SHIFT]; /* delay shift register */
 	double	filter_offset[NTP_SHIFT]; /* offset shift register */
@@ -322,13 +325,11 @@ struct peer {
 	l_fp	rec;		/* receive time stamp */
 	l_fp	xmt;		/* transmit time stamp */
 	l_fp	dst;		/* destination timestamp */
-	l_fp	aorg;		/* origin timestamp */
-	l_fp	borg;		/* alternate origin timestamp */
+	l_fp	org;		/* origin timestamp */
 	double	offset;		/* peer clock offset */
 	double	delay;		/* peer roundtrip delay */
 	double	jitter;		/* peer jitter (squares) */
 	double	disp;		/* peer dispersion */
-	double	xleave;		/* interleave delay */
 	double	bias;		/* programmed offset bias */
 
 	/*
@@ -370,6 +371,8 @@ struct peer {
 	u_long	selbroken;	/* KoD received */
 };
 
+/* pythonize-header: stop ignoring */
+
 /*
  * Values for peer.leap, sys_leap
  */
@@ -383,13 +386,14 @@ struct peer {
  * MODE_BROADCAST and MODE_BCLIENT appear in the transition
  * function. MODE_CONTROL and MODE_PRIVATE can appear in packets,
  * but those never survive to the translation function.
-/ */
+ */
 #define	MODE_UNSPEC	0	/* unspecified (old version) */
 #define	MODE_ACTIVE	1	/* symmetric active mode */
 #define	MODE_PASSIVE	2	/* symmetric passive mode */
 #define	MODE_CLIENT	3	/* client mode */
 #define	MODE_SERVER	4	/* server mode */
 #define	MODE_BROADCAST	5	/* broadcast mode */
+
 /*
  * These can appear in packets
  */
@@ -399,6 +403,10 @@ struct peer {
  * This is a madeup mode for broadcast client.
  */
 #define	MODE_BCLIENT	6	/* broadcast client mode */
+
+#define	LEN_PKT_NOMAC	48 /* min header length */
+
+/* pythonize-header: start ignoring */
 
 /*
  * Values for peer.stratum, sys_stratum
@@ -422,9 +430,6 @@ struct peer {
 #define	FLAG_IBURST	0x0100	/* initial burst mode */
 #define	FLAG_NOSELECT	0x0200	/* never select */
 #define	FLAG_TRUE	0x0400	/* force truechimer */
-#define	FLAG_XLEAVE	0x0800	/* interleaved protocol */
-#define	FLAG_XB		0x1000	/* interleaved broadcast */
-#define	FLAG_XBOGUS	0x2000	/* interleaved bogus packet */
 #define FLAG_TSTAMP_PPS	0x4cd000	/* PPS source provides absolute timestamp */
 
 /*
@@ -438,16 +443,50 @@ struct peer {
 #define CRYPTO_TO_ZERO(p)	((char *)&((p)->clear_to_zero))
 #define END_CRYPTO_TO_ZERO(p)	((char *)&((p)->end_clear_to_zero))
 #define LEN_CRYPTO_TO_ZERO	(END_CRYPTO_TO_ZERO((struct peer *)0) \
-				    - CRYPTO_TO_ZERO((struct peer *)0))
 
 /*
- * NTP packet format.  The mac field is optional.  It isn't really
- * an l_fp either, but for now declaring it that way is convenient.
- * See Appendix A in the specification.
- *
- * Note that all u_fp and l_fp values arrive in network byte order
- * and must be converted (except the mac, which isn't, really).
+ * It's ugly that refid is sometimes treated as a  uint32_t and sometimes
+ * as a string; that should be fixed. Using this in memcpy() at least
+ * contains the problem.
  */
+#define REFIDLEN	sizeof(uint32_t)
+
+/* This is the new, sane way of representing packets. All fields are
+   in host byte order, and the fixed-point time fields are just integers,
+   with uints of 2^-16 or 2^-32 seconds as appropriate. */
+
+struct parsed_pkt {
+        uint8_t li_vn_mode;
+        uint8_t stratum;
+        uint8_t ppoll;
+        int8_t precision;
+        uint32_t rootdelay;
+        uint32_t rootdisp;
+        char refid[REFIDLEN];
+        uint64_t reftime;
+        uint64_t org;
+        uint64_t rec;
+        uint64_t xmt;
+        unsigned num_extensions;
+        struct exten *extensions;
+        bool keyid_present;
+        uint32_t keyid;
+        size_t mac_len;
+        char mac[20];
+};
+
+struct exten {
+        uint16_t type;
+        uint16_t len;
+        uint8_t *body;
+};
+
+/* This is the old, insane way of representing packets. It'll gradually
+   be phased out and removed. Packets are simply pulled off the wire and
+   then type-punned into this structure, so all fields are in network
+   byte order. Note that there is no pack pragma. The only reason this
+   ever worked at all is that all the fields are self-aligned, so no ABI
+   has been evil enough to insert padding between fields. */
 struct pkt {
 	uint8_t	li_vn_mode;	/* peer leap indicator */
 	uint8_t	stratum;	/* peer stratum */
@@ -461,30 +500,21 @@ struct pkt {
 	l_fp	rec;		/* receive time stamp */
 	l_fp	xmt;		/* transmit time stamp */
 
-#define	LEN_PKT_NOMAC	(12 * sizeof(uint32_t)) /* min header length */
 #define MIN_MAC_LEN	(1 * sizeof(uint32_t))	/* crypto_NAK */
 #define MAX_MD5_LEN	(5 * sizeof(uint32_t))	/* MD5 */
 #define	MAX_MAC_LEN	(6 * sizeof(uint32_t))	/* SHA */
 
-	/*
-	 * The length of the packet less MAC must be a multiple of 64
-	 * with an RSA modulus and Diffie-Hellman prime of 256 octets
-	 * and maximum host name of 128 octets, the maximum autokey
-	 * command is 152 octets and maximum autokey response is 460
-	 * octets. A packet can contain no more than one command and one
-	 * response, so the maximum total extension field length is 864
-	 * octets. But, to handle humungus certificates, the bank must
-	 * be broke.
-	 */
 	uint32_t	exten[(MAX_MAC_LEN) / sizeof(uint32_t)];
 };
+
+/* pythonize-header: stop ignoring */
 
 /*
  * Stuff for extracting things from li_vn_mode
  */
-#define	PKT_MODE(li_vn_mode)	((uint8_t)((li_vn_mode) & 0x7))
-#define	PKT_VERSION(li_vn_mode)	((uint8_t)(((li_vn_mode) >> 3) & 0x7))
-#define	PKT_LEAP(li_vn_mode)	((uint8_t)(((li_vn_mode) >> 6) & 0x3))
+#define	PKT_MODE(li_vn_mode)	((li_vn_mode) & 0x7)
+#define	PKT_VERSION(li_vn_mode)	(((li_vn_mode) >> 3) & 0x7)
+#define	PKT_LEAP(li_vn_mode)	(((li_vn_mode) >> 6) & 0x3)
 
 /*
  * Stuff for putting things back into li_vn_mode in packets and vn_mode
@@ -494,6 +524,7 @@ struct pkt {
 #define	PKT_LI_VN_MODE(l, v, m) ((((l) & 3) << 6) | VN_MODE((v), (m)))
 
 
+/* pythonize-header: start ignoring */
 /*
  * Dealing with stratum.  0 gets mapped to 16 incoming, and back to 0
  * on output.
@@ -504,6 +535,7 @@ struct pkt {
 #define	STRATUM_TO_PKT(s)	((uint8_t)(((s) == (STRATUM_UNSPEC)) ?\
 				(STRATUM_PKT_UNSPEC) : (s)))
 
+/* pythonize-header: stop ignoring */
 /*
  * Event codes. Used for reporting errors/events to the control module
  */
@@ -546,8 +578,6 @@ struct pkt {
 #define	PEVNT_CLOCK	(11 | PEER_EVENT) /* clock event */
 #define	PEVNT_AUTH	(12 | PEER_EVENT) /* bad auth */
 #define	PEVNT_POPCORN	(13 | PEER_EVENT) /* popcorn */
-#define	PEVNT_XLEAVE	(14 | PEER_EVENT) /* interleave mode */
-#define	PEVNT_XERR	(15 | PEER_EVENT) /* interleave error */
 
 /*
  * Clock event codes
@@ -561,11 +591,7 @@ struct pkt {
 #define	CEVNT_BADTIME	6	/* bad time */
 #define CEVNT_MAX	CEVNT_BADTIME
 
-/*
- * Very misplaced value.  Default port through which we send traps.
- */
-#define	TRAPPORT	18447
-
+/* pythonize-header: start ignoring */
 
 /*
  * To speed lookups, peers are hashed by the low order bits of the
@@ -609,7 +635,7 @@ struct pkt {
 #define PROTO_CALLDELAY		20
 #define PROTO_MINDISP		21
 #define PROTO_MAXDIST		22
-	/* available		23 */
+#define	PROTO_MAXDISP		23
 #define	PROTO_MAXHOP		24
 #define	PROTO_BEACON		25
 #define	PROTO_ORPHAN		26
@@ -656,7 +682,7 @@ typedef struct mon_data	mon_entry;
 struct mon_data {
 	mon_entry *	hash_next;	/* next structure in hash list */
 	DECL_DLIST_LINK(mon_entry, mru);/* MRU list link pointers */
-	struct interface * lcladr;	/* address on which this arrived */
+	endpt *		lcladr;		/* address on which this arrived */
 	l_fp		first;		/* first time seen */
 	l_fp		last;		/* last time seen */
 	int		leak;		/* leaky bucket accumulator */
@@ -727,8 +753,11 @@ struct restrict_u_tag {
 #define	V6_SIZEOF_RESTRICT_U	(offsetof(restrict_u, u)	\
 				 + sizeof(res_addr6))
 
+/* pythonize-header: stop ignoring */
+
 /*
- * Access flags
+ * Access flags.  Do not change or garbage-collect these, they are exposed
+ * through the Mode 6 protocol.
  */
 #define	RES_IGNORE		0x0001	/* ignore packet */
 #define	RES_DONTSERVE		0x0002	/* access denied */
@@ -740,10 +769,10 @@ struct restrict_u_tag {
 				    RES_DONTTRUST | RES_VERSION |\
 				    RES_NOPEER | RES_LIMITED)
 
-#define	RES_NOQUERY		0x0040	/* mode 6/7 packet denied */
-#define	RES_NOMODIFY		0x0080	/* mode 6/7 modify denied */
-#define	RES_NOTRAP		0x0100	/* mode 6/7 set trap denied */
-#define	RES_LPTRAP		0x0200	/* mode 6/7 low priority trap */
+#define	RES_NOQUERY		0x0040	/* mode 6 packet denied */
+#define	RES_NOMODIFY		0x0080	/* mode 6 modify denied */
+#define	RES_NOTRAP		0x0100	/* mode 6 set trap denied (not used) */
+#define	RES_LPTRAP		0x0200	/* mode 6 low priority trap (not used) */
 
 #define	RES_KOD			0x0400	/* send kiss of death packet */
 #define	RES_MSSNTP		0x0800	/* enable MS-SNTP authentication */
@@ -751,10 +780,11 @@ struct restrict_u_tag {
 #define	RES_NOMRULIST		0x2000	/* mode 6 mrulist denied */
 
 #define	RES_ALLFLAGS		(RES_FLAGS | RES_NOQUERY |	\
-				 RES_NOMODIFY | RES_NOTRAP |	\
-				 RES_LPTRAP | RES_KOD |		\
+				 RES_NOMODIFY | RES_KOD |	\
 				 RES_MSSNTP | RES_FLAKE |	\
 				 RES_NOMRULIST)
+
+/* pythonize-header: start ignoring */
 
 /*
  * Match flags
@@ -792,13 +822,9 @@ struct endpoint {
 #define AM_NEWBCL	6		/* new broadcast */
 #define AM_POSSBCL	7		/* discard broadcast */
 
-/* NetInfo configuration locations */
-#ifdef HAVE_NETINFO_NI_H
-#define NETINFO_CONFIG_DIR "/config/ntp"
-#endif
-
 /* ntpq -c mrulist rows per request limit in ntpd */
 #define MRU_ROW_LIMIT	256
 /* similar datagrams per response limit for ntpd */
 #define MRU_FRAGS_LIMIT	128
+
 #endif /* GUARD_NTP_H */

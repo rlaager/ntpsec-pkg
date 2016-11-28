@@ -4,16 +4,15 @@
 #include <config.h>
 
 #include "ntpd.h"
-#include "ntp_unixtime.h"
 #include "ntp_filegen.h"
 #include "ntp_stdlib.h"
 #include "ntp_assert.h"
 #include "ntp_calendar.h"
 #include "ntp_leapsec.h"
-#include "ntp_intercept.h"
 #include "lib_strbuf.h"
 
 #include <stdio.h>
+#include <libgen.h>
 #include <ctype.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -46,7 +45,6 @@ static char	  *leapfile_name;		/* leapseconds file name */
 static struct stat leapfile_stat;	/* leapseconds file stat() buffer */
 static bool        have_leapfile = false;
 char	*stats_drift_file;		/* frequency file name */
-static	char *stats_temp_file;		/* temp frequency file name */
 static double wander_resid;		/* last frequency update */
 double	wander_threshold = 1e-7;	/* initial frequency threshold */
 
@@ -54,11 +52,7 @@ double	wander_threshold = 1e-7;	/* initial frequency threshold */
  * Statistics file stuff
  */
 #ifndef NTP_VAR
-# ifndef SYS_WINNT
-#  define NTP_VAR "/var/NTP/"		/* NOTE the trailing '/' */
-# else
-#  define NTP_VAR "c:\\var\\ntp\\"	/* NOTE the trailing '\\' */
-# endif /* SYS_WINNT */
+# define NTP_VAR "/var/NTP/"		/* NOTE the trailing '/' */
 #endif
 
 
@@ -106,14 +100,9 @@ void	uninit_util(void);
 void
 uninit_util(void)
 {
-#if defined(_MSC_VER) && defined (_DEBUG)
-	_CrtCheckMemory();
-#endif
 	if (stats_drift_file) {
 		free(stats_drift_file);
-		free(stats_temp_file);
 		stats_drift_file = NULL;
-		stats_temp_file = NULL;
 	}
 	if (key_file_name) {
 		free(key_file_name);
@@ -128,10 +117,6 @@ uninit_util(void)
 	filegen_unregister("protostats");
 	filegen_unregister("timingstats");
 	filegen_unregister("usestats");
-
-#if defined(_MSC_VER) && defined (_DEBUG)
-	_CrtCheckMemory();
-#endif
 }
 #endif /* DEBUG */
 
@@ -166,6 +151,30 @@ init_util(void)
 /*
  * hourly_stats - print some interesting stats
  */
+#define IGNORE(r) do{if(r){}}while(0)
+
+void drift_write(char *driftfile, double drift)
+{
+	int fd;
+	char tmpfile[PATH_MAX], driftcopy[PATH_MAX];
+	char driftval[32];
+	strlcpy(driftcopy, driftfile, PATH_MAX);
+	strlcpy(tmpfile, dirname(driftcopy), sizeof(tmpfile));
+	strlcat(tmpfile, "/driftXXXXXX", sizeof(tmpfile));
+	/* coverity[secure_temp] Warning is bogus on POSIX-compliant systems */
+	if ((fd = mkstemp(tmpfile)) < 0) {
+	    msyslog(LOG_ERR, "frequency file %s: %m", tmpfile);
+	    return;
+	}
+	snprintf(driftval, sizeof(driftval), "%.3f\n", drift);
+	IGNORE(write(fd, driftval, strlen(driftval)));
+	(void)close(fd);
+	/* atomic */
+	if (rename(tmpfile, driftfile))
+	    msyslog(LOG_WARNING,
+		    "Unable to rename temp drift file %s to %s, %m",
+		    tmpfile, driftfile);
+}
 void
 write_stats(void)
 {
@@ -194,7 +203,7 @@ write_stats(void)
 		}
 		prev_drift_comp = drift_comp;
 		wander_resid = wander_threshold;
-		intercept_drift_write(stats_drift_file, drift_comp * 1e6);
+		drift_write(stats_drift_file, drift_comp * 1e6);
 	}
 }
 
@@ -202,6 +211,23 @@ write_stats(void)
 /*
  * stats_config - configure the stats operation
  */
+bool drift_read(const char *drift_file, double *drift)
+{
+	FILE *fp;
+	if ((fp = fopen(drift_file, "r")) == NULL) {
+	    return false;
+	}
+	if (fscanf(fp, "%lf", drift) != 1) {
+	    msyslog(LOG_ERR,
+		    "format error frequency file %s",
+		    drift_file);
+	    fclose(fp);
+	    return false;
+	}
+	fclose(fp);
+	return true;
+}
+
 void
 stats_config(
 	int item,
@@ -214,52 +240,8 @@ stats_config(
 	double	new_drift = 0;
 	l_fp	now;
 	time_t  ttnow;
-	const char temp_ext[] = ".TEMP";
 
-	/*
-	 * Expand environment strings under Windows NT, since the
-	 * command interpreter doesn't do this, the program must.
-	 */
-#ifdef SYS_WINNT
-	char newvalue[MAX_PATH], parameter[MAX_PATH];
-
-	if (!ExpandEnvironmentStrings(invalue, newvalue, MAX_PATH)) {
-		switch (item) {
-		case STATS_FREQ_FILE:
-			strlcpy(parameter, "STATS_FREQ_FILE",
-				sizeof(parameter));
-			break;
-
-		case STATS_LEAP_FILE:
-			strlcpy(parameter, "STATS_LEAP_FILE",
-				sizeof(parameter));
-			break;
-
-		case STATS_STATSDIR:
-			strlcpy(parameter, "STATS_STATSDIR",
-				sizeof(parameter));
-			break;
-
-		case STATS_PID_FILE:
-			strlcpy(parameter, "STATS_PID_FILE",
-				sizeof(parameter));
-			break;
-
-		default:
-			strlcpy(parameter, "UNKNOWN",
-				sizeof(parameter));
-			break;
-		}
-		value = invalue;
-		msyslog(LOG_ERR,
-			"ExpandEnvironmentStrings(%s) failed: %m\n",
-			parameter);
-	} else {
-		value = newvalue;
-	}
-#else	 
 	value = invalue;
-#endif /* SYS_WINNT */
 
 	switch (item) {
 
@@ -271,17 +253,13 @@ stats_config(
 			break;
 
 		stats_drift_file = erealloc(stats_drift_file, len + 1);
-		stats_temp_file = erealloc(stats_temp_file, 
-		    len + sizeof(".TEMP"));
 		memcpy(stats_drift_file, value, (size_t)(len+1));
-		memcpy(stats_temp_file, value, (size_t)len);
-		memcpy(stats_temp_file + len, temp_ext, sizeof(temp_ext));
 
 		/*
 		 * Open drift file and read frequency. If the file is
 		 * missing or contains errors, tell the loop to reset.
 		 */
-		if (intercept_drift_read(stats_drift_file, &new_drift)) {
+		if (drift_read(stats_drift_file, &new_drift)) {
 		    loop_config(LOOP_FREQ, new_drift);
 		    prev_drift_comp = drift_comp;
 		}
@@ -323,8 +301,6 @@ stats_config(
 	 * Open pid file.
 	 */
 	case STATS_PID_FILE:
-		if (intercept_get_mode() == replay)
-		    break;
 		if ((fp = fopen(value, "w")) == NULL) {
 			msyslog(LOG_ERR, "pid file %s: %m",
 			    value);
@@ -348,7 +324,7 @@ stats_config(
 		leapfile_name = erealloc(leapfile_name, len + 1);
 		memcpy(leapfile_name, value, len + 1);
 
-		if (intercept_leapsec_load_file(
+		if (leapsec_load_file(
 			    leapfile_name, &leapfile_stat, true, true))
 		{
 			leap_signature_t lsig;
@@ -364,7 +340,6 @@ stats_config(
 					  ? "expired"
 					  : "expires",
 				      fstostr(lsig.etime));
-
 			have_leapfile = true;
 
 			/* force an immediate daily expiration check of
@@ -412,7 +387,7 @@ record_peer_stats(
 	if (peerstats.fp != NULL) {
 		fprintf(peerstats.fp,
 		    "%lu %s %s %x %.9f %.9f %.9f %.9f\n", day,
-		    ulfptoa(&now, 3), stoa(&peer->srcadr), status, peer->offset,
+		    ulfptoa(&now, 3), socktoa(&peer->srcadr), status, peer->offset,
 		    peer->delay, peer->disp, peer->jitter);
 		fflush(peerstats.fp);
 	}
@@ -426,7 +401,7 @@ peerlabel(const struct peer *peer)
 		return refclock_name(peer);
 	else
 #endif /* defined(REFCLOCK) && !defined(ENABLE_CLASSIC_MODE)*/
-		return stoa(&peer->srcadr);
+		return socktoa(&peer->srcadr);
 }
 
 /*
@@ -570,7 +545,7 @@ record_raw_stats(
 	if (rawstats.fp != NULL) {
 		fprintf(rawstats.fp, "%lu %s %s %s %s %s %s %s %d %d %d %d %d %d %.6f %.6f %s %d\n",
 		    day, ulfptoa(&now, 3),
-		    stoa(srcadr), dstadr ?  stoa(dstadr) : "-",
+		    socktoa(srcadr), dstadr ?  socktoa(dstadr) : "-",
 		    ulfptoa(t1, 9), ulfptoa(t2, 9),
 		    ulfptoa(t3, 9), ulfptoa(t4, 9),
 		    leap, version, mode, stratum, ppoll, precision,
@@ -711,7 +686,7 @@ record_proto_stats(
 	}
 }
 
-#ifdef DEBUG_TIMING
+#ifdef ENABLE_DEBUG_TIMING
 /*
  * record_timing_stats - write timing statistics to file
  *
@@ -767,7 +742,7 @@ check_leap_file(
 		return;
 	
 	/* try to load leapfile, force it if no leapfile loaded yet */
-	if (intercept_leapsec_load_file(
+	if (leapsec_load_file(
 		    leapfile_name, &leapfile_stat,
 		    !have_leapfile, is_daily_check))
 		have_leapfile = true;
@@ -826,22 +801,8 @@ getauthkeys(
 	if (!len)
 		return;
 	
-#ifndef SYS_WINNT
 	key_file_name = erealloc(key_file_name, len + 1);
 	memcpy(key_file_name, keyfile, len + 1);
-#else
-	key_file_name = erealloc(key_file_name, _MAX_PATH);
-	if (len + 1 > _MAX_PATH)
-		return;
-	if (!ExpandEnvironmentStrings(keyfile, key_file_name,
-				      _MAX_PATH)) {
-		msyslog(LOG_ERR,
-			"ExpandEnvironmentStrings(KEY_FILE) failed: %m");
-		strlcpy(key_file_name, keyfile, _MAX_PATH);
-	}
-	key_file_name = erealloc(key_file_name,
-				 1 + strlen(key_file_name));
-#endif /* SYS_WINNT */
 
 	authreadkeys(key_file_name);
 }
@@ -910,9 +871,4 @@ ntpd_time_stepped(void)
 		mon_stop(MON_OFF);
 		mon_start(saved_mon_enabled);
 	}
-
-	/* inform interpolating Windows code to allow time to go back */
-#ifdef SYS_WINNT
-	win_time_stepped();
-#endif
 }

@@ -1,5 +1,5 @@
-from waflib.Logs import pprint
 import sys
+from waflib.Logs import pprint
 
 def check_cap(ctx):
 
@@ -19,5 +19,3 @@ def check_cap(ctx):
         pprint("RED", "Warning libcap and headers not installed")
         pprint("RED", "Fedora needs libcap-devel")
         pprint("RED", "Debian needs libcap-dev")
-
-

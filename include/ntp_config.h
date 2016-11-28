@@ -18,13 +18,7 @@
  * Configuration file name
  */
 #ifndef CONFIG_FILE
-# ifndef SYS_WINNT
 #  define	CONFIG_FILE "/etc/ntp.conf"
-# else /* SYS_WINNT */
-#  define	CONFIG_FILE	"%windir%\\system32\\drivers\\etc\\ntp.conf"
-#  define	ALT_CONFIG_FILE "%windir%\\ntp.conf"
-#  define	NTP_KEYSDIR	"%windir%\\system32\\drivers\\etc"
-# endif /* SYS_WINNT */
 #endif /* not CONFIG_FILE */
 
 /* Limits */
@@ -234,7 +228,6 @@ struct config_tree_tag {
 	string_fifo *	phone;
 	setvar_fifo *	setvar;
 	int_fifo *	ttl;
-	addr_opts_fifo *trap;
 	attr_val_fifo *	vars;
 	nic_rule_fifo *	nic_rules;
 	int_fifo *	reset_counters;
@@ -252,16 +245,6 @@ struct REMOTE_CONFIG_INFO {
 	int err_pos;
 	int no_errors;
 };
-
-
-/*
- * context for trap_name_resolved() to call ctlsettrap() once the 
- * name->address resolution completes.
- */
-typedef struct settrap_parms_tag {
-	sockaddr_u	ifaddr;
-	int		ifaddr_nonnull;
-} settrap_parms;
 
 
 /* get text from T_ tokens */
@@ -309,4 +292,4 @@ extern bool have_interface_option;
 
 void ntp_rlimit(int, rlim_t, int, const char *);
 
-#endif	/* GUARD_!defined(NTP_CONFIG_H) */
+#endif	/* GUARD_NTP_CONFIG_H */

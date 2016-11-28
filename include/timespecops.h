@@ -45,6 +45,7 @@
 #include <math.h>
 
 #include "ntp.h"
+#include "ntp_calendar.h"
 #include "timetoa.h"
 
 
@@ -75,7 +76,7 @@ normalize_tspec(
 	struct timespec x
 	)
 {
-#if SIZEOF_LONG > 4
+#if NTP_SIZEOF_LONG > 4
 	long	z;
 
 	/* 
@@ -88,8 +89,8 @@ normalize_tspec(
 	 * here: it has implementation-defined behaviour when applied
 	 * to LONG_MIN.
 	 */
-	if (x.tv_nsec < -3l * NANOSECONDS ||
-	    x.tv_nsec > 3l * NANOSECONDS) {
+	if (x.tv_nsec < NANOSECONDS ||
+	    x.tv_nsec > NANOSECONDS) {
 		z = x.tv_nsec / NANOSECONDS;
 		x.tv_nsec -= z * NANOSECONDS;
 		x.tv_sec += z;
@@ -214,6 +215,10 @@ abs_tspec(
  * compare previously-normalised a and b
  * return 1 / 0 / -1 if a < / == / > b
  */
+#define TIMESPEC_LESS_THAN	1
+#define TIMESPEC_EQUAL		0
+#define TIMESPEC_GREATER_THAN	-1
+
 static inline int
 cmp_tspec(
 	struct timespec a,
@@ -373,13 +378,24 @@ lfp_stamp_to_tspec(
 	out.tv_nsec = FTOTVN(x.l_uf);
 
 	/* copying a vint64 to a time_t needs some care... */
-#if SIZEOF_TIME_T <= 4
-	out.tv_sec = (time_t)sec.d_s.lo;
+#if NTP_SIZEOF_TIME_T <= 4
+	out.tv_sec = (time_t)vint64lo(sec);
 #else
-	out.tv_sec = (time_t)sec.q_s;
+	out.tv_sec = (time_t)vint64s(sec);
 #endif
 
 	return out;
+}
+
+static inline struct timespec
+tval_to_tspec(
+    struct timeval x
+    )
+{
+    struct timespec y;
+    y.tv_sec = x.tv_sec;
+    y.tv_nsec = x.tv_usec * 1000;
+    return y;
 }
 
 #endif	/* GUARD_TIMESPECOPS_H */

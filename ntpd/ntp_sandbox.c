@@ -268,7 +268,7 @@ getgroup:
 // #if defined(HAVE_SECCOMP) && (defined(__x86_64__) || defined(__i386__))
 #if defined(HAVE_SECCOMP)
 
-#ifdef KILLonTRAP
+#ifdef ENABLE_KILL_ON_TRAP
   #define MY_SCMP_ACT SCMP_ACT_KILL
 #else
   #define MY_SCMP_ACT SCMP_ACT_TRAP
@@ -319,6 +319,7 @@ int scmp_sc[] = {
 	SCMP_SYS(munmap),
 	SCMP_SYS(open),
 	SCMP_SYS(poll),
+	SCMP_SYS(pselect6),
 	SCMP_SYS(read),
 	SCMP_SYS(recvfrom),
 	SCMP_SYS(recvmsg),

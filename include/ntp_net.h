@@ -9,8 +9,9 @@
 #include <sys/socket.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <netdb.h>
+#include <isc/net.h>
 
-#include "ntp_rfc2553.h"
 #include "ntp_malloc.h"
 
 typedef union {
@@ -64,7 +65,6 @@ typedef union {
 /* sockaddr_u v6 scope */
 #define SCOPE_VAR(psau)		((psau)->sa6.sin6_scope_id)
 
-#ifdef ISC_PLATFORM_HAVESCOPEID
 /* v4/v6 scope (always zero for v4) */
 # define SCOPE(psau)		(IS_IPV4(psau)			\
 				    ? 0				\
@@ -80,11 +80,6 @@ typedef union {
 		if (IS_IPV6(psau))				\
 			SCOPE_VAR(psau) = (s);			\
 	while (0)
-#else	/* ISC_PLATFORM_HAVESCOPEID not defined */
-# define SCOPE(psau)		(0)
-# define SCOPE_EQ(psau1, psau2)	(1)
-# define SET_SCOPE(psau, s)	do { } while (0)
-#endif	/* ISC_PLATFORM_HAVESCOPEID */
 
 /* v4/v6 is multicast address */
 #define IS_MCAST(psau)						\
@@ -146,13 +141,8 @@ typedef union {
 	       sizeof(pin6A)->s6_addr)
 
 /* compare two in6_addr for equality only */
-#if !defined(SYS_WINNT) || !defined(in_addr6)
 #define ADDR6_EQ(pin6A, pin6B)					\
 	(!ADDR6_CMP(pin6A, pin6B))
-#else
-#define ADDR6_EQ(pin6A, pin6B)					\
-	IN6_ADDR_EQUAL(pin6A, pin6B)
-#endif
 
 /* compare a in6_addr with socket address */
 #define	S_ADDR6_EQ(psau, pin6)					\
@@ -183,7 +173,7 @@ typedef union {
 #define SOCK_UNSPEC_S(psau)					\
 	(SOCK_UNSPEC(psau) && !SCOPE(psau))
 
-/* choose a default net interface (struct interface) for v4 or v6 */
+/* choose a default net interface (endpt) for v4 or v6 */
 #define ANY_INTERFACE_BYFAM(family)				\
 	((AF_INET == family)					\
 	     ? any_interface					\
