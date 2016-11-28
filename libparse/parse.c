@@ -9,7 +9,7 @@
 
 #include <config.h>
 #include "ntp_fp.h"
-#include "timevalops.h"
+#include "timespecops.h"
 #include "ntp_calendar.h"
 #include "ntp_stdlib.h"
 #include "ntp_machine.h"
@@ -24,62 +24,21 @@ extern unsigned short nformats;
 
 static unsigned long timepacket (parse_t *);
 
-/*
- * strings support usually not in kernel - duplicated, but what the heck
- */
-static int
-Strlen(
-	register const char *s
-	)
-{
-	register int c;
-
-	c = 0;
-	if (s)
-	{
-		while (*s++)
-		{
-			c++;
-		}
-	}
-	return c;
-}
-
-static int
-Strcmp(
-	register const char *s,
-	register const char *t
-	)
-{
-	register int c = 0;
-
-	if (!s || !t || (s == t))
-	{
-		return 0;
-	}
-
-	while (!(c = *s++ - *t++) && *s && *t)
-	    /* empty loop */;
-
-	return c;
-}
-
 bool
 parse_timedout(
 	       parse_t *parseio,
 	       timestamp_t *tstamp,
-	       struct timeval *del
+	       struct timespec *del
 	       )
 {
-	struct timeval delta;
+	struct timespec delta;
 
 	l_fp delt;
 
 	delt = tstamp->fp;
 	L_SUB(&delt, &parseio->parse_lastchar.fp);
-	TSTOTV(&delt, &delta);
-
-	if (timercmp(&delta, del, >))
+	delta = lfp_uintv_to_tspec(delt);
+	if (cmp_tspec(delta, *del) == TIMESPEC_GREATER_THAN)
 	{
 		parseprintf(DD_PARSE, ("parse: timedout: TRUE\n"));
 		return true;
@@ -411,7 +370,7 @@ parse_to_unixtime(
 		return -1;		/* bad hour */
 	}
 
-	t = TIMES24(t) + clock_time->hour;
+	t = t*24 + clock_time->hour;
 
 				/* min */
 	if (clock_time->minute < 0 || clock_time->minute > 59)
@@ -420,7 +379,7 @@ parse_to_unixtime(
 		return -1;		/* bad min */
 	}
 
-	t = TIMES60(t) + clock_time->minute;
+	t = t*60 + clock_time->minute;
 				/* sec */
 
 	if (clock_time->second < 0 || clock_time->second > 60)	/* allow for LEAPs */
@@ -429,7 +388,7 @@ parse_to_unixtime(
 		return -1;		/* bad sec */
 	}
 
-	t  = TIMES60(t) + clock_time->second;
+	t  = t*60 + clock_time->second;
 
 	t += clock_time->utcoffset;	/* warp to UTC */
 
@@ -661,9 +620,9 @@ timepacket(
 	/*
 	 * time stamp
 	 */
-	parseio->parse_dtime.parse_time.fp.l_ui = (uint32_t) (t + JAN_1970);
-	TVUTOTSF(clock_time.usecond, parseio->parse_dtime.parse_time.fp.l_uf);
-
+	struct timespec ts = {t, clock_time.usecond * 1000};
+	parseio->parse_dtime.parse_time.fp = tspec_stamp_to_lfp(ts);
+	
 	parseio->parse_dtime.parse_format       = format;
 
 	return updatetimeinfo(parseio, clock_time.flags);
@@ -715,7 +674,7 @@ parse_setfmt(
 
 			for (i = 0; i < nformats; i++)
 			{
-				if (!Strcmp(dct->parseformat.parse_buffer, clockformats[i]->name))
+				if (!strcmp(dct->parseformat.parse_buffer, clockformats[i]->name))
 				{
 					if (parse->parse_pdata)
 						free(parse->parse_pdata);
@@ -780,9 +739,9 @@ parse_getfmt(
 	UNUSED_ARG(dct);
 	UNUSED_ARG(parse);
 	if (dct->parseformat.parse_format < nformats &&
-	    Strlen(clockformats[dct->parseformat.parse_format]->name) <= PARSE_TCMAX)
+	    strlen(clockformats[dct->parseformat.parse_format]->name) <= PARSE_TCMAX)
 	{
-		dct->parseformat.parse_count = (unsigned short) (Strlen(clockformats[dct->parseformat.parse_format]->name) + 1);
+		dct->parseformat.parse_count = (unsigned short) (strlen(clockformats[dct->parseformat.parse_format]->name) + 1);
 		memcpy(dct->parseformat.parse_buffer, clockformats[dct->parseformat.parse_format]->name, dct->parseformat.parse_count);
 		return 1;
 	}

@@ -4,11 +4,6 @@
 
 #include "ntp_types.h"
 
-typedef union ctl_pkt_u_tag {
-	uint8_t data[480 + MAX_MAC_LEN]; /* data + auth */
-	uint32_t u32[(480 + MAX_MAC_LEN) / sizeof(uint32_t)];
-} ctl_pkt_u;
-
 struct ntp_control {
 	uint8_t li_vn_mode;		/* leap, version, mode */
 	uint8_t r_m_e_op;		/* response, more, error, opcode */
@@ -17,21 +12,19 @@ struct ntp_control {
 	uint16_t associd;		/* association ID (associd_t) */
 	uint16_t offset;		/* offset of this batch of data */
 	uint16_t count;			/* count of data in this packet */
-	ctl_pkt_u u;
+	uint8_t data[480 + MAX_MAC_LEN]; /* data + auth */
 };
 
 /*
  * Length of the control header, in octets
  */
-#define	CTL_HEADER_LEN		(offsetof(struct ntp_control, u))
+#define	CTL_HEADER_LEN		(offsetof(struct ntp_control, data))
 #define	CTL_MAX_DATA_LEN	468
 
 
 /*
  * Limits and things
  */
-#define	CTL_MAXTRAPS	3		/* maximum number of traps we allow */
-#define	CTL_TRAPTIME	(60*60)		/* time out traps in 1 hour */
 #define	CTL_MAXAUTHSIZE	64		/* maximum size of an authen'ed req */
 
 /*
@@ -56,13 +49,13 @@ struct ntp_control {
 #define	CTL_OP_WRITEVAR		3	/* write variables */
 #define	CTL_OP_READCLOCK	4	/* read clock variables */
 #define	CTL_OP_WRITECLOCK	5	/* write clock variables */
-#define	CTL_OP_SETTRAP		6	/* set trap address */
+#define	CTL_OP_SETTRAP		6	/* set trap address (obsolete, unused) */
 #define	CTL_OP_ASYNCMSG		7	/* asynchronous message */
 #define CTL_OP_CONFIGURE	8	/* runtime configuration */
 #define CTL_OP_READ_MRU		10	/* retrieve MRU (mrulist) */
 #define CTL_OP_READ_ORDLIST_A	11	/* ordered list req. auth. */
 #define CTL_OP_REQ_NONCE	12	/* request a client nonce */
-#define	CTL_OP_UNSETTRAP	31	/* unset trap */
+#define	CTL_OP_UNSETTRAP	31	/* unset trap (obsolete, unused) */
 
 /*
  * {En,De}coding of the system status word
@@ -81,7 +74,7 @@ struct ntp_control {
 #define	CTL_SYS_MAXEVENTS	15
 
 #define	CTL_SYS_STATUS(li, source, nevnt, evnt) \
-		(((((unsigned short)(li))<< 14)&0xc000) | \
+		(((((li) & 0xffff) << 14)&0xc000) |			\
 		(((source)<<8)&0x3f00) | \
 		(((nevnt)<<4)&0x00f0) | \
 		((evnt)&0x000f))
@@ -149,30 +142,6 @@ struct ntp_control {
 
 #define	CERR_NORESOURCE	CERR_PERMISSION	/* wish there was a different code */
 
-
-/*
- * Definition of the structure used internally to hold trap information.
- * ntp_request.c wants to see this.
- */
-struct ctl_trap {
-	sockaddr_u tr_addr;		/* address of trap recipient */
-	struct interface *tr_localaddr;	/* interface to send this through */
-	u_long tr_settime;		/* time trap was set */
-	u_long tr_count;		/* async messages sent to this guy */
-	u_long tr_origtime;		/* time trap was originally set */
-	u_long tr_resets;		/* count of resets for this trap */
-	u_short tr_sequence;		/* trap sequence id */
-	uint8_t tr_flags;		/* trap flags */
-	uint8_t tr_version;		/* version number of trapper */
-};
-extern struct ctl_trap ctl_traps[CTL_MAXTRAPS];
-
-/*
- * Flag bits
- */
-#define	TRAP_INUSE	0x1		/* this trap is active */
-#define	TRAP_NONPRIO	0x2		/* this trap is non-priority */
-#define	TRAP_CONFIGURED	0x4		/* this trap was configured */
 
 /*
  * Types of things we may deal with

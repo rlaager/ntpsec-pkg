@@ -1,5 +1,5 @@
-from waflib.Logs import pprint
 import re
+from waflib.Logs import pprint
 
 def msg(str):
 	pprint("YELLOW", str)
@@ -47,9 +47,9 @@ def parse_version(config):
 		[major, minor, rev] = version_string.split(".")
 		map = {
 			# "NTPS" for NTPSec -- this avoids any naming collisions
-			"NTPS_VERSION_MAJOR" : int(major),
-			"NTPS_VERSION_MINOR" : int(minor),
-			"NTPS_VERSION_REV" : int(rev)
+			"NTPSEC_VERSION_MAJOR" : int(major),
+			"NTPSEC_VERSION_MINOR" : int(minor),
+			"NTPSEC_VERSION_REV" : int(rev)
 		}
 
 	config.update(map)

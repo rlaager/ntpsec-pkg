@@ -69,6 +69,18 @@ typedef union {
 	uint64_t Q_s;	/* unsigned quad scalar */
 } vint64; /* variant int 64 */
 
+/* hide the structure of a vint64 */
+#define vint64lo(n)       (n).d_s.lo
+#define setvint64lo(n,v)  (n).d_s.lo = (v)
+#define vint64his(n)      (n).d_s.hi
+#define setvint64his(n,v) (n).d_s.hi = (v)
+#define vint64hiu(n)      (n).D_s.hi
+#define setvint64hiu(n,v) (n).D_s.hi = (v)
+#define vint64s(n)        (n).q_s
+#define setvint64s(n,v)   (n).q_s = (v)
+#define vint64u(n)        (n).Q_s
+#define setvint64u(n,v)   (n).Q_s = (v)
+#define negvint64(n)      (n).q_s *= -1
 
 typedef uint16_t	associd_t; /* association ID */
 #define ASSOCID_MAX	USHRT_MAX
@@ -80,10 +92,11 @@ typedef uint32_t tstamp_t;	/* NTP seconds timestamp */
  * Cloning malloc()'s behavior of always returning pointers suitably
  * aligned for the strictest alignment requirement of any type is not
  * easy to do portably, as the maximum alignment required is not
- * exposed.  Use the size of a union of the types known to represent the
- * strictest alignment on some platform.
+ * exposed.  Use the size of a struct of the types known to represent the
+ * strictest alignment on some platform. This will force the struct to 
+ * have the strictest possible alignment.
  */
-typedef union max_alignment_tag {
+typedef struct max_alignment_tag {
 	double		d;
 } max_alignment;
 
@@ -102,49 +115,9 @@ aligned_ptr(
 	return base + ALIGN_UNITS((minsize < 1) ? 1 : minsize);
 }
 
-/*
- * Macro to use in otherwise-empty source files to comply with ANSI C
- * requirement that each translation unit (source file) contain some
- * declaration.  This has commonly been done by declaring an unused
- * global variable of type int or char.  An extern reference to exit()
- * serves the same purpose without bloat.
- */
-#define	NONEMPTY_TRANSLATION_UNIT	extern void exit(int);
-
-/*
- * On Unix struct sock_timeval is equivalent to struct timeval.
- * On Windows built with 64-bit time_t, sock_timeval.tv_sec is a long
- * as required by Windows' socket() interface timeout argument, while
- * timeval.tv_sec is time_t for the more common use as a UTC time 
- * within NTP.
- */
-#ifndef SYS_WINNT
-#define	sock_timeval	timeval
-#endif
-
-/*
- * On Unix open() works for tty (serial) devices just fine, while on
- * Windows refclock serial devices are opened using CreateFile, a lower
- * level than the CRT-provided descriptors, because the C runtime lacks
- * tty APIs.  For refclocks which wish to use open() as well as or 
- * instead of refclock_open(), tty_open() is equivalent to open() on
- * Unix and  implemented in the Windows port similarly to
- * refclock_open().
- * Similarly, the termios emulation in the Windows code needs to know
- * about serial ports being closed, while the Posix systems do not.
- */
-#ifndef SYS_WINNT
-# define tty_open(f, a, m)	open(f, a, m)
-# define closeserial(fd)	close(fd)
-# define closesocket(fd)	close(fd)
 typedef int SOCKET;
 # define INVALID_SOCKET		(-1)
 # define SOCKET_ERROR		(-1)
-# define socket_errno()		(errno)
-#else	/* SYS_WINNT follows */
-# define socket_errno()		(errno = WSAGetLastError())
-#endif
-
 
 
 #endif	/* GUARD_NTP_TYPES_H */

@@ -68,8 +68,8 @@
 
 #include "ntpd.h"
 #include "ntp_refclock.h"
-#include "timevalops.h"		/* includes <sys/time.h> */
 #include "ntp_control.h"	/* for CTL_* clocktypes */
+#include "ntp_calendar.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -1913,9 +1913,7 @@ local_input(
 						sizeof(parsetime_t));
 					buf->recv_length  = sizeof(parsetime_t);
 					buf->recv_time    = rbufp->recv_time;
-#ifndef HAVE_IO_COMPLETION_PORT
 					buf->srcadr       = rbufp->srcadr;
-#endif
 					buf->dstadr       = rbufp->dstadr;
 					buf->receiver     = rbufp->receiver;
 					buf->fd           = rbufp->fd;
@@ -1923,9 +1921,6 @@ local_input(
 					parse->generic->io.recvcount++;
 					packets_received++;
 					add_full_recv_buffer(buf);
-#ifdef HAVE_IO_COMPLETION_PORT
-					SetEvent(WaitableIoEventHandle);
-#endif
 				}
 				parse_iodone(&parse->parseio);
 			}
@@ -2350,7 +2345,7 @@ parse_shutdown(
 	}
 #endif
 	if (parse->generic->io.fd != parse->ppsfd && parse->ppsfd != -1)
-		(void)closeserial(parse->ppsfd);  /* close separate PPS source */
+		(void)close(parse->ppsfd);  /* close separate PPS source */
 
 	/*
 	 * print statistics a last time and
@@ -2560,7 +2555,7 @@ parse_start(
 	(void) snprintf(parsedev, sizeof(parsedev), PARSEDEVICE, unit);
 	(void) snprintf(parseppsdev, sizeof(parsedev), PARSEPPSDEVICE, unit);
 
-	fd232 = tty_open(peer->path ? peer->path : parsedev,
+	fd232 = open(peer->path ? peer->path : parsedev,
 			 O_RDWR | O_NOCTTY | O_NONBLOCK, 0777);
 
 	if (fd232 == -1)
@@ -2674,7 +2669,7 @@ parse_start(
 		 * if the PARSEPPSDEVICE can be opened that will be used
 		 * for PPS else PARSEDEVICE will be used
 		 */
-		parse->ppsfd = tty_open(parseppsdev, O_RDWR | O_NOCTTY | O_NONBLOCK, 0777);
+		parse->ppsfd = open(parseppsdev, O_RDWR | O_NOCTTY | O_NONBLOCK, 0777);
 
 		if (parse->ppsfd == -1)
 		{

@@ -27,14 +27,12 @@
 #include "ntp.h"
 #include "ntpd.h"
 #include "ntp_io.h"
-#include "ntp_unixtime.h"
 #include "ntp_refclock.h"
 #include "ntp_filegen.h"
 #include "ntp_stdlib.h"
 #include "lib_strbuf.h"
 #include "ntp_assert.h"
 #include "ntp_random.h"
-#include "ntp_intercept.h"
 /*
  * [Bug 467]: Some linux headers collide with CONFIG_PHONE and CONFIG_KEYS
  * so #include these later.
@@ -46,6 +44,11 @@
 /* Bug is Bison 2.5 */
 #ifndef yyparse
   int yyparse (void);
+#endif
+
+/* NetInfo configuration locations */
+#ifdef HAVE_NETINFO_NI_H
+#define NETINFO_CONFIG_DIR "/config/ntp"
 #endif
 
 /*
@@ -75,9 +78,9 @@
 
 
 /* list of servers from command line for config_peers() */
-int	cmdline_server_count;
+int	cmdline_server_count = 0;
 char **	cmdline_servers;
-bool	force_synchronous_dns;
+bool	force_synchronous_dns = false;
 
 /*
  * FIXME: ugly globals, only created to avoid wiring in option-parsing cruft.
@@ -219,7 +222,6 @@ static void free_config_setvar(config_tree *);
 static void free_config_system_opts(config_tree *);
 static void free_config_tinker(config_tree *);
 static void free_config_tos(config_tree *);
-static void free_config_trap(config_tree *);
 static void free_config_ttl(config_tree *);
 static void free_config_unpeers(config_tree *);
 static void free_config_vars(config_tree *);
@@ -296,7 +298,6 @@ static void config_mdnstries(config_tree *);
 static void config_phone(config_tree *);
 static void config_setvar(config_tree *);
 static void config_ttl(config_tree *);
-static void config_trap(config_tree *);
 static void config_fudge(config_tree *);
 static void config_peers(config_tree *);
 static void config_unpeers(config_tree *);
@@ -311,9 +312,6 @@ static void peer_name_resolved(int, int, void *, const char *, const char *,
 static void unpeer_name_resolved(int, int, void *, const char *, const char *,
 			  const struct addrinfo *,
 			  const struct addrinfo *);
-static void trap_name_resolved(int, int, void *, const char *, const char *,
-			const struct addrinfo *,
-			const struct addrinfo *);
 #endif
 
 enum gnn_type {
@@ -322,7 +320,6 @@ enum gnn_type {
 	t_MSK		/* Network Mask */
 };
 
-static void ntpd_set_tod_using(const char *);
 static uint32_t get_pfxmatch(const char **, struct masks *);
 static uint32_t get_match(const char *, struct masks *);
 static uint32_t get_logmask(const char *);
@@ -387,10 +384,6 @@ free_config_tree(
 	config_tree *ptree
 	)
 {
-#if defined(_MSC_VER) && defined (_DEBUG)
-	_CrtCheckMemory();
-#endif
-
 	if (ptree->source.value.s != NULL)
 		free(ptree->source.value.s);
 
@@ -406,7 +399,6 @@ free_config_tree(
 	free_config_phone(ptree);
 	free_config_setvar(ptree);
 	free_config_ttl(ptree);
-	free_config_trap(ptree);
 	free_config_fudge(ptree);
 	free_config_vars(ptree);
 	free_config_peers(ptree);
@@ -416,10 +408,6 @@ free_config_tree(
 	free_auth_node(ptree);
 
 	free(ptree);
-
-#if defined(_MSC_VER) && defined (_DEBUG)
-	_CrtCheckMemory();
-#endif
 }
 
 /* generic fifo routines for structs linked by 1st member */
@@ -639,6 +627,9 @@ create_peer_node(
 	/* Initialize node values to default */
 
 	my_node->ctl.version = NTP_VERSION;
+	my_node->ctl.minpoll = NTP_MINDPOLL;
+        /* can not set maxpoll default yet, it may be NTP_MAXDPOLL or minpoll */
+	my_node->ctl.maxpoll = NTP_MAXPOLL_UNK;
 
 	/* Now set the node to the read values */
 	my_node->host_mode = hmode;
@@ -658,55 +649,50 @@ create_peer_node(
 		switch (option->attr) {
 
 		case T_Flag:
-		    if (hmode == T_Peer && option->attr == T_Flag && (option->value.i == T_Iburst || option->value.i == T_Burst)) {
-				msyslog(LOG_INFO,
-					"peer: ignoring burst or iburst option");
-			} else {
-				switch (option->value.i) {
+			switch (option->value.i) {
+			default:
+				INSIST(0);
+				break;
 
-				default:
-					INSIST(0);
-					break;
+			case T_Burst:
+				my_node->ctl.flags |= FLAG_BURST;
+				break;
 
-				case T_Burst:
-					my_node->ctl.flags |= FLAG_BURST;
-					break;
+			case T_Iburst:
+				my_node->ctl.flags |= FLAG_IBURST;
+				break;
 
-				case T_Iburst:
-					my_node->ctl.flags |= FLAG_IBURST;
-					break;
+			case T_Noselect:
+				my_node->ctl.flags |= FLAG_NOSELECT;
+				break;
 
-				case T_Noselect:
-					my_node->ctl.flags |= FLAG_NOSELECT;
-					break;
+			case T_Preempt:
+				my_node->ctl.flags |= FLAG_PREEMPT;
+				break;
 
-				case T_Preempt:
-					my_node->ctl.flags |= FLAG_PREEMPT;
-					break;
+			case T_Prefer:
+				my_node->ctl.flags |= FLAG_PREFER;
+				break;
 
-				case T_Prefer:
-					my_node->ctl.flags |= FLAG_PREFER;
-					break;
-
-				case T_True:
-					my_node->ctl.flags |= FLAG_TRUE;
-					break;
-
-				case T_Xleave:
-					my_node->ctl.flags |= FLAG_XLEAVE;
-					break;
-				}
+			case T_True:
+				my_node->ctl.flags |= FLAG_TRUE;
+				break;
 			}
 			break;
 
 		case T_Minpoll:
-			if (option->value.i < NTP_MINPOLL ||
-			    option->value.i > UCHAR_MAX) {
+			if (option->value.i < NTP_MINPOLL ) {
 				msyslog(LOG_INFO,
-					"minpoll: provided value (%d) is out of range [%d-%d])",
+					"minpoll: provided value (%d) is too small [%d-%d])",
 					option->value.i, NTP_MINPOLL,
-					UCHAR_MAX);
+					NTP_MAXPOLL);
 				my_node->ctl.minpoll = NTP_MINPOLL;
+			} else if (option->value.i > NTP_MAXPOLL) {
+				msyslog(LOG_INFO,
+					"minpoll: provided value (%d) is too large [%d-%d])",
+					option->value.i, NTP_MINPOLL,
+					NTP_MAXPOLL);
+				my_node->ctl.minpoll = NTP_MAXPOLL;
 			} else {
 				my_node->ctl.minpoll =
 					(uint8_t)option->value.u;
@@ -714,12 +700,18 @@ create_peer_node(
 			break;
 
 		case T_Maxpoll:
-			if (option->value.i < 0 ||
-			    option->value.i > NTP_MAXPOLL) {
-				msyslog(LOG_INFO,
-					"maxpoll: provided value (%d) is out of range [0-%d])",
-					option->value.i, NTP_MAXPOLL);
-				my_node->ctl.maxpoll = NTP_MAXPOLL;
+			if (option->value.i < NTP_MINPOLL ) {
+			    msyslog(LOG_INFO,
+				"maxpoll: value (%d) is too small [%d-%d])",
+				option->value.i, NTP_MINPOLL,
+				NTP_MAXPOLL);
+			    my_node->ctl.maxpoll = NTP_MINPOLL;
+			} else if ( option->value.i > NTP_MAXPOLL) {
+			    msyslog(LOG_INFO,
+				"maxpoll: value (%d) is too large [%d-%d])",
+				option->value.i, NTP_MINPOLL,
+				NTP_MAXPOLL);
+			    my_node->ctl.maxpoll = NTP_MAXPOLL;
 			} else {
 				my_node->ctl.maxpoll =
 					(uint8_t)option->value.u;
@@ -1270,7 +1262,7 @@ config_auth(
 
 	/* Keys Command */
 	if (ptree->auth.keys)
-		intercept_getauthkeys(ptree->auth.keys);
+		getauthkeys(ptree->auth.keys);
 
 	/* Control Key Command */
 	if (ptree->auth.control_key)
@@ -1365,6 +1357,10 @@ config_tos(
 
 		case T_Mindist:
 			item = PROTO_MINDISP;
+			break;
+
+		case T_Maxdisp:
+			item = PROTO_MAXDISP;
 			break;
 
 		case T_Maxdist:
@@ -1571,13 +1567,46 @@ free_config_monitor(
 	FREE_FILEGEN_FIFO(ptree->filegen_opts);
 }
 
+bool getaddrinfo_now(char *hname, sockaddr_u *peeraddrp)
+{
+	int a_info;
+	size_t octets;
+	struct addrinfo		hints, *res;
+	ZERO(hints);
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_protocol = IPPROTO_UDP;
+	a_info = getaddrinfo(hname, "ntp", &hints, &res);
+	if (a_info == EAI_NONAME
+#ifdef EAI_NODATA
+	    || a_info == EAI_NODATA
+#endif
+	    ) {
+	    hints.ai_flags = AI_CANONNAME;
+	    hints.ai_flags |= AI_ADDRCONFIG;
+	    a_info = getaddrinfo(hname, "ntp", &hints, &res);
+	}
+	if (a_info != 0) {
+	    msyslog(LOG_ERR,
+		    "hostname %s can not be used (%s), please use IP address.",
+		    hname, gai_strerror(a_info));
+	    return false;
+	} else {
+	    INSIST(res != NULL);
+	    memset(peeraddrp, '\0', sizeof(*peeraddrp));
+	    octets = min(sizeof(*peeraddrp), res->ai_addrlen);
+	    memcpy(peeraddrp, res->ai_addr, octets);
+	    freeaddrinfo(res);
+	    return true;
+	}
+}
 
 static void
 config_access(
 	config_tree *ptree
 	)
 {
-	static int		warned_signd;
+	static bool		warned_signd;
 	attr_val *		my_opt;
 	restrict_node *		my_node;
 	int_node *		curr_flag;
@@ -1595,7 +1624,7 @@ config_access(
 #ifdef ENABLE_MSSNTP
 	    "MS-SNTP signd operations currently block ntpd degrading service to all clients.";
 #else
-	    "mssntp restrict bit ignored, this ntpd was configured without --enable-ntp-signd.";
+	    "mssntp restrict bit ignored, this ntpd was configured without --enable-mssntp.";
 #endif
 
 	/* Configure the mru options */
@@ -1749,10 +1778,6 @@ config_access(
 				flags |= RES_LIMITED;
 				break;
 
-			case T_Lowpriotrap:
-				flags |= RES_LPTRAP;
-				break;
-
 			case T_Nomodify:
 				flags |= RES_NOMODIFY;
 				break;
@@ -1774,6 +1799,11 @@ config_access(
 				break;
 
 			case T_Notrap:
+				/*
+				 * No-op - included for backward compatibility
+				 * with all the world's boilerplate ntp.conf
+				 * files.
+				 */
 				flags |= RES_NOTRAP;
 				break;
 
@@ -1788,7 +1818,7 @@ config_access(
 		}
 
 		if ((RES_MSSNTP & flags) && !warned_signd) {
-			warned_signd = 1;
+			warned_signd = true;
 			fprintf(stderr, "%s\n", signd_warning);
 			msyslog(LOG_WARNING, "%s", signd_warning);
 		}
@@ -1802,9 +1832,18 @@ config_access(
 					    : "default";
 			const char *kod_warn = "KOD does nothing without LIMITED.";
 
-			if (intercept_get_mode() == none)
-			    fprintf(stderr, "restrict %s: %s\n", kod_where, kod_warn);
+			fprintf(stderr, "restrict %s: %s\n", kod_where, kod_warn);
 			msyslog(LOG_WARNING, "restrict %s: %s", kod_where, kod_warn);
+		}
+
+		if (RES_NOTRAP & flags) {
+			const char *notrap_where = (my_node->addr)
+					  ? my_node->addr->address
+					  : (mflags & RESM_SOURCE)
+					    ? "source"
+					    : "default";
+
+			msyslog(LOG_WARNING, "restrict %s: notrap keyword is ignored.", notrap_where);
 		}
 
 		ZERO_SOCK(&addr);
@@ -2083,10 +2122,6 @@ config_nic_rules(
 
 	curr_node = HEAD_PFIFO(ptree->nic_rules);
 
-	/* we don't want to accept packets if we're replaying a log */
-	if (intercept_get_mode() == replay)
-	    return;
-
 	if (curr_node != NULL && have_interface_option) {
 		msyslog(LOG_ERR,
 			"interface/nic rules are not allowed with --interface (-I) or --novirtualips (-L)%s",
@@ -2106,12 +2141,6 @@ config_nic_rules(
 		switch (curr_node->match_class) {
 
 		default:
-			/*
-			 * this assignment quiets a gcc "may be used
-			 * uninitialized" warning and is here for no
-			 * other reason.
-			 */
-			match_type = MATCH_ALL;
 			INSIST(false);
 			break;
 
@@ -2442,188 +2471,6 @@ free_config_ttl(
 
 
 static void
-config_trap(
-	config_tree *ptree
-	)
-{
-	addr_opts_node *curr_trap;
-	attr_val *curr_opt;
-	sockaddr_u addr_sock;
-	sockaddr_u peeraddr;
-	struct interface *localaddr;
-	struct addrinfo hints;
-	char port_text[8];
-	settrap_parms *pstp;
-	u_short port;
-	int err_flag;
-	int rc;
-
-	/* silence warning about addr_sock potentially uninitialized */
-	AF(&addr_sock) = AF_UNSPEC;
-
-	curr_trap = HEAD_PFIFO(ptree->trap);
-	for (; curr_trap != NULL; curr_trap = curr_trap->link) {
-		err_flag = 0;
-		port = 0;
-		localaddr = NULL;
-
-		curr_opt = HEAD_PFIFO(curr_trap->options);
-		for (; curr_opt != NULL; curr_opt = curr_opt->link) {
-			if (T_Port == curr_opt->attr) {
-				if (curr_opt->value.i < 1
-				    || curr_opt->value.i > USHRT_MAX) {
-					msyslog(LOG_ERR,
-						"invalid port number "
-						"%d, trap ignored",
-						curr_opt->value.i);
-					err_flag = 1;
-				}
-				port = (u_short)curr_opt->value.i;
-			}
-			else if (T_Interface == curr_opt->attr) {
-				/* Resolve the interface address */
-				ZERO_SOCK(&addr_sock);
-				if (getnetnum(curr_opt->value.s,
-					      &addr_sock, 1, t_UNK) != 1) {
-					err_flag = 1;
-					break;
-				}
-
-				localaddr = findinterface(&addr_sock);
-
-				if (NULL == localaddr) {
-					msyslog(LOG_ERR,
-						"can't find interface with address %s",
-						stoa(&addr_sock));
-					err_flag = 1;
-				}
-			}
-		}
-
-		/* Now process the trap for the specified interface
-		 * and port number
-		 */
-		if (!err_flag) {
-			if (!port)
-				port = TRAPPORT;
-			ZERO_SOCK(&peeraddr);
-			rc = getnetnum(curr_trap->addr->address,
-				       &peeraddr, 1, t_UNK);
-			if (1 != rc) {
-#ifndef USE_WORKER
-				msyslog(LOG_ERR,
-					"trap: unable to use IP address %s.",
-					curr_trap->addr->address);
-#else	/* USE_WORKER follows */
-				/*
-				 * save context and hand it off
-				 * for name resolution.
-				 */
-				ZERO(hints);
-				hints.ai_protocol = IPPROTO_UDP;
-				hints.ai_socktype = SOCK_DGRAM;
-				snprintf(port_text, sizeof(port_text),
-					 "%u", port);
-				hints.ai_flags = Z_AI_NUMERICSERV;
-				pstp = emalloc_zero(sizeof(*pstp));
-				if (localaddr != NULL) {
-					hints.ai_family = localaddr->family;
-					pstp->ifaddr_nonnull = 1;
-					memcpy(&pstp->ifaddr,
-					       &localaddr->sin,
-					       sizeof(pstp->ifaddr));
-				}
-				rc = getaddrinfo_sometime(
-					curr_trap->addr->address,
-					port_text, &hints,
-					INITIAL_DNS_RETRY,
-					&trap_name_resolved,
-					pstp);
-				if (!rc)
-					msyslog(LOG_ERR,
-						"config_trap: getaddrinfo_sometime(%s,%s): %m",
-						curr_trap->addr->address,
-						port_text);
-#endif	/* USE_WORKER */
-				continue;
-			}
-			/* port is at same location for v4 and v6 */
-			SET_PORT(&peeraddr, port);
-
-			if (NULL == localaddr)
-				localaddr = ANY_INTERFACE_CHOOSE(&peeraddr);
-			else
-				AF(&peeraddr) = AF(&addr_sock);
-
-			if (!ctlsettrap(&peeraddr, localaddr, 0,
-					NTP_VERSION))
-				msyslog(LOG_ERR,
-					"set trap %s -> %s failed.",
-					latoa(localaddr),
-					stoa(&peeraddr));
-		}
-	}
-}
-
-
-/*
- * trap_name_resolved()
- *
- * Callback invoked when config_trap()'s DNS lookup completes.
- */
-# ifdef USE_WORKER
-static void
-trap_name_resolved(
-	int			rescode,
-	int			gai_errno,
-	void *			context,
-	const char *		name,
-	const char *		service,
-	const struct addrinfo *	hints,
-	const struct addrinfo *	res
-	)
-{
-	settrap_parms *pstp;
-	struct interface *localaddr;
-	sockaddr_u peeraddr;
-
-	(void)gai_errno;
-	(void)service;
-	(void)hints;
-	pstp = context;
-	if (rescode) {
-		msyslog(LOG_ERR,
-			"giving up resolving trap host %s: %s (%d)",
-			name, gai_strerror(rescode), rescode);
-		free(pstp);
-		return;
-	}
-	INSIST(sizeof(peeraddr) >= res->ai_addrlen);
-	ZERO(peeraddr);
-	memcpy(&peeraddr, res->ai_addr, res->ai_addrlen);
-	localaddr = NULL;
-	if (pstp->ifaddr_nonnull)
-		localaddr = findinterface(&pstp->ifaddr);
-	if (NULL == localaddr)
-		localaddr = ANY_INTERFACE_CHOOSE(&peeraddr);
-	if (!ctlsettrap(&peeraddr, localaddr, 0, NTP_VERSION))
-		msyslog(LOG_ERR, "set trap %s -> %s failed.",
-			latoa(localaddr), stoa(&peeraddr));
-	free(pstp);
-}
-# endif	/* USE_WORKER */
-
-
-static void
-free_config_trap(
-	config_tree *ptree
-	)
-{
-	FREE_ADDR_OPTS_FIFO(ptree->trap);
-}
-
-
-static void
 config_fudge(
 	config_tree *ptree
 	)
@@ -2634,11 +2481,11 @@ config_fudge(
 	sockaddr_u addr_sock;
 	address_node *addr_node;
 	struct refclockstat clock_stat;
-	int err_flag;
+	bool err_flag;
 
 	curr_fudge = HEAD_PFIFO(ptree->fudge);
 	for (; curr_fudge != NULL; curr_fudge = curr_fudge->link) {
-		err_flag = 0;
+		err_flag = false;
 
 		/* Get the reference clock address and
 		 * ensure that it is sane
@@ -2647,17 +2494,17 @@ config_fudge(
 		ZERO_SOCK(&addr_sock);
 		if (getnetnum(addr_node->address, &addr_sock, 1, t_REF)
 		    != 1) {
-			err_flag = 1;
+			err_flag = true;
 			msyslog(LOG_ERR,
 				"unrecognized fudge reference clock address %s, line ignored",
-				stoa(&addr_sock));
+				socktoa(&addr_sock));
 		}
 
 		if (!ISREFCLOCKADR(&addr_sock)) {
-			err_flag = 1;
+			err_flag = true;
 			msyslog(LOG_ERR,
 				"inappropriate address %s for the fudge command, line ignored",
-				stoa(&addr_sock));
+				socktoa(&addr_sock));
 		}
 
 		/* Parse all the options to the fudge command */
@@ -2725,7 +2572,7 @@ config_fudge(
 				msyslog(LOG_ERR,
 					"Unexpected fudge flag %s (%d) for %s",
 					token_name(curr_opt->attr),
-					curr_opt->attr, stoa(&addr_sock));
+					curr_opt->attr, socktoa(&addr_sock));
 				exit(curr_opt->attr ? curr_opt->attr : 1);
 			}
 		}
@@ -2863,7 +2710,7 @@ is_sane_resolved_address(
 	if (!ISREFCLOCKADR(peeraddr) && ISBADADR(peeraddr)) {
 		msyslog(LOG_ERR,
 			"attempt to configure invalid address %s",
-			stoa(peeraddr));
+			socktoa(peeraddr));
 		return false;
 	}
 	/*
@@ -2875,13 +2722,13 @@ is_sane_resolved_address(
 	    && IS_MCAST(peeraddr)) {
 		msyslog(LOG_ERR,
 			"attempt to configure invalid address %s",
-			stoa(peeraddr));
+			socktoa(peeraddr));
 		return false;
 	}
 	if (T_Manycastclient == hmode && !IS_MCAST(peeraddr)) {
 		msyslog(LOG_ERR,
 			"attempt to configure invalid address %s",
-			stoa(peeraddr));
+			socktoa(peeraddr));
 		return false;
 	}
 
@@ -2960,10 +2807,8 @@ get_correct_host_mode(
 	case T_Server:
 	case T_Pool:
 	case T_Manycastclient:
-		return MODE_CLIENT;
-
 	case T_Peer:
-		return MODE_ACTIVE;
+		return MODE_CLIENT;
 
 	case T_Broadcast:
 		return MODE_BROADCAST;
@@ -2972,7 +2817,6 @@ get_correct_host_mode(
 		return 0;
 	}
 }
-
 
 static void
 config_peers(
@@ -2991,8 +2835,8 @@ config_peers(
 	    cmdline_server_count--, cmdline_servers++) {
 		struct peer_ctl client_ctl = {
 		    .version = NTP_VERSION,
-		    .minpoll = 0,
-		    .maxpoll = 0,
+		    .minpoll = NTP_MINDPOLL,
+		    .maxpoll = NTP_MAXPOLL_UNK,
 		    .flags = FLAG_IBURST,
 		    .ttl = 0,
 		    .peerkey = 0,
@@ -3017,7 +2861,7 @@ config_peers(
 					MODE_CLIENT,
 					&client_ctl);
 		} else if (force_synchronous_dns) {
-			if (intercept_getaddrinfo(*cmdline_servers, &peeraddr)) {
+			if (getaddrinfo_now(*cmdline_servers, &peeraddr)) {
 				peer_config(
 					&peeraddr,
 					NULL,
@@ -3032,8 +2876,12 @@ config_peers(
 			ctx->family = AF_UNSPEC;
 			ctx->host_mode = T_Server;
 			ctx->hmode = MODE_CLIENT;
+			ctx->ctl.flags   = FLAG_IBURST;
+			ctx->ctl.maxpoll = NTP_MAXPOLL_UNK;
+			ctx->ctl.minpoll = NTP_MINDPOLL;
+			ctx->ctl.peerkey = 0;
+			ctx->ctl.ttl     = 0;
 			ctx->ctl.version = NTP_VERSION;
-			ctx->ctl.flags = FLAG_IBURST;
 
 			ZERO(hints);
 			hints.ai_family = (u_short)ctx->family;
@@ -3104,7 +2952,7 @@ config_peers(
 					 * timer, since the clock may
 					 * have requirements for this.
 					 */
-					if (maxpoll == 0)
+					if (NTP_MAXPOLL_UNK == maxpoll)
 						/* default maxpoll for
 						 * refclocks is minpoll
 						 */
@@ -3137,7 +2985,7 @@ config_peers(
 		 * synchronous lookup may be forced.
 		 */
 		} else if (force_synchronous_dns) {
-			if (intercept_getaddrinfo(curr_peer->addr->address, &peeraddr)) {
+			if (getaddrinfo_now(curr_peer->addr->address, &peeraddr)) {
 				peer_config(
 					&peeraddr,
 					NULL,
@@ -3229,7 +3077,7 @@ peer_name_resolved(
 						     : "";
 				msyslog(LOG_INFO, "DNS %s %s-> %s",
 					name, fam_spec,
-					stoa(&peeraddr));
+					socktoa(&peeraddr));
 			}
 			peer_config(
 				&peeraddr,
@@ -3288,7 +3136,7 @@ config_unpeers(
 			p = findpeerbyassoc(curr_unpeer->assocID);
 			if (p != NULL) {
 				msyslog(LOG_NOTICE, "unpeered %s",
-					stoa(&p->srcadr));
+					socktoa(&p->srcadr));
 				peer_clear(p, "GONE", true);
 				unpeer(p);
 			}
@@ -3303,11 +3151,11 @@ config_unpeers(
 		/* Do we have a numeric address? */
 		if (rc > 0) {
 			DPRINTF(1, ("unpeer: searching for %s\n",
-				    stoa(&peeraddr)));
+				    socktoa(&peeraddr)));
 			p = findexistingpeer(&peeraddr, NULL, NULL, -1, 0);
 			if (p != NULL) {
 				msyslog(LOG_NOTICE, "unpeered %s",
-					stoa(&peeraddr));
+					socktoa(&peeraddr));
 				peer_clear(p, "GONE", true);
 				unpeer(p);
 			}
@@ -3385,7 +3233,7 @@ unpeer_name_resolved(
 		INSIST(res->ai_addrlen <= sizeof(peeraddr));
 		memcpy(&peeraddr, res->ai_addr, res->ai_addrlen);
 		DPRINTF(1, ("unpeer: searching for peer %s\n",
-			    stoa(&peeraddr)));
+			    socktoa(&peeraddr)));
 		peer = findexistingpeer(&peeraddr, NULL, NULL, -1, 0);
 		if (peer != NULL) {
 			af = AF(&peeraddr);
@@ -3395,7 +3243,7 @@ unpeer_name_resolved(
 					     ? "(A) "
 					     : "";
 			msyslog(LOG_NOTICE, "unpeered %s %s-> %s", name,
-				fam_spec, stoa(&peeraddr));
+				fam_spec, socktoa(&peeraddr));
 			peer_clear(peer, "GONE", true);
 			unpeer(peer);
 		}
@@ -3505,11 +3353,9 @@ config_ntpd(
 	config_mdnstries(ptree);
 	config_setvar(ptree);
 	config_ttl(ptree);
-	config_trap(ptree);
 	config_vars(ptree);
 
-	if (intercept_get_mode() != replay)
-		io_open_sockets();
+	io_open_sockets();
 
 	config_other_modes(ptree);
 	config_peers(ptree);
@@ -3530,7 +3376,7 @@ config_remotely(
 	char origin[128];
 
 	snprintf(origin, sizeof(origin), "remote config from %s",
-		 stoa(remote_addr));
+		 socktoa(remote_addr));
 	lex_init_stack(origin, NULL); /* no checking needed... */
 	init_syntax_tree(&cfgt);
 	yyparse();
@@ -3538,7 +3384,7 @@ config_remotely(
 
 	cfgt.source.attr = CONF_SOURCE_NTPQ;
 	cfgt.timestamp = time(NULL);
-	cfgt.source.value.s = estrdup(stoa(remote_addr));
+	cfgt.source.value.s = estrdup(socktoa(remote_addr));
 
 	DPRINTF(1, ("Finished Parsing!!\n"));
 
@@ -3554,30 +3400,7 @@ getconfig(const char *explicit_config)
 {
 	const char *config_file;
 
-#ifndef SYS_WINNT
 	config_file = CONFIG_FILE;
-#else
-	char *alt_config_file;
-	LPTSTR temp;
-	char config_file_storage[MAX_PATH];
-	char alt_config_file_storage[MAX_PATH];
-
-	temp = CONFIG_FILE;
-	if (!ExpandEnvironmentStringsA(temp, config_file_storage,
-				       sizeof(config_file_storage))) {
-		msyslog(LOG_ERR, "ExpandEnvironmentStrings CONFIG_FILE failed: %m");
-		exit(1);
-	}
-	config_file = config_file_storage;
-
-	temp = ALT_CONFIG_FILE;
-	if (!ExpandEnvironmentStringsA(temp, alt_config_file_storage,
-				       sizeof(alt_config_file_storage))) {
-		msyslog(LOG_ERR, "ExpandEnvironmentStrings ALT_CONFIG_FILE failed: %m");
-		exit(1);
-	}
-	alt_config_file = alt_config_file_storage;
-#endif /* SYS_WINNT */
 
 	if (explicit_config) {
 #ifdef HAVE_NETINFO_NI_H
@@ -3585,11 +3408,6 @@ getconfig(const char *explicit_config)
 #endif
 	    config_file = explicit_config;
 	}
-
-#ifdef SYS_WINNT
-	if (access(config_file, R_OK) != 0)
-	    config_file = alt_config_file;
-#endif /* SYS_WINNT */
 
 	return config_file;
 }
@@ -3607,12 +3425,6 @@ void readconfig(const char *config_file)
 		"daemon_version=\"ntpd %s\"", Version);
 	set_sys_var(line, strlen(line) + 1, RO);
 
-	/*
-	 * Set up for the first time step to install a variable showing
-	 * which syscall is being used to step.
-	 */
-	set_tod_using = &ntpd_set_tod_using;
-
 	init_syntax_tree(&cfgt);
 	if (
 		!lex_init_stack(config_file, "r")
@@ -3622,12 +3434,9 @@ void readconfig(const char *config_file)
 #endif /* HAVE_NETINFO_NI_H */
 		) {
 		msyslog(LOG_INFO, "getconfig: Couldn't open <%s>: %m", config_file);
-#ifndef SYS_WINNT
-		if (intercept_get_mode() != replay)
-			io_open_sockets();
+		io_open_sockets();
 
 		return;
-#endif	/* SYS_WINNT */
 	} else
 		cfgt.source.value.s = estrdup(config_file);
 
@@ -3682,18 +3491,6 @@ save_and_apply_config_tree(bool input_from_file)
 		     config_tree);
 	INSIST(punlinked == ptree);
 	free_config_tree(ptree);
-}
-
-
-static void
-ntpd_set_tod_using(
-	const char *which
-	)
-{
-	char line[128];
-
-	snprintf(line, sizeof(line), "settimeofday=\"%s\"", which);
-	set_sys_var(line, strlen(line) + 1, RO);
 }
 
 
@@ -3980,7 +3777,7 @@ getnetnum(
 # endif
 	SET_PORT(addr, NTP_PORT);
 
-	DPRINTF(2, ("getnetnum given %s, got %s\n", num, stoa(addr)));
+	DPRINTF(2, ("getnetnum given %s, got %s\n", num, socktoa(addr)));
 
 	return 1;
 }

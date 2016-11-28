@@ -8,14 +8,10 @@
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
 #include "ntp_control.h"	/* for CTL_* clocktypes */
-#include "ntp_intercept.h"
+#include "ntp_syscall.h"
 
 #include <stdio.h>
 #include <ctype.h>
-
-#ifdef HAVE_KERNEL_PLL
-#include "ntp_syscall.h"
-#endif
 
 /*
  * This is a hack to allow a machine to use its own system clock as a
@@ -176,7 +172,7 @@ local_poll(
 	 */
 #if defined(HAVE_KERNEL_PLL) && defined(ENABLE_LOCKCLOCK)
 	memset(&ntv,  0, sizeof ntv);
-	switch (intercept_kernel_pll_adjtime(&ntv)) {
+	switch (ntp_adjtime(&ntv)) {
 	case TIME_OK:
 		pp->leap = LEAP_NOWARNING;
 		peer->stratum = pp->stratum;

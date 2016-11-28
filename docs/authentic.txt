@@ -59,35 +59,31 @@ discarded.
 The +auth+ flag controls whether new associations or remote
 configuration commands require cryptographic authentication. This flag
 can be set or reset by the +enable+ and +disable+ commands and also by
-remote configuration commands sent by a {ntpqman} program
-running in another machine. If this flag is enabled, which is the
-default case, new broadcast client and symmetric passive associations
-and remote configuration commands must be cryptographically
-authenticated using either symmetric key or public key cryptography. If
+remote configuration commands sent by a {ntpqman} program running in
+another machine. If this flag is enabled, which is the default case,
+new broadcast client and symmetric passive associations and remote
+configuration commands must be cryptographically authenticated. If
 this flag is disabled, these operations are effective even if not
-cryptographic authenticated. It should be understood that operating with
-the +auth+ flag disabled invites a significant vulnerability where a rogue
-hacker can masquerade as a falseticker and seriously disrupt system
-timekeeping. It is important to note that this flag has no purpose other
-than to allow or disallow a new association in response to new broadcast
-and symmetric active messages and remote configuration commands and, in
-particular, the flag has no effect on the authentication process
-itself.
+cryptographic authenticated. It should be understood that operating
+with the +auth+ flag disabled invites a significant vulnerability
+where a cracker can masquerade as a falseticker and seriously disrupt
+system timekeeping. It is important to note that this flag has no
+purpose other than to allow or disallow a new association in response
+to new broadcast and symmetric active messages and remote
+configuration commands and, in particular, the flag has no effect on
+the authentication process itself.
 
 An attractive alternative where multicast support is available is
 manycast mode, in which clients periodically troll for servers as
 described in the 'Automatic NTP Configuration Options' page of the Web
-documentation.  Either symmetric key or public key cryptographic
-authentication can be used in this mode. The principle advantage of
-manycast mode is that potential servers need not be configured in
-advance, since the client finds them during regular operation, and the
-configuration files for all clients can be identical.
+documentation.  Authentication can be used in this mode. The principle
+advantage of manycast mode is that potential servers need not be
+configured in advance, since the client finds them during regular
+operation, and the configuration files for all clients can be
+identical.
 
 The security model and protocol schemes for symmetric key
-//and public key cryptography
-are summarized below; further details are in the
-briefings, papers and reports at the {project-fullname} page linked from
-{project-website}.
+are summarized below.
 
 [[symm]]
 === Symmetric-Key Cryptography ===
@@ -96,7 +92,7 @@ NTP allows any one of possibly 65,534 keys, each distinguished by a
 32-bit key identifier, to authenticate an association. The servers and
 clients involved must agree on the key and key identifier to
 authenticate NTP packets. Keys and related information are specified
-in a key file, usually called _{ntpkeys}_, which must be distributed
+in a key file, usually called _ntp.keys_, which must be distributed
 and stored using secure means beyond the scope of the NTP protocol
 itself. Besides the keys used for ordinary NTP associations,
 additional keys can be used as passwords for the {ntpqman} utility
@@ -174,7 +170,7 @@ program, including symmetric key and leapseconds files.
 == Algorithms ==
 
 The NTP standards include symmetric (private-key) authentication using
-the RSA Message Digest 5 (MD5) algorithm commonly ,called
+the RSA Message Digest 5 (MD5) algorithm, commonly called
 keyed-MD5. This algorithm computes a message digest or one-way hash
 which can be used to verify the client has the same message digest as
 the server. The MD5 message digest algorithm is included in the
@@ -202,10 +198,8 @@ US.
 Authentication is configured separately for each association using the
 +key+ option of the +server+ configuration command, as
 described in the link:confopt.html[Server Options] page. The
-link:ntpkeygen.html[{ntpkeygen}] page describes the files required for the
-various authentication schemes. Further details are in the briefings,
-papers and reports at the {project-shortname} project page linked from
-{project-weblink}.
+link:ntpkeygen.html[ntpkeygen] page describes the files required for the
+various authentication schemes.
 
 By default, the client sends non-authenticated packets and the server
 responds with non-authenticated packets. If the client sends
@@ -245,9 +239,9 @@ intruder cannot disrupt the protocol by sending a bogus crypto-NAK.
 Keys and related information are specified in a keys file, which must be
 distributed and stored using secure means beyond the scope of the NTP
 protocol itself. Besides the keys used for ordinary NTP associations,
-additional keys can be used as passwords for the +{ntpq}+
-utility program. Ordinarily, the +{ntpkeys}+ file is generated by the
-+{ntpkeygen}+ program, but it can be constructed and edited using an
+additional keys can be used as passwords for the +ntpq+
+utility program. Ordinarily, the +ntp.keys+ file is generated by the
++ntpkeygen+ program, but it can be constructed and edited using an
 ordinary text editor.
 
 Each line of the keys file consists of three fields: a key ID in the
@@ -272,29 +266,26 @@ be added to change any field. The key can be change to a password, such
 as +2late4Me+ for key ID 10. Note that two or more keys files can be
 combined in any order as long as the key IDs are distinct.
 
-When +{ntpd}+ is started, it reads the keys file specified by the +keys+
+When +ntpd+ is started, it reads the keys file specified by the +keys+
 command and installs the keys in the key cache. However, individual keys
 must be activated with the +trustedkey+ configuration command before
 use. This allows, for instance, the installation of possibly several
-batches of keys and then activating a key remotely using +{ntpq}+.
+batches of keys and then activating a key remotely using +ntpq+.
 The +controlkey+ command selects the key ID used as the password
-for the +{ntpq}+ utility.
+for the +ntpq+ utility.
 
-//[[windows]]
-//== Microsoft Windows Authentication ==
-//
-//In addition to the above means, +{ntpd}+ supports Microsoft Windows
-//MS-SNTP authentication using Active Directory services. This support was
-//contributed by the Samba Team and is still in development. It is enabled
-//using the +mssntp+ flag of the +restrict+ command described on the
-//link:accopt.html#restrict[Access Control Options] page. [red]#Note: Potential
-//users should be aware that these services involve a TCP connection to
-//another process that could potentially block, denying services to other
-//users. Therefore, this flag should be used only for a dedicated server
-//with no clients other than MS-SNTP.
+[[windows]]
+== Microsoft Windows Authentication ==
 
-[[pub]]
-== Public Key Cryptography ==
+In addition to the above means, +ntpd+ supports Microsoft Windows
+MS-SNTP authentication using Active Directory services. This support was
+contributed by the Samba Team and is still in development. It is enabled
+using the +mssntp+ flag of the +restrict+ command described on the
+link:accopt.html#restrict[Access Control Options] page. [red]#Note: Potential
+users should be aware that these services involve a TCP connection to
+another process that could potentially block, denying services to other
+users. Therefore, this flag should be used only for a dedicated server
+with no clients other than MS-SNTP.
 
 '''''
 

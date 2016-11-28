@@ -13,8 +13,6 @@ directory.
 The base directory ./ contains the configuration files, source
 directories and related stuff:
 
-BUGS::		Descriptions of known bugs.
-
 INSTALL::	Generic installation instructions.
 
 NEWS::		What's new in this release.
@@ -23,7 +21,15 @@ README::	This file.
 
 VERSION::	The version stamp, to be used by scripts and programs.
 
-devel/::	Documentation aimed at developers.
+attic/:: 	Directory containing source code that is *not* part of a
+		normal installation. Things can disappear from here at any
+		time.
+
+contrib/::	Directory containing contributed scripts, dragons dwell here.
+		Some of this might eventually move to being supported code.
+
+devel/::	Documentation and small tools aimed at developers.
+		Includes a hacking guide and a tour of the internals.
 
 docs/::		Directory containing a complete set of documentation on
 		building and configuring a NTP server or client. The files
@@ -69,11 +75,14 @@ ntpleapfetch/::	Directory containing a script to be run from a cron job
 
 ntpq/::		Directory containing sources for a utility program to
 		query local and remote NTP peers for state variables and
-		related timekeeping information. This program conforms
-		to Appendix A of the NTP Version 3 Specification RFC 1305.
+		related timekeeping information.
 
 ntpstats/::	Statistics visualization and analysis tools built around
 		the Python ntpstats.py module. Includes ntpviz.
+
+ntpsweep/::	Directory containing source for a utility program that can
+		fetch basic information about timservers, recursing through
+		peers to map the nearby topology of the time-service network.
 
 ntptime/:: 	Directory containing a utility for reading and modifying
 		kernel parameters related to the local clock.
@@ -87,21 +96,9 @@ ntpwait/::	Directory containing a script that blocks until ntpd is
 		in state 4 (synchronized). Useful at boot time, to delay
 		the boot sequence until after "ntpd -g" has set the time.
 
-perllib/::	NTP interface package required to query Mode 6 packets
-		from the daemon from Perl scripts.
-
-ports/::	Subdirectories of this contain code for non-Unix operating
-		systems.  At present there is just one, for Windows.
-
-pylib/::	Installable Python helper classes.
+pylib/::	Installable Python helper classes for scripts.
 
 tests/::	Self-test code.
-
-util/:: 	Directory containing sources for various utility and testing
-		programs that are *not* part of a normal installation.
-		The subdirectories monitoring/ and support/ hold
-		various perl and shell scripts for visualizing
-		synchronization and daemon startup.
 
 waf::		A copy of the waf builder.  This is the engine used to configure
 		and build the codebase.

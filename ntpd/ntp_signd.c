@@ -9,7 +9,6 @@
 #include "ntpd.h"
 #include "ntp_io.h"
 #include "ntp_stdlib.h"
-#include "ntp_unixtime.h"
 #include "ntp_control.h"
 
 #include <string.h>
@@ -195,9 +194,6 @@ send_via_ntp_signd(
 		}
 			
 		if (recv_packet(fd, &reply, &reply_len) != 0) {
-			if (reply) {
-				free(reply);
-			}
 			close(fd);
 			return;
 		}
@@ -218,8 +214,8 @@ send_via_ntp_signd(
 				if (debug)
 					printf(
 						"transmit ntp_signd packet: at %ld %s->%s mode %d keyid %08x len %d\n",
-						current_time, ntoa(&rbufp->dstadr->sin),
-						ntoa(&rbufp->recv_srcadr), xmode, xkeyid, sendlen);
+						current_time, socktoa(&rbufp->dstadr->sin),
+						socktoa(&rbufp->recv_srcadr), xmode, xkeyid, sendlen);
 #endif
 			}
 		}

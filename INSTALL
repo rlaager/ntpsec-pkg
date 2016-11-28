@@ -3,58 +3,80 @@
 == Prerequisites ==
 
 This software should build on any operating system conformant to
-POSIX.1-2001 and ISO/IEC 9899:1999 (C99).  In addition, the
-operating system must have either a Linux-like adjtimex(2) call
-or a BSD-like pair of ntp_gettime(2)/ntp_adjtime(2) calls.
+POSIX.1-2001 and ISO/IEC 9899:1999 (C99).  In addition, the operating
+system must have an ntp_adjtime(2) call or the older BSD adjtime(2)
+call. Also, it must support the IPv6 API defined in RFC2493 and
+RFC2553. Finally, it must support iterating over active UDP interfaces
+via getifaddrs(3) or some equivalent facility.
 
-There are some prerequisites.  Libraries need the library installed
+There are some prerequisites.  Libraries need the binary installed
 to run and in addition, the development headers installed to build.
 
-Python 2.x, x >= 5::
-   Required to build.  May be needed by some utilities.  Note, we don't
-   play well with Python 3 yet.
+Python 2.x, x >= 6, or Python 3.x, x >= 3::
+   Required to build, and for various scripts such as ntpviz (but see
+   the guidance for packagers in devel/packaging.txt).  Our Python code
+   has been written polyglot to also run with production versions of
+   Python 3.  Note that you will need both the ordinary Python
+   intallation and Python dev tools, if your OS makes such a
+   distinction.
+
+   SLES: python-devel
 
 bison::
    Required to build.
-   Fedora: bison
    Debian: bison
-
-libevent 2.x::
-   Optional. Without it, ntpdig won't build. 
-   Fedora: libevent and libevent-devel
-   Debian: libevent and libevent-dev
-
-   NetBSD: As installed, libevent is broken.  It links, but doesn't run.
-     Here is a workaround:
-      # cd /usr/lib
-      # ln -s /usr/pkg/lib/libevent_core-2.0.so.5
+   Fedora: bison
+   Gentoo package: sys-devel/bison
+   SLES: bison . Included in pattern `basis-devel`, which includes gcc, etc.
 
 libcap::
    Required on Linux, to support dropping root.
    Fedora: libcap and libcap-devel
    Debian: libcap2 and libcap-dev
+   Gentoo package: sys-libs/libcap
+   SLES: libcap2 and libcap-devel
+
+gnuplot::
+   Required for ntpviz.
+   Debian: gnuplot
+   Fedora: gnuplot
+   Gentoo package: sci-visualization/gnuplot
+   Ubuntu package: gnuplot5
+   SLES: gnuplot
+
+psutils::
+   Optional for ntpviz.  Allows running with ionice()
+   Debian package: python-psutil or python3-psutil
+   Gentoo package: dev-python/psutil
+   Ubuntu package: python-psutil or python3-psutil
+   SLES: python-psutil
+
+libevent 2.x::
+   Optional. Without it, ntpdig won't build. 
+   Debian: libevent-2.0-5 and libevent-dev
+   Fedora: libevent and libevent-devel
+   Gentoo package: dev-libs/libevent
+   SLES: libevent and libevent-devel
+
+   NetBSD: As installed, libevent is broken.  It links, but doesn't run.
+     Here is a workaround:
+      # cd /usr/lib
+      # ln -s /usr/pkg/lib/libevent_core-2.0.so.5 .
 
 seccomp::
    Optional on Linux to support restricting syscalls
-   Fedora: libseccomp-devel
    Debian: libseccomp-dev (gets libseccomp2)
+   Fedora: libseccomp-devel
+   Gentoo package: sys-libs/libseccomp
+   SLES: libseccomp-devel
 
 OpenSSL::
    Optional, required for --enable-crypto.
    Enables encryption and authentication.
-   Fedora: openssl-libs and openssl-devel
    Debian: libssl1.0.0 and libssl-dev
-
-GNU readline::
-   Optional. Enhances ntpq's interactive mode by enabling line
-   editing.
-   Fedora: readline and readline-devel
-   Debian: libreadline6 and libreadline-dev
-
-BSD libedit::
-   Optional. Enhances ntpq's interactive mode by enabling line
-   editing. Used as a fallback if it is installed and GNU readline
-   is not.
+   Fedora: openssl-libs and openssl-devel
+   Gentoo package: dev-libs/openssl
+   SLES: openssl-libs and openssl-devel
 
 sys/timepps.h::
    If you are building to supply Stratum 1 time service (that is, with
@@ -62,34 +84,42 @@ sys/timepps.h::
    file to be installed, depending on which refclocks you enable.
    This won't be necessary for pure client (Stratum 2 or higher)
    installations.
-   Fedora: pps-tools-devel (pps-tools may be useful for debugging)
    Debian: pps-tools
+   Fedora: pps-tools-devel (pps-tools may be useful for debugging)
+   Gentoo package: net-misc/pps-tools
+   SLES: SLES 12 and earlier do not seem to have this available.
 
 asciidoc, a2x::
    You will need asciidoc to make HTML and a2x to make manual pages from the
    documentation masters.  Only required if you configured with --enable-doc.
    Note, you need asciidoc 8.6.0 at minimum.
-   Fedora: asciidoc  (Stock CentOS/RHEL has only 8.4.5, you must upgrade)
    Debian: asciidoc
+   Fedora: asciidoc  (Stock CentOS/RHEL has only 8.4.5, you must upgrade)
+   Gentoo package: app-text/asciidoc
+   SLES: asciidoc
 
-gnuplot::
-   Required for ntpviz.
-   Fedora: gnuplot
-   Debian: gnuplot
+Local copy of DocBook stylesheets:
+   Optional: Prevents documentation build failures when your Internet is down
+   Debian: docbook-xsl
+   Fedora: docbook-xsl-stylesheets
+   Gentoo package: app-text/docbook-xsl-stylesheets
+   SLES: docbook-xsl-stylesheets .  Pulled in by `asciidoc`
 
 liberation::
    Optional, improves font quality in ntpviz renderings.
-   Fedora: liberation
    Debian: liberation
+   Fedora: liberation
+   Gentoo package: media-fonts/liberation-fonts
+   SLES: liberation-fonts
 
 The OS X build has been tested in this environment:
 
- OS X Version            : 10.11.x (El Capitan)
- Xcode Version           : 7.1
- Xcode Comand Line Tools : 7.2-beta
+ OS X Version             : 10.11.x (El Capitan)
+ Xcode Version            : 7.1
+ Xcode Command Line Tools : 7.2-beta
 
 All you will require is the Xcode command line tools with no additions.
-There is currently no support for using Xcode's builder. The NTPsec's standard
+There is currently no support for using Xcode's builder. NTPsec's standard
 waf based build system is used.
 
 The OS X build of NTPsec requires the OS X port of the libevent2 library:
@@ -109,9 +139,6 @@ this library if you wish and they have it available.
 == Basic Installation ==
 
 These are generic Unix installation instructions.
-
-If your default python is Python 3, replace "./waf" with "python2 waf"
-or whatever else is locally required to get python2 interpretation.
 
 Under Unix, the simplest way to compile this package is:
 
@@ -136,16 +163,21 @@ Under Unix, the simplest way to compile this package is:
      computer), type `./waf distclean'.
 
 Under OS X you can build NTPsec using Xcode command line tools with no
-additions.There is currently no support for using Xcode's builder.
+additions. There is currently no support for using Xcode's builder.
+
+== Qualification testing ==
+
+Details on how to qualify NTPsec if you've never used it before
+are at devel/testing.txt.
 
 == Bugs ==
 
-The configuration system is a work in progress, and occasionally acts
-up during builds on new platforms.  If you see the message
-"Compilation check failed but include exists!" this means that an attempt
-to compile a small test program using the include header mentioned on
-the previous line failed, but waf configure then found that despite
-this the header file exists on your system.
+The configuration system occasionally acts up during builds on new
+platforms.  If you see the message "Compilation check failed but
+include exists!" this means that an attempt to compile a small test
+program using the include header mentioned on the previous line
+failed, but waf configure then found that despite this the header file
+exists on your system.
 
 When this happens, it is likely that the header has prerequisites
 on your system that waf configure doesn't know about - that is,
@@ -159,6 +191,9 @@ By default, `waf install' will install the package's files in
 `/usr/local/bin', `/usr/local/man', etc.  You can specify an
 installation prefix other than `/usr/local' by giving waf the
 option `--prefix=PATH'.
+
+You should read the section "Path problems with the test tools" in
+devel/testing.txt before setting a non-default prefix.
 
 == Strict compatibility mode ==
 
@@ -178,19 +213,9 @@ Here's what it presently does:
 
 * Reverts the default baudrate of the NMEA driver to 4800 (from 9600).
 
+* Restores the old (non-RFC3339) format of logfile timestamps.
+
 Other behaviors may be added in future releases.
-
-== Uninstalled binaries and scripts ==
-
-Due to variations in Perl library paths, our stock source distribution
-makes no attempt to install certain Perl/Python/shell scripts: notably
-ntpleapfetch, ntpwait, and ntptrace.  If you installed this software
-from a binary package prepared by your OS distributor, the OS
-distributor may install them, arranging a rendezvous with the
-Perl implementation's library path.
-
-The utils/ directory contains various other uninstalled programs, some
-of only historical interest. Consult util/README for details.
 
 == Optional Features ==
 
@@ -218,5 +243,17 @@ operates.
      Print the version of waf used to generate the `configure'
      script, and exit.
 
+== Cross-compiling ==
+
+Set up a cross-compile environment for the target architecture.  At minimum
+it will need its own binaries for the OpenSSL and libevent2 libraries.
+
+Configure NTPSec with:
+
+  waf configure --enable-cross=/path/to/your/cross/cc
+
+There are also --cross-cflags and --cross-ldflags to supply the cross compiler 
+with appropriate values.
+                                                                  
 // end
 

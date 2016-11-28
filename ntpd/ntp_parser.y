@@ -61,7 +61,6 @@
 %token	<Integer>	T_Bclient
 %token	<Integer>	T_Beacon
 %token	<Integer>	T_Broadcast
-%token	<Integer>	T_Broadcastclient
 %token	<Integer>	T_Broadcastdelay
 %token	<Integer>	T_Burst
 %token	<Integer>	T_Calibrate
@@ -129,13 +128,13 @@
 %token	<Integer>	T_Logconfig
 %token	<Integer>	T_Logfile
 %token	<Integer>	T_Loopstats
-%token	<Integer>	T_Lowpriotrap
 %token	<Integer>	T_Manycastclient
 %token	<Integer>	T_Manycastserver
 %token	<Integer>	T_Mask
 %token	<Integer>	T_Maxage
 %token	<Integer>	T_Maxclock
 %token	<Integer>	T_Maxdepth
+%token	<Integer>	T_Maxdisp
 %token	<Integer>	T_Maxdist
 %token	<Integer>	T_Maxmem
 %token	<Integer>	T_Maxpoll
@@ -152,7 +151,6 @@
 %token	<Integer>	T_Monitor
 %token	<Integer>	T_Month
 %token	<Integer>	T_Mru
-%token	<Integer>	T_Multicastclient
 %token	<Integer>	T_Nic
 %token	<Integer>	T_Nolink
 %token	<Integer>	T_Nomodify
@@ -231,7 +229,6 @@
 %token	<Integer>	T_WanderThreshold	/* Not a token */
 %token	<Integer>	T_Week
 %token	<Integer>	T_Wildcard
-%token	<Integer>	T_Xleave
 %token	<Integer>	T_Year
 %token	<Integer>	T_Flag			/* Not a token */
 %token	<Integer>	T_EOC
@@ -311,8 +308,6 @@
 %type	<Integer>	tos_option_dbl_keyword
 %type	<Integer>	tos_option_int_keyword
 %type	<Attr_val_fifo>	tos_option_list
-%type	<Attr_val>	trap_option
-%type	<Attr_val_fifo>	trap_option_list
 %type	<Integer>	unpeer_keyword
 %type	<Set_var>	variable_assign
 
@@ -431,7 +426,6 @@ option_flag_keyword
 	|	T_Preempt
 	|	T_Prefer
 	|	T_True
-	|	T_Xleave
 	;
 
 option_int
@@ -515,17 +509,13 @@ unpeer_keyword
 	
 	
 /* Other Modes
- * (broadcastclient manycastserver multicastclient)
+ * (manycastserver)
  * ------------------------------------------------
  */
 
 other_mode_command
-	:	T_Broadcastclient
-			{ cfgt.broadcastclient = 1; }
-	|	T_Manycastserver address_list
+	:	T_Manycastserver address_list
 			{ CONCAT_G_FIFOS(cfgt.manycastserver, $2); }
-	|	T_Multicastclient address_list
-			{ CONCAT_G_FIFOS(cfgt.multicastclient, $2); }
 	|	T_Mdnstries T_Integer
 			{ cfgt.mdnstries = $2; }
 	;
@@ -643,6 +633,7 @@ tos_option_int_keyword
 
 tos_option_dbl_keyword
 	:	T_Mindist
+	|	T_Maxdisp
 	|	T_Maxdist
 	|	T_Minclock
 	|	T_Maxclock
@@ -863,7 +854,6 @@ access_control_flag
 	|	T_Kod
 	|	T_Mssntp
 	|	T_Limited
-	|	T_Lowpriotrap
 	|	T_Nomodify
 	|	T_Nomrulist
 	|	T_Nopeer
@@ -1226,13 +1216,6 @@ miscellaneous_command
 			{ CONCAT_G_FIFOS(cfgt.phone, $2); }
 	|	T_Setvar variable_assign
 			{ APPEND_G_FIFO(cfgt.setvar, $2); }
-	|	T_Trap ip_address trap_option_list
-		{
-			addr_opts_node *aon;
-			
-			aon = create_addr_opts_node($2, $3);
-			APPEND_G_FIFO(cfgt.trap, aon);
-		}
 	|	T_Ttl integer_list
 			{ CONCAT_G_FIFOS(cfgt.ttl, $2); }
 	;
@@ -1305,26 +1288,6 @@ t_default_or_zero
 	:	T_Default
 	|	/* empty, no "default" modifier */
 			{ $$ = 0; }
-	;
-
-trap_option_list
-	:	/* empty list */
-			{ $$ = NULL; }
-	|	trap_option_list trap_option
-		{
-			$$ = $1;
-			APPEND_G_FIFO($$, $2);
-		}
-	;
-
-trap_option
-	:	T_Port T_Integer
-			{ $$ = create_attr_ival($1, $2); }
-	|	T_Interface ip_address
-		{
-			$$ = create_attr_sval($1, estrdup($2->address));
-			destroy_address_node($2);
-		}
 	;
 
 log_config_list

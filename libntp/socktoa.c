@@ -31,7 +31,7 @@ socktoa(
 	char *		addr;
 	u_long		scope;
 
-	saved_errno = socket_errno();
+	saved_errno = errno;
 	LIB_GETBUF(res);
 
 	if (NULL == sock) {
@@ -79,7 +79,7 @@ sockporttoa(
 	const char *	atext;
 	char *		buf;
 
-	saved_errno = socket_errno();
+	saved_errno = errno;
 	atext = socktoa(sock);
 	LIB_GETBUF(buf);
 	snprintf(buf, LIB_BUFLENGTH,
@@ -102,7 +102,6 @@ sock_hash(
 	)
 {
 	u_int hashVal;
-	u_int j;
 	size_t len;
 	const uint8_t *pch;
 
@@ -132,7 +131,7 @@ sock_hash(
 		break;
 	}
 
-	for (j = 0; j < len ; j++)
+	for (u_int j = 0; j < len ; j++)
 		hashVal = 37 * hashVal + pch[j];
 
 	return (u_short)(hashVal & USHRT_MAX);

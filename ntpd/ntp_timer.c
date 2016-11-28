@@ -8,12 +8,6 @@
 #include "ntp_stdlib.h"
 #include "ntp_calendar.h"
 #include "ntp_leapsec.h"
-#include "ntp_intercept.h"
-
-#if defined(HAVE_IO_COMPLETION_PORT)
-# include "ntp_iocompletionport.h"
-# include "ntp_timer.h"
-#endif
 
 #include <stdio.h>
 #include <signal.h>
@@ -41,11 +35,6 @@ static void check_leapsec(uint32_t, const time_t*, bool);
 volatile int interface_interval;     /* init_io() sets def. 300s */
 
 /*
- * Alarm flag. The mainline code imports this.
- */
-volatile bool alarm_flag;
-
-/*
  * The counters and timeouts
  */
 static  u_long interface_timer;	/* interface update timer */
@@ -66,36 +55,26 @@ volatile u_long alarm_overflow;
 u_long current_time;		/* seconds since startup */
 
 /*
- * Stats.  Number of overflows and number of calls to transmit().
+ * Stats.  Time of last reset and number of calls to transmit().
  */
 u_long timer_timereset;
-u_long timer_overflows;
 u_long timer_xmtcalls;
 
-#ifdef SYS_WINNT
-HANDLE WaitableTimerHandle;
-#else
-static	void alarming (int);
-#endif /* SYS_WINNT */
+static	void catchALRM (int);
 
-#if !defined SYS_WINNT || defined(SYS_CYGWIN32)
-#  ifdef HAVE_TIMER_CREATE
+#ifdef HAVE_TIMER_CREATE
 static timer_t timer_id;
 typedef struct itimerspec intervaltimer;
-#  define	itv_frac	tv_nsec
-#  else
+#define	itv_frac	tv_nsec
+#else
 typedef struct itimerval intervaltimer;
-#   define	itv_frac	tv_usec
-#  endif
+#define	itv_frac	tv_usec
+#endif
 intervaltimer itimer;
-#endif
 
-#if !defined(SYS_WINNT)
 void	set_timer_or_die(const intervaltimer *);
-#endif
 
 
-#if !defined(SYS_WINNT)
 void
 set_timer_or_die(
 	const intervaltimer *	ptimer
@@ -119,7 +98,6 @@ set_timer_or_die(
 		exit(1);
 	}
 }
-#endif	/* !SYS_WINNT */
 
 
 /*
@@ -128,7 +106,6 @@ set_timer_or_die(
 void 
 reinit_timer(void)
 {
-#if !defined(SYS_WINNT)
 	ZERO(itimer);
 #ifdef HAVE_TIMER_CREATE
 	timer_gettime(timer_id, &itimer);
@@ -146,7 +123,6 @@ reinit_timer(void)
 	itimer.it_interval.tv_sec = (1 << EVENT_TIMEOUT);
 	itimer.it_interval.itv_frac = 0;
 	set_timer_or_die(&itimer);
-# endif
 }
 
 
@@ -159,7 +135,7 @@ init_timer(void)
 	/*
 	 * Initialize...
 	 */
-	alarm_flag = false;
+	sawALRM = false;
 	alarm_overflow = 0;
 	adjust_timer = 1;
 	stats_timer = SECSPERHR;
@@ -167,11 +143,9 @@ init_timer(void)
 	huffpuff_timer = 0;
 	interface_timer = 0;
 	current_time = 0;
-	timer_overflows = 0;
 	timer_xmtcalls = 0;
 	timer_timereset = 0;
 
-#ifndef SYS_WINNT
 	/*
 	 * Set up the alarm interrupt.	The first comes 2**EVENT_TIMEOUT
 	 * seconds from now and they continue on every 2**EVENT_TIMEOUT
@@ -183,38 +157,11 @@ init_timer(void)
 		exit(1);
 	}
 #endif
-	signal_no_reset(SIGALRM, alarming);
+	signal_no_reset(SIGALRM, catchALRM);
 	itimer.it_interval.tv_sec = 
 		itimer.it_value.tv_sec = (1 << EVENT_TIMEOUT);
 	itimer.it_interval.itv_frac = itimer.it_value.itv_frac = 0;
 	set_timer_or_die(&itimer);
-#else	/* SYS_WINNT follows */
-	/*
-	 * Set up timer interrupts for every 2**EVENT_TIMEOUT seconds
-	 * Under Windows/NT, 
-	 */
-
-	WaitableTimerHandle = CreateWaitableTimer(NULL, false, NULL);
-	if (WaitableTimerHandle == NULL) {
-		msyslog(LOG_ERR, "CreateWaitableTimer failed: %m");
-		exit(1);
-	}
-	else {
-		DWORD		Period;
-		LARGE_INTEGER	DueTime;
-		bool		rc;
-
-		Period = (1 << EVENT_TIMEOUT) * 1000;
-		DueTime.QuadPart = Period * 10000i64;
-		rc = SetWaitableTimer(WaitableTimerHandle, &DueTime,
-				      Period, NULL, NULL, false);
-		if (!rc) {
-			msyslog(LOG_ERR, "SetWaitableTimer failed: %m");
-			exit(1);
-		}
-	}
-
-#endif	/* SYS_WINNT */
 }
 
 
@@ -375,12 +322,11 @@ timer(void)
 }
 
 
-#ifndef SYS_WINNT
 /*
- * alarming - tell the world we've been alarmed
+ * catchALRM - tell the world we've been alarmed
  */
 static void
-alarming(
+catchALRM(
 	int sig
 	)
 {
@@ -389,15 +335,15 @@ alarming(
 # ifdef DEBUG
 	const char *msg = NULL;
 # endif
-	if (alarm_flag) {
+	if (sawALRM) {
 		alarm_overflow++;
 # ifdef DEBUG
-		msg = "alarming: overflow\n";
+		msg = "catchALRM: overflow\n";
 # endif
 	} else {
-		alarm_flag++;
+		sawALRM = true;
 # ifdef DEBUG
-		msg = "alarming: normal\n";
+		msg = "catchALRM: normal\n";
 # endif
 	}
 # ifdef DEBUG
@@ -405,7 +351,6 @@ if (debug >= 4 && msg != NULL)
 	(void)(-1 == write(1, msg, strlen(msg)));
 # endif
 }
-#endif /* !SYS_WINNT */
 
 
 void
@@ -421,7 +366,6 @@ timer_interfacetimeout(u_long timeout)
 void
 timer_clr_stats(void)
 {
-	timer_overflows = 0;
 	timer_xmtcalls = 0;
 	timer_timereset = current_time;
 }
@@ -457,13 +401,11 @@ check_leapsec(
 	leap_result_t lsdata;
 	uint32_t       lsprox;
 	
-#ifndef SYS_WINNT  /* WinNT port has its own leap second handling */
-# ifdef HAVE_KERNEL_PLL
+#ifdef HAVE_KERNEL_PLL
 	leapsec_electric((pll_control && kern_enable) ? electric_on : electric_off);
-# else
+#else
 	leapsec_electric(electric_off);
-# endif
-#endif	
+#endif
 #ifdef ENABLE_LEAP_SMEAR
 	leap_smear.enabled = (leap_smear_intv != 0);
 #endif
@@ -484,7 +426,7 @@ check_leapsec(
 		      if (lsdata.tai_diff) {
 			      if (leap_smear.interval == 0) {
 				      leap_smear.interval = leap_smear_intv;
-				      leap_smear.intv_end = lsdata.ttime.Q_s;
+				      leap_smear.intv_end = vint64u(lsdata.ttime);
 				      leap_smear.intv_start = leap_smear.intv_end - leap_smear.interval;
 				      DPRINTF(1, ("*** leapsec_query: setting leap_smear interval %li, begin %.0f, end %.0f\n",
 					      leap_smear.interval, leap_smear.intv_start, leap_smear.intv_end));
@@ -548,7 +490,7 @@ check_leapsec(
 			if (lsdata.warped < 0) {
 				if (clock_max_back > 0.0 &&
 				    clock_max_back < abs(lsdata.warped)) {
-					step_systime(lsdata.warped, intercept_set_tod);
+					step_systime(lsdata.warped, ntp_set_tod);
 					leapmsg = leapmsg_p_step;
 				} else {
 					leapmsg = leapmsg_p_slew;
@@ -556,7 +498,7 @@ check_leapsec(
 			} else 	if (lsdata.warped > 0) {
 				if (clock_max_fwd > 0.0 &&
 				    clock_max_fwd < abs(lsdata.warped)) {
-					step_systime(lsdata.warped, intercept_set_tod);
+					step_systime(lsdata.warped, ntp_set_tod);
 					leapmsg = leapmsg_n_step;
 				} else {
 					leapmsg = leapmsg_n_slew;

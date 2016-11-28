@@ -10,14 +10,12 @@
 #include <ctype.h>
 #include <signal.h>
 
-#include "iosignal.h"
 #include "ntp_stdlib.h"
 #include "ntp_malloc.h"
 #include "ntp_syslog.h"
 #include "ntpd.h"
 #include "ntp_io.h"
 #include "ntp_assert.h"
-#include "ntp_unixtime.h"
 #include "intreswork.h"
 
 
@@ -29,7 +27,6 @@ int			worker_per_query;	/* boolean */
 int			intres_req_pending;
 
 
-#ifndef HAVE_IO_COMPLETION_PORT
 /*
  * pipe_socketpair()
  *
@@ -119,8 +116,6 @@ close_all_beyond(
 		close(fd);
 # endif	/* !HAVE_CLOSEFROM && !F_CLOSEM */
 }
-#endif	/* HAVE_IO_COMPLETION_PORT */
-
 
 u_int
 available_blocking_child_slot(void)
@@ -227,12 +222,6 @@ process_blocking_resp(
 	blocking_pipe_header *	resp;
 	void *			data;
 
-	/*
-	 * On Windows send_blocking_resp_internal() may signal the
-	 * blocking_response_ready event multiple times while we're
-	 * processing a response, so always consume all available
-	 * responses before returning to test the event again.
-	 */
 #ifdef USE_WORK_THREAD
 	do {
 #endif
@@ -272,7 +261,6 @@ blocking_child_common(
 	while (!say_bye) {
 		req = receive_blocking_req_internal(c);
 		if (NULL == req) {
-			say_bye = true;
 			break;
 		}
 

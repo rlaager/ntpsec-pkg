@@ -123,7 +123,6 @@ write_kod_db(void)
 	FILE *db_s;
 	char *pch;
 	int dirmode;
-	register int a;
 
 	db_s = fopen(kod_db_file, "w");
 
@@ -157,7 +156,7 @@ write_kod_db(void)
 		return false;
 	}
 
-	for (a = 0; a < kod_db_cnt; a++) {
+	for (register int a = 0; a < kod_db_cnt; a++) {
 		fprintf(db_s, "%16.16llx %s %s\n", (unsigned long long)
 			kod_db[a]->timestamp, kod_db[a]->type,
 			kod_db[a]->hostname);
@@ -185,7 +184,7 @@ kod_init_kod_db(
 	int a, b, sepc, len;
 	unsigned long long ull;
 	char *str_ptr;
-	char error = 0;
+	bool error = false;
 
 	TRACE(2, ("Initializing KOD DB...\n"));
 
@@ -250,7 +249,7 @@ kod_init_kod_db(
 
 		str_ptr = fgets(fbuf, sizeof(fbuf), db_s);
 		if (NULL == str_ptr) {
-			error = 1;
+			error = true;
 			break;
 		}
 
@@ -267,7 +266,7 @@ kod_init_kod_db(
 
 			free(kod_db[b]);
 			kod_db[b] = NULL;
-			error = 1;
+			error = true;
 			break;
 		}
 

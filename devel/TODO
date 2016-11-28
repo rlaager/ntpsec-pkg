@@ -2,48 +2,15 @@
 
 == Checklist for a quality 1.0 release ==
 
-=== Build system ===
-
-* Document build files.
-
-* Cleanup and separate features in pylib/*
-
-* Add 'snapshot' feature to dump config status into a JSON file for collecting
-  build + platform information
-
-* The install production needs to warn of stale ntpdc and ntpdate binaries.
-
-* Add support for enabling all conditional checks to ensure none are broken.
-
-* Add support for disabling specific conditional tests to ensure nothing is
-  compiled into the base in a surprising fashion, e.g. --undefine=FOO should
-  suppress generation of any FOO #define into config.h.
-
-* Add support for enabling hidden features and/or
-  internal symbols for testing, e.g --define FOO=BAR generates #define
-  FOO BAR into config.h.
-
-* Add monkeypatch for rmdir, rmtree under Windows.
-
 === Code ===
 
-* We need a build time option to disable all dangerous operations
-  that ntpq can produce.  First we need to enumerate them.
+* Clean up the documentation for the removal of broadcast and symmetric modes.
 
-* Can the KERNEL_PLL code be removed? It's used by drivers 4, 8, 20, 22, and
-  30, but Hal thinks it may no longer have a point since processors are much
-  faster and schedulers smoother than when it was built.  Might remove the
-  need for adjtimex(2). We need to collect statistics on builds with and
-  without the PLL to see if it's actually a win.
-
-* From refclock_params in ntpd/ntp_refclock.c: " FreeBSD serial ports
-  provide capture on the clear edge, while FreeBSD parallel ports
-  provide capture on the assert edge.: Needs checking.
+* All the code relating to iteration over interfaces can and should be removed
+  in favor of binding to wildcard addresses. This will abolish several platform
+  dependencies.
 
 === Testing ===
-
-* Unit testing.  "waf check" needs to run all the unit tests, not
-  just the small fraction it does.
 
 * We need to live-test various refclocks.  It would be nice
   to test the full matrix of refclock x platform, but that's too
@@ -51,13 +18,9 @@
   on at least one platform and test the NMEA, Atom, and SHM drivers
   on most platforms.
 
-* The script tests in scripts/t should be investigated, perhaps
-  they are salvageable.
+=== Packaging ===
 
-=== Documentation ===
-
-* Short doc on how to tell your ntpd is running correctly.
-  Perhaps lifted from GPSD Time Service HOWTO?
+* Package metadata for Debian, Ubuntu, Raspbian, Red Hat, Gentoo, and SuSe.
 
 == After 1.0 release ==
 
@@ -73,6 +36,8 @@ Right now, after 10 mins, ntpd has 2,000 times the jitter as chronyd had
 when I turned it off.
 __________
 
+Also see https://gitlab.com/NTPsec/ntpsec/issues/68 where the dubiousness
+of the current startup logic gets discussed.
 
 == User interface ==
 
@@ -121,35 +86,21 @@ Neither is ideal, easy pickings for someone to code on.
   (and multiple inbound NTP connections, and a hole in your firewall) even when
   it has a known-good local timesource like a GPS.  This should be fixed.
 
-* ntpproto.py - a Python library that knows the NTP wire protocol and
-  can be used to generate and interpret packets.  Daniel has speculated
-  about writing this in order to test possible exploits, but there are
-  other uses.  Translate it from the Perl protcol library under scripts/lib.
-
-* Use ntpproto.py to translate the Perl stuff under scripts/ to Python.
+* The code used for asynchronous DNS lookup is more general, more complex,
+  and more bug-prone than it should be.  Either our version should be
+  rewritten and simplified or (better idea!) it should be replaced by
+  a well-maintained third-party library like c_ares.
 
 * Hal says "We need a way to inspect/debug bits on the wire. `ntpdate
   -du' is the traditional approach."  Hal's straw man is a new program
   rather than trying to make ntpdig do this.  Eric's proposed answer:
-  ntpshark, a command interpreter written around ntpproto.py and
+  ntpshark, a command interpreter written around the ntp Python module and
   loosely modeled on wireshark.
-
-* Replace ntpq with a Python wrapper around ntpproto.py.
 
 * We might be able to eliminate a lot of the Linux runtime
   droproot code by using file capabilities.
 
-* Better ANSI/POSIX conformance in MinGW and Visual Studio 2013 might
-  enable us to get rid of the SYS_WINNT code. Should be tried...
-
-* There is a mess around the symbols NO_MAIN_ALLOWED, BUILD_AS_LIB, and
-  LIBNTP_C that needs to be refactored.  ntpd should *always* be built as
-  a library linked to a main module, these guard symbols should go away.
-
-* seccomp sandboxing fails to build under Ubuntu due to some confusion
-  in the Linux headers.  Investigate.
-
-* Use the snprintb in util/ntptime for flag words like flash
+* Use the snprintb in ntptime/ntptime.c for flag words like flash
   codes and use it systematically to make reports more readable.
 
 * Timer events need, as much as possible, to be eliminated - they eat
@@ -185,23 +136,12 @@ __________
 
 == Old, sometime ancient stuff ==
 
-970711: Look Real Hard at changing the key stuff from u_long to u_int32.
-
-970711: Make sure it's safe to convert proto_config's 2nd argument from
-	u_long to u_int32.  Watch "set" in ntp_request.c:setclr_flags().
-
 970318: in hourly_stats(?), squawk if the magnitude of the drift is,
 	say, >400.
 
-
-== Simple Tasks for an intern ==
+== Simple tasks for an intern ==
 
 [quote, ESR 2015-09-30]
-
-* Write C++ required to glue the unit tests under test/ to Unity so they
-  run when 'waf check is called.  (Daniel Franke may be working on this,
-  but it's not a good use of his time - we want him concentrating on vulns
-  and security auditing.)  Requires basic C++ skills.
 
 * In the docs subdirectory, include/command.txt is an HTML passthrough
   in a not entirely successful attempt to emulate the look of the
@@ -213,14 +153,4 @@ __________
   the old HTML and should be cleaned up.  Requires HTML and CSS
   skills; intern must be willing to learn asciidoc
 
-* seccomp sandboxing fails to build under Ubuntu, apparently due to
-  some confusion in the Linux headers.  Investigate and report.
-  Requires basic C skills.
-
-* All Perl should be translated to Python for maintainability. Look
-  under scripts/. Requires Perl and Python skills.  It is possible
-  some of this is no longer useful - Daniel says some of it is in Perl 4!
-
-* In scripts/t/ are, apparently, unit tests for the stuff in scripts/.
-  Some attempt should be made to salvage these. Requires Perl and
-  Python skills.
+// end

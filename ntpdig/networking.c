@@ -21,13 +21,13 @@ sendpkt (
 	}
 #endif
 	TRACE(1, ("ntpdig sendpkt: Sending packet to %s ...\n",
-		  sptoa(dest)));
+		  sockporttoa(dest)));
 
 	cc = sendto(rsock, (void *)pkt, len, 0, &dest->sa, 
 		    SOCKLEN(dest));
 	if (cc == SOCKET_ERROR) {
 		msyslog(LOG_ERR, "Send to %s failed, %m",
-			sptoa(dest));
+			sockporttoa(dest));
 		return false;
 	}
 	TRACE(1, ("Packet sent.\n"));
@@ -55,7 +55,7 @@ recvdata(
 		return recvc;
 #ifdef DEBUG
 	if (debug > 2) {
-		printf("Received %d bytes from %s:\n", recvc, sptoa(sender));
+		printf("Received %d bytes from %s:\n", recvc, sockporttoa(sender));
 		pkt_output((struct pkt *)rdata, recvc, stdout);
 	}
 #endif
@@ -114,7 +114,6 @@ process_pkt (
 	l_fp		sent_xmt;
 	l_fp		resp_org;
 
-	key_id = 0;
 	pkt_key = NULL;
 	is_authentic = authenticate ? 0 : -1;
 
@@ -193,7 +192,7 @@ process_pkt (
 		/* Yay! Things worked out! */
 		is_authentic = 1;
 		TRACE(1, ("ntpdig %s: packet from %s authenticated using key id %d.\n",
-			  func_name, stoa(sender), key_id));
+			  func_name, socktoa(sender), key_id));
 		break;
 
 	default:
@@ -262,7 +261,7 @@ process_pkt (
 	if (LEAP_NOTINSYNC == PKT_LEAP(rpkt->li_vn_mode)) {
 		msyslog(LOG_ERR,
 			"%s: %s not in sync, skipping this server",
-			func_name, stoa(sender));
+			func_name, socktoa(sender));
 		return SERVER_UNUSEABLE;
 	}
 
@@ -278,7 +277,7 @@ process_pkt (
 		NTOHL_FP(&spkt->xmt, &sent_xmt);
 		msyslog(LOG_ERR,
 			"%s response org expected to match sent xmt",
-			stoa(sender));
+			socktoa(sender));
 		msyslog(LOG_ERR, "resp org: %s", prettydate(&resp_org));
 		msyslog(LOG_ERR, "sent xmt: %s", prettydate(&sent_xmt));
 		return PACKET_UNUSEABLE;

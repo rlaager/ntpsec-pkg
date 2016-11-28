@@ -47,11 +47,6 @@
 #endif
 
 
-/* nt_clockstuff.c */
-#ifdef SYS_WINNT
-extern	void	win_time_stepped(void);
-#endif
-
 /* ntp_config.c */
 #define	TAI_1972	10	/* initial TAI offset (s) */
 extern	char	*keysdir;	/* crypto keys and leaptable directory */
@@ -59,9 +54,7 @@ extern	char	*keysdir;	/* crypto keys and leaptable directory */
 extern	const char	*getconfig	(const char *);
 extern	void	readconfig(const char *);
 extern	void	ctl_clr_stats	(void);
-extern	bool	ctlclrtrap	(sockaddr_u *, struct interface *, int);
 extern	u_short ctlpeerstatus	(struct peer *);
-extern	bool	ctlsettrap	(sockaddr_u *, struct interface *, int, int);
 extern	u_short ctlsysstatus	(void);
 extern	void	init_control	(void);
 extern	void	process_control (struct recvbuf *, int);
@@ -116,9 +109,7 @@ extern	endpt *	findbcastinter		(sockaddr_u *);
 extern	void	enable_broadcast	(endpt *, sockaddr_u *);
 extern	void	enable_multicast_if	(endpt *, sockaddr_u *);
 extern	void	interface_update	(interface_receiver_t, void *);
-#ifndef HAVE_IO_COMPLETION_PORT
 extern  void    io_handler              (void);
-#endif
 extern	void	init_io 	(void);
 extern  SOCKET	open_socket	(sockaddr_u *, bool, bool, endpt *);
 extern	void	io_open_sockets	(void);
@@ -127,19 +118,9 @@ extern	void	io_setbclient	(void);
 extern	void	io_unsetbclient	(void);
 extern	void	io_multicast_add(sockaddr_u *);
 extern	void	io_multicast_del(sockaddr_u *);
-extern	void	sendpkt 	(sockaddr_u *, struct interface *, int, void *, int);
+extern	void	sendpkt 	(sockaddr_u *, endpt *, int, void *, int);
 #ifdef DEBUG
 extern	void	collect_timing  (struct recvbuf *, const char *, int, l_fp *);
-#endif
-#ifdef ENABLE_SIGNALED_IO
-extern	void	wait_for_signal		(void);
-extern	void	unblock_io_and_alarm	(void);
-extern	void	block_io_and_alarm	(void);
-# define	UNBLOCK_IO_AND_ALARM()	unblock_io_and_alarm()
-# define	BLOCK_IO_AND_ALARM()	block_io_and_alarm()
-#else
-# define	UNBLOCK_IO_AND_ALARM()	do {} while (0)
-# define	BLOCK_IO_AND_ALARM()	do {} while (0)
 #endif
 #define		latoa(pif)	localaddrtoa(pif)
 extern const char * localaddrtoa(endpt *);
@@ -199,6 +180,7 @@ extern  int     leapdif;        /* TAI difference step at next leap second*/
 extern	int	sys_orphan;
 extern	double	sys_mindisp;
 extern	double	sys_maxdist;
+extern	double	sys_maxdisp;
 
 extern	void	poll_update	(struct peer *, uint8_t);
 
@@ -258,20 +240,15 @@ extern	void	record_timing_stats (const char *);
 #endif
 extern	char *	fstostr(time_t);	/* NTP timescale seconds */
 
+/* ntpvis.c */
+void packet_dump(char *, size_t, struct pkt *, size_t);
+size_t packet_undump(char *, int len, char *);
+
 /*
  * Signals we catch for debugging.
  */
 #define MOREDEBUGSIG	SIGUSR1
 #define LESSDEBUGSIG	SIGUSR2
-/*
- * Signals which terminate us gracefully.
- */
-#ifndef SYS_WINNT
-# define SIGDIE1	SIGINT
-# define SIGDIE2	SIGQUIT
-# define SIGDIE3	SIGTERM
-#endif /* SYS_WINNT */
-
 
 /*
  * Last half: ntpd variables
@@ -279,13 +256,12 @@ extern	char *	fstostr(time_t);	/* NTP timescale seconds */
  */
 
 /* ntp_config.c */
-extern char const *	progname;
+extern char *	progname;
 extern char	*sys_phone[];		/* ACTS phone numbers */
 extern char *ntp_signd_socket;
 extern struct config_tree_tag *cfg_tree_history;
 
 /* ntp_control.c */
-extern int	num_ctl_traps;
 extern keyid_t	ctl_auth_keyid;		/* keyid used for authenticating write requests */
 
 /*
@@ -310,9 +286,9 @@ extern u_long	numasyncmsgs;		/* number of async messages we've sent */
 /*
  * Other statistics of possible interest
  */
-extern volatile u_long packets_dropped;	/* total number of packets dropped on reception */
-extern volatile u_long packets_ignored;	/* packets received on wild card interface */
-extern volatile u_long packets_received;/* total number of packets received */
+extern u_long packets_dropped;	/* total number of packets dropped on reception */
+extern u_long	packets_ignored;	/* received on wild card interface */
+extern u_long	packets_received;	/* total number of packets received */
 extern u_long	packets_sent;		/* total number of packets sent */
 extern u_long	packets_notsent; 	/* total number of packets which couldn't be sent */
 
@@ -321,7 +297,7 @@ extern volatile u_long handler_pkts;	/* number of pkts received by handler */
 extern u_long	io_timereset;		/* time counters were reset */
 
 /* ntp_io.c */
-extern  int	disable_dynamic_updates;
+extern bool	disable_dynamic_updates;
 extern u_int	sys_ifnum;		/* next .ifnum to assign */
 extern endpt *	any_interface;		/* IPv4 wildcard */
 extern endpt *	any6_interface;		/* IPv6 wildcard */
@@ -416,6 +392,8 @@ extern double	sys_rootdisp;		/* dispersion to primary source */
 extern uint32_t	sys_refid;		/* reference id */
 extern l_fp	sys_reftime;		/* last update time */
 extern struct peer *sys_peer;		/* current peer */
+extern int	sys_maxclock;		/* maximum candidates */
+extern int	sys_minclock;		/* minimum candidates */
 
 /*
  * Nonspecified system state variables.
@@ -451,6 +429,11 @@ extern u_long	sys_limitrejected;	/* rate exceeded */
 extern u_long	sys_kodsent;		/* KoD sent */
 extern u_long	use_stattime;		/* time since reset */
 
+/* Signalling */
+extern volatile bool sawALRM;
+extern volatile bool sawHUP;
+extern volatile bool sawQuit;		/* SIGQUIT, SIGINT, SIGTERM */
+extern sigset_t blockMask;
 
 /* ntp_restrict.c */
 extern restrict_u *	restrictlist4;	/* IPv4 restriction list */
@@ -468,19 +451,14 @@ extern void send_via_ntp_signd(struct recvbuf *, int, keyid_t, int,
 #endif
 
 /* ntp_timer.c */
-extern volatile bool alarm_flag;		/* alarm flag */
 extern volatile u_long alarm_overflow;
 extern u_long	current_time;		/* seconds since startup */
 extern u_long	timer_timereset;
-extern u_long	timer_overflows;
 extern u_long	timer_xmtcalls;
 extern bool	leap_sec_in_progress;
 #ifdef ENABLE_LEAP_SMEAR
 extern struct leap_smear_info leap_smear;
 extern int	leap_smear_intv;
-#endif
-#ifdef SYS_WINNT
-HANDLE WaitableTimerHandle;
 #endif
 
 /* ntp_util.c */
@@ -501,12 +479,6 @@ extern const char *chrootdir;	/* directory to chroot() to */
 #endif
 #ifdef HAVE_WORKING_FORK
 extern	int	waitsync_fd_to_close;	/* -w/--wait-sync */
-#endif
-extern  void	finish		(int sig);
-
-/* ntservice.c */
-#ifdef SYS_WINNT
-extern int accept_wildcard_if_for_winnt;
 #endif
 
 /* refclock_conf.c */

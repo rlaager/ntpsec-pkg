@@ -12,7 +12,7 @@ int main () {
 
 def check_sizeof_host(ctx, header, sizeof, mandatory=True):
 	sizeof_ns = sizeof.replace(" ", "_")
-	name = "SIZEOF_%s" % sizeof_ns.upper()
+	name = "NTP_SIZEOF_%s" % sizeof_ns.upper()
 
 	header_snippet = ""
 	if header:
@@ -47,7 +47,7 @@ int main () {
 
 def check_sizeof_cross(ctx, header, sizeof, mandatory=True):
 	sizeof_ns = sizeof.replace(" ", "_")
-	name = "SIZEOF_%s" % sizeof_ns.upper()
+	name = "NTP_SIZEOF_%s" % sizeof_ns.upper()
 
 	header_snippet = ""
 	if header:
@@ -56,8 +56,7 @@ def check_sizeof_cross(ctx, header, sizeof, mandatory=True):
 	else:
 		ctx.start_msg("Checking sizeof %s" % (sizeof))
 
-
-	for size in range(2,13):
+	for size in range(2, 13):
 
 		try:
 			ctx.check_cc(
@@ -80,4 +79,3 @@ def check_sizeof(*kwargs):
 		return check_sizeof_cross(*kwargs)
 	else:
 		return check_sizeof_host(*kwargs)
-

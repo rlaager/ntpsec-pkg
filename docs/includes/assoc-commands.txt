@@ -9,8 +9,8 @@ link-local IPV6 address with an interface specified in
 
 +pool+ _address_ [+burst+] [+iburst+] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_] [+preempt+]::
 +server+ _address_ [+key+ _key_] [+burst+] [+iburst+] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_]::
-+peer+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_] [+xleave+]::
-+broadcast+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+ttl+ _ttl_] [+xleave+]::
++peer+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_]::
++broadcast+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+ttl+ _ttl_]::
 +manycastclient+ _address_ [+key+ _key_] [+version+ _version_] [+prefer+] [+minpoll+ _minpoll_] [+maxpoll+ _maxpoll_] [+ttl+ _ttl_] [+preempt+]::
 +unpeer+ ['address' | 'associd']::
   These six commands specify the time server name or address to be used
@@ -31,13 +31,8 @@ link-local IPV6 address with an interface specified in
   clock. This command should _not_ be used for broadcast or multicast addresses.
 
 +peer+::
-  For server addresses (only), this command mobilizes a persistent
-  symmetric-active mode association with the specified remote peer. In
-  this mode the local clock can be synchronized to the remote peer or
-  the remote peer can be synchronized to the local clock. This is useful
-  in a network of servers where, depending on various failure scenarios,
-  either the local or remote peer may be the better source of time. This
-  command should NOT be used for broadcast, multicast, or refclock addresses.
+  NTP peer mode has been removed for security reasons.  peer is now just
+  an alias for the server keyword.  See above.
 
 +broadcast+::
   For broadcast and multicast addresses (only), this command mobilizes a persistent
@@ -52,9 +47,6 @@ link-local IPV6 address with an interface specified in
   assigned the multicast group address IPv4 224.0.1.1 and IPv6 ff05::101
   (site local) exclusively to NTP, but other nonconflicting addresses
   can be used to contain the messages within administrative boundaries.
-  Ordinarily, this specification applies only to the local server
-  operating as a sender; for operation as a broadcast client, see the
-  _broadcastclient_ or _multicastclient_ commands below.
 
 +manycastclient+::
   For multicast addresses (only), this command mobilizes a manycast client
@@ -78,7 +70,7 @@ link-local IPV6 address with an interface specified in
   This command removes a previously configured association. An address
   or association ID can be used to identify the association. Either an
   IP address or DNS name can be used. This command is most useful when
-  supplied via +{ntpq}+ runtime configuration commands +:config+ and
+  supplied via +ntpq+ runtime configuration commands +:config+ and
   +config-from-file+.
 
 // end

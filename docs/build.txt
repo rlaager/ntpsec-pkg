@@ -18,7 +18,6 @@ include::includes/install.txt[]
 * link:#waf[Autoconf has been replaced with waf]
 * link:#build[Building and Installing the Distribution]
 * link:#unix[Building and Installing for Unix]
-* link:#win[Building and Installing for Windows]
 * link:#conf[Configuration]
 * link:#prob[If You Have Problems]
 * link:#additional[Additional +waf+ Commands]
@@ -31,7 +30,7 @@ include::includes/install.txt[]
 The autoconf build system used in NTP Classic has been replaced with
 waf, a more modern and much faster build engine.  It is not necessary
 to install any separate waf package; the build engine is a Python
-script included in your {project-shortname} distribution.
+script included in your NTPsec distribution.
 
 [[build]]
 == Building and Installing the Distribution ==
@@ -43,8 +42,7 @@ options. Therefore, it is necessary to configure, build and install
 for each system and version. In almost all cases, these procedures are
 completely automatic, The user types +./waf configure+, +./waf build+,
 and +./waf install+ in that order and the build system does the
-rest. There are some exceptions, as noted below and on the
-link:hints.html[Hints and Kinks] pages.
+rest. There are some exceptions, as noted below.
 
 This page provides only a general introduction to building the code.
 Please consult the INSTALL file in the distribution root for the
@@ -69,35 +67,26 @@ configures the build process accordingly. Use the +./waf build+ command to
 compile and link the distribution and the +./waf install+ command to install
 the executables by default in +/usr/local/bin+.
 
-[[win]]
-== Building and Installing for Windows ==
-
-Building for Windows is not presently supported.  This may change in a
-future release.  If you have a requirement for this, you may be able
-to accelerate the process by contributing either skilled technical
-help or money so we can hire skilled technical help.
-
 [[conf]]
 == Configuration ==
 
 You are now ready to configure the daemon. You will need to create a NTP
 configuration file by default in +/etc/{ntpconf}+. Newbies should see the
 link:quick.html[Quick Start] page for orientation. Seasoned veterans can
-start with the link:ntpd.html[+{ntpd}+ - Network Time Protocol (NTP)
+start with the link:ntpd.html[+ntpd+ - Network Time Protocol (NTP)
 daemon] page and move on to the specific configuration option pages from
 there.
 
 [[prob]]
 == If You Have Problems ==
 
-If you have problems with your hardware and software environment (e.g.
-operating system-specific issues), browse the link:hints.html[Hints and
-Kinks] pages. For other problems a tutorial on debugging technique is in
+If you have problems with your hardware and software environment,
+a tutorial on debugging technique is in
 the link:debug.html[NTP Debugging Technique] page. A list of important
-system log messages is on the link:msyslog.html[+{ntpd}+ System Log
+system log messages is on the link:msyslog.html[+ntpd+ System Log
 Messages] page.
 
-The first line of general assistance is the {project-shortname} web site
+The first line of general assistance is the NTPsec web site
 {project-weblink} and the helpful documents resident
 there. Requests for assistance of a general nature and of interest to
 other timekeepers should be sent to the NTP newsgroup

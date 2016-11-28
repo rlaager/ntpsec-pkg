@@ -16,15 +16,8 @@
 #include "ntp_debug.h"
 #include "ntp_syslog.h"
 
-#ifdef SYS_WINNT
-# include <stdarg.h>
-# include "..\ports\winnt\libntp\messages.h"
-#endif
-
-
 bool	syslogit = true;	/* log messages to syslog */
 bool	termlogit = false;	/* duplicate to stdout/err */
-bool	hashprefix = false;	/* prefix with hash, for repolay use */
 bool	termlogit_pid = true;
 bool	msyslog_include_timestamp = true;
 FILE *	syslog_file;
@@ -88,8 +81,6 @@ format_errmsg(
 /*
  * errno_to_str() - a thread-safe strerror() replacement.
  *		    Hides the varied signatures of strerror_r().
- *		    For Windows, we have:
- *			#define errno_to_str isc_strerror
  */
 void
 errno_to_str(
@@ -177,8 +168,6 @@ addto_syslog(
 		term_file = (level <= LOG_ERR)
 				? stderr
 				: stdout;
-		if (hashprefix)
-			fputc('#', term_file);
 		if (msyslog_include_timestamp)
 			fprintf(term_file, "%s ", human_time);
 		if (termlogit_pid)
@@ -215,11 +204,7 @@ mvsnprintf(
 	/*
 	 * Save the error value as soon as possible
 	 */
-#ifdef SYS_WINNT
-	errval = GetLastError();
-	if (NO_ERROR == errval)
-#endif /* SYS_WINNT */
-		errval = errno;
+	errval = errno;
 
 #ifndef VSNPRINTF_PERCENT_M
 	format_errmsg(nfmt, sizeof(nfmt), fmt, errval);
@@ -247,11 +232,7 @@ mvfprintf(
 	/*
 	 * Save the error value as soon as possible
 	 */
-#ifdef SYS_WINNT
-	errval = GetLastError();
-	if (NO_ERROR == errval)
-#endif /* SYS_WINNT */
-		errval = errno;
+	errval = errno;
 
 #ifndef VSNPRINTF_PERCENT_M
 	format_errmsg(nfmt, sizeof(nfmt), fmt, errval);
@@ -374,11 +355,6 @@ init_logging(
 	else
 		pname = 1 + cp;	/* skip DIR_SEP */
 	progname = estrdup(pname);
-#ifdef SYS_WINNT			/* strip ".exe" */
-	cp = strrchr(progname, '.');
-	if (NULL != cp && !strcasecmp(cp, ".exe"))
-		progname[cp - progname] = '\0';
-#endif
 
 	if (is_daemon)
 		was_daemon = true;
@@ -424,7 +400,7 @@ change_logfile(
 	size_t		cd_octets;
 	size_t		octets;
 
-	NTP_REQUIRE(fname != NULL);
+	//NTP_REQUIRE(fname != NULL);
 	log_fname = fname;
 
 	/*

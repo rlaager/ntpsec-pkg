@@ -14,7 +14,7 @@ def build(ctx):
 		includes	= [
 					"%s/ntpfrob/" % bldnode
 				],
-		use		= "ntp opts isc M RT PTHREAD",
+		use		= "M RT",
 		install_path = "${PREFIX}/bin/"
 	)
 

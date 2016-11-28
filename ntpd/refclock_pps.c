@@ -7,7 +7,6 @@
 
 #include "ntpd.h"
 #include "ntp_io.h"
-#include "ntp_unixtime.h"
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
 #include "ntp_control.h"	/* for CTL_* clocktypes */
@@ -74,7 +73,7 @@
  * Interface definitions
  */
 #define DEVICE		"/dev/pps%d"	/* device name and unit */
-#define	PRECISION	(-20)		/* precision assumed (about 1 us) */
+#define	PRECISION	(-30)		/* precision assumed (about 1 ns) */
 #define	REFID		"PPS\0"		/* reference ID */
 #define	NAME		"PPS"		/* shortname */
 #define	DESCRIPTION	"PPS Clock Discipline" /* WRU */
@@ -145,7 +144,7 @@ pps_start(
 	 * not necessarily the port used for the associated radio.
 	 */
 	snprintf(device, sizeof(device), DEVICE, unit);
-	up->fddev = tty_open(peer->ppspath ? peer->ppspath : device,
+	up->fddev = open(peer->ppspath ? peer->ppspath : device,
 			     O_RDWR, 0777);
 	if (up->fddev <= 0) {
 		msyslog(LOG_ERR,

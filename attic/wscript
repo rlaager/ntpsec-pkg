@@ -1,0 +1,18 @@
+from waflib import Utils
+
+def build(ctx):
+	bldnode = ctx.bldnode.abspath()
+
+	util = ['sht']
+
+	for name in util:
+		ctx(
+			target		= name,
+			features	= "c cprogram bld_include src_include libisc_include",
+			source		= [name + ".c"],
+			includes	= [
+						"%s/%s/" % (bldnode, name)
+					],
+			use		= "ntp isc M RT THR PTHREAD",
+			install_path    = None,
+		)

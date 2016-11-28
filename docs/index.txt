@@ -20,8 +20,9 @@ Pleased to meet you.
 * link:#intro[Introduction]
 * link:#intro[Differences from NTP Classic]
 * link:#platforms[Supported Platforms]
-* link:#hand[The Handbook]
 * link:#build[Building and Installing NTP]
+* link:#man[Manual Pages]
+* link:#hand[The Handbook]
 * link:#prob[Resolving Problems]
 * link:#info[Further Information]
 
@@ -31,18 +32,6 @@ Pleased to meet you.
 The Network Time Protocol software contained in this
 distribution is available without charge under the conditions set
 forth in the link:copyright.html[Copyright Notice].
-
-[NOTE]
-It is very important that readers understand that the NTP document
-collection began 25 years ago and remains today a work in progress. It
-has evolved as new features were invented and old features retired. It
-has been widely copied, cached and morphed to other formats, including
-man pages, with varying loss of fidelity. However, these HTML pages are
-the ONLY authoritative and definitive reference. Readers should always
-use the collection that comes with the distribution they use. A copy of
-the online collection at {project-weblink} is normally included in the most
-recent snapshot, but might not agree with an earlier snapshot or
-release version.
 
 This distribution is an implementation of RFC-5905 "Network Time
 Protocol Version 4: Protocol and Algorithms Specification".  NTP is
@@ -63,10 +52,16 @@ in recent decades
 The link:ntpspeak.html[Glossary of NTP-speak] might also be a helpful
 guide for the perplexed.
 
+Use caution when employing search engines to dig up NTP material.
+There are many, many copies of the NTP documentation out there, often
+referring to very old versions and carrying stale information. It's
+best to use only the HTML and manpages that come with your
+distribution.
+
 [[differences]]
 == Differences from NTP Classic ==
 
-The design objectives of this distribution, {project-fullname}, are in
+The design objectives of this distribution, NTPsec, are in
 many ways a break with NTP's past.  We have deliberately jettisoned
 support for ancient legacy hardware and operating systems in order to
 ship code that is security-hardened, simpler, drastically less bulky
@@ -89,16 +84,20 @@ few will be user-visible.
 
 === Security changes ===
 
-* The deprecated ntpdc utility, long since replaced by {ntpq} and a
-  chronic locus of security vulnerabilities, has been removed.
+* The deprecated ntpdc utility, long a chronic locus of security
+  vulnerabilities, has been removed.  Its function has been merged
+  into +ntpq+.
 
 * As noted above, Autokey is not supported; that code has been
   removed, as it was chronically prone to security vulnerabilties.
 
+* peer mode has been removed.  The keyword peer in ntp.conf is now
+  just an alias for keyword server.  Incoming peer packets are ignored.
+
 * The deprecated and vulnerability-prone ntpdate program has been
-  replaced with a shell wrapper around {ntpdig}.  Its -e and -p
+  replaced with a shell wrapper around ntpdig.  Its -e and -p
   options are not implemented. It is no longer documented, but can be
-  found in the util/ directory of the source distribution.
+  found in the attic/ directory of the source distribution.
 
 * A large number of obsolete refclocks have been removed in order to
   reduce attack surface, code bulk, and documentation complexity.
@@ -111,10 +110,18 @@ few will be user-visible.
 * Likewise, the poorly-documented ntpdsim code has also been removed
   to gain a significant reduction in code complexity.
 
+* The 'trap' feature has been removed.  It was broken by bit-rot in
+  recent versions of NTP Classic, and if not broken would have been at
+  high risk for bugs that would enable DoS vulnerabilities.
+
+* Interleave mode has been removed.  It didn't work correctly (there
+  was an implementation error in the timestamp handling), so no point
+  in allowing it to increase attack surface.
+
 * The code has been systematically hardened, with unsafe string
   copy and formatting functions replaced by safe (bounded) ones.
 
-* In toto, more than 60% of the NTP Classic code has been outright
+* In toto, more than 65% of the NTP Classic code has been outright
   removed, with less than 5% new code added. This is a dramatic
   reduction in attack surface.
 
@@ -131,7 +138,7 @@ few will be user-visible.
 * The documentation has been extensively updated and revised.  One
   important change is that manual pages are now generated from the
   same masters as this web documentation, so the two will no longer
-  drift out of synchronization.  
+  drift out of synchronization.
 
 * There is a new, simpler syntax for declaring refclocks.  The old
   syntax with the magic 127.127.t.u addresses and fudge command is
@@ -140,6 +147,17 @@ few will be user-visible.
   each refclock page.  One major feature of the new syntax is that
   refclock drivers are referred to by names, not numbers.
 
+* The includefile directive now evaluates relative pathnames not with
+  respect to the current working directory but with respect to the
+  directory name of the last pushed file in the stack.  This means
+  that you can run ntpd from any directory with "includefile foo"
+  in /etc/ntp.conf finding /etc/foo rather than looking for foo in
+  ypur current directory.
+
+* It is now possible to set the peer maximum dispersion with "tos
+  maxdisp". See RFC5905 for discussion of this synchronization
+  parameter.
+
 * For the generic (parse) driver only: Using the new refclock syntax,
   the maximum number of units that can be set up changes from 4
   (numbers 0-3) to unlimited.  However, the old magic-address syntax
@@ -147,29 +165,50 @@ few will be user-visible.
   generic-driver refclocks.  If the software was compiled with the
   --enable-classic-mode switch, the foregoing is reversed.
 
-* The +sntp+ program has been renamed +{ntpdig}+ in order to make
+* The +sntp+ program has been renamed +ntpdig+ in order to make
   NTP installables have a uniform name prefix and take up less
-  namespace. Also, +ntp-keygen+ is now +{ntpkeygen}+, +ntp-wait+
-  is {ntpwait}, and +update-leap+ is now +{ntpleapfetch}+.
+  namespace. Also, +ntp-keygen+ is now +ntpkeygen+, +ntp-wait+
+  is ntpwait, and +update-leap+ is now +ntpleapfetch+.
 
-* A new utility, +{ntpfrob}+, collects several small diagnostic functions
+* A new utility, +ntpfrob+, collects several small diagnostic functions
   for reading and tweaking the local clock hardware, including reading
   the clock tick rate, precision, and jitter. Part of it formerly
   traveled as +tickadj+.
 
 === Other user-visible changes ===
 
+* The notorious collision between pool and nopeer in older
+  implementations has been fixed; the pool keyword is now fully
+  usable.
+
 * There is a new data-visualization tool,
-  link:ntpviz.html[+{ntpviz}+], which can produce various useful and
+  link:ntpviz.html[+ntpviz+], which can produce various useful and
   interesting plots from the NTP statistics logs.  These should assist in
   monitoring a time-server's performance, fixing configuration
   problems, and identifying noise sources in network weather and
   elsewhere.
 
+* Because +ntpviz+ exists, a number of ancient and poorly-documented
+  scripts in awk, Perl, and S, formerly used for making statistical
+  summaries, have been removed from the distribution in order to
+  reduce overall maintainance burden and complexity. If you miss any
+  of this cruft, the project team will (a) be quite surprised, and (b)
+  work with you on better analytics using ntpviz and modern tools.
+
+* The ntpq utility resizes its display to take advantage of wide
+  terminal windows, allowing more space for long peer addresses.
+
+* When running as root, the ntpq utility looks in /etc/ntp.conf and
+  /usr/local/etc/ntp.keys to find credentials for control requests
+  that require authentication. Thus it is not necessary to enter
+  them by hand.
+
 * The ntpsnmpd daemon, incomplete and not conformant with RFC 5907,
   has been removed.
 
 * Log timestamps look a little different; they are now in ISO8601 format.
+  The code can be built in a strict NTP Classic compatibility mode
+  that restores the old format.
 
 * Clock identifiers in log files are normally the driver shortname
   followed by the unit number in parentheses, rather than the magic IP
@@ -188,27 +227,34 @@ few will be user-visible.
 * If you had a refclock on a path of the form /dev/palisadeNNN, that
   link needs to change to /dev/trimbleNNN.
 
+* If you had a refclock on a path of the form /dev/actsNNN, that
+  link needs to change to /dev/modemNNN.
+
 * The -!m, ->, and -< options of some Classic commands are not
   supported.  (The argument-parsing framework code that implemented
   them in Classic was overcomplicated and buggy and had to be removed.)
 
 * The shortname of --help options is now -h, not -?
 
-* An instance of +{ntpq}+ built from the {project-shortname} code
+* An instance of +ntpq+ built from the NTPsec code
   querying a legacy NTP daemon will not automatically display
   peers with 127.127.127.t.u addresses as refclocks; that assumption
-  has been removed from the {project-shortname} code as part of
+  has been removed from the NTPsec code as part of
   getting it fully IPv6-ready.
 
 [[platforms]]
 == Supported platforms ==
 
-{project-shortname} supports all operating systems conforming to
+NTPsec supports all operating systems conforming to
 POSIX.1-2001 and ISO/IEC 9899:1999 (aka C99).  Primary platforms
 include Linux and the *BSD family; any reasonably modern proprietary
 Unix will also serve.  The OS must have either a Linux-like
-adjtimex(2) call or a BSD-like pair of ntp_gettime(2)/ntp_adjtime(2)
-calls.
+adjtimex(2) call or a BSD-like ntp_adjtime(2) call.
+
+Legacy Windows support has been removed from the NTPsec
+codebase. Future Windows support will be conditional on the quality
+of POSIX/C99 emulation environments such as Cygwin and/or the support
+for Linux binary execution in Windows 10 and later.
 
 If you have a requirement for time service on an OS we don't support,
 and its API is reasonably close to our POSIX/C99 conformance baseline,
@@ -225,6 +271,9 @@ A good deal of tutorial and directive information is available on the
 handbook pages. These should be read in conjunction with the command and
 option information available on the pages listed on the sitemap page.
 
+link:quick.html[Quick start for client configurations]::
+  Basic configuration for 99% of client installations.  Introduces
+  concepts used later in the Handbook.
 link:assoc.html[Association Management]::
   Describes how to configure servers and peers and manage the various
   options. Includes automatic server discovery schemes.
@@ -235,8 +284,7 @@ link:access.html[Access Control Support]::
   Describes the access control mechanisms that can be used to limit
   client access to various time and management functions.
 link:authentic.html[Authentication Support]::
-  Describes the authentication mechanisms for symmetric-key and
-  public-key cryptography.
+  Describes the cryptographic authentication mechanisms.
 link:rate.html[Rate Management]::
   Describes the principles of rate management to minimize network load
   and defend against DoS attacks.
@@ -245,6 +293,10 @@ link:refclock.html[Reference Clock Support]::
   servers.
 link:warp.html[How NTP Works]::
   Gives an overview of the NTP daemon architecture and how it works.
+link:outside-tools.html[Outside Tools]::
+  A variety of tools not directly maintained along with NTP can be
+  useful for adminiseting and monitoring it. This page collects some
+  references and links.
 
 [[build]]
 == Building and Installing NTP ==
@@ -254,19 +306,21 @@ gives and overview of the procedures for building and installing
 on a typical system.  For more details, see the INSTALL file in the
 distribution root.
 
+[[man]]
+include::includes/manual.txt[]
+
 [[prob]]
 == Resolving Problems ==
 
 Like other things in modern Internet life, NTP problems can be
 devilishly intricate. This distribution includes a number of utilities
 designed to identify and repair problems using an integrated management
-protocol supported by the link:ntpq.html[+{ntpq}+] utility program.
+protocol supported by the link:ntpq.html[+ntpq+] utility program.
 
-The link:debug.html[NTP Debugging Techniques] and link:hints.html[Hints
-and Kinks] pages contain useful information for identifying problems and
-devising solutions. Additional information on reference clock driver
-construction and debugging is in the link:rdebug.html[Debugging Hints
-for Reference Clock Drivers] page.
+The link:debug.html[NTP Debugging Techniques] page contains useful
+information for identifying problems and devising solutions. Additional
+information on reference clock driver construction and debugging is
+in the link:rdebug.html[Debugging Hints for Reference Clock Drivers] page.
 
 Users are invited to report bugs and offer suggestions via the
 link:bugs.html[NTP Bug Reporting Procedures] page.
@@ -290,7 +344,7 @@ Computer Network Time Synchronization] page. Background information,
 bibliography and briefing slides suitable for presentations are on the
 {millshome}ntp.html[Network Time
 Synchronization Research Project] page. Additional information is at
-the {project-shortname} web site {project-weblink}.
+the NTPsec web site {project-weblink}.
 
 '''''
 

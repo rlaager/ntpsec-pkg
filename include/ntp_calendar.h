@@ -94,24 +94,6 @@ extern systime_func_ptr ntpcal_set_timefunc(systime_func_ptr);
 #define	SECSPERAVGYEAR	31556952		/* mean year length over 400yrs */
 
 /*
- * Gross hacks.	 I have illicit knowlege that there won't be overflows
- * here, the compiler often can't tell this.
- */
-#define	TIMES60(val)	((((val)<<4) - (val))<<2)	/* *(16 - 1) * 4 */
-#define	TIMES24(val)	(((val)<<4) + ((val)<<3))	/* *16 + *8 */
-#define	TIMES7(val)	(((val)<<3) - (val))		/* *8  - *1 */
-#define	TIMESDPERC(val)	(((val)<<10) + ((val)<<8) \
-			+ ((val)<<7) + ((val)<<5) \
-			+ ((val)<<4) + ((val)<<2) + (val))	/* *big* hack */
-
-
-extern	const char * const months[12];
-extern	const char * const daynames[7];
-
-extern	void	 calgregorian	(uint32_t, struct calendar *);
-extern	uint32_t caltontp	(const struct calendar *);
-
-/*
  * Convert between 'time_t' and 'vint64'
  */
 extern vint64 time_to_vint64(const time_t *);
@@ -414,5 +396,13 @@ ntpcal_weekday_lt(int32_t /* rdn */, int32_t /* dow */);
 #define	GREGORIAN_CYCLE_WEEKS (GREGORIAN_CYCLE_DAYS / 7)
 
 #define	is_leapyear(y)	(!((y) % 4) && !(!((y) % 100) && (y) % 400))
+
+/*
+ * Time of day conversion constant.  NTP's time scale starts in 1900,
+ * Unix in 1970.  The value is 1970 - 1900 in seconds, 0x83aa7e80 or
+ * 2208988800.  This is larger than 32-bit INT_MAX, so unsigned
+ * type is forced.
+ */
+#define	JAN_1970 ((u_int)NTP_TO_UNIX_DAYS * (u_int)SECSPERDAY)
 
 #endif

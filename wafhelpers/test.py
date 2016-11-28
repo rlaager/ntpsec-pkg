@@ -13,9 +13,9 @@ def test_write_log(ctx):
 			fp.write("BINARY      : %s\n" % binary)
 			fp.write("RETURN VALUE: %s\n" % retval)
 			fp.write("\n*** stdout ***\n")
-			fp.write(lines)
+			fp.write(str(lines))
 			fp.write("\n*** stderr ***\n")
-			fp.write(error)
+			fp.write(str(error))
 			fp.write("\n\n\n")
 
 	pprint("BLUE", "Wrote test log to: ", file_out)
@@ -30,9 +30,9 @@ def test_print_log(ctx):
 		if retval or error:
 			pprint("RED", "****** ERROR ******\n")
 
-			print error or lines
+			print(error or lines)
 
 		if (not retval) and (not error):
 			pprint("GREEN", "****** LOG ******\n", lines)
 
-		print
+		print("")

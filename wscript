@@ -3,6 +3,7 @@ from waflib.Build import BuildContext, CleanContext, InstallContext, UninstallCo
 from waflib import Context, Errors
 from waflib import Scripting
 from waflib.Logs import pprint
+import os
 
 pprint.__doc__ = None
 
@@ -14,7 +15,7 @@ from wafhelpers.test import test_write_log, test_print_log
 from wafhelpers.options import options_cmd
 
 config = {
-	"NTPS_RELEASE": False,
+	"NTPSEC_RELEASE": False,
 	"out": out,
 	"OPT_STORE": {}
 }
@@ -22,13 +23,23 @@ config = {
 # Release procedure:
 #   1. waf configure
 #   2. waf build
-#   3. Edit wscript and set NTPS_RELEASE to True
+#   3. Edit wscript and set NTPSEC_RELEASE to True
 #   4. waf dist
 
 # Snapshot procedure:
 #   Steps 1-3 as above.
 #   4. waf dist --build-snapshot
 
+def help(ctx):
+    "Be helpful, give a usage"
+    print('''
+Usage: waf <command>
+    configure	Configure the project
+    build	Build the project
+    install     Install the project
+    dist        Create a release
+
+''')
 
 def dist(ctx):
 	from wafhelpers.dist import dist_cmd
@@ -37,12 +48,12 @@ def dist(ctx):
 
 def options(ctx):
 	options_cmd(ctx, config)
-	ctx.recurse("ntpstats")
+	ctx.recurse("pylib")
 
 def configure(ctx):
 	from wafhelpers.configure import cmd_configure
 	cmd_configure(ctx, config)
-	ctx.recurse("ntpstats")
+	ctx.recurse("pylib")
 
 from waflib.Build import BuildContext
 class check(BuildContext):
@@ -50,9 +61,9 @@ class check(BuildContext):
 	variant = "main"
 
 def bin_test(ctx):
+	"""Run binary check, use after tests."""
 	from wafhelpers.bin_test import cmd_bin_test
 	cmd_bin_test(ctx, config)
-bin_test.__doc__ = "Run binary check, use after tests."
 
 # Borrowed from https://www.rtems.org/
 variant_cmd = (
@@ -111,13 +122,43 @@ for command, func, descr in commands:
 			execute = Scripting.autoconfigure(Context.Context.execute)
 # end borrowed code
 
-
+def linkmaker(ctx):
+    # Make magic links to support in-tree testing.
+    # The idea is that all directories where the Python tools
+    # listed above live should have an 'ntp' symlink so they
+    # can import compiled Python modules from the build directory.
+    # Also, they need to be able to see the Python extension
+    # module built in libntp.
+    for x in ("ntpq", "ntpdig", "ntpstats", "ntpsweep", "ntptrace", "ntpwait"):
+            path_build = ctx.bldnode.make_node("pylib")
+            path_source = ctx.srcnode.make_node(x + "/ntp")
+            relpath = "../" + path_build.path_from(ctx.srcnode)
+            if ctx.cmd in ('install', 'build'):
+                    if not path_source.exists() or os.readlink(path_source.abspath()) != relpath:
+                            try:
+                                    os.remove(path_source.abspath())
+                            except OSError:
+                                    pass
+                            os.symlink(relpath, path_source.abspath())
+            elif ctx.cmd == 'clean':
+                    if path_source.exists():
+                        #print "removing", path_source.abspath()
+                        os.remove(path_source.abspath())
+    bldnode = ctx.bldnode.abspath()
+    if ctx.cmd in ('install', 'build'):
+        os.system("ln -sf %s/libntp/ntpc.so %s/pylib/ntpc.so " % (bldnode, bldnode))
 
 def build(ctx):
 	ctx.load('waf', tooldir='wafhelpers/')
 	ctx.load('bison')
 	ctx.load('asciidoc', tooldir='wafhelpers/')
 	ctx.load('rtems_trace', tooldir='wafhelpers/')
+
+	if ctx.cmd == "build":
+		# It's a waf gotcha that if there are object files (including
+		# .pyc and .pyo files) in a source directory, compilation to
+		# the build directory never happens.  This is how we foil that.
+		ctx.add_pre_fun(lambda ctx: ctx.exec_command("rm -f pylib/*.py[co]"))
 
 	if ctx.env.ENABLE_DOC_USER:
 		if ctx.variant != "main":
@@ -141,22 +182,19 @@ def build(ctx):
 	ctx.recurse("libsodium")
 	ctx.recurse("ntpd")
 	ctx.recurse("ntpfrob")
-	ctx.recurse("ntpq")
 	ctx.recurse("ntpkeygen")
 	ctx.recurse("ntptime")
-	ctx.recurse("ntpstats")
-	ctx.recurse("util")
+	ctx.recurse("pylib")
+	ctx.recurse("attic")
 	ctx.recurse("tests")
 
-	# Some of these presently fail because they require a Perl
-	# module that'ds never installed. Awkwardly, their man pages do
-	# get installed. There is a note about this mess in INSTALL.
 	scripts = [
 		"ntpleapfetch/ntpleapfetch",
+		"ntpq/ntpq",
 		"ntpstats/ntpviz",
 		"ntptrace/ntptrace",
 		"ntpwait/ntpwait",
-		#"util/ntpsweep/ntpsweep",
+		"ntpsweep/ntpsweep",
 	]
 
 	ctx(
@@ -167,12 +205,13 @@ def build(ctx):
 		install_path = "${PREFIX}/bin/"
 	)
 
+	ctx.add_post_fun(linkmaker)
+
 	ctx.manpage(8, "ntpleapfetch/ntpleapfetch-man.txt")
 	ctx.manpage(1, "ntptrace/ntptrace-man.txt")
 	ctx.manpage(1, "ntpstats/ntpviz-man.txt")
 	ctx.manpage(8, "ntpwait/ntpwait-man.txt")
-	#ctx.manpage(1, "util/ntpsweep/ntpsweep-man.txt")
-
+	ctx.manpage(1, "ntpsweep/ntpsweep-man.txt")
 
 	# Skip running unit tests on a cross compile build
 	if not ctx.env.ENABLE_CROSS:
@@ -193,3 +232,27 @@ def build(ctx):
 		pprint("YELLOW", "Unit test runner skipped on a cross-compiled build.")
 		from waflib import Options
 		Options.options.no_tests = True
+
+	if ctx.cmd == "build":
+		if not "PYTHONPATH" in os.environ:
+			print("--- PYTHONPATH is not set, "
+				"loading the Python ntp library may be troublesome ---")
+
+#
+# Miscellaneous utility productions
+#
+
+def ifdex(ctx):
+    "Get a report on configuration symbols not accounted for."
+    ctx.exec_command("ifdex -X build/config.h -X devel/ifdex-ignores .")
+
+# See https://gitlab.com/esr/loccount
+def loccount(ctx):
+    "Report the SLOC count of the source tree."
+    ctx.exec_command("loccount -x=build .")
+
+# The following sets edit modes for GNU EMACS
+# Local Variables:
+# mode:python
+# End:
+# end

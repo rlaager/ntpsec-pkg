@@ -86,10 +86,6 @@ struct refclockio {
 	int	fd;		/* file descriptor */
 	u_long	recvcount;	/* count of receive completions */
 	bool	active;		/* true when in use */
-
-#ifdef HAVE_IO_COMPLETION_PORT
-	void *	device_context;	/* device-related data for i/o subsystem */
-#endif
 };
 
 /*
@@ -107,10 +103,6 @@ struct refclockbug {
 	l_fp	times[NCLKBUGTIMES]; /* real times */
 };
 
-#ifdef HAVE_IO_COMPLETION_PORT
-extern	HANDLE	WaitableIoEventHandle;
-#endif
-
 /*
  * Structure interface between the reference clock support
  * ntp_refclock.c and the driver utility routines
@@ -120,13 +112,6 @@ extern	HANDLE	WaitableIoEventHandle;
 #define BMAX		128	/* max timecode length */
 #define GMT		0	/* I hope nobody sees this */
 #define MAXDIAL		60	/* max length of modem dial strings */
-
-/*
- * It's ugly that refid is sometimes treated as a  uint32_t and sometimes
- * as a string; that should be fixed. Using this in memcpy() at least
- * contains the problem.
- */
-#define REFIDLEN	sizeof(uint32_t)
 
 struct refclockproc {
 	void *	unitptr;	/* pointer to unit structure */

@@ -33,7 +33,7 @@ refclock_map = {
 		"file":		"generic"
 	},
 
-       "magnavox": {
+	"magnavox": {
 		"descr":	"Magnavox MX4200 and related GPS receivers",
 		"define":	"CLOCK_MAGNAVOX",
 		"require":	["ppsapi"],
@@ -46,10 +46,10 @@ refclock_map = {
 		"file":		"arbiter"
 	},
 
-	"acts": {
+	"modem": {
 		"descr":	"NIST/USNO/PTB Modem Time Services",
-		"define":	"CLOCK_ACTS",
-		"file":		"acts"
+		"define":	"CLOCK_MODEM",
+		"file":		"modem"
 	},
 
 	"nmea": {
@@ -129,10 +129,9 @@ refclock_map = {
 }
 
 
-
 @conf
 def refclock_config(ctx):
-	from refclock import refclock_map
+	from wafhelpers.refclock import refclock_map
 
 	if ctx.options.refclocks == "all":
 		ids = refclock_map.keys()
@@ -146,7 +145,6 @@ def refclock_config(ctx):
 	# Remove duplicate IDs while preserving order.
 	unique_id = []
 	[unique_id.append(x) for x in ids if x not in unique_id]
-
 
 	refclock = False
 	for id in unique_id:
@@ -169,7 +167,7 @@ def refclock_config(ctx):
 				"CLOCK_TRIMTSIP",
 				"CLOCK_VARITEXT",
 				"CLOCK_WHARTON_400A",
-				)
+			)
 			for subtype in parse_clocks:
 				ctx.define(subtype, 1, comment="Enable individual parse clock")
 

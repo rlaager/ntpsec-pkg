@@ -5,12 +5,12 @@
 
 #include "ntpd.h"
 #include "ntp_io.h"
-#include "ntp_unixtime.h"
 #include "ntp_tty.h"
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
 #include "ntp_assert.h"
 #include "lib_strbuf.h"
+#include "ntp_calendar.h"
 
 #include <stdio.h>
 
@@ -19,10 +19,6 @@
 #endif /* HAVE_SYS_IOCTL_H */
 
 #ifdef REFCLOCK
-
-#ifdef HAVE_KERNEL_PLL
-#include "ntp_syscall.h"
-#endif /* HAVE_KERNEL_PLL */
 
 #ifdef HAVE_PPSAPI
 #include "ppsapi_timepps.h"
@@ -71,9 +67,9 @@ static int refclock_sample (struct refclockproc *);
 /*
  * refclock_report - note the occurance of an event
  *
- * This routine presently just remembers the report and logs it, but
- * does nothing heroic for the trap handler. It tries to be a good
- * citizen and bothers the system log only if things change.
+ * This routine presently just remembers the report and logs it.  It
+ * tries to be a good citizen and bothers the system log only if
+ * things change.
  */
 void
 refclock_report(
@@ -297,7 +293,7 @@ refclock_transmit(
 #ifdef DEBUG
 		if (debug)
 			printf("refclock_transmit: at %ld %s\n",
-			    current_time, stoa(&(peer->srcadr)));
+			    current_time, socktoa(&(peer->srcadr)));
 #endif
 
 		/*
@@ -307,7 +303,7 @@ refclock_transmit(
 		oreach = peer->reach & 0xfe;
 		peer->reach <<= 1;
 		if (!(peer->reach & 0x0f))
-			clock_filter(peer, 0., 0., MAXDISPERSE);
+			clock_filter(peer, 0., 0., sys_maxdisp);
 		peer->outdate = current_time;
 		if (!peer->reach) {
 			if (oreach) {
@@ -486,7 +482,7 @@ refclock_sample(
 			pp->jitter += SQUARE(off[k] - off[k - 1]);
 	}
 	pp->offset /= m;
-	pp->jitter = max(SQRT(pp->jitter / m), LOGTOD(sys_precision));
+	pp->jitter = SQRT(pp->jitter / m);
 #ifdef DEBUG
 	if (debug)
 		printf(
@@ -516,7 +512,7 @@ refclock_receive(
 #ifdef DEBUG
 	if (debug)
 		printf("refclock_receive: at %lu %s\n",
-		    current_time, stoa(&peer->srcadr));
+		    current_time, socktoa(&peer->srcadr));
 #endif
 
 	/*
@@ -537,7 +533,7 @@ refclock_receive(
 	}
 	peer->reach |= 1;
 	peer->reftime = pp->lastref;
-	peer->aorg = pp->lastrec;
+	peer->org = pp->lastrec;
 	peer->rootdisp = pp->disp;
 	get_systime(&peer->dst);
 	if (!refclock_sample(pp))
@@ -682,33 +678,9 @@ indicate_refclock_packet(
  * process_refclock_packet()
  *
  * Used for deferred processing of 'io_input' on systems where threading
- * is used (notably Windows). This is acting as a trampoline to make the
+ * is used. This is acting as a trampoline to make the
  * real calls to the refclock functions.
  */
-#ifdef HAVE_IO_COMPLETION_PORT
-void
-process_refclock_packet(
-	struct recvbuf * rb
-	)
-{
-	struct refclockio * rio;
-
-	/* get the refclockio structure from the receive buffer */
-	rio  = &rb->recv_peer->procptr->io;
-
-	/* call 'clock_recv' if either there is no input function or the
-	 * raw input function tells us to feed the packet to the
-	 * receiver.
-	 */
-	if (rio->io_input == NULL || (*rio->io_input)(rb) != 0) {
-		rio->recvcount++;
-		packets_received++;
-		handler_pkts++;		
-		(*rio->clock_recv)(rb);
-	}
-}
-#endif	/* HAVE_IO_COMPLETION_PORT */
-
 
 /*
  * refclock_open - open serial port for reference clock
@@ -1013,10 +985,9 @@ refclock_params(
 	ap->pps_params.api_version = PPS_API_VERS_1;
 
 	/*
-	 * Solaris serial ports provide PPS pulse capture only on the
-	 * assert edge. FreeBSD serial ports provide capture on the
-	 * clear edge, while FreeBSD parallel ports provide capture
-	 * on the assert edge. Your mileage may vary.
+	 * If flag2 is lit, capture on clear edge if we can.  Not all
+	 * PPSAPI implementations let you choose; if in doubt, check
+	 * the documentation of your serial driver.
 	 */
 	if (mode & CLK_FLAG2)
 		ap->pps_params.mode = PPS_TSFMT_TSPEC | PPS_CAPTURECLEAR;
