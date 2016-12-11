@@ -1,0 +1,20 @@
+Description: Fix Python PIE build
+ Debian wants to build with -fPIE for security reasons.  This is not
+ compatible with building shared libraries like the ntpc python extension.  If
+ the -fPIE flag comes before -shared (or -fPIC), the latter will override, and
+ the build succeeds.
+Forwarded: not-needed
+Origin: vendor
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2016-12-11
+--- a/waflib/Tools/c.py
++++ b/waflib/Tools/c.py
+@@ -16,7 +16,7 @@
+ 	ext_in=['.h']
+ 	scan=c_preproc.scan
+ class cprogram(link_task):
+-	run_str='${LINK_CC} ${LINKFLAGS} ${CCLNK_SRC_F}${SRC} ${CCLNK_TGT_F}${TGT[0].abspath()} ${RPATH_ST:RPATH} ${FRAMEWORKPATH_ST:FRAMEWORKPATH} ${FRAMEWORK_ST:FRAMEWORK} ${ARCH_ST:ARCH} ${STLIB_MARKER} ${STLIBPATH_ST:STLIBPATH} ${STLIB_ST:STLIB} ${SHLIB_MARKER} ${LIBPATH_ST:LIBPATH} ${LIB_ST:LIB} ${LDFLAGS}'
++	run_str='${LINK_CC} ${LDFLAGS} ${LINKFLAGS} ${CCLNK_SRC_F}${SRC} ${CCLNK_TGT_F}${TGT[0].abspath()} ${RPATH_ST:RPATH} ${FRAMEWORKPATH_ST:FRAMEWORKPATH} ${FRAMEWORK_ST:FRAMEWORK} ${ARCH_ST:ARCH} ${STLIB_MARKER} ${STLIBPATH_ST:STLIBPATH} ${STLIB_ST:STLIB} ${SHLIB_MARKER} ${LIBPATH_ST:LIBPATH} ${LIB_ST:LIB}'
+ 	ext_out=['.bin']
+ 	vars=['LINKDEPS']
+ 	inst_to='${BINDIR}'

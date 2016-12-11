@@ -6,7 +6,6 @@ debian/tmp/usr/sbin/ntpkeygen
 debian/tmp/usr/sbin/ntptime
 debian/tmp/usr/sbin/ntpwait
 debian/tmp/usr/share/man/man1/ntpq.1
-debian/tmp/usr/share/man/man1/ntpsweep.1
 debian/tmp/usr/share/man/man1/ntptrace.1
 debian/tmp/usr/share/man/man5/ntp.conf.5
 debian/tmp/usr/share/man/man5/ntp.keys.5

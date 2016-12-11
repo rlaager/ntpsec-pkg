@@ -1,0 +1,29 @@
+From 98bcdca0dec54f8bc1c9c6a12d6fe41ab204a719 Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Sat, 10 Dec 2016 23:22:39 -0600
+Subject: [PATCH 5/5] ntpviz: Open the log files as text
+
+This is necessary for Python 3.
+---
+ pylib/statfiles.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/pylib/statfiles.py b/pylib/statfiles.py
+index 7791b85..826ffc1 100644
+--- a/pylib/statfiles.py
++++ b/pylib/statfiles.py
+@@ -88,9 +88,9 @@ class NTPStats:
+                     if starttime > os.path.getmtime(logpart):
+                         continue
+                     if logpart.endswith("gz"):
+-                        lines += gzip.open(logpart, 'rb').readlines()
++                        lines += gzip.open(logpart, 'rt').readlines()
+                     else:
+-                        lines += open(logpart, 'rb').readlines()
++                        lines += open(logpart, 'r').readlines()
+             except IOError:
+                 sys.stderr.write("ntpviz: WARNING: could not read %s\n" \
+                      % logpart)
+-- 
+2.7.4
+

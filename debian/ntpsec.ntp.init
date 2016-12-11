@@ -5,8 +5,13 @@
 # Required-Start:  $network $remote_fs $syslog
 # Required-Stop:   $network $remote_fs $syslog
 # Default-Start:   2 3 4 5
-# Default-Stop:    1
+# Default-Stop:
 # Short-Description: Start NTP daemon
+# Description:       NTP, the Network Time Protocol, is used to keep computer
+#                    clocks accurate by synchronizing them over the Internet or
+#                    a local network, or by following an accurate hardware
+#                    receiver that interprets GPS, DCF-77, or similar time
+#                    signals.
 ### END INIT INFO
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin

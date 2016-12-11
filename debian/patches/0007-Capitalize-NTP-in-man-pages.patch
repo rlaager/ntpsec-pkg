@@ -1,0 +1,39 @@
+From dca47b4d46ec9e8158de6064af9df0328ad76bfc Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Sat, 10 Dec 2016 22:51:57 -0600
+Subject: [PATCH 7/8] Capitalize "NTP" in man pages
+
+Since the protocol name is an acronym, it should be capitalized when
+standing alone.
+---
+ ntpclients/ntpkeygen | 2 +-
+ ntpclients/ntpsweep  | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ntpclients/ntpkeygen b/ntpclients/ntpkeygen
+index f0d8dd6..c3a3025 100755
+--- a/ntpclients/ntpkeygen
++++ b/ntpclients/ntpkeygen
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env python
+ #
+-# ntpkeygen - program to generate cryptographic keys for ntp clients and servers
++# ntpkeygen - program to generate cryptographic keys for NTP clients and servers
+ # 
+ # All file names are like "ntpkey_<type>_<hostname>.<filestamp>", where
+ # <type> is the file type, <hostname> the generating host name and
+diff --git a/ntpclients/ntpsweep b/ntpclients/ntpsweep
+index e7a8437..b457d69 100755
+--- a/ntpclients/ntpsweep
++++ b/ntpclients/ntpsweep
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env python
+ """
+-ntpsweep - Print various information about given ntp servers.
++ntpsweep - Print various information about given NTP servers.
+ USAGE: ntpsweep [-<flag> [<val>] | --<name>[{=| }<val>]]... [hostfile]
+ 
+     -l, --host-list=str        Host to execute actions on
+-- 
+2.7.4
+

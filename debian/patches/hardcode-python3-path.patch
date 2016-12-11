@@ -30,14 +30,6 @@ Last-Update: 2016-11-29
  # coding: utf-8
  
  from __future__ import print_function
---- a/contrib/pi-temp-log
-+++ b/contrib/pi-temp-log
-@@ -1,4 +1,4 @@
--#!/usr/bin/env python
-+#!/usr/bin/python3
- # coding: utf-8
- """\
- Usage: zone-temper-log
 --- a/contrib/smartctl-temp-log
 +++ b/contrib/smartctl-temp-log
 @@ -1,4 +1,4 @@
@@ -54,40 +46,40 @@ Last-Update: 2016-11-29
  # coding: utf-8
  """\
  Usage: temper-temper-log
---- a/ntpq/ntpq
-+++ b/ntpq/ntpq
+--- a/ntpclients/ntpq
++++ b/ntpclients/ntpq
 @@ -1,4 +1,4 @@
 -#!/usr/bin/env python
 +#!/usr/bin/python3
  #
  # ntpq - query an NTP server using mode 6 commands
  #
---- a/ntpstats/ntpviz
-+++ b/ntpstats/ntpviz
+--- a/ntpclients/ntpviz
++++ b/ntpclients/ntpviz
 @@ -1,4 +1,4 @@
 -#!/usr/bin/env python
 +#!/usr/bin/python3
  # coding: utf-8
  """\
  ntpviz - logfile visualizer for NTP log files
---- a/ntpsweep/ntpsweep
-+++ b/ntpsweep/ntpsweep
+--- a/ntpclients/ntpsweep
++++ b/ntpclients/ntpsweep
 @@ -1,4 +1,4 @@
 -#!/usr/bin/env python
 +#!/usr/bin/python3
  """
- ntpsweep - Print various information about given ntp servers.
- USAGE: ntpsweep [ -<flag> [<val>] | --<name>[{=| }<val>] ]... [hostfile]
---- a/ntptrace/ntptrace
-+++ b/ntptrace/ntptrace
+ ntpsweep - print various information about given NTP servers
+ USAGE: ntpsweep [-<flag> [<val>] | --<name>[{=| }<val>]]... [hostfile]
+--- a/ntpclients/ntptrace
++++ b/ntpclients/ntptrace
 @@ -1,4 +1,4 @@
 -#!/usr/bin/env python
 +#!/usr/bin/python3
  """
  ntptrace - trace peers of an NTP server
  
---- a/ntpwait/ntpwait
-+++ b/ntpwait/ntpwait
+--- a/ntpclients/ntpwait
++++ b/ntpclients/ntpwait
 @@ -1,4 +1,4 @@
 -#!/usr/bin/env python
 +#!/usr/bin/python3
@@ -750,11 +742,43 @@ Last-Update: 2016-11-29
  """
  Generate a Python module from a C file of macro definitions.
  
---- a/ntpkeygen/ntpkeygen
-+++ b/ntpkeygen/ntpkeygen
+--- a/ntpclients/ntpkeygen
++++ b/ntpclients/ntpkeygen
 @@ -1,4 +1,4 @@
 -#!/usr/bin/env python
 +#!/usr/bin/python3
  #
- # ntpkeygen - program to generate cryptographic keys for ntp clients and servers
+ # ntpkeygen - program to generate cryptographic keys for NTP clients and servers
  # 
+--- a/devel/linkcheck
++++ b/devel/linkcheck
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ #
+ # linkcheck - check link integrity in the document tree
+ #
+--- a/ntpclients/ntpmon
++++ b/ntpclients/ntpmon
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ #
+ # ntpmon - real-time peerstats/MRU monitor
+ #
+--- a/ntpclients/ntpdig
++++ b/ntpclients/ntpdig
+@@ -1,4 +1,4 @@
+-#!/usr/bin/python
++#!/usr/bin/python3
+ """
+ ntpdig - simple SNTP client
+ 
+--- a/contrib/zone-temp-log
++++ b/contrib/zone-temp-log
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # coding: utf-8
+ """\
+ Usage: zone-temper-log

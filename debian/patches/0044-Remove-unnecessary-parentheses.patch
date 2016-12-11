@@ -1,0 +1,21 @@
+From 8d97effd1e99a4f7aa15c179ef96e62e16633224 Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Mon, 12 Dec 2016 01:51:36 -0600
+Subject: [PATCH 4/5] Remove unnecessary parentheses
+
+This is more consistent with the other items.
+---
+ ntpclients/ntpviz | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/ntpclients/ntpviz
++++ b/ntpclients/ntpviz
+@@ -1575,7 +1575,7 @@
+ 
+ <dt>time offset:</dt>
+ <dd>The difference between the ntpd calculated time and the local system
+- clock's time.  (Also can be called phase offset)</dd>
++ clock's time.  Also called phase offset.</dd>
+ 
+ <dt>upstream clock:</dt>
+ <dd>Any remote clock or reference clock used as a source of time.</dd>

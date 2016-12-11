@@ -2,9 +2,10 @@
 
 DEB_HOST_ARCH_OS ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
 
-CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS) -D_GNU_SOURCE
-CFLAGS   = $(shell dpkg-buildflags --get CFLAGS) -fno-strict-aliasing
-LDFLAGS  = $(shell dpkg-buildflags --get LDFLAGS) -Wl,--as-needed
+export DEB_BUILD_MAINT_OPTIONS = hardening=+bindnow,+pie
+export DEB_CFLAGS_MAINT_APPEND = -fno-strict-aliasing
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+include /usr/share/dpkg/buildflags.mk
 
 configure-stamp:
 	dh_testdir
@@ -41,7 +42,7 @@ build-arch: build-stamp
 build-indep: build-stamp
 build-stamp: configure-stamp
 	dh_testdir
-	python3 waf build
+	python3 waf build -v
 	touch $@
 
 clean:
@@ -49,8 +50,7 @@ clean:
 	dh_testroot
 	rm -f build-stamp configure-stamp
 	python3 waf clean || true
-	rm -rf ntpdig/ntp ntpstats/ntp ntpq/ntp ntptrace/ntp ntpwait/ntp ntpsweep/ntp
-	rm -rf build .lock-waf_*_build pylib/version.py pylib/ntp_magic.py pylib/ntp_control.py .waf*
+	rm -rf build .lock-waf_*_build ntpclients/ntp pylib/control.py pylib/magic.py pylib/version.py .waf*
 	find -name "*.pyc" -delete
 	rm -f wafhelpers/autorevision.sh
 	dh_clean
@@ -68,31 +68,18 @@ install: build-stamp
 	mv debian/tmp/usr/man debian/tmp/usr/share/man
 
 	install -m 755 \
-		ntpleapfetch/ntpleapfetch \
-		ntptrace/ntptrace \
+		ntpclients/ntpleapfetch \
+		ntpclients/ntptrace \
 		debian/tmp/usr/bin
 	install -m 755 \
 		attic/ntpdate \
-		ntpwait/ntpwait \
+		ntpclients/ntpwait \
 		debian/tmp/usr/sbin
 
 	# move the administrator programs from /usr/bin to /usr/sbin
 	for file in ntptime ntpkeygen; do \
 		mv debian/tmp/usr/bin/$$file debian/tmp/usr/sbin/$$file || exit; \
 	done
-
-	install -D -m 0755 ntpsweep/ntpsweep debian/ntpsec/usr/bin/ntpsweep
-
-	install -d debian/ntpsec-ntpviz/usr/share/doc/ntpsec-ntpviz/examples
-	install -m 0755 \
-		contrib/cpu-temp-log \
-		contrib/gps-log \
-		contrib/smartctl-temp-log \
-		contrib/temper-temp-log \
-		debian/ntpsec-ntpviz/usr/share/doc/ntpsec-ntpviz/examples
-
-	install -D -m 0755 contrib/pi-temp-log \
-		debian/ntpsec-ntpviz/usr/share/ntpsec-ntpviz/zone-temp-log
 
 	install -d debian/ntpsec-ntpviz/usr/share/ntpsec-ntpviz/ntpviz
 	install -m 644 \

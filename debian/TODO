@@ -1,7 +1,14 @@
 - ntpviz
-  - Deal with gps logging. Can we make this a service that runs if both gpsd
-    and ntpd are installed?  It would ship in the ntpsec-ntpviz package.
-  - Deal with temp logging.
+  - Patch it to ignore the non-dated stats* files (i.e. not temps or gpsd)
+
+- Rebase on a new daily tarball
+
+- Document libsodium, libisc, and libjsmn in debian/copyright
+  - Probably change it to machine-readable as well
+  - Add a Comment that other packages (including ntp) embed libjsmn, though my
+    long-term plan is to break it out so we can all use a libjsmn package.
+
+- Peel out Ubuntu changes; test on Jessie. Commit. Upload for experimental.
 
 - Rework init script?
   - For sysvinit, run `ntpd -g`.
@@ -26,8 +33,5 @@
       ---- Discussion here: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=744753
   - Test with suspend/resume on a VM.
   - Then, drop all of ntpdate entirely.  Move ntpdig to the ntpsec package
-
-- Document libsodium, libisc, and libjsmn in debian/copyright
-  - Probably change it to machine-readable as well
 
 - Use system libjsmn (which means libjsmn needs packaging)

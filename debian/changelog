@@ -1,4 +1,4 @@
-ntpsec (0.9.5+dfsg1-1) UNRELEASED; urgency=medium
+ntpsec (0.9.7~git20161210+dfsg1-1ubuntu1) UNRELEASED; urgency=medium
 
   * Initial release. (Closes: #819806)
     Packaging forked from ntp_4.2.8p8+dfsg.
@@ -8,4 +8,4 @@ ntpsec (0.9.5+dfsg1-1) UNRELEASED; urgency=medium
       ntp.ubuntu.com.
     + debian/README.Debian: Add a PPS section to the README.Debian
 
- -- Richard Laager <rlaager@wiktel.com>  Fri, 28 Oct 2016 07:25:56 -0500
+ -- Richard Laager <rlaager@wiktel.com>  Sat, 10 Dec 2016 21:53:35 -0600

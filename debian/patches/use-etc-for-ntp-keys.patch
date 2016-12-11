@@ -5,7 +5,7 @@ Description: Use /etc for ntp.keys
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2016-12-04
+Last-Update: 2016-12-10
 --- a/docs/includes/ntpkeygen-body.txt
 +++ b/docs/includes/ntpkeygen-body.txt
 @@ -34,12 +34,7 @@
@@ -34,9 +34,9 @@ Last-Update: 2016-12-04
  host and used only by that host, although exceptions exist as noted
 --- a/wafhelpers/configure.py
 +++ b/wafhelpers/configure.py
-@@ -279,7 +279,7 @@
-         # The protocol major number
-         ctx.define("NTP_API", 4, comment="Protocol major number.")
+@@ -275,7 +275,7 @@
+         for header, sizeof in sorted(sizeofs, key=lambda x: x[1:]):
+                 check_sizeof(ctx, header, sizeof)
  
 -        ctx.define("NTP_KEYSDIR", "%s/etc" % ctx.env.PREFIX, comment="NTP key file directory")
 +        ctx.define("NTP_KEYSDIR", "/etc", comment="NTP key file directory")
@@ -65,7 +65,7 @@ Last-Update: 2016-12-04
  +trustedkey+ _key..._ ::
 --- a/docs/includes/ntpd-body.txt
 +++ b/docs/includes/ntpd-body.txt
-@@ -549,7 +549,7 @@
+@@ -511,7 +511,7 @@
  |log file           |system log      |+-l+        |+logfile+
  |include file       |none            |none        |+includefile+
  |statistics path    |+/var/NTP+      |+-s+        |+statsdir+
@@ -76,7 +76,7 @@ Last-Update: 2016-12-04
  [[signals]]
 --- a/docs/index.txt
 +++ b/docs/index.txt
-@@ -199,7 +199,7 @@
+@@ -210,7 +210,7 @@
    terminal windows, allowing more space for long peer addresses.
  
  * When running as root, the ntpq utility looks in /etc/ntp.conf and
@@ -87,7 +87,7 @@ Last-Update: 2016-12-04
  
 --- a/pylib/packet.py
 +++ b/pylib/packet.py
-@@ -1411,7 +1411,7 @@
+@@ -1417,7 +1417,7 @@
          "Retrieve ifstats data."
          return self.__ordlist("ifstats")
  

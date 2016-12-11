@@ -1,0 +1,20 @@
+From e5dd4575db41d6bb8f4d76bc8d537b136d058d16 Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Mon, 12 Dec 2016 01:51:29 -0600
+Subject: [PATCH 3/5] Add a missing period
+
+---
+ ntpclients/ntpviz | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/ntpclients/ntpviz
++++ b/ntpclients/ntpviz
+@@ -807,7 +807,7 @@
+ 
+ <p>Closer to 0s is better.  An ideal system would be a horizontal line
+ at 0s. Typical 90%% ranges may be: local serial GPS 200 ms; local PPS
+-20µs</p>
++20µs.</p>
+ 
+ <p>Clock Offset is field 5 in the peerstats log file.</p>
+ """

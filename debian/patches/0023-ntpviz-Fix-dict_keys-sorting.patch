@@ -1,0 +1,58 @@
+From ced4d70c6c4fff35e0b9d8bec6ff22289604438c Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Sat, 10 Dec 2016 23:20:41 -0600
+Subject: [PATCH 3/5] ntpviz: Fix dict_keys sorting
+
+On Python 3, {}.keys() returns a dict_keys object, which has no sort()
+method.  We have to turn it to a list first.
+---
+ ntpclients/ntpviz | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+--- a/ntpclients/ntpviz
++++ b/ntpclients/ntpviz
+@@ -444,7 +444,7 @@
+             return ''
+ 
+         tempsmap = self.tempssplit()
+-        tempslist = tempsmap.keys()
++        tempslist = list(tempsmap.keys())
+         tempslist.sort()
+         if not len( tempsmap) or not len( tempslist):
+             sys.stderr.write("ntpviz: WARNING: no temps to graph\n")
+@@ -525,7 +525,7 @@
+         "Generate gnuplot code graphing local temperature statistics"
+         sitename = self.sitename
+         tempsmap = self.tempssplit()
+-        tempslist = tempsmap.keys()
++        tempslist = list(tempsmap.keys())
+         tempslist.sort()
+ 
+         if not len( tempsmap) or not len( tempslist):
+@@ -576,7 +576,7 @@
+         "Generate gnuplot code graphing local GPS statistics"
+         sitename = self.sitename
+         gpsmap = self.gpssplit()
+-        gpslist = gpsmap.keys()
++        gpslist = list(gpsmap.keys())
+         gpslist.sort()
+ 
+         if not len( gpsmap) or not len( gpslist):
+@@ -758,7 +758,7 @@
+ 
+         peerdict = self.peersplit()
+         if not peerlist:
+-            peerlist = peerdict.keys()
++            peerlist = list(peerdict.keys())
+         if not len( peerlist):
+             sys.stderr.write("ntpviz: WARNING: no peer data to graph\n")
+             return ''
+@@ -1645,7 +1645,7 @@
+             ("peer-offsets", stats.peer_offsets_gnuplot()),
+         ]
+ 
+-        peerlist = stats.peersplit().keys()
++        peerlist = list(stats.peersplit().keys())
+         # sort for output order stability
+         peerlist.sort()
+         for key in peerlist:

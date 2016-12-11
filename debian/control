@@ -5,7 +5,7 @@ Maintainer: Richard Laager <rlaager@wiktel.com>
 Build-Depends: asciidoc,
                autorevision (>= 1.18),
                bison,
-               debhelper (>= 6),
+               debhelper (>= 9),
                dh-apache2,
                dh-apparmor,
                dh-python,
@@ -71,6 +71,7 @@ Description: Network Time Protocol daemon and utility programs
 Package: ntpsec-ntpdate
 Architecture: any
 Depends: netbase,
+         python3 (>= 3.3),
          ${misc:Depends},
          ${shlibs:Depends}
 Conflicts: ntpdate
@@ -106,8 +107,6 @@ Depends: fonts-liberation,
 Recommends: ntpsec,
             psutils,
             ${misc:Recommends}
-Suggests: lm-sensors,
-          python-gps
 Description: NTP statistics graphing utility
  NTP, the Network Time Protocol, is used to keep computer clocks
  accurate by synchronizing them over the Internet or a local network,
@@ -117,6 +116,9 @@ Description: NTP statistics graphing utility
  ntpviz analyzes NTP log files and generates statistical plots from
  them.  The output is in the form of HTML with images.  If Apache is
  installed, it will be served at: /ntpviz
+ .
+ This is part of NTPsec.  NTPsec is a secure, hardened, and improved
+ implementation derived from the original NTP project.
 
 Package: ntpsec-doc
 Architecture: all
@@ -129,9 +131,10 @@ Description: Network Time Protocol documentation
  DCF-77, or similar time signals.
  .
  This package contains HTML documentation for the ntpsec packages (ntpsec,
- ntpsec-ntpdate).  Since there are no substantive man pages for ntpsec's
- programs and configuration files, this package is desirable for any
- setup beyond the simple default configuration.
+ ntpsec-ntpdate).
+ .
+ This is part of NTPsec.  NTPsec is a secure, hardened, and improved
+ implementation derived from the original NTP project.
 
 Package: python3-ntp
 Architecture: any
@@ -141,5 +144,13 @@ Depends: python3 (>= 3.3),
          ${shlibs:Depends}
 Provides: ${python3:Provides}
 Description: Python 3 NTP Helper Classes
- This contains the Python "ntp" module, which contains helper classes for
- NTP utilities written in Python.
+ NTP, the Network Time Protocol, is used to keep computer clocks
+ accurate by synchronizing them over the Internet or a local network,
+ or by following an accurate hardware receiver that interprets GPS,
+ DCF-77, or similar time signals.
+ .
+ This package contains the Python "ntp" module, which contains helper
+ classes for NTP utilities written in Python.
+ .
+ This is part of NTPsec.  NTPsec is a secure, hardened, and improved
+ implementation derived from the original NTP project.

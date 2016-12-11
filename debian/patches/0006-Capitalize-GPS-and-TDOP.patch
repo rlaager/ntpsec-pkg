@@ -1,0 +1,43 @@
+From 1d8c1704dbc43d11f6c6e854645af1bb70b5d95b Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Sat, 10 Dec 2016 23:32:29 -0600
+Subject: [PATCH 6/8] Capitalize GPS and TDOP
+
+---
+ ntpclients/ntpviz | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/ntpclients/ntpviz b/ntpclients/ntpviz
+index 27596a8..f49a0b8 100755
+--- a/ntpclients/ntpviz
++++ b/ntpclients/ntpviz
+@@ -573,7 +573,7 @@ component of frequency drift.</p>
+         return ret
+ 
+     def local_gps_gnuplot(self):
+-        "Generate gnuplot code graphing local gps statistics"
++        "Generate gnuplot code graphing local GPS statistics"
+         sitename = self.sitename
+         gpsmap = self.gpssplit()
+         gpslist = gpsmap.keys()
+@@ -581,7 +581,7 @@ component of frequency drift.</p>
+ 
+         if not len( gpsmap) or not len( gpslist):
+             if 1 <= args.debug_level:
+-                sys.stderr.write("ntpviz: INFO: no gps data to graph\n")
++                sys.stderr.write("ntpviz: INFO: no GPS data to graph\n")
+             return ''
+ 
+         stats = []
+@@ -1245,7 +1245,7 @@ Python by ESR, concept and gnuplot code by Dan Drown.
+                 default = False,
+                 action="store_true",
+                 dest='show_gps',
+-                help="Plot gpsd tdop and nSats")
++                help="Plot gpsd TDOP and nSats")
+     group.add_argument( '--local-jitter',
+                 default=False,
+                 action="store_true",
+-- 
+2.7.4
+
