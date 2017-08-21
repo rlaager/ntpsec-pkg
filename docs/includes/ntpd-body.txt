@@ -6,11 +6,11 @@
 == SYNOPSIS ==
 [verse]
 ntpd
-    [-46aAbghLmnNqx ] [ -c 'conffile' ] [ -f 'driftfile' ] [ -i 'jaildir' ]
-    [ -k 'keyfile' ] [ -l 'logfile' ] [ -p 'pidfile' ] [ -P 'priority' ]
-    [ -r 'broadcast-delay' ]  [ -s 'statsdir' ]  [ -t  'key' ]
-    [ -u 'user'[:'group'] ] [ -U 'interface_update_interval' ]
-    [ -v 'variable' ] [ -V 'variable' ] [server...]
+    [-46ghLmnNqx] [-c 'conffile'] [-f 'driftfile'] [-i 'jaildir']
+    [-k 'keyfile'] [-l 'logfile'] [-p 'pidfile'] [-P 'priority']
+    [-s 'statsdir']  [-t  'key']
+    [-u 'user'[:'group']] [-U 'interface_update_interval']
+    [-v 'variable'] [-V 'variable'] [server...]
 
 [[descr]]
 == DESCRIPTION ==
@@ -18,24 +18,19 @@ ntpd
 The +ntpd+ utility is an operating system daemon which sets and
 maintains the system time of day in synchronism with Internet standard
 time servers. It is a complete implementation of the Network Time
-Protocol (NTP) version 4, as defined by RFC-5905, but also retains
-compatibility with version 3, as defined by RFC-1305, and versions 1 and
-2, as defined by RFC-1059 and RFC-1119, respectively.
+Protocol (NTP) version 4, as defined by RFC 5905, but also retains
+compatibility with version 3, as defined by RFC 1305, and versions 1 and
+2, as defined by RFC 1059 and RFC 1119, respectively.
 
-The +ntpd+ utility does most computations in 64-bit floating point
-arithmetic and does relatively clumsy 64-bit fixed point operations only
-when necessary to preserve the ultimate precision, about 232
-picoseconds. While the ultimate precision is not achievable with
-ordinary workstations and networks of today, it may be required with
-future gigahertz CPU clocks and gigabit LANs.
+The +ntpd+ utility can synchronize time to a theoretical precision of
+about 232 picoseconds. In practice, this limit is unattainable due to
+quantum limits on the clock speed of ballistic-electron logic.
 
 Ordinarily, +ntpd+ reads the {ntpdconfman} configuration file at startup
 time in order to determine the synchronization sources and operating
 modes. It is also possible to specify a working, although limited,
 configuration entirely on the command line, obviating the need for a
-configuration file. This may be particularly useful when the local host
-is to be configured as a broadcast/multicast client, with all peers
-being determined by listening to broadcasts at run time.
+configuration file.
 
 The +ntpd+ program normally operates continuously while adjusting the
 system time and frequency, but in some cases this might not be
@@ -76,25 +71,7 @@ the IPv4 namespace.
 Force DNS resolution of following host names on the command line to
 the IPv6 namespace.
 
-+-a+, +--authreq+::
-  Require crypto authentication. This option must not appear in
-  combination with any of the following options: authnoreq.
-+
-Require cryptographic authentication for broadcast client, multicast
-client and symmetric passive associations. This is the default.
-
-+-A+, +--authnoreq+::
-  Do not require crypto authentication. This option must not appear in
-  combination with any of the following options: authreq.
-+
-Do not require cryptographic authentication for broadcast client,
-multicast client and symmetric passive associations. This is almost
-never a good idea.
-
-+-b+, +--bcastsync+::
-  Allow us to sync to broadcast servers.
-
-+-c+ string, +--configfile+=_string_::
++-c+ _string_, +--configfile+=_string_::
   configuration file name.
 +
 The name and path of the configuration file, +/etc/{ntpconf}+ by
@@ -104,11 +81,11 @@ default.
   Increase debug verbosity level. This option may appear an unlimited
   number of times.
 
-+-D+ number, +--set-debug-level+=_number_::
++-D+ _number_, +--set-debug-level+=_number_::
   Set the debug verbosity level. This option may appear an unlimited
   number of times. This option takes an integer number as its argument.
 
-+-f+ string, +--driftfile+=_string_::
++-f+ _string_, +--driftfile+=_string_::
   frequency drift file name.
 +
 The name and path of the frequency file, +/etc/ntp.drift+ by default.
@@ -141,7 +118,7 @@ cause the time to be stepped back so this option must not be used if
 applications requiring monotonic time are running. See the _tinker_
 configuration file directive for other options.
 
-+-i+ string, +--jaildir+=_string_::
++-i+ _string_, +--jaildir+=_string_::
   Jail directory.
 +
 Chroot the server to the directory _jaildir_ This option also implies
@@ -150,7 +127,7 @@ need to also specify a +-u+ option. This option is only available if
 the OS supports adjusting the clock without full root privileges. This
 option is supported under Linux, NetBSD and Solaris.
 
-+-I+ iface, +--interface+=_iface_::
++-I+ _iface_, +--interface+=_iface_::
   Listen on an interface name or address. This option may appear an
   unlimited number of times.
 +
@@ -160,14 +137,14 @@ option also implies not opening other addresses, except wildcard and
 localhost. This option is deprecated. Please consider using the
 configuration file _interface_ command, which is more versatile.
 
-+-k+ string, +--keyfile+=_string_::
++-k+ _string_, +--keyfile+=_string_::
   path to symmetric keys.
 +
 Specify the name and path of the symmetric key file. +/etc/ntp.keys+
 is the default. This is the same operation as the _keys_
 configuration file directive.
 
-+-l+ string, +--logfile+=_string_::
++-l+ _string_, +--logfile+=_string_::
   path to the log file.
 +
 Specify the name and path of the log file. The default is the system
@@ -197,14 +174,14 @@ server to be discovered via mDNS client lookup.
 To the extent permitted by the operating system, run +ntpd+ at the
 highest priority.
 
-+-p+ string, +--pidfile+=_string_::
++-p+ _string_, +--pidfile+=_string_::
   path to the PID file.
 +
 Specify the name and path of the file used to record +ntpd+'s process
 ID. This is the same operation as the _pidfile_
 configuration file directive.
 
-+-P+ number, +--priority+=_number_::
++-P+ _number_, +--priority+=_number_::
   Process priority. This option takes an integer number as its argument.
 +
 To the extent permitted by the operating system, run +ntpd+ at the
@@ -220,34 +197,27 @@ which has been replaced with a shell script. The +-g+ and +-x+ options can be
 used with this option. Note: The kernel time discipline is disabled
 with this option.
 
-+-r+ string, +--propagationdelay+=_string_::
-  Broadcast/propagation delay.
-+
-Specify the default propagation delay from the broadcast/multicast
-server to this client. This is necessary only if the delay cannot be
-computed automatically by the protocol.
-
-+-s+ string, +--statsdir+=_string_::
++-s+ _string_, +--statsdir+=_string_::
   Statistics file location.
 +
 Specify the directory path for files created by the statistics
 facility. This is the same operation as the _statsdir_
 configuration file directive.
 
-+-t+ tkey, +--trustedkey+=_tkey_::
++-t+ _tkey_, +--trustedkey+=_tkey_::
   Trusted key number. This option may appear an unlimited number of
   times.
 +
 Add the specified key number to the trusted key list.
 
-+-u+ string, +--user+=_string_::
++-u+ _string_, +--user+=_string_::
   Run as userid (or userid:groupid).
 +
 Specify a user, and optionally a group, to switch to. This option is
 only available if the OS supports adjusting the clock without full
 root privileges. This option is supported under Linux, NetBSD and Solaris.
 
-+-U+ number, +--updateinterval+=_number_::
++-U+ _number_, +--updateinterval+=_number_::
   interval in seconds between scans for new or dropped interfaces. This
   option takes an integer number as its argument.
 +
@@ -257,7 +227,7 @@ performed shortly after the interface change has been detected by the
 system. Use 0 to disable scanning. 60 seconds is the minimum time
 between scans.
 
-+-w+ number, +--wait-sync+=_number_::
++-w+ _number_, +--wait-sync+=_number_::
   Seconds to wait for first clock sync. This option must not appear in
   combination with any of the following options: nofork, quit.
   This option takes an integer number as its argument.
@@ -433,19 +403,11 @@ file at hourly intervals.
 
 === Operating Modes ===
 
-The +ntpd+ utility can operate in any of several modes, including
-symmetric active/passive, client/server broadcast/multicast and
-manycast, as described in the "Association Management" page (available
-as part of the HTML documentation provided in +/usr/share/doc/ntp+). It
-normally operates continuously while monitoring for small changes in
-frequency and trimming the clock for the ultimate precision. However, it
-can operate in a one-time mode where the time is set from an external
-server and frequency is set from a previously recorded frequency file. A
-broadcast/multicast or manycast client can discover remote servers,
-compute server-client propagation delay correction factors and configure
-itself automatically. This makes it possible to deploy a fleet of
-workstations without specifying configuration details specific to the
-local environment.
++ntpd+ normally operates continuously while monitoring for small
+changes in frequency and trimming the clock for the ultimate
+precision. However, it can operate in a one-time mode where the time
+is set from an external server and frequency is set from a previously
+recorded frequency file.
 
 By default, +ntpd+ runs in continuous mode where each of possibly
 several external servers is polled at intervals determined by an
@@ -579,25 +541,25 @@ equivalent of -Z) in older versions.
 
 == STANDARDS ==
 
-RFC1059::
-  David L. Mills, _Network Time Protocol (Version 1)_, RFC1059
+RFC 1059::
+  David L. Mills, _Network Time Protocol (Version 1)_, RFC 1059
 
-RFC1119::
-  David L. Mills, _Network Time Protocol (Version 2)_, RFC1119
+RFC 1119::
+  David L. Mills, _Network Time Protocol (Version 2)_, RFC 1119
 
-RFC1305::
-  David L. Mills, _Network Time Protocol (Version 3)_, RFC1305
+RFC 1305::
+  David L. Mills, _Network Time Protocol (Version 3)_, RFC 1305
 
-RFC5905::
+RFC 5905::
   David L. Mills and J. Martin, Ed. and J. Burbank and W. Kasch, _Network
-  Time Protocol Version 4: Protocol and Algorithms Specification_, RFC5905
+  Time Protocol Version 4: Protocol and Algorithms Specification_, RFC 5905
 
-RFC5907::
+RFC 5907::
   H&#x2e; Gerstung and C. Elliott and B. Haberman, Ed., _Definitions of Managed
-  Objects for Network Time Protocol Version 4: (NTPv4)_, RFC5907
+  Objects for Network Time Protocol Version 4: (NTPv4)_, RFC 5907
 
-RFC5908::
+RFC 5908::
   R&#x2e; Gayraud and B. Lourdelet, _Network Time Protocol (NTP) Server Option
-  for DHCPv6_, RFC5908
+  for DHCPv6_, RFC 5908
 
 //end

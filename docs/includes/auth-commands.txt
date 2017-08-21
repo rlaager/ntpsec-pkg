@@ -1,9 +1,10 @@
 // Authentication commands - included twice
 
+[[controlkey]]
 +controlkey+ _key_::
   Specifies the key identifier to use with the
   {ntpqman} utility, which uses the standard protocol defined in
-  RFC-5905. The _key_ argument is the key identifier for a trusted key,
+  RFC 5905. The _key_ argument is the key identifier for a trusted key,
   where the value can be in the range 1 to 65,534, inclusive.
 
 +crypto+ [+cert+ _file_] [+leap+ _file_] [+randfile+ _file_] [+host+ _file_] [+sign+ _file_] [+gq+ _file_] [+gqpar+ _file_] [+iffpar+ _file_] [+mvpar+ _file_] [+pw+ _password_]::
@@ -54,6 +55,7 @@
     the link _ntpkey_sign_hostname_ in the keys directory. If this file
     is not found, the host key is also the sign key.
 
+[[keys]]
 +keys+ _keyfile_::
   Specifies the complete path and location of the MD5 key file
   containing the keys and key identifiers used by {ntpdman},
@@ -64,6 +66,7 @@
   This command specifies the default directory path for cryptographic
   keys, parameters and certificates. The default is +/usr/local/etc/+.
 
+[[trustedkey]]
 +trustedkey+ _key..._ ::
   Specifies the key identifiers which are trusted for the purposes of
   authenticating peers with symmetric key cryptography, as well as keys

@@ -42,7 +42,8 @@ class tex(Task.Task):
 	Execute the program **makeglossaries**
 	"""
 	def exec_command(self,cmd,**kw):
-		kw['stdout']=kw['stderr']=None
+		if self.env.PROMPT_LATEX:
+			kw['stdout']=kw['stderr']=None
 		return super(tex,self).exec_command(cmd,**kw)
 	def scan_aux(self,node):
 		nodes=[node]
@@ -113,6 +114,12 @@ class tex(Task.Task):
 	def check_status(self,msg,retcode):
 		if retcode!=0:
 			raise Errors.WafError('%r command exit status %r'%(msg,retcode))
+	def info(self,*k,**kw):
+		try:
+			info=self.generator.bld.conf.logger.info
+		except AttributeError:
+			info=Logs.info
+		info(*k,**kw)
 	def bibfile(self):
 		for aux_node in self.aux_nodes:
 			try:
@@ -121,7 +128,7 @@ class tex(Task.Task):
 				Logs.error('Error reading %s: %r',aux_node.abspath())
 				continue
 			if g_bibtex_re.findall(ct):
-				Logs.info('calling bibtex')
+				self.info('calling bibtex')
 				self.env.env={}
 				self.env.env.update(os.environ)
 				self.env.env.update({'BIBINPUTS':self.texinputs(),'BSTINPUTS':self.texinputs()})
@@ -142,7 +149,7 @@ class tex(Task.Task):
 			if bibunits:
 				fn=['bu'+str(i)for i in range(1,len(bibunits)+1)]
 				if fn:
-					Logs.info('calling bibtex on bibunits')
+					self.info('calling bibtex on bibunits')
 				for f in fn:
 					self.env.env={'BIBINPUTS':self.texinputs(),'BSTINPUTS':self.texinputs()}
 					self.env.SRCFILE=f
@@ -153,9 +160,9 @@ class tex(Task.Task):
 			idx_path=self.idx_node.abspath()
 			os.stat(idx_path)
 		except OSError:
-			Logs.info('index file %s absent, not calling makeindex',idx_path)
+			self.info('index file %s absent, not calling makeindex',idx_path)
 		else:
-			Logs.info('calling makeindex')
+			self.info('calling makeindex')
 			self.env.SRCFILE=self.idx_node.name
 			self.env.env={}
 			self.check_status('error when calling makeindex %s'%idx_path,self.makeindex_fun())
@@ -189,7 +196,7 @@ class tex(Task.Task):
 			env.append_value('PDFLATEXFLAGS','-interaction=batchmode')
 			env.append_value('XELATEXFLAGS','-interaction=batchmode')
 		self.cwd=self.inputs[0].parent.get_bld()
-		Logs.info('first pass on %s',self.__class__.__name__)
+		self.info('first pass on %s',self.__class__.__name__)
 		cur_hash=self.hash_aux_nodes()
 		self.call_latex()
 		self.hash_aux_nodes()
@@ -205,7 +212,7 @@ class tex(Task.Task):
 				Logs.error('No aux.h to process')
 			if cur_hash and cur_hash==prev_hash:
 				break
-			Logs.info('calling %s',self.__class__.__name__)
+			self.info('calling %s',self.__class__.__name__)
 			self.call_latex()
 	def hash_aux_nodes(self):
 		try:
@@ -246,7 +253,13 @@ def apply_tex(self):
 	if not getattr(self,'type',None)in('latex','pdflatex','xelatex'):
 		self.type='pdflatex'
 	outs=Utils.to_list(getattr(self,'outs',[]))
-	self.env.PROMPT_LATEX=getattr(self,'prompt',1)
+	try:
+		self.generator.bld.conf
+	except AttributeError:
+		default_prompt=False
+	else:
+		default_prompt=True
+	self.env.PROMPT_LATEX=getattr(self,'prompt',default_prompt)
 	deps_lst=[]
 	if getattr(self,'deps',None):
 		deps=self.to_list(self.deps)

@@ -58,10 +58,8 @@
 %token	<Integer>	T_Auth
 %token	<Integer>	T_Average
 %token	<Integer>	T_Baud
-%token	<Integer>	T_Bclient
 %token	<Integer>	T_Beacon
 %token	<Integer>	T_Broadcast
-%token	<Integer>	T_Broadcastdelay
 %token	<Integer>	T_Burst
 %token	<Integer>	T_Calibrate
 %token	<Integer>	T_Ceiling
@@ -128,8 +126,6 @@
 %token	<Integer>	T_Logconfig
 %token	<Integer>	T_Logfile
 %token	<Integer>	T_Loopstats
-%token	<Integer>	T_Manycastclient
-%token	<Integer>	T_Manycastserver
 %token	<Integer>	T_Mask
 %token	<Integer>	T_Maxage
 %token	<Integer>	T_Maxclock
@@ -238,7 +234,6 @@
 %type	<Int_fifo>	ac_flag_list
 %type	<Address_node>	address
 %type	<Integer>	address_fam
-%type	<Address_fifo>	address_list
 %type	<Integer>	boolean
 %type	<Integer>	client_type
 %type	<Integer>	counter_set_keyword
@@ -375,7 +370,6 @@ client_type
 	|	T_Pool
 	|	T_Peer
 	|	T_Broadcast
-	|	T_Manycastclient
 	;
 
 address
@@ -514,9 +508,7 @@ unpeer_keyword
  */
 
 other_mode_command
-	:	T_Manycastserver address_list
-			{ CONCAT_G_FIFOS(cfgt.manycastserver, $2); }
-	|	T_Mdnstries T_Integer
+	:	T_Mdnstries T_Integer
 			{ cfgt.mdnstries = $2; }
 	;
 
@@ -1090,9 +1082,7 @@ system_option
 	;
 
 system_option_flag_keyword
-	:	T_Auth
-	|	T_Bclient
-	|	T_Calibrate
+	:	T_Calibrate
 	|	T_Kernel
 	|	T_Monitor
 	|	T_Ntp
@@ -1221,8 +1211,7 @@ miscellaneous_command
 	;
 
 misc_cmd_dbl_keyword
-	:	T_Broadcastdelay
-	|	T_Nonvolatile
+	:	T_Nonvolatile
 	|	T_Tick
 	;
 
@@ -1444,19 +1433,6 @@ string_list
 		{
 			$$ = NULL;
 			APPEND_G_FIFO($$, create_string_node($1));
-		}
-	;
-
-address_list
-	:	address_list address
-		{
-			$$ = $1;
-			APPEND_G_FIFO($$, $2);
-		}
-	|	address
-		{
-			$$ = NULL;
-			APPEND_G_FIFO($$, $1);
 		}
 	;
 

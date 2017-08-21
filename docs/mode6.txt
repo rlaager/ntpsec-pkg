@@ -119,7 +119,7 @@ instruction to set a string-valued variable to the empty string.
 Textual responses may end with padding NULs; clients should ignore
 these.
 
-In RFC5234 ABNF:
+In RFC 5234 ABNF:
 
 -----------------------------------------------------------
 varlist = item [itemtail] LF *%x00
@@ -257,7 +257,7 @@ entries which have since been reclaimed.  If necessary, the protocol
 could be extended to zap those from the client snapshot at the end,
 but so far that doesn't seem useful.
 
-To accomodate the changing MRU list, the starting point for requests
+To accommodate the changing MRU list, the starting point for requests
 after the first request is supplied as a series of last seen
 timestamps and associated addresses, the newest ones the client has
 received.  As long as at least one of those entries hasn't been
@@ -391,7 +391,7 @@ the stanza.
 Attributes within each stanza are deliberately issued in a random
 order, and ntpd occasionally issues an attribute with a
 randomly-generated name and value. This is an attempt to prevent Mode
-6 clients from making brittle assumptioons about the inventory of
+6 clients from making brittle assumptions about the inventory of
 attributes and their transmission order.
 
 Clients can rely on all *.0 values preceding any *.1 values, that is
@@ -426,8 +426,6 @@ en.#:: Integer literal. 1 if packets on this interface are processed, 0
 flags.#:: A hex literal that is a mask of flag bits on.
           Flag mask values are described in a following table.
 
-mc.#:: Count of multicast transmissions.
-
 name.#:: The interface name, such as would occur in an ifconfig listing.
 
 pc.#:: Count of peers using this interface.
@@ -448,9 +446,9 @@ up.#:: Uptime in seconds.
 |INT_PPP	| 0x002	| Point-to-point interface
 |INT_LOOPBACK	| 0x004	| the loopback interface
 |INT_BROADCAST	| 0x008	| can broadcast out this interface
-|INT_MULTICAST	| 0x010	| can multicast out this interface
+|INT_MULTICAST	| 0x010	| can multicast out this interface (not used)
 |INT_BCASTOPEN	| 0x020	| broadcast receive socket is open
-|INT_MCASTOPEN	| 0x040	| multicasting enabled
+|INT_MCASTOPEN	| 0x040	| multicasting enabled (not used)
 |INT_WILDCARD	| 0x080	| wildcard interface - usually skipped
 |INT_MCASTIF	| 0x100	| bound directly to MCAST address
 |INT_PRIVACY	| 0x200	| RFC 4941 IPv6 privacy address

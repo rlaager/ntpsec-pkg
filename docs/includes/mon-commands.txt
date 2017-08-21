@@ -1,5 +1,6 @@
 // Monitoring commands. Is included twice.
 
+[[statistics]]
 +statistics+ _name..._::
   Enables writing of statistics records. Currently, eight kinds of
   _name_ statistics are supported.
@@ -105,7 +106,8 @@ The event message code and _message_ field are described on the
     generation set named _peerstats_:
 +
 ---------------------------------------------------------------------------------
-48773 10847.650 SPECTRACOM(4) 9714 -0.001605376 0.000000000 0.001424877 0.000958674
+48773 10847.650 SPECTRACOM(4) 9714 -0.001605376 0.000000000
+    0.001424877 0.000958674
 ---------------------------------------------------------------------------------
 +
 [width="100%",cols="<34%,<33%,<33%"]
@@ -138,8 +140,9 @@ show the offset, delay, dispersion and RMS jitter, all in seconds.
 +
 ---------------------------------------------------------------------------------
 5628 54575.160 128.4.1.1 192.168.1.5 3565350574.400229473
-    3565350574.442385200 3565350574.442436000 3565350575.154505763
-    0 4 4 1 8 -21 0.000000 0.000320 PPS 0
+    3565350574.442385200 3565350574.442436000
+    3565350575.154505763 0 4 4 1 8 -21 0.000000 0.000320
+    PPS 0
 ---------------------------------------------------------------------------------
 +
 |==============================================================================
@@ -227,7 +230,7 @@ generated line.
 |+0+        |#        |ru_inblock: file blocks in
 |+2328+     |#        |ru_oublock: file blocks out
 |+64226+    |#        |ru_nvcsw: context switches, wait
-|+1+        |#        |ru_nivcsw: context switches, prempts
+|+1+        |#        |ru_nivcsw: context switches, preempts
 |+0+        |#        |ru_nsignals: signals
 |+4308+     |#        |ru_maxrss: resident set size, kilobytes
 |==================================================
@@ -257,12 +260,14 @@ The remaining fields show the values used since the last report.
 |_message_    |text     |code path description (see source)
 |====================================
 
+[[statsdir]]
   +statsdir+ _directory_path_;;
     Indicates the full path of a directory where statistics files should
     be created (see below). This keyword allows the (otherwise constant)
     _filegen_ filename prefix to be modified for file generation sets,
     which is useful for handling statistics logs.
 
+[[filegen]]
   +filegen+ _name_ [+file+ _filename_] [+type+ _typename_] [+link+ | +nolink+] [+enable+ | +disable+];;
     Configures setting of generation file set name. Generation file sets
     provide a means for handling files that are continuously growing

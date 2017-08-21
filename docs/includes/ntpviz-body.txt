@@ -8,8 +8,8 @@
 ntpviz [-d LOGDIR] [-g] [-n name] [-p DAYS]
          [-s starttime] [-e endtime]
          [-o OUTDIR]
-         [ -c | --clip ]
-         [ -w SIZE | --width SIZE]
+         [-c | --clip]
+         [-w SIZE | --width SIZE]
          [--all-peer-jitters |
           --all-peer-offsets |
           --local-error |
@@ -22,8 +22,7 @@ ntpviz [-d LOGDIR] [-g] [-n name] [-p DAYS]
           --local-stability |
           --local-temps |
           --peer-jitters=hosts |
-          --peer-offsets=hosts |
-         ]
+          --peer-offsets=hosts]
          [-D DLVL | --debug DLVL]
          [-V | --version]
          [@OPTIONFILE]
@@ -64,7 +63,7 @@ subset of comparative plots for multiple directories.
 
 -e TIME or --endtime TIME::
     With -s and -e you set the start and end times.  TIME is either numeric
-    POSIX time (sconds since the start of the epoch) or ISO8601-style
+    POSIX time (sconds since the start of the epoch) or ISO 8601-style
     timestamps (yyyy-mmm-ddThh:mm:ss). +
     The default end time is the last logfile entry timestamp.   +
     The default start time is computed as the end time minus DAYS. +
@@ -85,7 +84,7 @@ subset of comparative plots for multiple directories.
     (1388x768).  'l' for large screens (1920x1080).  'm' is the default.
 
 -D DLVL or --debug DLVL::
-    Set the debug level to DLVL.  Lsrger DLVL leads to more verbosity. +
+    Set the debug level to DLVL.  Larger DLVL leads to more verbosity. +
     0 is the default, quiet except for all ERRORs and some WARNINGs. +
     1 shows some environment info and basic program progress. +
     2 leaves the plot file in the system temp directory. +

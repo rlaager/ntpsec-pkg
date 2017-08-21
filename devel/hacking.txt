@@ -56,7 +56,7 @@ Here are the non-standardized APIs that may be used:
 
 * Either ntp_adjtime() or the older BSD adjtime(2).
 
-* Berkeley sockets and the IPv6 API defined in RFC2493 and RFC2553.
+* Berkeley sockets and the IPv6 API defined in RFC 2493 and RFC 2553.
 
 * getifaddrs(3) or an equivalent local API for iterating over the
   system's active UDP interfaces. However, the local details should be
@@ -225,12 +225,12 @@ goal to aim at, given our choice of scripting languages, is
 is to make writing script wrappers in Python easy.
 
 There is more than one way to arrange this.  If you can design a
-simple tabular output format, or something resembling an RFC2822 header
+simple tabular output format, or something resembling an RFC 2822 header
 that's easy for both human eyes and programs to parse, do that.
 Besides being simple, formats like these are easily handled by either
 Python or shellscripts.
 
-Such simplicity is often difficult or impractical for heterogenous
+Such simplicity is often difficult or impractical for heterogeneous
 data that needs to be both grouped and labeled, so we have another
 convention for those cases. Here it is:
 
@@ -246,9 +246,9 @@ You can read about JSON at http://www.json.org/
 Be aware that if you present a tool design with a messy output format
 and no JSON option it is quite likely to be rejected.
 
-Our preferred format for dates is RFC3339 (a version of ISO8601 for
+Our preferred format for dates is RFC 3339 (a version of ISO 8601 for
 UTC with some options frozen; full year required, medial T required,
-explicit Zulu timezone). Local times should be expressed in ISO8601,
+explicit Zulu timezone). Local times should be expressed in ISO 8601,
 always with full 4-digit year.
 
 === Copyrights and licenses ===
@@ -336,7 +336,7 @@ that appears on a man page.
 
 === Version string ===
 
-We use a varient of three part Semantic Versioning, of the form X.Y.Z.
+We use a variant of three part Semantic Versioning, of the form X.Y.Z.
 X, Y, and Z are non-negative decimal integers.
 
 X is the "major" version number.
@@ -490,7 +490,8 @@ should be able to use "git stash" to get around that.
 
 == Release Checklist ==
 
-This is the release checklist to be used by the project manager to cut each 0.9.X release.
+This is the release checklist to be used by the project manager to cut
+each 0.9.X release.
 
 . Decide that it's time to cut a release.  This can be driven by landing
   a significant new feature, landing a critical fix, or just that enough
@@ -500,7 +501,7 @@ This is the release checklist to be used by the project manager to cut each 0.9.
   contributors to chime in, and to each assure that the .../NEWS file
   and the ../devel/TODO file is up to date.
 
-. Wait 4 days for the contributors to check in and for the discussion
+. Wait for the contributors to check in and for the discussion
   to settle down.  If the discussion suggests that now is not a good
   time to cut a release, wait until the raised issues are resolved.
 
@@ -510,29 +511,9 @@ This is the release checklist to be used by the project manager to cut each 0.9.
 . Modify the .../VERSION file with the new version number.
   Version number strings look like "0.9.1"
 
-. Modify the .../NEWS file, changing the "Repository head"
+. Modify the .../NEWS file, changing the "Repository head".
   to the current date and the version string.
 
-. Add GPG signed git tag.  Tags look like "NTPsec_9_1".
-
-. Commit those modifications to the repository.
-  The commit message looks like "version 0.9.1"
-
-. Push the repository upstream.
-  Don't forget to use the --tags option to push the new tag as well.
-
-. Generate release tarball.
-
-. Generate GPG detached signature of the release tarball.
-
-. Generate sha256sum file for the release tarball.
-
-. GPG sign that sha256sum file.
-
-. Copy the release tarball, GPG detached signature of the release
-  tarball, and the signed sha256sum file to the ftp artifact server.
-
-. Email the release message to the devel list.  The release message
-  should include the sha256sum value, and should be GPG signed.
+. Run the "release" script in this directory.
 
 //end

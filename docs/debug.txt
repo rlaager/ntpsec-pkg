@@ -21,7 +21,7 @@ This page discusses +ntpd+ program monitoring and debugging techniques
 using the link:ntpq.html[+ntpq+ - standard NTP query program], either
 on the local server or from a remote machine. The +ntpq+ program
 implements the management functions specified in the NTP specification
-https://tools.ietf.org/html/rfc5905[RFC-5905].  In addition, the
+https://tools.ietf.org/html/rfc5905[RFC 5905].  In addition, the
 program can be used to send remote configuration commands to the
 server.
 
@@ -85,7 +85,7 @@ in the +select+ field of the link:decode.html#peer[peer status word].
 
 The link:ntpq.html#as[+as+] command displays a list of associations and
 association identifiers. Note the +condition+ column, which reflects the
-tally code. The link:ntpq.html#pe[+rv+] command displays the
+tally code. The link:ntpq.html#rv[+rv+] command displays the
 link:ntpq.html#system[system variables] billboard, including the
 link:decode.html#sys[system status word]. The
 link:ntpq.html#rv[+rv assocID+] command, where +assocID+ is the
@@ -214,16 +214,6 @@ for problems is to use the trace facility, which is enabled using the
 displayed which shows the authentication status in the +auth+ field. A
 status of 1 indicates the packet was successful authenticated; otherwise
 it has failed.
-
-A common misconception is the implication of the +auth+ bit in the
-+enable+ and +disable+ commands. *This bit does not affect
-authentication in any way other than to enable or disable mobilization
-of a new persistent association in broadcast/multicast client, manycast
-client or symmetric passive modes.* If enabled, which is the default,
-these associations require authentication; if not, an association is
-mobilized even if not authenticated. Users are cautioned that running
-with authentication disabled is very dangerous, since an intruder can
-easily strike up an association and inject false time values.
 
 == Debugging Checklist ==
 

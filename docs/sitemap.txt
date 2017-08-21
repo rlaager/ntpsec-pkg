@@ -9,18 +9,24 @@ Welcome to the tea party.
 |==============================
 
 
-== Related Links ==
+== Links ==
 
 include::includes/install.txt[]
 include::includes/manual.txt[]
+xref:_links[Back to Top]
+
 include::includes/hand.txt[]
 include::includes/refclock.txt[]
+xref:_links[Back to Top]
+
 include::includes/misc.txt[]
 include::includes/special.txt[]
+xref:_links[Back to Top]
+
 include::includes/external.txt[]
 
 '''''
 
-image:pic/tribeb.gif[]
+image::pic/tribeb.gif[align="center"]
 
 include::includes/footer.txt[]

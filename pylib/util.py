@@ -6,21 +6,29 @@ from __future__ import print_function
 import socket
 import sys
 import time
-import ntp.ntpc
+import os
 import re
+import shutil
+import collections
 
-from ntp.packet import *
-from ntp.version import *
+import ntp.ntpc
+import ntp.version
+import ntp.magic
+import ntp.control
 
 def stdversion():
-    return "%s-%s-%s %s" % (VERSION, VCS_TICK, VCS_BASENAME, VCS_DATE)
+    return "%s-%s-%s %s" % (ntp.version.VERSION, ntp.version.VCS_TICK,
+                            ntp.version.VCS_BASENAME, ntp.version.VCS_DATE)
 
 def rfc3339(t):
-    "RFC3339 string from Unix time, including fractional second."
-    subsec = t - int(t)
-    t -= subsec
+    "RFC 3339 string from Unix time, including fractional second."
     rep = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(t))
-    rep += ("%f" % subsec)[1:] + "Z"
+    t = str(t)
+    if "." in t:
+        subsec = t.split(".", 1)[1]
+        if int(subsec) > 0:
+            rep += "." + subsec
+    rep += "Z"
     return rep
 
 def portsplit(hostname):
@@ -37,13 +45,18 @@ def portsplit(hostname):
             hostname = hostname[1:-1]	# Strip brackets
     return (hostname, portsuffix)
 
-def canonicalize_dns(hostname, family=socket.AF_UNSPEC):
+# A hack to avoid repeatedly hammering on DNS when ntpmon runs.
+canonicalization_cache = {}
+
+def canonicalize_dns(inhost, family=socket.AF_UNSPEC):
     "Canonicalize a hostname or numeric IP address."
+    if inhost in canonicalization_cache:
+        return canonicalization_cache[inhost]
     # Catch garbaged hostnames in corrupted Mode 6 responses
-    m = re.match("([:.[\]]|\w)*", hostname)
+    m = re.match("([:.[\]]|\w)*", inhost)
     if not m:
         raise TypeError
-    (hostname, portsuffix) = portsplit(hostname)
+    (hostname, portsuffix) = portsplit(inhost)
     try:
         ai = socket.getaddrinfo(hostname, None, family, 0, 0, socket.AI_CANONNAME)
     except socket.gaierror as e:
@@ -52,27 +65,37 @@ def canonicalize_dns(hostname, family=socket.AF_UNSPEC):
     (family, socktype, proto, canonname, sockaddr) = ai[0]
     try:
         name = socket.getnameinfo(sockaddr, socket.NI_NAMEREQD)
+        result = name[0].lower() + portsuffix
     except socket.gaierror:
         # On OS X, canonname is empty for hosts without rDNS.
         # Fall back to the hostname.
         canonicalized = canonname or hostname
-        return canonicalized.lower() + portsuffix
-    return name[0].lower() + portsuffix
+        result = canonicalized.lower() + portsuffix
+    canonicalization_cache[inhost] = result
+    return result
+
+TermSize = collections.namedtuple("TermSize", ["width", "height"])
 
 def termsize():
     "Return the current terminal size."
-    # Should work under Linux and Solaris at least.
     # Alternatives at http://stackoverflow.com/questions/566746/how-to-get-console-window-width-in-python
-    import shlex, subprocess, re
-    try:
-        output = subprocess.check_output(shlex.split('/bin/stty -a'))
-    except (OSError, subprocess.CalledProcessError, AttributeError):
-        return (24, 80)
-    for pattern in ('rows\D+(\d+); columns\D+(\d+);', '\s+(\d+)\D+rows;\s+(\d+)\D+columns;'):
-        m = re.search(pattern, output)
-        if m:
-            return int(m.group(1)), int(m.group(2))
-    return (24, 80)
+    # The way this is used makes it not a big deal if the default is wrong.
+    size = (80, 24)
+    if os.isatty(1):
+        try:
+            (w, h) = shutil.get_terminal_size((80, 24))
+            size = (w, h)
+        except AttributeError:
+            try:
+                # OK, Python version < 3.3, cope
+                import fcntl, termios, struct
+                h, w, hp, wp = struct.unpack('HHHH',
+                    fcntl.ioctl(2, termios.TIOCGWINSZ,
+                    struct.pack('HHHH', 0, 0, 0, 0)))
+                size = (w, h)
+            except IOError:
+                pass
+    return TermSize(*size)
 
 class PeerSummary:
     "Reusable report generator for peer statistics"
@@ -82,11 +105,17 @@ class PeerSummary:
         self.showhostnames = showhostnames	# If false, display numeric IPs
         self.wideremote = wideremote		# show wide remote names?
         self.debug = debug
+        self.termwidth = termwidth
         # By default, the peer spreadsheet layout is designed so lines just
         # fit in 80 characters. This tells us how much extra horizontal space
         # we have available on a wider terminal emulator.
-        self.horizontal_slack = (termwidth or 80) - 80
-        # Peer spreadsheet column widths
+        self.horizontal_slack = min((termwidth or 80) - 80, 24)
+        # Peer spreadsheet column widths. The reason we cap extra
+        # width used at 24 is that on very wide displays, slamming the
+        # non-hostname fields all the way to the right produces a huge
+        # river that makes the entries difficult to read as wholes.
+        # This choice caps the peername field width at that of the longest
+        # possible IPV6 numeric address.
         self.namewidth = 15 + self.horizontal_slack
         self.refidwidth = 15
         # Compute peer spreadsheet headers 
@@ -176,11 +205,11 @@ class PeerSummary:
             elif name == "hpoll":
                 hpoll = value
                 if hpoll < 0:
-                    hpoll = NTP_MINPOLL
+                    hpoll = ntp.magic.NTP_MINPOLL
             elif name == "ppoll":
                 ppoll = value
                 if ppoll < 0:
-                    ppoll = NTP_MINPOLL
+                    ppoll = ntp.magic.NTP_MINPOLL
             elif name == "reach":
                 # Shipped as hex, displayed in octal
                 reach = value
@@ -200,16 +229,16 @@ class PeerSummary:
                 srcport = value
             elif name == "reftime":
                 reftime = value	# l_fp timestamp
-        if hmode == MODE_BCLIENT:
+        if hmode == ntp.magic.MODE_BCLIENT:
             # broadcastclient or multicastclient
             ptype = 'b'
-        elif hmode == MODE_BROADCAST:
+        elif hmode == ntp.magic.MODE_BROADCAST:
             # broadcast or multicast server
             if srcadr.startswith("224."):	# IANA multicast address prefix
                 ptype = 'M'
             else:
                 ptype = 'B'
-        elif hmode == MODE_CLIENT:
+        elif hmode == ntp.magic.MODE_CLIENT:
             if srchost and '(' in srchost:
                 ptype = 'l'	# local refclock
             elif dstadr_refid == "POOL":
@@ -218,9 +247,9 @@ class PeerSummary:
                 ptype = 'a'	# manycastclient
             else:
                 ptype = 'u'	# unicast
-        elif hmode == MODE_ACTIVE:
+        elif hmode == ntp.magic.MODE_ACTIVE:
             ptype = 's'		# symmetric active
-        elif hmode == MODE_PASSIVE:
+        elif hmode == ntp.magic.MODE_PASSIVE:
             ptype = 'S'		# symmetric passive
 
         #
@@ -228,10 +257,10 @@ class PeerSummary:
         #
         line = ""
         poll_sec = 1 << min(ppoll, hpoll)
-        if self.pktversion > NTP_OLDVERSION:
-            c = " x.-+#*o"[CTL_PEER_STATVAL(rstatus) & 0x7]
+        if self.pktversion > ntp.magic.NTP_OLDVERSION:
+            c = " x.-+#*o"[ntp.control.CTL_PEER_STATVAL(rstatus) & 0x7]
         else:
-            c = " .+*"[CTL_PEER_STATVAL(rstatus) & 0x3]
+            c = " .+*"[ntp.control.CTL_PEER_STATVAL(rstatus) & 0x3]
         # Source host or clockname
         if srchost != None:
             clock_name = srchost
@@ -248,7 +277,7 @@ class PeerSummary:
             clock_name = srcadr
         if self.wideremote and len(clock_name) > self.namewidth:
             line += ("%c%s\n" % (c, clock_name))
-            line + (" " * (self.namewidth + 2))
+            line += (" " * (self.namewidth + 2))
         else:
             line += ("%c%-*.*s " % \
                              (c, self.namewidth, self.namewidth, clock_name[:self.namewidth]))
@@ -290,23 +319,23 @@ class MRUSummary:
         self.showhostnames = showhostnames	# If false, display numeric IPs
         self.now = time.time()
 
-    header = "lstint avgint rstr r m v  count rport remote address"
+    header = " lstint avgint rstr r m v  count rport remote address"
 
-    width = 78
+    width = 79
 
     def summary(self, entry):
         lstint = int(self.now - entry.last + 0.5)
-        active = int(entry.last - entry.first + 0.5)
+        active = float(entry.last - entry.first)
         favgint = active / entry.ct
         avgint = int(favgint + 0.5)
-        stats = "%6d" % lstint
+        stats = "%7d" % lstint
         if 5 < avgint or 1 == entry.ct:
             stats += " %6d" % avgint
         else:
             stats += " %6.2f" % favgint
-        if entry.rs & RES_KOD:
+        if entry.rs & ntp.magic.RES_KOD:
             rscode = 'K'
-        elif entry.rs & RES_LIMITED:
+        elif entry.rs & ntp.magic.RES_LIMITED:
             rscode = 'L'
         else:
             rscode = '.'
@@ -316,7 +345,8 @@ class MRUSummary:
                 dns = canonicalize_dns(dns)
             stats += " %4hx %c %d %d %6d %5s %s" % \
                      (entry.rs, rscode,
-                      PKT_MODE(entry.mv), PKT_VERSION(entry.mv),
+                      ntp.magic.PKT_MODE(entry.mv),
+                      ntp.magic.PKT_VERSION(entry.mv),
                       entry.ct, port[1:], dns)
             return stats
         except TypeError:
@@ -350,7 +380,7 @@ class ReslistSummary:
             return ''
         address += ReslistSummary.__getPrefix(mask)
         flags = variables.get("flags", "?")
-        # reslist reponses are often corrupted
+        # reslist responses are often corrupted
         s = "%10s %s\n           %s\n" % (hits, address, flags)
         # Throw away corrupted entries.  This is a shim - we really
         # want to make ntpd stop generating garbage
@@ -389,5 +419,34 @@ class IfstatsSummary:
             if not c.isalnum() and not c in "/.:[] \n":
                 return ''
         return s
+
+try:
+    import collections
+    OrderedDict = collections.OrderedDict
+except ImportError:
+    class OrderedDict(dict):
+        "A stupid simple implementation in order to be back-portable to 2.6"
+        # This can be simple because it doesn't need to be fast.
+        # The programs that use it only have to run at human speed,
+        # and the collections are small.
+        def __init__(self, items=None):
+            dict.__init__(self)
+            self.__keys = []
+            if items:
+                for (k, v) in items:
+                    self[k] = v
+        def __setitem__(self, key, val):
+            dict.__setitem__(self, key, val)
+            self.__keys.append(key)
+        def __delitem__(self, key):
+            dict.__delitem__(self, key)
+            self.__keys.remove(key)
+        def keys(self):
+            return self.__keys
+        def items(self):
+            return tuple([(k, self[k]) for k in self.__keys])
+        def __iter__(self):
+            for key in self.__keys:
+                yield key
 
 # end

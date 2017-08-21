@@ -170,7 +170,6 @@ typedef unsigned int	u_int;
  */
 typedef struct __endpt {
 	struct __endpt *elink;		/* endpt list link */
-	struct __endpt *mclink;		/* per-AF_* multicast list */
 	SOCKET		fd;		/* socket descriptor */
 	SOCKET		bfd;		/* for receiving broadcasts */
 	uint32_t	ifnum;		/* endpt instance count */
@@ -613,13 +612,13 @@ struct pkt {
 /*
  * Configuration items.  These are for the protocol module (proto_config())
  */
-#define	PROTO_BROADCLIENT	1
+#define	PROTO_BROADCLIENT	1	/* (not used) */
 #define	PROTO_PRECISION		2	/* (not used) */
-#define	PROTO_AUTHENTICATE	3
-#define	PROTO_BROADDELAY	4
-#define	PROTO_AUTHDELAY		5	/* (not used) */
-#define PROTO_MULTICAST_ADD	6
-#define PROTO_MULTICAST_DEL	7
+#define	PROTO_AUTHENTICATE	3	/* (not used) */
+#define	PROTO_BROADDELAY	4	/* (not used) */
+#define	PROTO_AUTHDELAY		5
+#define PROTO_MULTICAST_ADD	6	/* (not used) */
+#define PROTO_MULTICAST_DEL	7	/* (not used) */
 #define PROTO_NTP		8
 #define PROTO_KERNEL		9
 #define PROTO_MONITOR		10
@@ -672,6 +671,7 @@ struct pkt {
 
 /*
  * Default parameters.  We use these in the absence of something better.
+ * (Historical relic - muliticast mode has been removed for security reasons.)
  */
 #define INADDR_NTP	0xe0000101	/* NTP multicast address 224.0.1.1 */
 
@@ -695,28 +695,25 @@ struct mon_data {
 
 /*
  * Values for cast_flags in mon_entry and struct peer.  mon_entry uses
- * only the first three, MDF_UCAST, MDF_MCAST, and MDF_BCAST.
+ * only MDF_UCAST and MDF_BCAST.
  */
 #define	MDF_UCAST	0x01	/* unicast client */
-#define	MDF_MCAST	0x02	/* multicast server */
+#define	MDF_MCAST	0x02	/* multicast server (not used) */
 #define	MDF_BCAST	0x04	/* broadcast server */
 #define	MDF_POOL	0x08	/* pool client solicitor */
-#define MDF_ACAST	0x10	/* manycast client solicitor */
-#define	MDF_BCLNT	0x20	/* eph. broadcast/multicast client */
+#define MDF_ACAST	0x10	/* manycast client solicitor (not used) */
+#define	MDF_BCLNT	0x20	/* eph. broadcast/multicast client (not used) */
 #define MDF_UCLNT	0x40	/* preemptible manycast or pool client */
 /*
- * In the context of struct peer in ntpd, three of the cast_flags bits
+ * In the context of struct peer in ntpd, one cast_flags bit
  * represent configured associations which never receive packets, and
- * whose reach is always 0: MDF_BCAST, MDF_MCAST, and MDF_ACAST.  The
- * last can be argued as responses are received, but those responses do
- * not affect the MDF_ACAST association's reach register, rather they
- * (may) result in mobilizing ephemeral MDF_ACLNT associations.
+ * whose reach is always 0: MDF_BCAST
  */
-#define MDF_TXONLY_MASK	(MDF_BCAST | MDF_MCAST | MDF_ACAST | MDF_POOL)
+#define MDF_TXONLY_MASK	(MDF_BCAST | MDF_POOL)
 /*
  * manycastclient-like solicitor association cast_flags bits
  */
-#define MDF_SOLICIT_MASK	(MDF_ACAST | MDF_POOL)
+#define MDF_SOLICIT_MASK	MDF_POOL
 /*
  * Values used with mon_enabled to indicate reason for enabling monitoring
  */
