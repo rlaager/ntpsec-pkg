@@ -74,9 +74,6 @@ bool leap_sec_in_progress;
 /*
  * Nonspecified system state variables
  */
-int	sys_bclient;		/* broadcast client enable */
-double	sys_bdelay;		/* broadcast client default delay */
-bool	sys_authenticate;	/* require authentication for config */
 l_fp	sys_authdelay;		/* authentication delay */
 double	sys_offset;	/* current local clock offset */
 double	sys_mindisp = MINDISPERSE; /* minimum distance (s) */
@@ -195,7 +192,7 @@ is_control_packet(
 	    PKT_MODE(rbufp->recv_space.X_recv_buffer[0]) == MODE_CONTROL;
 }
 
-/* Free a parsed_pkt sturcture allocated by parsed_packet(). In the
+/* Free a parsed_pkt structure allocated by parsed_packet(). In the
    event of a parse error, this function may be called from within
    parse_packet() while the structure is only partially initalized, so
    we must be careful not to dereference uninitialized pointers.  This
@@ -246,7 +243,7 @@ parse_packet(
 	pkt->precision = (int8_t)recv_buf[3];
 	pkt->rootdelay = ntp_be32dec(recv_buf + 4);
 	pkt->rootdisp = ntp_be32dec(recv_buf + 8);
-	memcpy(pkt->refid, recv_buf + 12, 4);
+	memcpy(pkt->refid, recv_buf + 12, REFIDLEN);
 	pkt->reftime = ntp_be64dec(recv_buf + 16);
 	pkt->org = ntp_be64dec(recv_buf + 24);
 	pkt->rec = ntp_be64dec(recv_buf + 32);
@@ -405,8 +402,7 @@ i_require_authentication(
         bool peer_has_key = peer != NULL && peer->keyid != 0;
         bool wants_association =
             PKT_MODE(pkt->li_vn_mode) == MODE_BROADCAST ||
-            (peer == NULL && PKT_MODE(pkt->li_vn_mode == MODE_ACTIVE)) ||
-            (peer != NULL && peer->cast_flags & MDF_ACAST);
+            (peer == NULL && PKT_MODE(pkt->li_vn_mode == MODE_ACTIVE));
         bool restrict_nopeer =
             (restrict_mask & RES_NOPEER) &&
             wants_association;
@@ -475,12 +471,6 @@ handle_fastxmit(
 			sys_declined++;
 			return;
 		}
-	}
-
-	restrict_mask = ntp_monitor(rbufp, restrict_mask);
-	if (restrict_mask & RES_LIMITED) {
-		sys_limitrejected++;
-		if(!(restrict_mask & RES_KOD)) { return; }
 	}
 
 	/* To prevent exposing an authentication oracle, only MAC
@@ -558,7 +548,7 @@ handle_procpkt(
 	peer->outcount = 0;
 
 	if(is_kod(pkt)) {
-		if(!memcmp(pkt->refid, "RATE", 4)) {
+		if(!memcmp(pkt->refid, "RATE", REFIDLEN)) {
 			peer->selbroken++;
 			report_event(PEVNT_RATE, peer, NULL);
 			if (peer->minpoll < 10) { peer->minpoll = 10; }
@@ -628,7 +618,7 @@ handle_procpkt(
 	peer->precision = pkt->precision;
 	peer->rootdelay = scalbn((double)pkt->rootdelay, -16);
 	peer->rootdisp = scalbn((double)pkt->rootdisp, -16);
-	memcpy(&peer->refid, pkt->refid, 4);
+	memcpy(&peer->refid, pkt->refid, REFIDLEN);
 	uint64_to_lfp(&peer->reftime, pkt->reftime);
 	uint64_to_lfp(&peer->rec, pkt->rec);
 	uint64_to_lfp(&peer->xmt, pkt->xmt);
@@ -793,6 +783,12 @@ receive(
 		}
 	}
 
+	restrict_mask = ntp_monitor(rbufp, restrict_mask);
+	if (restrict_mask & RES_LIMITED) {
+		sys_limitrejected++;
+		if(!(restrict_mask & RES_KOD)) { goto done; }
+	}
+
 	switch(match) {
 	    case AM_FXMIT:
             case AM_NEWPASS:
@@ -805,7 +801,7 @@ receive(
 		handle_manycast(rbufp, restrict_mask, pkt, peer, authenticated);
 		break;
 	    default:
-		/* Everything else is for broadcast or multicast modes,
+		/* Everything else is for broadcast modes,
 		   which are a security nightmare.  So they go to the
 		   bit bucket until this improves.
 		*/
@@ -839,40 +835,10 @@ transmit(
 	 * In broadcast mode the poll interval is never changed from
 	 * minpoll.
 	 */
-	if (peer->cast_flags & (MDF_BCAST | MDF_MCAST)) {
+	if (peer->cast_flags & MDF_BCAST) {
 		peer->outdate = current_time;
 		if (sys_leap != LEAP_NOTINSYNC)
 			peer_xmit(peer);
-		poll_update(peer, hpoll);
-		return;
-	}
-
-	/*
-	 * In manycast mode we start with unity ttl. The ttl is
-	 * increased by one for each poll until either sys_maxclock
-	 * servers have been found or the maximum ttl is reached. When
-	 * sys_maxclock servers are found we stop polling until one or
-	 * more servers have timed out or until less than sys_minclock
-	 * associations turn up. In this case additional better servers
-	 * are dragged in and preempt the existing ones.  Once every
-	 * sys_beacon seconds we are to transmit unconditionally, but
-	 * this code is not quite right -- peer->unreach counts polls
-	 * and is being compared with sys_beacon, so the beacons happen
-	 * every sys_beacon polls.
-	 */
-	if (peer->cast_flags & MDF_ACAST) {
-		peer->outdate = current_time;
-		if (peer->unreach > sys_beacon) {
-			peer->unreach = 0;
-			peer->ttl = 0;
-			peer_xmit(peer);
-		} else if (sys_survivors < sys_minclock ||
-		    peer_associations < sys_maxclock) {
-			if (peer->ttl < (uint32_t)sys_ttlmax)
-				peer->ttl++;
-			peer_xmit(peer);
-		}
-		peer->unreach++;
 		poll_update(peer, hpoll);
 		return;
 	}
@@ -885,9 +851,7 @@ transmit(
 	 * growth in associations if the system clock or network quality
 	 * result in survivor count dipping below sys_minclock often.
 	 * This was observed testing with pool, where sys_maxclock == 12
-	 * resulted in 60 associations without the hard limit.	A
-	 * similar hard limit on manycastclient ephemeral associations
-	 * may be appropriate.
+	 * resulted in 60 associations without the hard limit.
 	 */
 	if (peer->cast_flags & MDF_POOL) {
 		peer->outdate = current_time;
@@ -2275,13 +2239,8 @@ fast_xmit(
 	 * the system minimum poll (ntp_minpoll). This is for KoD rate
 	 * control and not strictly specification compliant, but doesn't
 	 * break anything.
-	 *
-	 * If the gazinta was from a multicast address, the gazoutta
-	 * must go out another way.
 	 */
 	rpkt = &rbufp->recv_pkt;
-	if (rbufp->dstadr->flags & INT_MCASTOPEN)
-		rbufp->dstadr = findinterface(&rbufp->recv_srcadr);
 
 	/*
 	 * If this is a kiss-o'-death (KoD) packet, show leap
@@ -2799,9 +2758,6 @@ init_proto(const bool verbose)
 	get_systime(&dummy);
 	sys_survivors = 0;
 	sys_manycastserver = 0;
-	sys_bclient = 0;
-	sys_bdelay = 0;
-	sys_authenticate = true;
 	sys_stattime = current_time;
 	orphwait = current_time + sys_orphwait;
 	proto_clr_stats();
@@ -2822,8 +2778,7 @@ void
 proto_config(
 	int	item,
 	u_long	value,
-	double	dvalue,
-	sockaddr_u *svalue
+	double	dvalue
 	)
 {
 	/*
@@ -2837,18 +2792,6 @@ proto_config(
 	/*
 	 * enable and disable commands - arguments are Boolean.
 	 */
-	case PROTO_AUTHENTICATE: /* authentication (auth) */
-		sys_authenticate = (bool)value;
-		break;
-
-	case PROTO_BROADCLIENT: /* broadcast client (bclient) */
-		sys_bclient = (int)value;
-		if (sys_bclient == 0)
-			io_unsetbclient();
-		else
-			io_setbclient();
-		break;
-
 #ifdef REFCLOCK
 	case PROTO_CAL:		/* refclock calibrate (calibrate) */
 		cal_enable = value;
@@ -2887,10 +2830,6 @@ proto_config(
 	 */
 	case PROTO_BEACON:	/* manycast beacon (beacon) */
 		sys_beacon = (int)dvalue;
-		break;
-
-	case PROTO_BROADDELAY:	/* default broadcast delay (bdelay) */
-		sys_bdelay = dvalue;
 		break;
 
 	case PROTO_CEILING:	/* stratum ceiling (ceiling) */
@@ -2942,20 +2881,6 @@ proto_config(
 		orphwait += sys_orphwait;
 		break;
 
-	/*
-	 * Miscellaneous commands
-	 */
-	case PROTO_MULTICAST_ADD: /* add group address */
-		if (svalue != NULL)
-			io_multicast_add(svalue);
-		sys_bclient = 1;
-		break;
-
-	case PROTO_MULTICAST_DEL: /* delete group address */
-		if (svalue != NULL)
-			io_multicast_del(svalue);
-		break;
-
 	default:
 		msyslog(LOG_NOTICE,
 		    "proto: unsupported option %d", item);
@@ -2982,10 +2907,3 @@ proto_clr_stats(void)
 	sys_kodsent = 0;
 }
 
-void proto_dump(FILE *fp)
-{
-    /* must cover at least anything that can be set on the command line */
-    fprintf(fp, "%sable auth;\n", sys_authenticate ? "en" : "dis");
-    fprintf(fp, "%sable bclient;\n", sys_bclient ? "en" : "dis");
-    fprintf(fp, "broadcastdelay %f;\n", sys_bdelay);
-}

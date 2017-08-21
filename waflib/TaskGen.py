@@ -2,7 +2,7 @@
 # encoding: utf-8
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
-import copy,re,os
+import copy,re,os,functools
 from waflib import Task,Utils,Logs,Errors,ConfigSet,Node
 feats=Utils.defaultdict(set)
 HEADER_EXTS=['.h','.hpp','.hxx','.hh']
@@ -63,13 +63,14 @@ class task_gen(object):
 			return False
 		self.posted=True
 		keys=set(self.meths)
+		keys.update(feats['*'])
 		self.features=Utils.to_list(self.features)
-		for x in self.features+['*']:
+		for x in self.features:
 			st=feats[x]
-			if not st:
-				if not x in Task.classes:
-					Logs.warn('feature %r does not exist - bind at least one method to it',x)
-			keys.update(list(st))
+			if st:
+				keys.update(st)
+			elif not x in Task.classes:
+				Logs.warn('feature %r does not exist - bind at least one method to it?',x)
 		prec={}
 		prec_tbl=self.prec
 		for x in prec_tbl:
@@ -85,7 +86,8 @@ class task_gen(object):
 		out=[]
 		while tmp:
 			e=tmp.pop()
-			if e in keys:out.append(e)
+			if e in keys:
+				out.append(e)
 			try:
 				nlst=prec[e]
 			except KeyError:
@@ -99,8 +101,10 @@ class task_gen(object):
 					else:
 						tmp.append(x)
 		if prec:
-			txt='\n'.join(['- %s after %s'%(k,repr(v))for k,v in prec.items()])
-			raise Errors.WafError('Cycle detected in the method execution\n%s'%txt)
+			buf=['Cycle detected in the method execution:']
+			for k,v in prec.items():
+				buf.append('- %s after %s'%(k,[x for x in v if x in prec]))
+			raise Errors.WafError('\n'.join(buf))
 		out.reverse()
 		self.meths=out
 		Logs.debug('task_gen: posting %s %d',self,id(self))
@@ -301,6 +305,8 @@ def process_rule(self):
 		self.source=[]
 	if getattr(self,'cwd',None):
 		tsk.cwd=self.cwd
+	if isinstance(tsk.run,functools.partial):
+		tsk.run=functools.partial(tsk.run,tsk)
 @feature('seq')
 def sequence_order(self):
 	if self.meths and self.meths[-1]!='sequence_order':

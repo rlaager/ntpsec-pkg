@@ -216,12 +216,8 @@ findexistingpeer_addr(
 	/*
 	 * start_peer is included so we can locate instances of the
 	 * same peer through different interfaces in the hash table.
-	 * Without MDF_BCLNT, a match requires the same mode and remote
-	 * address.  MDF_BCLNT associations start out as MODE_CLIENT
-	 * if broadcastdelay is not specified, and switch to
-	 * MODE_BCLIENT after estimating the one-way delay.  Duplicate
-	 * associations are expanded in definition to match any other
-	 * MDF_BCLNT with the same srcadr (remote, unicast address).
+	 * A match requires the same mode and remote
+	 * address. 
 	 */
 	if (NULL == start_peer)
 		peer = peer_hash[NTP_HASH_ADDR(addr)];
@@ -232,9 +228,7 @@ findexistingpeer_addr(
 		DPRINTF(3, ("%s %s %d %d 0x%x 0x%x ", sockporttoa(addr),
 			sockporttoa(&peer->srcadr), mode, peer->hmode,
 			(u_int)cast_flags, (u_int)peer->cast_flags));
-		if ((-1 == mode || peer->hmode == mode ||
-		     ((MDF_BCLNT & peer->cast_flags) &&
-		      (MDF_BCLNT & cast_flags))) &&
+		if ((-1 == mode || peer->hmode == mode) &&
 		    ADDR_PORT_EQ(addr, &peer->srcadr)) {
 			DPRINTF(3, ("found.\n"));
 			break;
@@ -307,7 +301,7 @@ findpeer(
                  * doesn't match the peer's, check if it matches the
                  * ACST prototype peer's.  If so it is a redundant
                  * solicitation response, return AM_ERR to discard it.
-                 * [Bug 1762]
+                 * [Classic Bug 1762]
                  */
                 if (MODE_SERVER == pkt_mode && AM_PROCPKT == *action) {
                         pkt = &rbufp->recv_pkt;
@@ -571,7 +565,6 @@ peer_refresh_interface(
 	)
 {
 	endpt *	niface;
-	endpt *	piface;
 
 	niface = select_peerinterface(p, &p->srcadr, NULL);
 
@@ -595,29 +588,7 @@ peer_refresh_interface(
 		DPRINTF(4, ("<NONE>\n"));
 	}
 
-	piface = p->dstadr;
 	set_peerdstadr(p, niface);
-	if (p->dstadr != NULL) {
-		/*
-		 * clear crypto if we change the local address
-		 */
-		if (p->dstadr != piface && !(MDF_ACAST & p->cast_flags)
-		    && MODE_BROADCAST != p->pmode)
-		    peer_clear(p, "XFAC", false);
-
-		/*
-		 * Broadcast needs the socket enabled for broadcast
-		 */
-		if (MDF_BCAST & p->cast_flags)
-			enable_broadcast(p->dstadr, &p->srcadr);
-
-		/*
-		 * Multicast needs the socket interface enabled for
-		 * multicast
-		 */
-		if (MDF_MCAST & p->cast_flags)
-			enable_multicast_if(p->dstadr, &p->srcadr);
-	}
 }
 
 
@@ -716,7 +687,7 @@ newpeer(
 
 	/*
 	 * Allocate a new peer structure. Some dirt here, since some of
-	 * the initialization requires knowlege of our system state.
+	 * the initialization requires knowledge of our system state.
 	 */
 	if (peer_free_count == 0)
 		getmorepeermem();
@@ -770,22 +741,12 @@ newpeer(
 	if ((MDF_BCAST & cast_flags) && peer->dstadr != NULL)
 		enable_broadcast(peer->dstadr, srcadr);
 
-	/*
-	 * Multicast needs the socket interface enabled for multicast
-	 */
-	if ((MDF_MCAST & cast_flags) && peer->dstadr != NULL)
-		enable_multicast_if(peer->dstadr, srcadr);
-
 	peer->ttl = ttl;
 	peer->keyid = key;
 	peer->precision = sys_precision;
 	peer->hpoll = peer->minpoll;
-	if (cast_flags & MDF_ACAST)
-		peer_clear(peer, "ACST", initializing);
-	else if (cast_flags & MDF_POOL)
+	if (cast_flags & MDF_POOL)
 		peer_clear(peer, "POOL", initializing);
-	else if (cast_flags & MDF_MCAST)
-		peer_clear(peer, "MCST", initializing);
 	else if (cast_flags & MDF_BCAST)
 		peer_clear(peer, "BCST", initializing);
 	else

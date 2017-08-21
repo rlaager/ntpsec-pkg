@@ -33,7 +33,7 @@ The Network Time Protocol software contained in this
 distribution is available without charge under the conditions set
 forth in the link:copyright.html[Copyright Notice].
 
-This distribution is an implementation of RFC-5905 "Network Time
+This distribution is an implementation of RFC 5905 "Network Time
 Protocol Version 4: Protocol and Algorithms Specification".  NTP is
 widely used to synchronize a computer to Internet time servers or
 other sources, such as a radio or satellite receiver or telephone
@@ -44,7 +44,7 @@ configurations utilize multiple redundant servers and diverse network
 paths in order to achieve high accuracy and reliability.
 
 For background on the problems NTP solves, see
-link:http://www.catb.org/gpsd/time-service-intro.html[Introduction to
+http://www.catb.org/gpsd/time-service-intro.html[Introduction to
 Time Service].  This white paper discusses time source types, relative
 accuracy, relative cost, and how those figures of merit have changed
 in recent decades
@@ -70,7 +70,7 @@ two!), easier to understand, and easier to maintain.
 
 We retain, however, almost full compatibility and interoperation with
 NTP Classic.  The qualification "almost" is required mainly because we
-do not support the Autokey (RFC5906) public-key encryption scheme. It
+do not support the Autokey (RFC 5906) public-key encryption scheme. It
 had interoperability and exploitable vulnerability issues too severe
 to be patched.  We are participating in an IETF effort to develop
 better security features.
@@ -89,10 +89,18 @@ few will be user-visible.
   into +ntpq+.
 
 * As noted above, Autokey is not supported; that code has been
-  removed, as it was chronically prone to security vulnerabilties.
+  removed, as it was chronically prone to security vulnerabilities.
 
 * peer mode has been removed.  The keyword peer in ntp.conf is now
   just an alias for keyword server.  Incoming peer packets are ignored.
+
+* Broadcast- and multicast client modes, which are impossible to
+  secure, have been removed. Broadcast (but not multicast) service can still
+  be enabled, though this is a deprecated and unsupported mode of
+  operation and may be entirely removed in a future release.
+
+* The authentication requirement for remote configuration commands
+  (e.g., via +ntpq+) can no longer be disabled.
 
 * The deprecated and vulnerability-prone ntpdate program has been
   replaced with a shell wrapper around ntpdig.  Its -e and -p
@@ -155,7 +163,7 @@ few will be user-visible.
   ypur current directory.
 
 * It is now possible to set the peer maximum dispersion with "tos
-  maxdisp". See RFC5905 for discussion of this synchronization
+  maxdisp". See RFC 5905 for discussion of this synchronization
   parameter.
 
 * For the generic (parse) driver only: Using the new refclock syntax,
@@ -191,9 +199,12 @@ few will be user-visible.
 * Because +ntpviz+ exists, a number of ancient and poorly-documented
   scripts in awk, Perl, and S, formerly used for making statistical
   summaries, have been removed from the distribution in order to
-  reduce overall maintainance burden and complexity. If you miss any
+  reduce overall maintenance burden and complexity. If you miss any
   of this cruft, the project team will (a) be quite surprised, and (b)
   work with you on better analytics using ntpviz and modern tools.
+
+* A new tool, +ntpmon+, performs real-time monitoring of your
+  peer and MRU status with efficient (least-cost) querying.
 
 * The ntpq utility resizes its display to take advantage of wide
   terminal windows, allowing more space for long peer addresses.
@@ -206,7 +217,7 @@ few will be user-visible.
 * The ntpsnmpd daemon, incomplete and not conformant with RFC 5907,
   has been removed.
 
-* Log timestamps look a little different; they are now in ISO8601 format.
+* Log timestamps look a little different; they are now in ISO 8601 format.
   The code can be built in a strict NTP Classic compatibility mode
   that restores the old format.
 
@@ -269,7 +280,8 @@ redistributable as open source.
 
 A good deal of tutorial and directive information is available on the
 handbook pages. These should be read in conjunction with the command and
-option information available on the pages listed on the sitemap page.
+option information available on the pages listed on the
+link:sitemap.html[Site Map] page.
 
 link:quick.html[Quick start for client configurations]::
   Basic configuration for 99% of client installations.  Introduces
@@ -278,8 +290,8 @@ link:assoc.html[Association Management]::
   Describes how to configure servers and peers and manage the various
   options. Includes automatic server discovery schemes.
 link:discover.html[Automatic Server Discovery Schemes]::
-  Describes automatic server discovery using broadcast, multicast,
-  manycast and server pool scheme.
+  Describes automatic server discovery using broadcast
+  and server pool schemes.
 link:access.html[Access Control Support]::
   Describes the access control mechanisms that can be used to limit
   client access to various time and management functions.
@@ -295,7 +307,7 @@ link:warp.html[How NTP Works]::
   Gives an overview of the NTP daemon architecture and how it works.
 link:outside-tools.html[Outside Tools]::
   A variety of tools not directly maintained along with NTP can be
-  useful for adminiseting and monitoring it. This page collects some
+  useful for administering and monitoring it. This page collects some
   references and links.
 
 [[build]]

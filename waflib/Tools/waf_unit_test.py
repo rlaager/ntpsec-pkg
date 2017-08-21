@@ -2,11 +2,20 @@
 # encoding: utf-8
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
-import os
+import os,sys
 from waflib.TaskGen import feature,after_method,taskgen_method
 from waflib import Utils,Task,Logs,Options
 from waflib.Tools import ccroot
 testlock=Utils.threading.Lock()
+SCRIPT_TEMPLATE="""#! %(python)s
+import subprocess, sys
+cmd = %(cmd)r
+# if you want to debug with gdb:
+#cmd = ['gdb', '-args'] + cmd
+env = %(env)r
+status = subprocess.call(cmd, env=env, cwd=%(cwd)r, shell=isinstance(cmd, str))
+sys.exit(status)
+"""
 @feature('test')
 @after_method('apply_link','process_use')
 def make_test(self):
@@ -84,6 +93,14 @@ class utest(Task.Task):
 		return self.exec_command(self.ut_exec)
 	def exec_command(self,cmd,**kw):
 		Logs.debug('runner: %r',cmd)
+		if getattr(Options.options,'dump_test_scripts',False):
+			global SCRIPT_TEMPLATE
+			script_code=SCRIPT_TEMPLATE%{'python':sys.executable,'env':self.get_test_env(),'cwd':self.get_cwd().abspath(),'cmd':cmd}
+			script_file=self.inputs[0].abspath()+'_run.py'
+			Utils.writef(script_file,script_code)
+			os.chmod(script_file,Utils.O755)
+			if Logs.verbose>1:
+				Logs.info('Test debug file written as %r'%script_file)
 		proc=Utils.subprocess.Popen(cmd,cwd=self.get_cwd().abspath(),env=self.get_test_env(),stderr=Utils.subprocess.PIPE,stdout=Utils.subprocess.PIPE)
 		(stdout,stderr)=proc.communicate()
 		self.waf_unit_test_results=tup=(self.inputs[0].abspath(),proc.returncode,stdout,stderr)
@@ -123,3 +140,4 @@ def options(opt):
 	opt.add_option('--alltests',action='store_true',default=False,help='Exec all unit tests',dest='all_tests')
 	opt.add_option('--clear-failed',action='store_true',default=False,help='Force failed unit tests to run again next time',dest='clear_failed_tests')
 	opt.add_option('--testcmd',action='store',default=False,help='Run the unit tests using the test-cmd string'' example "--test-cmd="valgrind --error-exitcode=1'' %s" to run under valgrind',dest='testcmd')
+	opt.add_option('--dump-test-scripts',action='store_true',default=False,help='Create python scripts to help debug tests',dest='dump_test_scripts')

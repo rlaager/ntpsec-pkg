@@ -1,4 +1,4 @@
-== Special Topics ==
+=== Special Topics ===
 * link:warp.html[How NTP Works]
 * link:prefer.html[Mitigation Rules and the `prefer` Keyword]
 * link:orphan.html[Orphan Mode]
@@ -12,5 +12,4 @@
 * link:clock.html[Clock State Machine]
 * link:leap.html[Leap Second Processing]
 * link:leapsmear.html[Leap Smearing]
-* link:sitemap.html[Site Map]
 

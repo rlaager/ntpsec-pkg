@@ -21,8 +21,7 @@ include::includes/refclock.txt[]
 == Introduction ==
 
 NTP supports a large number of satellite, radio and telephone modem
-reference clocks plus several audio devices for instrumentation
-signals, plus a special pseudo-clock used for backup or when no other
+reference clocks, plus a special pseudo-clock used for backup or when no other
 clock source is available.
 
 A general description of the reference clock support is on this
@@ -38,7 +37,7 @@ standard/daylight adjustments are performed by the operating system
 kernel.
 
 Nowadays a reference clock will generally (though not always) be a GPS
-or GPSDO (GPS-conditioned oscillator). In former times it was often a
+or GPSDO (GPS-disciplined oscillator). In former times it was often a
 radio timecode receiver synchronized to standard time as provided by
 NIST and USNO in the US, NRC in Canada and their counterparts
 elsewhere in the world.  Precision time radios have been extinct in
@@ -145,7 +144,7 @@ If you have seen older versions of NTP, this list may have fewer
 entries than you expected.  Support for some very ancient drivers
 (notably, those rendered obsolete by the WWVB modulation change at
 2012-10-29T15:00:00Z) has been dropped in order to reduce our
-maintainence load. So have some other drivers (notably the Austron
+maintenance load. So have some other drivers (notably the Austron
 2200A/2201A) after having been end-of-lifed with no sign of
 aftermarket activity for more than ten years. Several others have been
 removed for relying on obsolete buses or hardware classes that no

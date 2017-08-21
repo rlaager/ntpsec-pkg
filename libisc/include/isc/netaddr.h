@@ -27,14 +27,6 @@ struct isc_netaddr {
 };
 
 bool
-isc_netaddr_equal(const isc_netaddr_t *a, const isc_netaddr_t *b);
-
-/*%<
- * Compare network addresses 'a' and 'b'.  Return #true if
- * they are equal, #false if not.
- */
-
-bool
 isc_netaddr_eqprefix(const isc_netaddr_t *a, const isc_netaddr_t *b,
 		     unsigned int prefixlen);
 /*%<
@@ -147,7 +139,7 @@ isc_netaddr_fromv4mapped(isc_netaddr_t *t, const isc_netaddr_t *s);
 isc_result_t
 isc_netaddr_prefixok(const isc_netaddr_t *na, unsigned int prefixlen);
 /*
- * Test whether the netaddr 'na' and 'prefixlen' are consistant.
+ * Test whether the netaddr 'na' and 'prefixlen' are consistent.
  * e.g. prefixlen within range.
  *      na does not have bits set which are not covered by the prefixlen.
  *

@@ -50,11 +50,7 @@
 
 /* MUSL port shim */
 #ifndef HAVE_NTP_GETTIME
-#ifdef STRUCT_NTPTIMEVAL_HAS_TAI
 int ntp_gettime(struct ntptimeval *ntv)
-#else
-int ntp_gettime(struct timex *ntv)
-#endif
 {
 	struct timex tntx;
 	int result;
@@ -64,11 +60,9 @@ int ntp_gettime(struct timex *ntv)
 	ntv->time = tntx.time;
 	ntv->maxerror = tntx.maxerror;
 	ntv->esterror = tntx.esterror;
-#  ifdef NTP_API
-#   if NTP_API > 3
+#if defined(STRUCT_NTPTIMEVAL_HAS_TAI)
 	ntv->tai = tntx.tai;
-#   endif
-#  endif
+#endif
 	return result;
 }
 #endif	/* !HAVE_NTP_GETTIME */
@@ -121,11 +115,7 @@ main(
 {
 	extern int ntp_optind;
 	extern char *ntp_optarg;
-#ifdef STRUCT_NTPTIMEVAL_HAS_TAI
 	struct ntptimeval ntv;
-#else
-	struct timex ntv;
-#endif
 	struct timeval tv;
 	struct timex ntx, _ntx;
 	int	times[20];
@@ -361,12 +351,13 @@ main(
 			       (u_int)ts.l_ui, (u_int)ts.l_uf,
 			       (int)ntv.time.tv_sec, fdigits,
 			       (int)time_frac,
+
 			       ctime_r((time_t *)&ntv.time.tv_sec, ascbuf));
-#if NTP_API > 3
+#if defined(STRUCT_NTPTIMEVAL_HAS_TAI)
 		printf(json ? jfmt5 : ofmt5, (long)ntv.tai);
 #else
-		printf(json ? jfmt6 : ofmt6);
-#endif /* NTP_API */
+		fputs(json ? jfmt6 : ofmt6, stdout);
+#endif /* STRUCT_NTPTIMEVAL_HAS_TAI */
 	}
 	status = ntp_adjtime_ns(&ntx);
 	if (status < 0) {

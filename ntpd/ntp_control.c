@@ -164,7 +164,7 @@ static const struct ctl_proc control_codes[] = {
 #define	CS_SS_PROCESSED		43
 #define	CS_PEERADR		44
 #define	CS_PEERMODE		45
-#define	CS_BCASTDELAY		46
+#define	CS_BCASTDELAY		46	/* not used */
 #define	CS_AUTHDELAY		47
 #define	CS_AUTHKEYS		48
 #define	CS_AUTHFREEK		49
@@ -338,7 +338,7 @@ static const struct ctl_var sys_var[] = {
 	{ CS_SS_PROCESSED,	RO, "ss_processed" },	/* 43 */
 	{ CS_PEERADR,		RO, "peeradr" },	/* 44 */
 	{ CS_PEERMODE,		RO, "peermode" },	/* 45 */
-	{ CS_BCASTDELAY,	RO, "bcastdelay" },	/* 46 */
+	//{ CS_BCASTDELAY,	RO, "bcastdelay" },	/* 46 */
 	{ CS_AUTHDELAY,		RO, "authdelay" },	/* 47 */
 	{ CS_AUTHKEYS,		RO, "authkeys" },	/* 48 */
 	{ CS_AUTHFREEK,		RO, "authfreek" },	/* 49 */
@@ -697,7 +697,7 @@ ctl_error(
 	/*
 	 * send packet and bump counters
 	 */
-	if (res_authenticate && sys_authenticate) {
+	if (res_authenticate) {
 		maclen = authencrypt(res_keyid, (uint32_t *)&rpkt,
 				     CTL_HEADER_LEN);
 		sendpkt(rmt_addr, lcl_inter, -2, &rpkt,	CTL_HEADER_LEN + maclen);
@@ -803,8 +803,7 @@ process_control(
 	properlen = (properlen + 7) & ~7;
 	maclen = rbufp->recv_length - properlen;
 	if ((rbufp->recv_length & 3) == 0 &&
-	    maclen >= MIN_MAC_LEN && maclen <= MAX_MAC_LEN &&
-	    sys_authenticate) {
+	    maclen >= MIN_MAC_LEN && maclen <= MAX_MAC_LEN) {
 		res_authenticate = true;
 		pkid = (void *)((char *)pkt + properlen);
 		res_keyid = ntohl(*pkid);
@@ -970,7 +969,7 @@ ctl_flushpkt(
 			(res_opcode & CTL_OP_MASK);
 	rpkt.count = htons((u_short)dlen);
 	rpkt.offset = htons((u_short)res_offset);
-	if (res_authenticate && sys_authenticate) {
+	if (res_authenticate) {
 		totlen = sendlen;
 		/*
 		 * If we are going to authenticate, then there
@@ -1713,10 +1712,6 @@ ctl_putsys(
 
 	case CS_SS_PROCESSED:
 		ctl_putuint(sys_var[varid].text, sys_processed);
-		break;
-
-	case CS_BCASTDELAY:
-		ctl_putdbl(sys_var[varid].text, sys_bdelay * 1e3);
 		break;
 
 	case CS_AUTHDELAY:
@@ -2539,7 +2534,7 @@ control_unspec(
 
 	/*
 	 * What is an appropriate response to an unspecified op-code?
-	 * I return no errors and no data, unless a specified assocation
+	 * I return no errors and no data, unless a specified association
 	 * doesn't exist.
 	 */
 	if (res_associd) {
@@ -2580,7 +2575,7 @@ read_status(
 #endif
 	/*
 	 * Two choices here. If the specified association ID is
-	 * zero we return all known assocation ID's.  Otherwise
+	 * zero we return all known association ID's.  Otherwise
 	 * we return a bunch of stuff about the particular peer.
 	 */
 	if (res_associd) {
@@ -3188,7 +3183,7 @@ send_mru_entry(
  * from the client snapshot at the end, but so far that doesn't seem
  * useful.
  *
- * To accomodate the changing MRU list, the starting point for requests
+ * To accommodate the changing MRU list, the starting point for requests
  * after the first request is supplied as a series of last seen
  * timestamps and associated addresses, the newest ones the client has
  * received.  As long as at least one of those entries hasn't been

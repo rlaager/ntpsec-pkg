@@ -15,7 +15,7 @@
 
 /* Define a structure to hold a (keyword, token) pair */
 struct key_tok {
-	char *	key;		/* Keyword */
+	const char * key;	/* Keyword */
 	u_short	token;		/* Associated Token */
 	follby	followedby;	/* nonzero indicates the next token(s)
 				   forced to be string(s) */
@@ -25,7 +25,6 @@ struct key_tok ntp_keywords[] = {
 { "...",		T_Ellipsis,		FOLLBY_TOKEN },
 { "allpeers",		T_Allpeers,		FOLLBY_TOKEN },
 { "broadcast",		T_Broadcast,		FOLLBY_STRING },
-{ "broadcastdelay",	T_Broadcastdelay,	FOLLBY_TOKEN },
 { "baud",		T_Baud,			FOLLBY_TOKEN },
 { "ctl",		T_Ctl,			FOLLBY_TOKEN },
 { "disable",		T_Disable,		FOLLBY_TOKEN },
@@ -42,8 +41,6 @@ struct key_tok ntp_keywords[] = {
 { "leapsmearinterval",	T_Leapsmearinterval,	FOLLBY_TOKEN },
 { "logconfig",		T_Logconfig,		FOLLBY_STRINGS_TO_EOC },
 { "logfile",		T_Logfile,		FOLLBY_STRING },
-{ "manycastclient",	T_Manycastclient,	FOLLBY_STRING },
-{ "manycastserver",	T_Manycastserver,	FOLLBY_STRINGS_TO_EOC },
 { "mem",		T_Mem,			FOLLBY_TOKEN },
 { "path",		T_Path,			FOLLBY_STRING },
 { "peer",		T_Peer,			FOLLBY_STRING },
@@ -181,7 +178,6 @@ struct key_tok ntp_keywords[] = {
 { "time2",		T_Time2,		FOLLBY_TOKEN },
 /* system_option */
 { "auth",		T_Auth,			FOLLBY_TOKEN },
-{ "bclient",		T_Bclient,		FOLLBY_TOKEN },
 { "calibrate",		T_Calibrate,		FOLLBY_TOKEN },
 { "kernel",		T_Kernel,		FOLLBY_TOKEN },
 { "ntp",		T_Ntp,			FOLLBY_TOKEN },
@@ -245,7 +241,7 @@ static void	generate_preamble	(void);
 static void	generate_fsm		(void);
 static void	generate_token_text	(void);
 static u_short	create_keyword_scanner	(void);
-static u_short	create_scan_states	(char *, u_short, follby, u_short);
+static u_short	create_scan_states	(const char *, u_short, follby, u_short);
 int		compare_key_tok_id	(const void *, const void *);
 int		compare_key_tok_text	(const void *, const void *);
 void		populate_symb		(char *);
@@ -468,7 +464,7 @@ generate_fsm(void)
  */
 static u_short
 create_scan_states(
-	char *	text, 
+	const char * text,
 	u_short	token, 
 	follby	followedby,
 	u_short	prev_state

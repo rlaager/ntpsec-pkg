@@ -15,6 +15,7 @@
 #include "ntp_syslog.h"
 #include "ntp_malloc.h"
 #include "ntp_refclock.h"
+#include "ntp_control.h"
 #include "ntp_intres.h"
 #include "recvbuff.h"
 
@@ -107,17 +108,12 @@ extern	endpt *	select_peerinterface	(struct peer *, sockaddr_u *,
 extern	endpt *	findinterface		(sockaddr_u *);
 extern	endpt *	findbcastinter		(sockaddr_u *);
 extern	void	enable_broadcast	(endpt *, sockaddr_u *);
-extern	void	enable_multicast_if	(endpt *, sockaddr_u *);
 extern	void	interface_update	(interface_receiver_t, void *);
 extern  void    io_handler              (void);
 extern	void	init_io 	(void);
 extern  SOCKET	open_socket	(sockaddr_u *, bool, bool, endpt *);
 extern	void	io_open_sockets	(void);
 extern	void	io_clr_stats	(void);
-extern	void	io_setbclient	(void);
-extern	void	io_unsetbclient	(void);
-extern	void	io_multicast_add(sockaddr_u *);
-extern	void	io_multicast_del(sockaddr_u *);
 extern	void	sendpkt 	(sockaddr_u *, endpt *, int, void *, int);
 #ifdef DEBUG
 extern	void	collect_timing  (struct recvbuf *, const char *, int, l_fp *);
@@ -188,9 +184,8 @@ extern	void	clear		(struct peer *);
 extern	void	clock_filter	(struct peer *, double, double, double);
 extern	void	init_proto	(const bool);
 extern	void	set_sys_tick_precision(double);
-extern	void	proto_config	(int, u_long, double, sockaddr_u *);
+extern	void	proto_config	(int, u_long, double);
 extern	void	proto_clr_stats (void);
-extern  void    proto_dump(FILE *);
 
 /* ntp_refclock.c */
 #ifdef	REFCLOCK
@@ -243,6 +238,10 @@ extern	char *	fstostr(time_t);	/* NTP timescale seconds */
 /* ntpvis.c */
 void packet_dump(char *, size_t, struct pkt *, size_t);
 size_t packet_undump(char *, int len, char *);
+
+/* packetstamp.c */
+extern void	enable_packetstamps(int, sockaddr_u *);
+extern l_fp	fetch_packetstamp(struct recvbuf *, struct msghdr *, l_fp);
 
 /*
  * Signals we catch for debugging.
@@ -398,9 +397,6 @@ extern int	sys_minclock;		/* minimum candidates */
 /*
  * Nonspecified system state variables.
  */
-extern int	sys_bclient;		/* we set our time to broadcasts */
-extern double	sys_bdelay; 		/* broadcast client default delay */
-extern bool	sys_authenticate;	/* requre authentication for config */
 extern l_fp	sys_authdelay;		/* authentication delay */
 extern u_long 	sys_epoch;		/* last clock update time */
 extern keyid_t	sys_private;		/* private value for session seed */

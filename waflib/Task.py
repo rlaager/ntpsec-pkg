@@ -399,7 +399,7 @@ class Task(TaskBase):
 						v=v()
 					upd(v)
 	def sig_vars(self):
-		sig=self.generator.bld.hash_env_vars(self.env,self.__class__.vars)
+		sig=self.generator.bld.hash_env_vars(self.env,self.vars)
 		self.m.update(sig)
 	scan=None
 	def sig_implicit_deps(self):

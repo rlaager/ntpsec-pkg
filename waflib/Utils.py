@@ -2,7 +2,7 @@
 # encoding: utf-8
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
-import os,sys,errno,traceback,inspect,re,datetime,platform,base64,signal
+import atexit,os,sys,errno,traceback,inspect,re,datetime,platform,base64,signal,functools
 try:
 	import cPickle
 except ImportError:
@@ -88,12 +88,8 @@ class lru_cache(object):
 		self.maxlen=maxlen
 		self.table={}
 		self.head=lru_node()
-		for x in range(maxlen-1):
-			node=lru_node()
-			node.prev=self.head.prev
-			node.next=self.head
-			node.prev.next=node
-			node.next.prev=node
+		self.head.next=self.head
+		self.head.prev=self.head
 	def __getitem__(self,key):
 		node=self.table[key]
 		if node is self.head:
@@ -102,19 +98,28 @@ class lru_cache(object):
 		node.next.prev=node.prev
 		node.next=self.head.next
 		node.prev=self.head
-		node.next.prev=node
-		node.prev.next=node
-		self.head=node
+		self.head=node.next.prev=node.prev.next=node
 		return node.val
 	def __setitem__(self,key,val):
-		node=self.head=self.head.next
-		try:
-			del self.table[node.key]
-		except KeyError:
-			pass
-		node.key=key
-		node.val=val
-		self.table[key]=node
+		if key in self.table:
+			node=self.table[key]
+			node.val=val
+			self.__getitem__(key)
+		else:
+			if len(self.table)<self.maxlen:
+				node=lru_node()
+				node.prev=self.head
+				node.next=self.head.next
+				node.prev.next=node.next.prev=node
+			else:
+				node=self.head=self.head.next
+				try:
+					del self.table[node.key]
+				except KeyError:
+					pass
+			node.key=key
+			node.val=val
+			self.table[key]=node
 is_win32=os.sep=='\\'or sys.platform=='win32'
 def readf(fname,m='r',encoding='ISO8859-1'):
 	if sys.hexversion>0x3000000 and not'b'in m:
@@ -356,6 +361,12 @@ def h_fun(fun):
 	try:
 		return fun.code
 	except AttributeError:
+		if isinstance(fun,functools.partial):
+			code=list(fun.args)
+			code.extend(sorted(fun.keywords.items()))
+			code.append(h_fun(fun.func))
+			fun.code=h_list(code)
+			return fun.code
 		try:
 			h=inspect.getsource(fun)
 		except EnvironmentError:
@@ -571,6 +582,16 @@ def alloc_process_pool(n,force=False):
 	else:
 		for x in lst:
 			process_pool.append(x)
+def atexit_pool():
+	for k in process_pool:
+		try:
+			os.kill(k.pid,9)
+		except OSError:
+			pass
+		else:
+			k.wait()
+if sys.hexversion<0x207000f and not is_win32:
+	atexit.register(atexit_pool)
 if sys.platform=='cli'or not sys.executable:
 	run_process=run_regular_process
 	get_process=alloc_process_pool=nada

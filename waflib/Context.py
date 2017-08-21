@@ -5,9 +5,9 @@
 import os,re,imp,sys
 from waflib import Utils,Errors,Logs
 import waflib.Node
-HEXVERSION=0x1090500
-WAFVERSION="1.9.5"
-WAFREVISION="d5628f1ee6dfc59eae92cf4d0c20baac5e233599"
+HEXVERSION=0x1090600
+WAFVERSION="1.9.6"
+WAFREVISION="dbcda7ec6a52a88c7a605a357eb5713438ac2704"
 ABI=99
 DBFILE='.wafpickle-%s-%d-%d'%(sys.platform,sys.hexversion,ABI)
 APPNAME='APPNAME'

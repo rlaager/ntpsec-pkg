@@ -1,6 +1,7 @@
+from __future__ import print_function
+
 import sys, os, platform
-from waflib.Configure import conf
-from wafhelpers.probes import *
+from wafhelpers.probes import probe_header_with_prerequisites, probe_function_with_prerequisites
 from wafhelpers.util import msg, msg_setting
 
 def cmd_configure(ctx, config):
@@ -14,7 +15,6 @@ def cmd_configure(ctx, config):
         from wafhelpers.util import parse_version
         parse_version(config)
 
-        ctx.env.NTPSEC_RELEASE = config["NTPSEC_RELEASE"]
         ctx.env.NTPSEC_VERSION_MAJOR = config["NTPSEC_VERSION_MAJOR"]
         ctx.env.NTPSEC_VERSION_MINOR = config["NTPSEC_VERSION_MINOR"]
         ctx.env.NTPSEC_VERSION_REV = config["NTPSEC_VERSION_REV"]
@@ -47,9 +47,7 @@ def cmd_configure(ctx, config):
         ctx.setenv('host', ctx.env.derive())
 
         ctx.load('compiler_c')
-
-        if not ctx.env.NTPSEC_RELEASE:
-                ctx.load('bison')
+        ctx.load('bison')
 
         for opt in opt_map:
                 ctx.env[opt] = opt_map[opt]
@@ -107,7 +105,7 @@ def cmd_configure(ctx, config):
                 ctx.env.ASCIIDOC_FLAGS = ["-f", "%s/docs/asciidoc.conf" % ctx.srcnode.abspath()]
                 ctx.env.ENABLE_DOC_ONLY = ctx.options.enable_doc_only
                 ctx.env.ENABLE_DOC_USER = ctx.options.enable_doc
-                ctx.env.HTMLDIR = ctx.options.path_doc
+                ctx.env.HTMLDIR = ctx.options.htmldir
 
         # XXX: conditionally build this with --disable-man?  Should it build without docs enabled?
         ctx.env.A2X_FLAGS = ["--format", "manpage", "--asciidoc-opts=--conf-file=%s/docs/asciidoc.conf" % ctx.srcnode.abspath()]
@@ -126,9 +124,9 @@ def cmd_configure(ctx, config):
         if exists(".git") and ctx.find_program("git", var="BIN_GIT", mandatory=False):
                 ctx.start_msg("DEVEL: Getting revision")
                 cmd = ["git", "log", "-1", "--format=%H"]
-                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
+                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
                 ctx.env.NTPSEC_REVISION, stderr = p.communicate()
-                ctx.env.NTPSEC_REVISION = str(ctx.env.NTPSEC_REVISION).replace("\n", "")
+                ctx.env.NTPSEC_REVISION = ctx.env.NTPSEC_REVISION.replace("\n", "")
                 ctx.end_msg(ctx.env.NTPSEC_REVISION)
 
         ctx.start_msg("Building version")
@@ -241,30 +239,30 @@ def cmd_configure(ctx, config):
         types = ["uint64_t"]
 
         for inttype in sorted(types):
-                ctx.check_type(inttype, ["stdint.h", "sys/types.h"])
+                check_type(ctx, inttype, ["stdint.h", "sys/types.h"])
 
         net_types = (
                 ("struct if_laddrconf", ["sys/types.h", "net/if6.h"]),
                 ("struct if_laddrreq", ["sys/types.h", "net/if6.h"]),
         )
         for (f, h) in net_types:
-                ctx.check_type(f, h)
+                check_type(ctx, f, h)
 
         structures = (
                 ("struct timex", ["sys/time.h", "sys/timex.h"]),
                 ("struct ntptimeval", ["sys/time.h", "sys/timex.h"]),
         )
         for (s, h) in structures:
-                ctx.check_type(s, h)
+                check_type(ctx, s, h)
 
         structure_fields = (
                 ("time_tick", "timex", ["sys/time.h", "sys/timex.h"]),
                 ("modes", "timex", ["sys/time.h", "sys/timex.h"]),
                 ("time.tv_nsec", "ntptimeval", ["sys/time.h", "sys/timex.h"]),
-                ("tai", "ntptimeval", ["sys/time.h", "sys/timex.h"]),
+                ("tai", "ntptimeval", ["sys/time.h", "sys/timex.h"]), # first in glibc 2.12
         )
         for (f, s, h) in structure_fields:
-                ctx.check_structfield(f, s, h)
+                check_structfield(ctx, f, s, h)
 
         # mostly used by timetoa.h and timespecops.h
         sizeofs = [
@@ -275,17 +273,11 @@ def cmd_configure(ctx, config):
         ]
 
         for header, sizeof in sorted(sizeofs, key=lambda x: x[1:]):
-                ctx.check_sizeof(header, sizeof)
-
-        # The protocol major number
-        ctx.define("NTP_API", 4, comment="Protocol major number.")
+                check_sizeof(ctx, header, sizeof)
 
         ctx.define("NTP_KEYSDIR", "%s/etc" % ctx.env.PREFIX, comment="NTP key file directory")
         ctx.define("GETSOCKNAME_SOCKLEN_TYPE", "socklen_t", quote=False, comment="socklen type")
         ctx.define("DFLT_RLIMIT_STACK", 50, comment="Default stack size")
-
-        from wafhelpers.check_multicast import check_multicast
-        check_multicast(ctx)
 
         ctx.define("TYPEOF_IP_MULTICAST_LOOP", "u_char", quote=False, comment="Multicast loop type") #XXX: check for mcast type
 
@@ -310,7 +302,6 @@ def cmd_configure(ctx, config):
                 ('clock_settime', ["time.h"], "RT"),
                 ('EVP_MD_do_all_sorted', ["openssl/evp.h"], "CRYPTO"),
                 ('getdtablesize', ["unistd.h"]),
-                ('getpassphrase', ["stdlib.h"]),                # Sun systems
                 ('getrusage', ["sys/time.h", "sys/resource.h"]),
                 ('MD5Init', ["md5.h"], "CRYPTO"),
                 ('ntp_adjtime', ["sys/time.h", "sys/timex.h"]),         # BSD
@@ -493,19 +484,12 @@ def cmd_configure(ctx, config):
         from wafhelpers.check_seccomp import check_seccomp
         check_seccomp(ctx)
 
-        from wafhelpers.check_libevent2 import check_libevent2_header
-        check_libevent2_header(ctx)
-
         from wafhelpers.check_pthread import check_pthread_header_lib
         check_pthread_header_lib(ctx)
 
         if not ctx.options.disable_mdns_registration:
                 from wafhelpers.check_mdns import check_mdns_header
                 check_mdns_header(ctx)
-
-        # Run checks
-        from wafhelpers.check_libevent2 import check_libevent2_run
-        check_libevent2_run(ctx)
 
         if not ctx.options.disable_dns_retry:
             from wafhelpers.check_pthread import check_pthread_run

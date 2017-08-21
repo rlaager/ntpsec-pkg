@@ -6,6 +6,8 @@ import re,string,traceback
 from waflib import Logs,Utils,Errors
 class PreprocError(Errors.WafError):
 	pass
+FILE_CACHE_SIZE=100000
+LINE_CACHE_SIZE=100000
 POPFILE='-'
 recursion_limit=150
 go_absolute=False
@@ -459,7 +461,8 @@ class c_parser(object):
 		try:
 			cache=node.ctx.preproc_cache_node
 		except AttributeError:
-			cache=node.ctx.preproc_cache_node=Utils.lru_cache(1000)
+			global FILE_CACHE_SIZE
+			cache=node.ctx.preproc_cache_node=Utils.lru_cache(FILE_CACHE_SIZE)
 		key=(node,filename)
 		try:
 			return cache[key]
@@ -502,7 +505,8 @@ class c_parser(object):
 		try:
 			cache=node.ctx.preproc_cache_lines
 		except AttributeError:
-			cache=node.ctx.preproc_cache_lines=Utils.lru_cache(1000)
+			global LINE_CACHE_SIZE
+			cache=node.ctx.preproc_cache_lines=Utils.lru_cache(LINE_CACHE_SIZE)
 		try:
 			return cache[node]
 		except KeyError:
