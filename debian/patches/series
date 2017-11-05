@@ -1,26 +1,6 @@
 # To be upstreamed
-0001-Fix-a-couple-typos.patch
-0002-Be-more-consistent-with-spacing-around-options.patch
-0003-Fix-missing-sntp-to-ntpdig-renames.patch
-0004-Rename-GNUPLOT-to-gnuplot.patch
-0005-Cleanup-text-around-a-link.patch
-0006-Capitalize-GPS-and-TDOP.patch
-0007-Capitalize-NTP-in-man-pages.patch
-0008-Improve-man-page-and-usage-message-consistency.patch
-
-0011-Generalize-pi-temp-log-to-zone-temp-log.patch
-
-0021-ntpviz-Open-icon-files-in-binary-mode.patch
-0022-ntpviz-Fix-temp-file-binary-vs.-text.patch
-0023-ntpviz-Fix-dict_keys-sorting.patch
-0024-ntpviz-Open-HTML-and-CSV-files-as-text.patch
-0025-ntpviz-Open-the-log-files-as-text.patch
-
-0041-Capitalize-more-instances-of-TDOP.patch
-0042-Handle-gpsd-returning-None-as-the-device.patch
-0043-Add-a-missing-period.patch
-0044-Remove-unnecessary-parentheses.patch
-0045-Fix-a-reference-to-gps-log.patch
+ntpviz-statfiles.patch
+ntpviz-templates.patch
 
 # To be upstreamed eventually (possibly with changes)
 use-system-libsodium.patch
@@ -32,5 +12,6 @@ support-reproducible-builds.patch
 update-refclock-docs.patch
 use-etc-for-ntp-keys.patch
 use-etc-ntpviz-for-header-and-footer.patch
+use-var-log-ntpstats-for-stats.patch
 fix-python-pie-build.patch
-ntpviz-statfiles.patch
+ntpviz-optionfile.patch

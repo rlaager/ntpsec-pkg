@@ -1,0 +1,14 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "configure" ]; then
+	# If the log directory does not exist, create it and restart ntpd to
+	# enable logging.
+	if ! [ -d /var/log/ntpstats ]; then
+		install -o ntp -g ntp -d /var/log/ntpstats
+		invoke-rc.d ntp restart
+	fi
+fi
+
+#DEBHELPER#

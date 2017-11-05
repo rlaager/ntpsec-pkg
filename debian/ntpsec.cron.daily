@@ -6,9 +6,15 @@
 # is delete old ones, and compress the ones we're keeping so disk
 # usage is controlled.
 
-statsdir=$(cat /etc/ntp.conf | grep -v '^#' | sed -nr 's/^statsdir[[:space:]]+([^[:space:]]+).*$/\1/p')
+statsdir=$(grep -v '^#' /etc/ntp.conf | sed -nr 's/^statsdir[[:space:]]+([^[:space:]]+).*$/\1/p')
 
-if [ -n "$statsdir" ] && [ -d "$statsdir" ]; then
+# The ntpsec package, unlike ntp, uses /var/log/ntpstats as the default for
+# statsdir.
+if [ -n "$statsdir" ]; then
+	statsdir=/var/log/ntpstats
+fi
+
+if [ -d "$statsdir" ]; then
 	# only keep a week's depth of these. Delete only files exactly
 	# within the directory and do not descend into subdirectories
 	# to avoid security risks on platforms where find is not using

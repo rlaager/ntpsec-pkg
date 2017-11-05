@@ -7,4 +7,5 @@ ntpsec
 ntpsec-doc
 ntpsec-ntpdate
 ntpsec-ntpviz
+python3-ntp
 tmp

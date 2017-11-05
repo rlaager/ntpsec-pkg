@@ -2,26 +2,24 @@
 
 set -e
 
-if dpkg-maintscript-helper supports rm_conffile; then
-	dpkg-maintscript-helper rm_conffile \
-		/etc/logcheck/ignore.d.server/ntp 1:4.2.6+dfsg-1 -- "$@"
-	dpkg-maintscript-helper rm_conffile \
-		/etc/dhcp3/dhclient-enter-hooks.d/ntp 1:4.2.6+dfsg-1 -- "$@"
-	dpkg-maintscript-helper rm_conffile \
-		/etc/network/if-up.d/ntp 1:4.2.6+dfsg-1 -- "$@"
-fi
-
-if dpkg-maintscript-helper supports mv_conffile; then
-	dpkg-maintscript-helper mv_conffile \
-		/etc/dhcp3/dhclient-exit-hooks.d/ntp \
-		/etc/dhcp/dhclient-exit-hooks.d/ntp \
-		1:4.2.6.p1+dfsg-1 -- "$@"
-fi
-
 if [ "$1" = "configure" ]; then
 	addgroup --system --quiet ntp
 	adduser --system --quiet --ingroup ntp --home /nonexistent --no-create-home ntp
-	chown -R ntp:ntp /var/lib/ntp /var/log/ntpstats
+	chown -R ntp:ntp /var/lib/ntp
+
+	# If ntpsec-ntpviz is not installed, remove the log directory (but only
+	# if it is empty).  This prevents ntpd from logging.  The admin is
+	# likely switching from NTP Classic, and this preserves the existing
+	# behavior.  (If they were using logging, the directory will not be
+	# empty.)
+	if ! dpkg -s ntpsec-ntpviz >/dev/null 2>&1; then
+	        rmdir /var/log/ntpstats 2> /dev/null || true
+	fi
+
+	# If the directory does exist, make sure the ownership is correct.
+	if [ -d /var/log/ntpstats ]; then
+		chown -R ntp:ntp /var/log/ntpstats
+	fi
 fi
 
 installinit_error() {

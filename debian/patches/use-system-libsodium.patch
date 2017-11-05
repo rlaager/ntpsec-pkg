@@ -4,10 +4,10 @@ Description: Use system libsodium
 Forwarded: no
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2016-11-29
+Last-Update: 2016-12-17
 --- a/libntp/wscript
 +++ b/libntp/wscript
-@@ -49,14 +49,14 @@
+@@ -48,14 +48,14 @@
  	includes = [
  		"%s/libisc/include/" % srcnode,
  		"%s/libisc/unix/include/" % srcnode, # XXX: platform: requires unix/win32 switch.

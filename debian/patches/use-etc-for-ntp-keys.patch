@@ -5,7 +5,7 @@ Description: Use /etc for ntp.keys
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2016-12-10
+Last-Update: 2016-12-17
 --- a/docs/includes/ntpkeygen-body.txt
 +++ b/docs/includes/ntpkeygen-body.txt
 @@ -34,12 +34,7 @@
@@ -74,20 +74,9 @@ Last-Update: 2016-12-10
  |================================================================
  
  [[signals]]
---- a/docs/index.txt
-+++ b/docs/index.txt
-@@ -210,7 +210,7 @@
-   terminal windows, allowing more space for long peer addresses.
- 
- * When running as root, the ntpq utility looks in /etc/ntp.conf and
--  /usr/local/etc/ntp.keys to find credentials for control requests
-+  /etc/ntp.keys to find credentials for control requests
-   that require authentication. Thus it is not necessary to enter
-   them by hand.
- 
 --- a/pylib/packet.py
 +++ b/pylib/packet.py
-@@ -1417,7 +1417,7 @@
+@@ -1418,7 +1418,7 @@
          "Retrieve ifstats data."
          return self.__ordlist("ifstats")
  

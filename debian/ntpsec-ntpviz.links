@@ -1,6 +1,7 @@
-/etc/ntpviz/footer.html /var/lib/ntp/ntpviz/day/footer
-/etc/ntpviz/footer.html /var/lib/ntp/ntpviz/week/footer
-/etc/ntpviz/header.html /var/lib/ntp/ntpviz/day/header
-/etc/ntpviz/header.html /var/lib/ntp/ntpviz/week/header
+/etc/ntpviz/day/footer.html /var/lib/ntp/ntpviz/day/footer
+/etc/ntpviz/day/header.html /var/lib/ntp/ntpviz/day/header
+/etc/ntpviz/index.html /usr/share/ntpsec-ntpviz/ntpviz/index.html
+/etc/ntpviz/week/footer.html /var/lib/ntp/ntpviz/week/footer
+/etc/ntpviz/week/header.html /var/lib/ntp/ntpviz/week/header
 /var/lib/ntp/ntpviz/day /usr/share/ntpsec-ntpviz/ntpviz/day
 /var/lib/ntp/ntpviz/week /usr/share/ntpsec-ntpviz/ntpviz/week

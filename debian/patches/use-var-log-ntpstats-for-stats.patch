@@ -1,0 +1,34 @@
+Description: Use /var/log/ntpstats for stats
+ This is the default NTP log location on Debian.  This avoids the need to
+ explicitly set "statsdir" in /etc/ntp.conf.
+ .
+ This is a change from the ntp ("NTP Classic") package, which requires the
+ statsdir to be explicitly set for logging to happen.  However, that is only
+ happening because /var/NTP does not normally exist, so it is a bit of an
+ accidental feature.
+Forwarded: not-needed
+Origin: vendor
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2016-12-19
+--- a/docs/includes/ntpd-body.txt
++++ b/docs/includes/ntpd-body.txt
+@@ -510,7 +510,7 @@
+ |process ID file    |none            |+-p+        |+pidfile+
+ |log file           |system log      |+-l+        |+logfile+
+ |include file       |none            |none        |+includefile+
+-|statistics path    |+/var/NTP+      |+-s+        |+statsdir+
++|statistics path    |+/var/log/ntpstats+|+-s+     |+statsdir+
+ |keys path          |+/etc+          |none        |+keysdir+
+ |================================================================
+ 
+--- a/ntpd/ntp_util.c
++++ b/ntpd/ntp_util.c
+@@ -52,7 +52,7 @@
+  * Statistics file stuff
+  */
+ #ifndef NTP_VAR
+-# define NTP_VAR "/var/NTP/"		/* NOTE the trailing '/' */
++# define NTP_VAR "/var/log/ntpstats/"		/* NOTE the trailing '/' */
+ #endif
+ 
+ 

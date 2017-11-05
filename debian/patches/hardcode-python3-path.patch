@@ -5,7 +5,7 @@ Description: Hardcode python3 path
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2016-11-29
+Last-Update: 2016-12-17
 --- a/attic/calc_tickadj/calc_tickadj
 +++ b/attic/calc_tickadj/calc_tickadj
 @@ -1,4 +1,4 @@
@@ -763,9 +763,9 @@ Last-Update: 2016-11-29
 @@ -1,4 +1,4 @@
 -#!/usr/bin/env python
 +#!/usr/bin/python3
- #
- # ntpmon - real-time peerstats/MRU monitor
- #
+ # SPDX-License-Identifier: BSD-2-clause
+ '''\
+ Keystroke commands:
 --- a/ntpclients/ntpdig
 +++ b/ntpclients/ntpdig
 @@ -1,4 +1,4 @@
