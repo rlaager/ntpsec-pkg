@@ -1,16 +1,8 @@
 # To be upstreamed
-ntpviz-statfiles.patch
-ntpviz-templates.patch
-
-# To be upstreamed eventually (possibly with changes)
-use-system-libsodium.patch
 
 # Not to be upstreamed
 hardcode-python3-path.patch
-gps-python-path.patch
-support-reproducible-builds.patch
 update-refclock-docs.patch
-use-etc-for-ntp-keys.patch
 use-etc-ntpviz-for-header-and-footer.patch
 use-var-log-ntpstats-for-stats.patch
 fix-python-pie-build.patch

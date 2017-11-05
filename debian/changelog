@@ -1,4 +1,4 @@
-ntpsec (0.9.7~git20161217+dfsg1-1ubuntu1) UNRELEASED; urgency=medium
+ntpsec (1.0.0+dfsg1-1ubuntu1) UNRELEASED; urgency=medium
 
   * Initial release. (Closes: #819806)
     Packaging forked from ntp_4.2.8p8+dfsg.

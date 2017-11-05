@@ -9,21 +9,21 @@ Description: Use /var/log/ntpstats for stats
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2016-12-19
+Last-Update: 2017-11-05
 --- a/docs/includes/ntpd-body.txt
 +++ b/docs/includes/ntpd-body.txt
-@@ -510,7 +510,7 @@
- |process ID file    |none            |+-p+        |+pidfile+
- |log file           |system log      |+-l+        |+logfile+
- |include file       |none            |none        |+includefile+
--|statistics path    |+/var/NTP+      |+-s+        |+statsdir+
-+|statistics path    |+/var/log/ntpstats+|+-s+     |+statsdir+
- |keys path          |+/etc+          |none        |+keysdir+
- |================================================================
+@@ -516,7 +516,7 @@
+ |process ID file         |none              |+-p+        |+pidfile+
+ |log file                |system log        |+-l+        |+logfile+
+ |include file            |none              |none        |+includefile+
+-|statistics path         |+/var/NTP+        |+-s+        |+statsdir+
++|statistics path         |+/var/log/ntpstats+|+-s+       |+statsdir+
+ |keys file               |none              |+-k+        |+keys+
+ |===================================================================
  
 --- a/ntpd/ntp_util.c
 +++ b/ntpd/ntp_util.c
-@@ -52,7 +52,7 @@
+@@ -51,7 +51,7 @@
   * Statistics file stuff
   */
  #ifndef NTP_VAR

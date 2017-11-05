@@ -9,19 +9,19 @@ Description: Document disabled refclocks
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2016-12-10
+Last-Update: 2017-11-05
 --- a/docs/refclock.txt
 +++ b/docs/refclock.txt
-@@ -168,7 +168,7 @@
+@@ -166,7 +166,7 @@
+ |link:driver_truetime.html[truetime]    | D | TrueTime GPS/GOES Receivers
  |link:driver_generic.html[generic]      | T | Generic Reference Driver (Parse)
- |link:driver_magnavox.html[magnavox]    | D | MX4200 and compatible GPS receivers
- |link:driver_arbiter.html[arbiter]      | - | Arbiter 1088A/B GPS Receiver
+ |link:driver_arbiter.html[arbiter]      | D | Arbiter 1088A/B GPS Receiver
 -|link:driver_modem.html[modem]          | - | NIST/USNO/PTB Modem Time Services
 +|link:driver_modem.html[modem]          | d | NIST/USNO/PTB Modem Time Services
  |link:driver_nmea.html[nmea]            | T | Generic NMEA GPS Receiver
  |link:driver_pps.html[pps]              | T | PPS Clock Discipline
  |link:driver_hpgps.html[hpgps]          | T | Hewlett Packard GPS Receivers
-@@ -191,7 +191,8 @@
+@@ -187,7 +187,8 @@
  [cols="5%,95%",options="header"]
  |====================================================================
  |Flag| Meaning

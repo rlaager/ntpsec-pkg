@@ -17,7 +17,6 @@ endif
 	ln -sf /usr/bin/autorevision wafhelpers/autorevision.sh
 
 	# We set MKREPRO_DATE and MKREPRO_TIME to allow for reproducible builds.
-	# See also debian/patches/reproducible-build.patch.
 	#
 	# Only build with refclocks NOT slated for removal.  See also
 	# debian/patches/update-refclock-docs.patch.
@@ -63,9 +62,6 @@ install: build-stamp
 
 	python3 waf install --destdir=$(CURDIR)/debian/tmp
 	rm -rf debian/tmp/usr/lib/python3/dist-packages/ntp/__pycache__
-
-	install -d debian/tmp/usr/share
-	mv debian/tmp/usr/man debian/tmp/usr/share/man
 
 	install -m 755 \
 		ntpclients/ntpmon \
