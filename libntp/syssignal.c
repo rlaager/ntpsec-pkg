@@ -1,4 +1,4 @@
-# include <config.h>
+# include "config.h"
 
 #include <stdio.h>
 #include <sys/types.h>
@@ -7,15 +7,13 @@
 #include "ntp_syslog.h"
 #include "ntp_stdlib.h"
 
-static ctrl_c_fn	ctrl_c_hook;
-void sigint_handler(int);
-
 # ifdef SA_RESTART
 #  define Z_SA_RESTART		SA_RESTART
 # else
 #  define Z_SA_RESTART		0
 # endif
 
+/* set an sa_handler */
 void
 signal_no_reset(
 	int sig,
@@ -24,7 +22,6 @@ signal_no_reset(
 {
 	int n;
 	struct sigaction vec;
-	struct sigaction ovec;
 
 	ZERO(vec);
 	sigemptyset(&vec.sa_mask);
@@ -41,40 +38,32 @@ signal_no_reset(
 # endif
 
 	do
-		n = sigaction(sig, &vec, &ovec);
+		n = sigaction(sig, &vec, NULL);
 	while (-1 == n && EINTR == errno);
 	if (-1 == n) {
-		perror("sigaction");
+		perror("ERROR: signal_no_reset() sigaction");
 		exit(1);
 	}
 }
 
-/*
- * POSIX implementation of set_ctrl_c_hook()
- */
+/* set an sa_sigaction */
 void
-sigint_handler(
-	int	signum
+signal_no_reset1(
+	int sig,
+	void (*func)(int, siginfo_t *, void *)
 	)
 {
-	UNUSED_ARG(signum);
-	if (ctrl_c_hook != NULL)
-		(*ctrl_c_hook)();
-}
+	int n;
+	struct sigaction vec;
 
-void
-set_ctrl_c_hook(
-	ctrl_c_fn	c_hook
-	)
-{
-	void (*handler)(int);
+	ZERO(vec);
+	sigemptyset(&vec.sa_mask);
+	vec.sa_sigaction = func;
+	vec.sa_flags = SA_SIGINFO;
 
-	if (NULL == c_hook) {
-		handler = SIG_DFL;
-		ctrl_c_hook = NULL;
-	} else {
-		handler = &sigint_handler;
-		ctrl_c_hook = c_hook;
+	n = sigaction(sig, &vec, NULL);
+	if (-1 == n) {
+		perror("ERROR: signal_no_reset1() sigaction");
+		exit(1);
 	}
-	signal_no_reset(SIGINT, handler);
 }

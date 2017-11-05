@@ -11,7 +11,8 @@
 #include <errno.h>
 #include <signal.h>
 
-#include <config.h>
+#include "config.h"
+#include "ntp_assert.h"
 
 #ifdef ENABLE_DROPROOT
 # include <ctype.h>
@@ -34,28 +35,24 @@ static priv_set_t *highprivs = NULL;
 
 #ifdef HAVE_SECCOMP_H
 # include <seccomp.h>
-#endif /* HAVE_SECCOMP_H */
+static void catchTrap(int sig, siginfo_t *, void *);
+#endif
 
 #ifdef ENABLE_DROPROOT
-bool root_dropped;
-uid_t sw_uid;
-gid_t sw_gid;
-char *endp;
-struct group *gr;
-struct passwd *pw;
+static bool root_dropped;
+static uid_t sw_uid;
+static gid_t sw_gid;
+static char *endp;
+static struct group *gr;
+static struct passwd *pw;
 #endif /* ENABLE_DROPROOT */
 
 #include "ntp_syslog.h"
 #include "ntp_stdlib.h"
 
-#ifdef ENABLE_SECCOMP
-#ifdef HAVE_SECCOMP
-static void catchTrap(int sig);
-#endif
-#endif
 
 bool sandbox(const bool droproot,
-	     const char *user, const char *group,
+	     char *user, const char *group,
 	     const char *chrootdir,
 	     bool want_dynamic_interface_tracking)
 {
@@ -73,7 +70,7 @@ bool sandbox(const bool droproot,
 #if !defined(HAVE_LINUX_CAPABILITY) && !defined(HAVE_SOLARIS_PRIVS) && !defined(HAVE_SYS_CLOCKCTL_H)
 	if (droproot) {
 		msyslog(LOG_ERR,
-			"root can't be dropped due to missing capabilities.");
+			"INIT: root can't be dropped due to missing capabilities.");
 		exit(-1);
 	}
 #endif /* !defined(HAVE_LINUX_CAPABILITY) && !defined(HAVE_SOLARIS_PRIVS)  && !defined(HAVE_SYS_CLOCKCTL_H) */
@@ -82,15 +79,15 @@ bool sandbox(const bool droproot,
 #  ifdef HAVE_LINUX_CAPABILITY
 		/* set flag: keep privileges across setuid() call. */
 		if (prctl( PR_SET_KEEPCAPS, 1L, 0L, 0L, 0L ) == -1) {
-			msyslog( LOG_ERR, "prctl( PR_SET_KEEPCAPS, 1L ) failed: %m" );
+			msyslog( LOG_ERR, "INIT: prctl( PR_SET_KEEPCAPS, 1L ) failed: %m" );
 			exit(-1);
 		}
-#  elif HAVE_SOLARIS_PRIVS
+#  elif defined(HAVE_SOLARIS_PRIVS)
 		/* Nothing to do here */
 #  else
 		/* we need a user to switch to */
 		if (user == NULL) {
-			msyslog(LOG_ERR, "Need user name to drop root privileges (see -u flag!)" );
+			msyslog(LOG_ERR, "INIT: Need user name to drop root privileges (see -u flag!)" );
 			exit(-1);
 		}
 #  endif	/* HAVE_LINUX_CAPABILITY || HAVE_SOLARIS_PRIVS */
@@ -107,7 +104,7 @@ bool sandbox(const bool droproot,
 					sw_gid = pw->pw_gid;
 				} else {
 					errno = 0;
-					msyslog(LOG_ERR, "Cannot find user ID %s", user);
+					msyslog(LOG_ERR, "INIT: Cannot find user ID %s", user);
 					exit (-1);
 				}
 
@@ -119,9 +116,9 @@ getuser:
 					sw_gid = pw->pw_gid;
 				} else {
 					if (errno)
-						msyslog(LOG_ERR, "getpwnam(%s) failed: %m", user);
+						msyslog(LOG_ERR, "INIT: getpwnam(%s) failed: %m", user);
 					else
-						msyslog(LOG_ERR, "Cannot find user `%s'", user);
+						msyslog(LOG_ERR, "INIT: Cannot find user `%s'", user);
 					exit (-1);
 				}
 			}
@@ -137,7 +134,7 @@ getgroup:
 					sw_gid = gr->gr_gid;
 				} else {
 					errno = 0;
-					msyslog(LOG_ERR, "Cannot find group `%s'", group);
+					msyslog(LOG_ERR, "INIT: Cannot find group `%s'", group);
 					exit (-1);
 				}
 			}
@@ -146,63 +143,67 @@ getgroup:
 		if (chrootdir ) {
 			/* make sure cwd is inside the jail: */
 			if (chdir(chrootdir)) {
-				msyslog(LOG_ERR, "Cannot chdir() to `%s': %m", chrootdir);
+				msyslog(LOG_ERR, "INIT: Cannot chdir() to `%s': %m", chrootdir);
 				exit (-1);
 			}
 			if (chroot(chrootdir)) {
-				msyslog(LOG_ERR, "Cannot chroot() to `%s': %m", chrootdir);
+				msyslog(LOG_ERR, "INIT: Cannot chroot() to `%s': %m", chrootdir);
 				exit (-1);
 			}
 			if (chdir("/")) {
-				msyslog(LOG_ERR, "Cannot chdir() to root after chroot(): %m");
+				msyslog(LOG_ERR, "INIT: Cannot chdir() to root after chroot(): %m");
 				exit (-1);
 			}
 		}
 #  ifdef HAVE_SOLARIS_PRIVS
 		if ((lowprivs = priv_str_to_set(LOWPRIVS, ",", NULL)) == NULL) {
-			msyslog(LOG_ERR, "priv_str_to_set() failed:%m");
+			msyslog(LOG_ERR, "INIT: priv_str_to_set() failed:%m");
 			exit(-1);
 		}
 		if ((highprivs = priv_allocset()) == NULL) {
-			msyslog(LOG_ERR, "priv_allocset() failed:%m");
+			msyslog(LOG_ERR, "INIT: priv_allocset() failed:%m");
 			exit(-1);
 		}
 		(void) getppriv(PRIV_PERMITTED, highprivs);
 		(void) priv_intersect(highprivs, lowprivs);
 		if (setppriv(PRIV_SET, PRIV_PERMITTED, lowprivs) == -1) {
-			msyslog(LOG_ERR, "setppriv() failed:%m");
+			msyslog(LOG_ERR, "INIT: setppriv() failed:%m");
 			exit(-1);
 		}
 #  endif /* HAVE_SOLARIS_PRIVS */
-		if (user && initgroups(user, sw_gid)) {
-			msyslog(LOG_ERR, "Cannot initgroups() to user `%s': %m", user);
+                /* FIXME? Apple takes an int as 2nd argument */
+		if (user && initgroups(user, (gid_t)sw_gid)) {
+			msyslog(LOG_ERR, "INIT: Cannot initgroups() to user `%s': %m", user);
 			exit (-1);
 		}
 		if (group && setgid(sw_gid)) {
-			msyslog(LOG_ERR, "Cannot setgid() to group `%s': %m", group);
+			msyslog(LOG_ERR, "INIT: Cannot setgid() to group `%s': %m", group);
 			exit (-1);
 		}
 		if (group && setegid(sw_gid)) {
-			msyslog(LOG_ERR, "Cannot setegid() to group `%s': %m", group);
+			msyslog(LOG_ERR, "INIT: Cannot setegid() to group `%s': %m", group);
 			exit (-1);
 		}
 		if (group) {
 			if (0 != setgroups(1, &sw_gid)) {
-				msyslog(LOG_ERR, "setgroups(1, %d) failed: %m", sw_gid);
+				msyslog(LOG_ERR, "INIT: setgroups(1, %u) failed: %m",
+                                        sw_gid);
 				exit (-1);
 			}
 		}
 		else if (pw)
-			if (0 != initgroups(pw->pw_name, pw->pw_gid)) {
-				msyslog(LOG_ERR, "initgroups(<%s>, %d) filed: %m", pw->pw_name, pw->pw_gid);
+			if (0 != initgroups(pw->pw_name, (gid_t)pw->pw_gid)) {
+				msyslog(LOG_ERR,
+                                        "INIT: initgroups(<%s>, %u) filed: %m",
+                                        pw->pw_name, pw->pw_gid);
 				exit (-1);
 			}
 		if (user && setuid(sw_uid)) {
-			msyslog(LOG_ERR, "Cannot setuid() to user `%s': %m", user);
+			msyslog(LOG_ERR, "INIT: Cannot setuid() to user `%s': %m", user);
 			exit (-1);
 		}
 		if (user && seteuid(sw_uid)) {
-			msyslog(LOG_ERR, "Cannot seteuid() to user `%s': %m", user);
+			msyslog(LOG_ERR, "INIT: Cannot seteuid() to user `%s': %m", user);
 			exit (-1);
 		}
 
@@ -226,7 +227,7 @@ getgroup:
 			 *  interface tracking.
 			 */
 			cap_t caps;
-			char *captext;
+			const char *captext;
 			
 			captext = want_dynamic_interface_tracking
 				      ? "cap_sys_nice,cap_sys_time,cap_net_bind_service=pe"
@@ -234,13 +235,13 @@ getgroup:
 			caps = cap_from_text(captext);
 			if (!caps) {
 				msyslog(LOG_ERR,
-					"cap_from_text(%s) failed: %m",
+					"INIT: cap_from_text(%s) failed: %m",
 					captext);
 				exit(-1);
 			}
 			if (-1 == cap_set_proc(caps)) {
 				msyslog(LOG_ERR,
-					"cap_set_proc() failed to drop root privs: %m");
+					"INIT: cap_set_proc() failed to drop root privs: %m");
 				exit(-1);
 			}
 			cap_free(caps);
@@ -248,11 +249,11 @@ getgroup:
 #  endif	/* HAVE_LINUX_CAPABILITY */
 #  ifdef HAVE_SOLARIS_PRIVS
 		if (priv_delset(lowprivs, "proc_setid") == -1) {
-			msyslog(LOG_ERR, "priv_delset() failed:%m");
+			msyslog(LOG_ERR, "INIT: priv_delset() failed:%m");
 			exit(-1);
 		}
 		if (setppriv(PRIV_SET, PRIV_PERMITTED, lowprivs) == -1) {
-			msyslog(LOG_ERR, "setppriv() failed:%m");
+			msyslog(LOG_ERR, "INIT: setppriv() failed:%m");
 			exit(-1);
 		}
 		priv_freeset(lowprivs);
@@ -262,11 +263,8 @@ getgroup:
 	}	/* if (droproot) */
 # endif	/* ENABLE_DROPROOT */
 
-#ifdef ENABLE_SECCOMP
-/* libssecomp sandboxing */
-// Working on ARM
-// #if defined(HAVE_SECCOMP) && (defined(__x86_64__) || defined(__i386__))
-#if defined(HAVE_SECCOMP)
+/* libseccomp sandboxing */
+#if defined(HAVE_SECCOMP_H)
 
 #ifdef ENABLE_KILL_ON_TRAP
   #define MY_SCMP_ACT SCMP_ACT_KILL
@@ -275,15 +273,12 @@ getgroup:
 #endif
 	scmp_filter_ctx ctx = seccomp_init(MY_SCMP_ACT);
 
-        signal_no_reset(SIGSYS, catchTrap);
-
+        signal_no_reset1(SIGSYS, catchTrap);
 
 	if (NULL == ctx) {
-		msyslog(LOG_ERR, "sandbox: seccomp_init  failed: %m");
-		return nonroot;
+		msyslog(LOG_ERR, "INIT: sandbox: seccomp_init() failed: %m");
+		exit (1);
 		}
-	else
-		msyslog(LOG_DEBUG, "sandbox: seccomp_init succeeded");
 
 int scmp_sc[] = {
 	SCMP_SYS(adjtimex),
@@ -294,6 +289,7 @@ int scmp_sc[] = {
 	SCMP_SYS(clock_settime),
 	SCMP_SYS(close),
 	SCMP_SYS(connect),
+	SCMP_SYS(exit),
 	SCMP_SYS(exit_group),
 	SCMP_SYS(fcntl),
 	SCMP_SYS(fstat),
@@ -309,6 +305,9 @@ int scmp_sc[] = {
 	SCMP_SYS(getrlimit),	/* sysconf */
 	SCMP_SYS(setrlimit),
 #endif
+#ifdef __NR_prlimit64
+	SCMP_SYS(prlimit64),	/* 64 bit Fedora 26 with early_droproot*/
+#endif
 	SCMP_SYS(getrusage),
 	SCMP_SYS(getsockname),
 	SCMP_SYS(getsockopt),
@@ -318,10 +317,16 @@ int scmp_sc[] = {
 	SCMP_SYS(lseek),
 	SCMP_SYS(munmap),
 	SCMP_SYS(open),
+#ifdef __NR_openat
+	SCMP_SYS(openat),	/* SUSE */
+#endif
 	SCMP_SYS(poll),
 	SCMP_SYS(pselect6),
 	SCMP_SYS(read),
-	SCMP_SYS(recvfrom),
+	SCMP_SYS(recvfrom),    /* Comment this out for testing.
+				* It will die on the first reply.
+				* (Or maybe sooner if a request arrives.)
+				*/
 	SCMP_SYS(recvmsg),
 	SCMP_SYS(rename),
 	SCMP_SYS(rt_sigaction),
@@ -350,15 +355,20 @@ int scmp_sc[] = {
         SCMP_SYS(unlink),
 
 #ifdef ENABLE_DNS_LOOKUP
-	/* Needed for threads */
-	SCMP_SYS(clone),
+/* Don't comment out this block for testing.
+ * pthread_create blocks signals so it will crash
+ * rather than generate a trap.
+ */
+	SCMP_SYS(clone),	/* threads */
+	SCMP_SYS(futex),	/* sem_xxx, used by threads */
+	SCMP_SYS(kill),		/* generate signal */
 	SCMP_SYS(madvise),
 	SCMP_SYS(mprotect),
 	SCMP_SYS(set_robust_list),
-	SCMP_SYS(exit),
-	SCMP_SYS(futex),	/* sem_xxx */
 	SCMP_SYS(sendmmsg),	/* DNS lookup */
 	SCMP_SYS(socketpair),
+	SCMP_SYS(statfs),
+	SCMP_SYS(uname),
 #endif
 
 #ifdef HAVE_UTMPX_H
@@ -373,18 +383,28 @@ int scmp_sc[] = {
 #ifdef CLOCK_SHM
         SCMP_SYS(shmget),
         SCMP_SYS(shmat),
+        SCMP_SYS(shmdt),
 #endif
 
 	SCMP_SYS(fcntl64),
 	SCMP_SYS(fstat64),
 
-#ifdef __x86_64__
-	SCMP_SYS(mmap),
+/* Arch Linux */
+	SCMP_SYS(getpid),
+	SCMP_SYS(gettid),
+	SCMP_SYS(geteuid),
+	SCMP_SYS(ppoll),
+	SCMP_SYS(sendmsg),
+
+#ifdef __NR_mmap
+	/* gentoo 64-bit and 32-bit, Intel and Arm use mmap */
+	SCMP_SYS(mmap),           
 #endif
-#ifdef __i386__
+#if defined(__i386__) || defined(__arm__)
 	SCMP_SYS(_newselect),
 	SCMP_SYS(_llseek),
 	SCMP_SYS(mmap2),
+	SCMP_SYS(send),
 	SCMP_SYS(stat64),
 #endif
 };
@@ -395,36 +415,70 @@ int scmp_sc[] = {
 			if (seccomp_rule_add(ctx,
 			    SCMP_ACT_ALLOW, scmp_sc[i], 0) < 0) {
 				msyslog(LOG_ERR,
-				    "sandbox: seccomp_rule_add() failed: %m");
+				    "INIT: sandbox: seccomp_rule_add() failed: %m");
+			    exit(1);
 			}
 		}
 	}
 
-	if (seccomp_load(ctx) < 0)
-		msyslog(LOG_ERR, "sandbox: seccomp_load() failed: %m");	
-	else {
-		msyslog(LOG_DEBUG, "sandbox: seccomp_load() succeeded");
+	if (seccomp_load(ctx) < 0) {
+		msyslog(LOG_ERR, "INIT: sandbox: seccomp_load() failed: %m");
+		exit(1);
 	}
-#endif /* HAVE_SECCOMP */
-#endif /* ENABLE_SECCOMP */
+	else {
+		msyslog(LOG_NOTICE, "INIT: sandbox: seccomp enabled.");
+	}
+#endif /* HAVE_SECCOMP_H */
 
 	return nonroot;
 }
 
-#ifdef ENABLE_SECCOMP
-#ifdef HAVE_SECCOMP
+#ifdef HAVE_SECCOMP_H
 /*
  * catchTrap - get here if something missing from list above
  * (or a bad guy finds a way in)
+ *
+ * The list above is a moving target.  Most syscalls will be
+ * obvious but libc (and friends) can remap things and
+ * getaddrinfo does all sorts of syscalls.
+ *
+ * To track down a missing call:
+ *
+ * Option one:
+ *  The code below should print out the syscall number.
+ *  grep _NR_ /usr/include/ -r | grep <number here> -w
+ *  You will get several hits for various architures/modes.
+ *  You can probably guess the right one.
+ *
+ * Option two:
+ *  use strace
+ *  sudo strace -t -f -o<filename> <path-to-ntpd> <args>
+ *  When it crashes, the last syscall will be near the end of the log file
+ *  just before the line with "--- SIGSYS", a page or two from the end
+ *  depending on the stack trace.
+ *
+ * Option three:
+ *  use gdb, break on catchTrap, get a trace.
+ *  If you have the symbols, you can probably guess the syscall.
+ *  You may have to get the sources for libc.
+ *
  */
-static void catchTrap(int sig)
+static void catchTrap(int sig, siginfo_t *si, void *u)
 {
 	UNUSED_ARG(sig);	/* signal number */
-	msyslog(LOG_ERR, "SIGSYS: got a trap.  Bailing.");
+	UNUSED_ARG(u);	        /* unused ucontext_t */
+	msyslog(LOG_ERR, "ERR: SIGSYS: got a trap.\n");
+	if ( si->si_syscall ) {
+	    msyslog(LOG_ERR, "ERR: SIGSYS/seccomp bad syscall %d/%#x\n",
+		    si->si_syscall, si->si_arch);
+        }
+#ifndef BACKTRACE_DISABLED
+        backtrace_log();
+#endif
+
 	exit(1);
 }
-#endif /* HAVE_SECCOMP */
-#endif /* ENABLE_SECCOMP */
+#endif /* HAVE_SECCOMP_H */
 
 
 /* end */

@@ -34,6 +34,10 @@
   Old name for the PPS driver.  Origin lost in the mists of history,
   but probably related in some way to cesium atomic clocks.
 
+[[cycle]] cycle::
+  An <<era>>; code comments sometimes use this term to emphasize that
+  modular arithmetic is going on.
+
 [[drift]] drift::
   In an NTP context, drift refers to the frequency offset of a clock crystal
   in an NTP host that causes the system time to slowly drift.  It is
@@ -52,6 +56,19 @@
   problem with the timeserver itself but rather with highly variable
   and asymmetric network delays between server and client, but firmware
   bugs in GPS receivers have produced falsetickers.
+
+[[epoch]] epoch::
+  1. The zero date of an NTP era.  The "prime epoch" (of era 0) was
+  1900-00-00T00:00:00 in proleptic UTC (leap second correction was not
+  introduced until 1972). 2. Other calendar systems have other
+  definitions; notably, the Unix epoch is 1970-00-00T00:00:00.
+
+[[era]] era::
+  One complete revolution of a 64-bit NTP 64-bit timestamp; approximately
+  136 years. Eras are numbered from 0, but this era number is not
+  represented internally in NTP code because modular-arithmetic
+  trickery is used to deduce the nearest time that could fit a given
+  timestamp.
 
 [[fudge]] fudge::
   Can have one of two senses.  Either (1) an offset configured for a
@@ -75,15 +92,20 @@
    are derived from spherical trigonometry using the precisely known
    positions of satellites in a geocentric coordinate system. GPS
    also provides time service; those that emit <<PPS>> are suitable
-   as clock sources for Stratum 1 timeservers.
+   as clock sources for Stratum 1 timeservers.  In timekeeping, the
+   term is used to refer not only to the US original GPS system,
+   but newer constellations that work on the same principles, such
+   as ГЛОНАСС (the Russian GLONASS), 北斗 (the Chinese BeiDou-2),
+   and the EU's Galileo.
 
 [[GPSDO]] GPSDO::
    GPS Disciplined Oscillator. A good crystal is synchronized to
    time from a GPS receiver.  The combination gets the short term
    stability of the crystal and the long term stability of GPS.
    With appropriate firmware, the crystal can be used when the
-   GPS receiver stops working.  Most cell towers have GPSDOs.
-   You can usually spot the conical GPS antenna.
+   GPS receiver is temporarily non-operational; see <<holdover>>.
+   Most cell towers have GPSDOs. You can usually spot the conical
+   GPS antenna.
 
 [[GPSD]] GPSD::
    The http://www.catb.org/gpsd/[GPS Daemon], an open-source device
@@ -91,8 +113,22 @@
    a clock source by Stratum 1 sites via the link:driver_shm.html[SHM]
    interface.
 
+[[GPS pivot date]] GPS pivot date::
+   The GPS pivot date is specific fixed arbitrary time.  It is stored in
+   the firmware of a GPS receiver, and is probably the date that firmware
+   was released.  For reasons, a GPS receiver will start reporting
+   incorrect time 512 weeks (9.8 years) or 1024 weeks (19.6 years) after
+   it's pivot date.  There is generally no way to determine what a given
+   GPS receiver's pivot date is, or to determine that it has failed in
+   this manner.
+
+   It is recommended that any critical Stratum 1 NTP server that uses
+   a GPS receiver as a refclock not use one that is more than 9 years
+   old, and to have a peer or nopeer relationship with other NTP
+   servers, so as to detect when the GPS time is no longer sane.
+
 [[holdover]] holdover::
-   In connection with a <<GPSD0>> or <<time radio>> that may lose
+   In connection with a <<GPSDO>> or <<time radio>> that may lose
    signal from its time source, holdover is its ability to continue
    delivering accurate time from an internal oscillator. Due to
    <<drift>> in the oscillator, accuracy drops as holdover time (time
@@ -104,7 +140,7 @@
    serial link is called "in-band time" to contrast it with the
    out-of-band <<PPS>> signal.  Abbreviated IBT. Seldom useful
    by itself as it tends to have a large random wander from top
-   of second.
+   of second.  It is however, useful as a count of seconds.
 
 [[leap second]] leap second::
    Because the earth's rotation varies in irregular ways (gradually
@@ -112,8 +148,8 @@
    absolute terms rather than as a fraction of day length, keeping
    time of day synchronized with mean solar time requires occasional,
    unpredictable insertions of a standard second in the calendar. Leap
-   second notifications are issued by IERS
-   (http://www.iers.org/IERS/EN/Home/home_node.html[International
+   second notifications are issued as Bulletin C by the
+   http://www.iers.org/IERS/EN/Home/home_node.html[International
    Earth Rotation Service] when required, and obeyed by national time
    authorities.  The current leap-second offset is automatically
    propagated through the <<GPS>> system.
@@ -121,7 +157,7 @@
 [[leapfile]] leapfile::
    A local file containing the current <<leap second>> offset, typically
    fetched from <<USNO>> or <<NIST>> and potentially needing updates
-   near the very beginning of each half year. Normally retrieved
+   near the end of each half year. Normally retrieved
    by a cron(1) job, but some varieties of <<refclock>> (notably
    GPSes) update the same information during normal operation.
 
@@ -145,13 +181,13 @@
    http://www.nist.gov/[National Institute of Standards and
    Technology].  The civilian national time authority of the USA;
    runs <<WWVB>>.  Responsible for keeping U.S. civil time
-   coordinated with international UTC time.  NIST time tracks <<USNO>>
-   time to within a few nanoseconds.
+   coordinated with UTC.  Civil <<NIST>> and military <<USNO>>
+   time agree to within nanoseconds.
 
 [[NTP-classic]] NTP Classic::
    The original reference implementation of NTP by Dave Mills, later
-   maintained by the Network Time Foundation.  NTPsec forked from it
-   on June 6th, 2015.
+   maintained by the Network Time Foundation.  It is available at
+   http://www.ntp.org/ .  NTPsec forked from it on June 6th, 2015.
 
 [[nonce]] nonce::
   An arbitrary number that may only be used once. a random or
@@ -195,16 +231,19 @@
    In an NTP context, "the pool" is usually the
    http://www.pool.ntp.org/en/[NTP Pool Project], a collection of
    thousands of NTP servers accessible through DNS servers that hand
-   out service addresses at random from the pool.
+   out "nearby" server addresses from the pool.  These servers are
+   usually run by volunteers, and available via well-known DNS names.
 
-[[proventic]] proventic:: <<Mills-speak>> for "the transitive completion of the
-  authentication relationship", defined in RFC 5906. Time is proventic
-  if it is provided by a chain of time servers between which packets
-  are authenticated and the chain reaches back to Stratum 1.
+[[proventic]] proventic:: <<Mills-speak>> for "the transitive
+  completion of the authentication relationship", defined in RFC 5906.
+  Time is proventic if it is provided by a chain of time servers
+  between which packets are authenticated and the chain reaches
+  back to Stratum 1.
 
 [[refclock]] refclock::
   Shorthand for a "reference clock", a primary time source. A computer
-  with a refclock is implicitly Stratum 1.
+  with a refclock is implicitly Stratum 1.  Examples include <<GPS>>
+  or <<time radio>> receivers, or even a master cesium clock.
 
 [[stratum]] stratum::
   A "stratum" is a layer in the hierarchy of time servers.  a
@@ -212,8 +251,10 @@
   a refclock is stratum 1; and a client served by a stratum N is
   stratum N+1. Often capitalized, especially when referring to all
   members of a stratum. While strata up to 15 are defined, it is
-  unusual to see a public timeserver with stratum > 3, and thus
-  almost all NTP clients are at Stratum 4 or lower.
+  unusual to see a public timeserver with stratum greater than 3,
+  and thus almost all NTP clients are at Stratum 4 or lower.
+  Notice that a 'lower' stratum is closer to the reference clock than
+  a 'higher'.
 
 [[time-radio]] time radio::
   A radio receiver specialized for picking up accurate time reference
@@ -230,14 +271,15 @@
 [[truechimer]] truechimer::
   <<Mills-speak>> for a timeserver that provides time believed good,
   that is with low jitter with respect to UTC.  As with a
-  link#falseticker[falseticker], this is usually less a property of
+  <<falseticker>>, this is usually less a property of
   the server itself than it is of favorable network topology.
 
 [[USNO]] USNO::
   http://www.usno.navy.mil/USNO[The United States Naval Observatory],
   one of the two U.S. national time authorities and the source of the
   U.S. military time reference, now delivered primarily by GPS
-  signals. U.S. civil and military time agree to within nanoseconds.
+  signals. U.S. civil <<NIST>> and military <<USNO>> time agree to
+  within nanoseconds.
 
 [[WWVB]] WWVB::
   https://www.nist.gov/time-and-frequency-services/nist-radio-stations/wwvb[The

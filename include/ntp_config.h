@@ -20,6 +20,7 @@
 #ifndef CONFIG_FILE
 #  define	CONFIG_FILE "/etc/ntp.conf"
 #endif /* not CONFIG_FILE */
+#define CONFIG_DIR	"ntp.d"
 
 /* Limits */
 #define MAXLINE 1024
@@ -32,7 +33,6 @@
 /* list of servers from command line for config_peers() */
 extern	int	cmdline_server_count;
 extern	char **	cmdline_servers;
-extern	bool	force_synchronous_dns;
 
 typedef struct int_range_tag {
 	int	first;
@@ -47,7 +47,7 @@ struct attr_val_tag {
 	int		type;	/* T_String, T_Integer, ... */
 	union val {
 		int		i;
-		u_int		u;
+		unsigned int	u;
 		int_range	r;
 		double		d;
 		char *		s;
@@ -61,7 +61,7 @@ typedef struct address_node_tag address_node;
 struct address_node_tag {
 	address_node *	link;
 	char *		address;
-	u_short		type;	/* family, AF_UNSPEC (0), AF_INET[6] */
+	unsigned short	type;	/* family, AF_UNSPEC (0), AF_INET[6] */
 };
 
 typedef DECL_FIFO_ANCHOR(address_node) address_fifo;
@@ -85,6 +85,7 @@ typedef DECL_FIFO_ANCHOR(string_node) string_fifo;
 typedef struct restrict_node_tag restrict_node;
 struct restrict_node_tag {
 	restrict_node *	link;
+	int		mode;	/* restrict or unrestrict? */
 	address_node *	addr;
 	address_node *	mask;
 	int_fifo *	flags;
@@ -92,22 +93,6 @@ struct restrict_node_tag {
 };
 
 typedef DECL_FIFO_ANCHOR(restrict_node) restrict_fifo;
-
-/*
- * Read-only control knobs for a peer structure.
- * Packaging these makes context copies a bit more succinct.
- */
-struct peer_ctl {
-	uint8_t		version;
-	int		flags;
-	uint8_t		minpoll;
-	uint8_t		maxpoll;
-	uint32_t	ttl;
-	keyid_t		peerkey;
-	uint32_t	baud;
-	char		*path;
-	char		*ppspath;
-};
 
 typedef struct peer_node_tag peer_node;
 struct peer_node_tag {
@@ -133,11 +118,7 @@ typedef DECL_FIFO_ANCHOR(unpeer_node) unpeer_fifo;
 typedef struct auth_node_tag auth_node;
 struct auth_node_tag {
 	int		control_key;
-	int		cryptosw;
-	attr_val_fifo *	crypto_cmd_list;
 	char *		keys;
-	char *		keysdir;
-	int		revoke;
 	attr_val_fifo *	trusted_key_list;
 	char *		ntp_signd_socket;
 };
@@ -223,7 +204,6 @@ struct config_tree_tag {
 	attr_val_fifo *	logconfig;
 	string_fifo *	phone;
 	setvar_fifo *	setvar;
-	int_fifo *	ttl;
 	attr_val_fifo *	vars;
 	nic_rule_fifo *	nic_rules;
 	int_fifo *	reset_counters;
@@ -231,6 +211,7 @@ struct config_tree_tag {
 	sim_fifo *	sim_details;
 	int		mdnstries;
 };
+extern int mdnstries;
 
 
 /* Structure for holding a remote configuration command */
@@ -265,13 +246,13 @@ address_node *create_address_node(char *addr, int type);
 void destroy_address_node(address_node *my_node);
 attr_val *create_attr_dval(int attr, double value);
 attr_val *create_attr_ival(int attr, int value);
-attr_val *create_attr_uval(int attr, u_int value);
+attr_val *create_attr_uval(int attr, unsigned int value);
 attr_val *create_attr_rangeval(int attr, int first, int last);
 attr_val *create_attr_sval(int attr, const char *s);
 filegen_node *create_filegen_node(int filegen_token,
 				  attr_val_fifo *options);
 string_node *create_string_node(char *str);
-restrict_node *create_restrict_node(address_node *addr,
+restrict_node *create_restrict_node(int mode, address_node *addr,
 				    address_node *mask,
 				    int_fifo *flags, int line_no);
 int_node *create_int_node(int val);
@@ -285,6 +266,8 @@ extern struct REMOTE_CONFIG_INFO remote_config;
 void config_remotely(sockaddr_u *);
 
 extern bool have_interface_option;
+extern char *stats_drift_file;	/* name of the driftfile */
+
 
 void ntp_rlimit(int, rlim_t, int, const char *);
 

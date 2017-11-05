@@ -1,19 +1,17 @@
 /*
  * authreadkeys.c - routines to support the reading of the key file
  */
-#include <config.h>
+#include "config.h"
 #include <stdio.h>
 #include <ctype.h>
 
-#include "ntp_fp.h"
 #include "ntp.h"
 #include "ntp_syslog.h"
 #include "ntp_stdlib.h"
+#include "lib_strbuf.h"
 
-#ifdef HAVE_OPENSSL
-#include "openssl/objects.h"
-#include "openssl/evp.h"
-#endif	/* HAVE_OPENSSL */
+#include <openssl/objects.h>
+#include <openssl/evp.h>
 
 /* Forwards */
 static char *nexttok (char **);
@@ -26,7 +24,7 @@ nexttok(
 	char	**str
 	)
 {
-	register char *cp;
+	char *cp;
 	char *starttok;
 
 	cp = *str;
@@ -86,12 +84,12 @@ authreadkeys(
 	 */
 	fp = fopen(file, "r");
 	if (fp == NULL) {
-		msyslog(LOG_ERR, "authreadkeys: file %s: %m",
+		msyslog(LOG_ERR, "AUTH: authreadkeys: file %s: %m",
 		    file);
 		return false;
 	}
-	INIT_SSL();
-msyslog(LOG_ERR, "authreadkeys: reading %s", file);
+	ssl_init();
+msyslog(LOG_ERR, "AUTH: authreadkeys: reading %s", file);
 
 	/*
 	 * Remove all existing keys
@@ -109,16 +107,16 @@ msyslog(LOG_ERR, "authreadkeys: reading %s", file);
 		/*
 		 * First is key number.  See if it is okay.
 		 */
-		keyno = atoi(token);
+		keyno = (keyid_t)atoi(token);
 		if (keyno == 0) {
 			msyslog(LOG_ERR,
-			    "authreadkeys: cannot change key %s", token);
+			    "AUTH: authreadkeys: cannot change key %s", token);
 			continue;
 		}
 
 		if (keyno > NTP_MAXKEY) {
 			msyslog(LOG_ERR,
-			    "authreadkeys: key %s > %d reserved",
+			    "AUTH: authreadkeys: key %s > %d reserved",
 			    token, NTP_MAXKEY);
 			continue;
 		}
@@ -129,40 +127,40 @@ msyslog(LOG_ERR, "authreadkeys: reading %s", file);
 		token = nexttok(&line);
 		if (token == NULL) {
 			msyslog(LOG_ERR,
-			    "authreadkeys: no key type for key %d", keyno);
+			    "AUTH: authreadkeys: no key type for key %u", keyno);
 			continue;
 		}
-#ifdef HAVE_OPENSSL
 		/*
 		 * The key type is the NID used by the message digest 
 		 * algorithm. There are a number of inconsistencies in
 		 * the OpenSSL database. We attempt to discover them
 		 * here and prevent use of inconsistent data later.
+		 *
+		 * OpenSSL digest short names are capitalized, so uppercase the
+		 * digest name before passing to OBJ_sn2nid().  If it is not
+		 * recognized but begins with 'M' use NID_md5 to be consistent
+		 * with past behavior.
 		 */
-		keytype = keytype_from_text(token, NULL);
+		char *upcased;
+		char *pch;
+		upcased = lib_getbuf();
+		strlcpy(upcased, token, LIB_BUFLENGTH);
+		for (pch = upcased; '\0' != *pch; pch++)
+			*pch = (char)toupper((unsigned char)*pch);
+
+		keytype = OBJ_sn2nid(upcased);
+		if (!keytype && 'm' == tolower((unsigned char)token[0]))
+			keytype = NID_md5;
 		if (keytype == 0) {
 			msyslog(LOG_ERR,
-			    "authreadkeys: invalid type for key %d", keyno);
+			    "AUTH: authreadkeys: invalid type for key %u", keyno);
 			continue;
 		}
 		if (EVP_get_digestbynid(keytype) == NULL) {
 			msyslog(LOG_ERR,
-			    "authreadkeys: no algorithm for key %d", keyno);
+			    "AUTH: authreadkeys: no algorithm for key %u", keyno);
 			continue;
 		}
-#else	/* !HAVE_OPENSSL follows */
-
-		/*
-		 * The key type is unused, but is required to be 'M' or
-		 * 'm' for compatibility.
-		 */
-		if (!(*token == 'M' || *token == 'm')) {
-			msyslog(LOG_ERR,
-			    "authreadkeys: invalid type for key %d", keyno);
-			continue;
-		}
-		keytype = KEY_TYPE_MD5;
-#endif	/* !HAVE_OPENSSL */
 
 		/*
 		 * Finally, get key and insert it. If it is longer than 20
@@ -173,12 +171,12 @@ msyslog(LOG_ERR, "authreadkeys: reading %s", file);
 		token = nexttok(&line);
 		if (token == NULL) {
 			msyslog(LOG_ERR,
-			    "authreadkeys: no key for key %d", keyno);
+			    "AUTH: authreadkeys: no key for key %u", keyno);
 			continue;
 		}
 		len = strlen(token);
 		if (len <= 20) {	/* Bug 2537 */
-			MD5auth_setkey(keyno, keytype, (uint8_t *)token, len);
+			mac_setkey(keyno, keytype, (uint8_t *)token, len);
 			keys++;
 		} else {
 			char	hex[] = "0123456789abcdef";
@@ -195,18 +193,19 @@ msyslog(LOG_ERR, "authreadkeys: reading %s", file);
 				if (j & 1)
 					keystr[j / 2] |= temp;
 				else
-					keystr[j / 2] = temp << 4;
+					keystr[j / 2] = (uint8_t)(temp << 4);
 			}
 			if (j < jlim) {
-				msyslog(LOG_ERR,
-					"authreadkeys: invalid hex digit for key %d", keyno);
-				continue;
+			    msyslog(LOG_ERR,
+				"AUTH: authreadkeys: invalid hex digit for key %u",
+				keyno);
+			    continue;
 			}
-			MD5auth_setkey(keyno, keytype, keystr, jlim / 2);
+			mac_setkey(keyno, keytype, keystr, jlim / 2);
 			keys++;
 		}
 	}
 	fclose(fp);
-msyslog(LOG_ERR, "authreadkeys: added %d keys", keys);
+	msyslog(LOG_ERR, "AUTH: authreadkeys: added %d keys", keys);
 	return true;
 }

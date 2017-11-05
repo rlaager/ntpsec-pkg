@@ -67,8 +67,7 @@ def configure(conf):
 		v.MSVC_COMPILER=compiler
 		try:
 			v.MSVC_VERSION=float(version)
-		except Exception:
-			raise
+		except ValueError:
 			v.MSVC_VERSION=float(version[:-3])
 		conf.find_ifort_win32()
 		conf.ifort_modifier_win32()
@@ -101,8 +100,10 @@ def gather_ifort_versions(conf,versions):
 			continue
 		targets={}
 		for target,arch in all_ifort_platforms:
-			if target=='intel64':targetDir='EM64T_NATIVE'
-			else:targetDir=target
+			if target=='intel64':
+				targetDir='EM64T_NATIVE'
+			else:
+				targetDir=target
 			try:
 				Utils.winreg.OpenKey(all_versions,version+'\\'+targetDir)
 				icl_version=Utils.winreg.OpenKey(all_versions,version)
@@ -253,7 +254,8 @@ def find_ifort_win32(conf):
 	v.IFORT_MANIFEST=(compiler=='intel'and version>=11)
 	fc=conf.find_program(compiler_name,var='FC',path_list=path)
 	env=dict(conf.environ)
-	if path:env.update(PATH=';'.join(path))
+	if path:
+		env.update(PATH=';'.join(path))
 	if not conf.cmd_and_log(fc+['/nologo','/help'],env=env):
 		conf.fatal('not intel fortran compiler could not be identified')
 	v.FC_NAME='IFORT'

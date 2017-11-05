@@ -56,101 +56,12 @@
  */
 #define GPS_SEC_BIAS   315964800UL     // ( ( ( 10UL * 365UL ) + 2 + 5 ) * SECS_PER_DAY )
 
-
-/**
- * @brief Enumeration of handshake modes
- */
-enum COM_HANSHAKE_MODES { HS_NONE, HS_XONXOFF, HS_RTSCTS, N_COM_HS };
-
-/**
- * @brief A data type to configure a serial port's baud rate
- *
- * @see ::MBG_BAUD_RATES
- */
-typedef int32_t BAUD_RATE;
-
-/**
- * @brief Indices used to identify a parameter in the framing string
- *
- * @see ::MBG_FRAMING_STRS
- */
-enum MBG_FRAMING_STR_IDXS { F_DBITS, F_PRTY, F_STBITS };
-
-/**
- * @brief A structure to store the configuration of a serial port
- */
-typedef struct
-{
-  BAUD_RATE baud_rate;  ///< transmission speed, e.g. 19200L, see ::MBG_BAUD_RATES
-  char framing[4];      ///< ASCIIZ framing string, e.g. "8N1" or "7E2", see ::MBG_FRAMING_STRS
-  int16_t handshake;    ///< handshake mode, yet only ::HS_NONE supported
-
-} COM_PARM;
-
-
-/**
- * @brief Enumeration of modes supported for time string transmission
- *
- * This determines e.g. at which point in time a string starts
- * to be transmitted via the serial port.
- * Used with ::PORT_SETTINGS::mode.
- *
- * @see ::STR_MODE_MASKS
- */
-enum STR_MODES
-{
-  STR_ON_REQ,     ///< transmission on request by received '?' character only
-  STR_PER_SEC,    ///< transmission automatically if second changes
-  STR_PER_MIN,    ///< transmission automatically if minute changes
-  STR_AUTO,       ///< transmission automatically if required, e.g. on capture event
-  STR_ON_REQ_SEC, ///< transmission if second changes and a request has been received before
-  N_STR_MODE      ///< the number of known modes
-};
-
-
-/**
- * The number of serial ports which are at least available
- * even with very old GPS receiver models. For devices providing
- * a ::RECEIVER_INFO structure the number of provided COM ports
- * is available in ::RECEIVER_INFO::n_com_ports.
- */
-#define DEFAULT_N_COM   2
-
-
-/**
- * @brief A The structure used to store the configuration of two serial ports
- *
- * @deprecated This structure is deprecated, ::PORT_SETTINGS and related structures
- * should be used instead, if supported by the device.
- */
-typedef struct
-{
-  COM_PARM com[DEFAULT_N_COM];    ///< COM0 and COM1 settings
-  uint8_t mode[DEFAULT_N_COM];    ///< COM0 and COM1 output mode
-
-} PORT_PARM;
-
-
 /**
  * @brief The type of a GPS command code
  *
  * @see ::GPS_CMD_CODES
  */
 typedef uint16_t GPS_CMD;
-
-
-/**
- * @brief Control codes to be or'ed with a particular command/type code
- */
-enum GPS_CMD_CTRL_CODES
-{
-  GPS_REQACK = 0x8000,   ///< to device: request acknowledge
-  GPS_ACK    = 0x4000,   ///< from device: acknowledge a command
-  GPS_NACK   = 0x2000,   ///< from device: error evaluating a command
-};
-
-#define GPS_CTRL_MSK  0xF000   ///< bit mask of all ::GPS_CMD_CTRL_CODES
-
 
 /**
  * @brief Command codes for the binary protocol
@@ -276,9 +187,6 @@ typedef uint16_t IOD;     ///< Issue-Of-Data code
  * @see ::BVAR_FLAGS
  */
 typedef uint16_t BVAR_STAT;
-
-#define _mbg_swab_bvar_stat( _p )  _mbg_swab16( (_p) )
-
 
 /**
  * @brief Enumeration of flag bits used to define ::BVAR_FLAGS
@@ -441,24 +349,6 @@ enum TM_GPS_STATUS_BIT_MASKS
 };
 
 
-/**
- * @brief A structure used to transmit information on date and time
- *
- * This structure can be used to transfer the current time, in which
- * case the channel field has to be set to -1, or an event capture time
- * retrieved from the on-board FIFO, in which case the channel field
- * contains the index of the time capture input, e.g. 0 or 1.
- */
-typedef struct
-{
-  int16_t channel;  ///< -1: the current on-board time; >= 0 the capture channel number
-  T_GPS t;          ///< time in GPS scale and format
-  TM_GPS tm;        ///< time converted to %UTC and/or local time according to ::TZDL settings
-
-} TTM;
-
-
-
 /* Two types of variables used to store a position. Type XYZ is */
 /* used with a position in earth centered, earth fixed (ECEF) */
 /* coordinates whereas type LLA holds such a position converted */
@@ -506,193 +396,11 @@ typedef l_fp LLA[N_LLA];
 
 
 /**
- * @defgroup group_synth Synthesizer parameters
- *
- * Synthesizer frequency is expressed as a
- * four digit decimal number (freq) to be multiplied by 0.1 Hz and an
- * base 10 exponent (range). If the effective frequency is less than
- * 10 kHz its phase is synchronized corresponding to the variable phase.
- * Phase may be in a range from -360 deg to +360 deg with a resolution
- * of 0.1 deg, so the resulting numbers to be stored are in a range of
- * -3600 to +3600.
- *
- * Example:<br>
- * Assume the value of freq is 2345 (decimal) and the value of phase is 900.
- * If range == 0 the effective frequency is 234.5 Hz with a phase of +90 deg.
- * If range == 1 the synthesizer will generate a 2345 Hz output frequency
- * and so on.
- *
- * Limitations:<br>
- * If freq == 0 the synthesizer is disabled. If range == 0 the least
- * significant digit of freq is limited to 0, 3, 5 or 6. The resulting
- * frequency is shown in the examples below:
- *    - freq == 1230  -->  123.0 Hz
- *    - freq == 1233  -->  123 1/3 Hz (real 1/3 Hz, NOT 123.3 Hz)
- *    - freq == 1235  -->  123.5 Hz
- *    - freq == 1236  -->  123 2/3 Hz (real 2/3 Hz, NOT 123.6 Hz)
- *
- * If range == ::MAX_SYNTH_RANGE the value of freq must not exceed 1000, so
- * the output frequency is limited to 10 MHz (see ::MAX_SYNTH_FREQ_VAL).
- *
- * @{ */
-
-#define N_SYNTH_FREQ_DIGIT  4    ///< number of digits to edit
-#define MAX_SYNTH_FREQ   1000    ///< if range == ::MAX_SYNTH_RANGE
-
-#define MIN_SYNTH_RANGE     0
-#define MAX_SYNTH_RANGE     5
-#define N_SYNTH_RANGE       ( MAX_SYNTH_RANGE - MIN_SYNTH_RANGE + 1 )
-
-#define N_SYNTH_PHASE_DIGIT  4
-#define MAX_SYNTH_PHASE      3600
-
-
-#define MAX_SYNTH_FREQ_EDIT  9999  ///< max sequence of digits when editing
-
-
-/**
- * @brief The maximum frequency that can be configured for the synthesizer
- */
-#define MAX_SYNTH_FREQ_VAL   10000000UL     ///< 10 MHz
-/*   == MAX_SYNTH_FREQ * 10^(MAX_SYNTH_RANGE-1) */
-
-/**
- * @brief The synthesizer's phase is only be synchronized if the frequency is below this limit
- */
-#define SYNTH_PHASE_SYNC_LIMIT   10000UL    ///< 10 kHz
-
-/**
- * A Macro used to determine the position of the decimal point
- * when printing the synthesizer frequency as 4 digit value
- */
-#define _synth_dp_pos_from_range( _r ) \
-  ( ( ( N_SYNTH_RANGE - (_r) ) % ( N_SYNTH_FREQ_DIGIT - 1 ) ) + 1 )
-
-/**
- * @brief Synthesizer frequency units
- *
- * An initializer for commonly displayed synthesizer frequency units
- * (::N_SYNTH_RANGE strings)
- */
-#define DEFAULT_FREQ_RANGES \
-{                           \
-  "Hz",                     \
-  "kHz",                    \
-  "kHz",                    \
-  "kHz",                    \
-  "MHz",                    \
-  "MHz",                    \
-}
-
-
-
-/**
- * @brief Synthesizer configuration parameters
- */
-typedef struct
-{
-  int16_t freq;    ///< four digits used; scale: 0.1 Hz; e.g. 1234 -> 123.4 Hz
-  int16_t range;   ///< scale factor for freq; 0..::MAX_SYNTH_RANGE
-  int16_t phase;   ///< -::MAX_SYNTH_PHASE..+::MAX_SYNTH_PHASE; >0 -> pulses later
-
-} SYNTH;
-
-#define _mbg_swab_synth( _p )   \
-{                               \
-  _mbg_swab16( &(_p)->freq );   \
-  _mbg_swab16( &(_p)->range );  \
-  _mbg_swab16( &(_p)->phase );  \
-}
-
-
-/**
- * @brief Enumeration of synthesizer states
- */
-enum SYNTH_STATES
-{
-  SYNTH_DISABLED,   ///< disbled by cfg, i.e. freq == 0.0
-  SYNTH_OFF,        ///< not enabled after power-up
-  SYNTH_FREE,       ///< enabled, but not synchronized
-  SYNTH_DRIFTING,   ///< has initially been sync'd, but now running free
-  SYNTH_SYNC,       ///< fully synchronized
-  N_SYNTH_STATE     ///< the number of known states
-};
-
-
-/**
- * @brief A structure used to report the synthesizer state
- */
-typedef struct
-{
-  uint8_t state;     ///< state code as enumerated in ::SYNTH_STATES
-  uint8_t flags;     ///< reserved, currently always 0
-
-} SYNTH_STATE;
-
-#define _mbg_swab_synth_state( _p )  _nop_macro_fnc()
-
-#define SYNTH_FLAG_PHASE_IGNORED  0x01
-
-/** @} defgroup group_synth */
-
-
-
-/**
- * @defgroup group_tzdl Time zone / daylight saving parameters
- *
- * Example: <br>
- * For automatic daylight saving enable/disable in Central Europe,
- * the variables are to be set as shown below: <br>
- *   - offs = 3600L           one hour from %UTC
- *   - offs_dl = 3600L        one additional hour if daylight saving enabled
- *   - tm_on = first Sunday from March 25, 02:00:00h ( year |= ::DL_AUTO_FLAG )
- *   - tm_off = first Sunday from October 25, 03:00:00h ( year |= ::DL_AUTO_FLAG )
- *   - name[0] == "CET  "     name if daylight saving not enabled
- *   - name[1] == "CEST "     name if daylight saving is enabled
- *
- * @{ */
-
-/**
  * @brief The name of a time zone
  *
  * @note Up to 5 printable characters, plus trailing zero
  */
 typedef char TZ_NAME[6];
-
-/**
- * @brief Time zone / daylight saving parameters
- *
- * This structure is used to specify how a device converts on-board %UTC
- * to local time, including computation of beginning and end of daylight
- * saving time (DST), if required.
- *
- * @note The ::TZDL structure contains members of type ::TM_GPS to specify
- * the times for beginning and end of DST. However, the ::TM_GPS::frac,
- * ::TM_GPS::offs_from_utc, and ::TM_GPS::status fields of these ::TZDL::tm_on
- * and ::TZDL::tm_off members are ignored for the conversion to local time,
- * and thus should be 0.
- */
-typedef struct
-{
-  int32_t offs;      ///< standard offset from %UTC to local time [sec]
-  int32_t offs_dl;   ///< additional offset if daylight saving enabled [sec]
-  TM_GPS tm_on;      ///< date/time when daylight saving starts
-  TM_GPS tm_off;     ///< date/time when daylight saving ends
-  TZ_NAME name[2];   ///< names without and with daylight saving enabled
-
-} TZDL;
-
-/**
- * @brief A flag indicating automatic computation of DST
- *
- * If this flag is or'ed to the year numbers in ::TZDL::tm_on and ::TZDL::tm_off
- * then daylight saving is computed automatically year by year.
- */
-#define DL_AUTO_FLAG  0x8000
-
-/** @} defgroup group_tzdl */
-
-
 
 /**
  * @brief Antenna status and error at reconnect information
@@ -818,133 +526,20 @@ typedef struct
 } ASCII_MSG;
 
 
-/**
- * @brief Ephemeris parameters of one specific satellite
- *
- * Needed to compute the position of a satellite at a given time with
- * high precision. Valid for an interval of 4 to 6 hours from start
- * of transmission.
- */
-typedef struct
-{
-  CSUM csum;       ///<    checksum of the remaining bytes
-  int16_t valid;   ///<    flag data are valid
 
-  HEALTH health;   ///<    health indication of transmitting SV      [---]
-  IOD IODC;        ///<    Issue Of Data, Clock
-  IOD IODE2;       ///<    Issue of Data, Ephemeris (Subframe 2)
-  IOD IODE3;       ///<    Issue of Data, Ephemeris (Subframe 3)
-  T_GPS tt;        ///<    time of transmission
-  T_GPS t0c;       ///<    Reference Time Clock                      [---]
-  T_GPS t0e;       ///<    Reference Time Ephemeris                  [---]
-
-  l_fp sqrt_A;     ///<    Square Root of semi-major Axis        [sqrt(m)]
-  l_fp e;          ///<    Eccentricity                              [---]
-  l_fp M0;         ///< +- Mean Anomaly at Ref. Time                 [rad]
-  l_fp omega;      ///< +- Argument of Perigee                       [rad]
-  l_fp OMEGA0;     ///< +- Longit. of Asc. Node of orbit plane       [rad]
-  l_fp OMEGADOT;   ///< +- Rate of Right Ascension               [rad/sec]
-  l_fp deltan;     ///< +- Mean Motion Diff. from computed value [rad/sec]
-  l_fp i0;         ///< +- Inclination Angle                         [rad]
-  l_fp idot;       ///< +- Rate of Inclination Angle             [rad/sec]
-  l_fp crc;        ///< +- Cosine Corr. Term to Orbit Radius           [m]
-  l_fp crs;        ///< +- Sine Corr. Term to Orbit Radius             [m]
-  l_fp cuc;        ///< +- Cosine Corr. Term to Arg. of Latitude     [rad]
-  l_fp cus;        ///< +- Sine Corr. Term to Arg. of Latitude       [rad]
-  l_fp cic;        ///< +- Cosine Corr. Term to Inclination Angle    [rad]
-  l_fp cis;        ///< +- Sine Corr. Term to Inclination Angle      [rad]
-
-  l_fp af0;        ///< +- Clock Correction Coefficient 0            [sec]
-  l_fp af1;        ///< +- Clock Correction Coefficient 1        [sec/sec]
-  l_fp af2;        ///< +- Clock Correction Coefficient 2      [sec/sec^2]
-  l_fp tgd;        ///< +- estimated group delay differential        [sec]
-
-  uint16_t URA;    ///<    predicted User Range Accuracy
-
-  uint8_t L2code;  ///<    code on L2 channel                         [---]
-  uint8_t L2flag;  ///<    L2 P data flag                             [---]
-
-} EPH;
-
-
-
-/**
- * @brief Almanac parameters of one specific satellite
- *
- * A reduced precision set of parameters used to check if a satellite
- * is in view at a given time. Valid for an interval of more than 7 days
- * from start of transmission.
- */
-typedef struct
-{
-  CSUM csum;       ///<    checksum of the remaining bytes
-  int16_t valid;   ///<    flag data are valid
-
-  HEALTH health;   ///<                                               [---]
-  T_GPS t0a;       ///<    Reference Time Almanac                     [sec]
-
-  l_fp sqrt_A;     ///<    Square Root of semi-major Axis         [sqrt(m)]
-  l_fp e;          ///<    Eccentricity                               [---]
-
-  l_fp M0;         ///< +- Mean Anomaly at Ref. Time                  [rad]
-  l_fp omega;      ///< +- Argument of Perigee                        [rad]
-  l_fp OMEGA0;     ///< +- Longit. of Asc. Node of orbit plane        [rad]
-  l_fp OMEGADOT;   ///< +- Rate of Right Ascension                [rad/sec]
-  l_fp deltai;     ///< +-                                            [rad]
-  l_fp af0;        ///< +- Clock Correction Coefficient 0             [sec]
-  l_fp af1;        ///< +- Clock Correction Coefficient 1         [sec/sec]
-
-} ALM;
-
-
-
-/**
- * @brief Ionospheric correction parameters
- */
-typedef struct
-{
-  CSUM csum;       ///<    checksum of the remaining bytes
-  int16_t valid;   ///<    flag data are valid
-
-  l_fp alpha_0;    ///<    Ionosph. Corr. Coeff. Alpha 0              [sec]
-  l_fp alpha_1;    ///<    Ionosph. Corr. Coeff. Alpha 1          [sec/deg]
-  l_fp alpha_2;    ///<    Ionosph. Corr. Coeff. Alpha 2        [sec/deg^2]
-  l_fp alpha_3;    ///<    Ionosph. Corr. Coeff. Alpha 3        [sec/deg^3]
-
-  l_fp beta_0;     ///<    Ionosph. Corr. Coeff. Beta 0               [sec]
-  l_fp beta_1;     ///<    Ionosph. Corr. Coeff. Beta 1           [sec/deg]
-  l_fp beta_2;     ///<    Ionosph. Corr. Coeff. Beta 2         [sec/deg^2]
-  l_fp beta_3;     ///<    Ionosph. Corr. Coeff. Beta 3         [sec/deg^3]
-
-} IONO;
-
-
-
-void mbg_tm_str (char **, TM_GPS *, int, int);
-void mbg_tgps_str (char **, T_GPS *, int);
+void mbg_tm_str (char **, TM_GPS *, size_t, int);
+void mbg_tgps_str (char **, T_GPS *, size_t);
 void get_mbg_header (unsigned char **, GPS_MSG_HDR *);
 void put_mbg_header (unsigned char **, GPS_MSG_HDR *);
 void get_mbg_sw_rev (unsigned char **, SW_REV *);
 void get_mbg_ascii_msg (unsigned char **, ASCII_MSG *);
-void get_mbg_svno (unsigned char **, SVNO *);
-void get_mbg_health (unsigned char **, HEALTH *);
-void get_mbg_cfg (unsigned char **, CFG *);
-void get_mbg_tgps (unsigned char **, T_GPS *);
-void get_mbg_tm (unsigned char **, TM_GPS *);
-void get_mbg_ttm (unsigned char **, TTM *);
-void get_mbg_synth (unsigned char **, SYNTH *);
-void get_mbg_tzdl (unsigned char **, TZDL *);
 void get_mbg_antinfo (unsigned char **, ANT_INFO *);
 void get_mbg_cfgh (unsigned char **, CFGH *);
 void get_mbg_utc (unsigned char **, UTC *);
 void get_mbg_lla (unsigned char **, LLA);
 void get_mbg_xyz (unsigned char **, XYZ);
-void get_mbg_portparam (unsigned char **, PORT_PARM *);
-void get_mbg_eph (unsigned char **, EPH *);
-void get_mbg_alm (unsigned char **, ALM *);
-void get_mbg_iono (unsigned char **, IONO *);
 
-CSUM mbg_csum (unsigned char *, unsigned int);
+CSUM mbg_csum (unsigned char *, unsigned int) __attribute__((pure));
 
 #endif
 /*

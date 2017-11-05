@@ -2,14 +2,13 @@
    Copyright 2008, Andrew Tridgell.
    Licensed under the same terms as NTP itself.
  */
-#include <config.h>
+#include "config.h"
 
 #ifdef ENABLE_MSSNTP
 
 #include "ntpd.h"
 #include "ntp_io.h"
 #include "ntp_stdlib.h"
-#include "ntp_control.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -59,9 +58,9 @@ write_all(int fd, const void *buf, size_t len)
 	while (len) {
 		int n = write(fd, buf, len);
 		if (n <= 0) return total;
-		buf = n + (char *)buf;
-		len -= n;
-		total += n;
+		buf = n + (const char *)buf;
+		len -= (unsigned int)n;
+		total += (unsigned int)n;
 	}
 	return total;
 }
@@ -77,8 +76,8 @@ read_all(int fd, void *buf, size_t len)
 		int n = read(fd, buf, len);
 		if (n <= 0) return total;
 		buf = n + (char *)buf;
-		len -= n;
-		total += n;
+		len -= (unsigned int)n;
+		total += (unsigned int)n;
 	}
 	return total;
 }
@@ -121,6 +120,9 @@ send_via_ntp_signd(
 	)
 {
 	UNUSED_ARG(flags);
+#ifndef DEBUG
+	UNUSED_ARG(xmode);
+#endif
 	
 	/* We are here because it was detected that the client
 	 * sent an all-zero signature, and we therefore know
@@ -209,14 +211,10 @@ send_via_ntp_signd(
 			if (ntohl(samba_reply.op) == 3 && reply_len >  offsetof(struct samba_key_out, pkt)) {
 				sendlen = reply_len - offsetof(struct samba_key_out, pkt);
 				xpkt = &samba_reply.pkt;
-				sendpkt(&rbufp->recv_srcadr, rbufp->dstadr, 0, xpkt, sendlen);
-#ifdef DEBUG
-				if (debug)
-					printf(
-						"transmit ntp_signd packet: at %ld %s->%s mode %d keyid %08x len %d\n",
-						current_time, socktoa(&rbufp->dstadr->sin),
-						socktoa(&rbufp->recv_srcadr), xmode, xkeyid, sendlen);
-#endif
+				sendpkt(&rbufp->recv_srcadr, rbufp->dstadr, xpkt, sendlen);
+				DPRINT(1, ("transmit ntp_signd packet: at %lu %s->%s mode %d keyid %08x len %d\n",
+					   current_time, socktoa(&rbufp->dstadr->sin),
+					   socktoa(&rbufp->recv_srcadr), xmode, xkeyid, sendlen));
 			}
 		}
 		

@@ -8,7 +8,6 @@
 #include "ntp_io.h"
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
-#include "ntp_control.h"	/* for CTL_* clocktypes */
 
 #include <stdio.h>
 #include <ctype.h>
@@ -24,6 +23,10 @@
  * calculates the local clock correction. It is designed primarily for
  * use as backup when neither a radio clock nor connectivity to Internet
  * time servers is available.
+ *
+ * WARNING: The ACTS mode of this driver depends on the system clock
+ * for year disambiguation.  It will thus not be usable for recovery
+ * if the system clock is trashed.
  *
  * This driver requires a modem with a Hayes-compatible command set
  * and control over the modem data terminal ready (DTR) control
@@ -90,7 +93,7 @@
  *
  * US Naval Observatory (USNO)
  *
- * Phone: (202) 762-1594 (Washington, DC); (719) 567-6742 (Boulder, CO)
+ * Phone: (202) 762-1594 (Washington, DC); (719) 567-6743 (Colorado Springs, CO)
  *
  * Data Format (two lines, repeating at one-second intervals)
  *
@@ -125,15 +128,19 @@
 /*
  * Interface definitions
  */
+#ifndef ENABLE_CLASSIC_MODE
 #define	DEVICE		"/dev/modem%d" /* device name and unit */
+#else
+#define	DEVICE		"/dev/acts%d" /* device name and unit */
+#endif
 #define	SPEED232	B19200	/* uart speed (19200 bps) */
 #define	PRECISION	(-10)	/* precision assumed (about 1 ms) */
 #define LOCKFILE	"/var/spool/lock/LCK..cua%d"
 #define NAME		"MODEM"	/* shortname */
 #define DESCRIPTION	"Automated Computer Time Service" /* WRU */
 #define REFID		"NONE"	/* default reference ID */
-#define MSGCNT		20	/* max message count */
-#define	MAXPHONE	10	/* max number of phone numbers */
+/* #define MSGCNT	20	* max message count UNUSED */
+/* #define MAXPHONE	10	* max number of phone numbers UNUSED */
 
 /*
  * Calling program modes (mode)
@@ -171,8 +178,8 @@
  * V1	return result codes as English words
  * Y1	enable long-space disconnect
  */
-const char def_modem_setup[] = "ATB1&C0&D2E0L1M1Q0V1Y1";
-const char *modem_setup = def_modem_setup;
+static const char def_modem_setup[] = "ATB1&C0&D2E0L1M1Q0V1Y1";
+static const char *modem_setup = def_modem_setup;
 
 /*
  * Timeouts (all in seconds)
@@ -228,8 +235,8 @@ struct refclock refclock_modem = {
 	modem_start,		/* start up driver */
 	modem_shutdown,		/* shut down driver */
 	modem_poll,		/* transmit poll message */
-	noentry,		/* control - not used */
-	noentry,		/* init - not used */
+	NULL,			/* control - not used */
+	NULL,			/* init - not used */
 	modem_timer		/* housekeeping timer */
 };
 
@@ -326,7 +333,7 @@ modem_receive(
 	peer = rbufp->recv_peer;
 	pp = peer->procptr;
 	up = pp->unitptr;
-	octets = sizeof(up->buf) - (up->bufptr - up->buf);
+	octets = sizeof(up->buf) - (size_t)(up->bufptr - up->buf);
 	refclock_gtraw(rbufp, tbuf, octets, &pp->lastrec);
 	for (tptr = tbuf; *tptr != '\0'; tptr++) {
 		if (*tptr == LF) {
@@ -343,7 +350,7 @@ modem_receive(
 			if (*tptr == '*' || *tptr == '#') {
 				up->tstamp = pp->lastrec;
 				if (write(pp->io.fd, tptr, 1) < 0)
-					msyslog(LOG_ERR, "modem: write echo fails %m");
+					msyslog(LOG_ERR, "REFCLOCK: modem: write echo fails %m");
 			}
 		}
 	}
@@ -364,7 +371,7 @@ modem_message(
 	char	tbuf[BMAX], *cp;
 	int		dtr = TIOCM_DTR;
 
-	DPRINTF(1, ("modem: %d %s\n", (int)strlen(msg), msg));
+	DPRINT(1, ("modem: %d %s\n", (int)strlen(msg), msg));
 
 	/*
 	 * What to do depends on the state and the first token in the
@@ -405,10 +412,10 @@ modem_message(
 		mprintf_event(PEVNT_CLOCK, peer, "DIAL #%d %s",
 			      up->retry, sys_phone[up->retry]);
 		if (ioctl(pp->io.fd, TIOCMBIS, &dtr) < 0)
-			msyslog(LOG_ERR, "modem: ioctl(TIOCMBIS) failed: %m");
+			msyslog(LOG_ERR, "REFCLOCK: modem: ioctl(TIOCMBIS) failed: %m");
 		if (write(pp->io.fd, sys_phone[up->retry],
 		    strlen(sys_phone[up->retry])) < 0)
-			msyslog(LOG_ERR, "modem: write DIAL fails %m");
+			msyslog(LOG_ERR, "REFCLOCK: modem: write DIAL fails %m");
 		IGNORE(write(pp->io.fd, "\r", 1));
 		up->retry++;
 		up->state = S_CONNECT;
@@ -418,7 +425,7 @@ modem_message(
 	/*
 	 * We are waiting for the CONNECT response to the dial
 	 * command. When this happens, listen for timecodes. If
-	 * somthing other than CONNECT is received, like BUSY
+	 * something other than CONNECT is received, like BUSY
 	 * or NO CARRIER, abort the call.
 	 */
 	case S_CONNECT:
@@ -443,6 +450,10 @@ modem_message(
 		else
 			modem_timeout(peer, S_MSG);
 		return;
+
+        default:
+                /* huh? */
+                break;
 	}
 
 	/*
@@ -465,7 +476,7 @@ modem_timeout(
 	struct modemunit *up;
 	struct refclockproc *pp;
 	int	fd;
-	int	rc;
+	ssize_t	rc;
 	char	device[20];
 	char	lockfile[128], pidbuf[8];
 
@@ -499,10 +510,10 @@ modem_timeout(
 				report_event(PEVNT_CLOCK, peer, "modem: port busy");
 				return;
 			}
-			snprintf(pidbuf, sizeof(pidbuf), "%d\n",
-			    (u_int)getpid());
+			snprintf(pidbuf, sizeof(pidbuf), "%u\n",
+			    (unsigned int)getpid());
 			if (write(fd, pidbuf, strlen(pidbuf)) < 0)
-				msyslog(LOG_ERR, "modem: write lock fails %m");
+				msyslog(LOG_ERR, "REFCLOCK: modem: write lock fails %m");
 			close(fd);
 		}
 
@@ -510,16 +521,16 @@ modem_timeout(
 		 * Open the device in raw mode and link the I/O.
 		 */
 		snprintf(device, sizeof(device), DEVICE, up->unit);
-		fd = refclock_open(peer->path ? peer->path : device,
-				   peer->baud ? peer->baud : SPEED232,
+		fd = refclock_open(peer->cfg.path ? peer->cfg.path : device,
+				   peer->cfg.baud ? peer->cfg.baud : SPEED232,
 				   LDISC_ACTS | LDISC_RAW | LDISC_REMOTE);
 		if (fd < 0) {
-			msyslog(LOG_ERR, "modem: open fails %m");
+			msyslog(LOG_ERR, "REFCLOCK: modem: open fails %m");
 			return;
 		}
 		pp->io.fd = fd;
 		if (!io_addclock(&pp->io)) {
-			msyslog(LOG_ERR, "modem: addclock fails");
+			msyslog(LOG_ERR, "REFCLOCK: modem: addclock fails");
 			close(fd);
 			pp->io.fd = -1;
 			return;
@@ -533,7 +544,7 @@ modem_timeout(
 		 */
 		if (sys_phone[up->retry] == NULL) {
 			if (write(pp->io.fd, "T", 1) < 0)
-				msyslog(LOG_ERR, "modem: write T fails %m");
+				msyslog(LOG_ERR, "REFCLOCK: modem: write T fails %m");
 			up->state = S_MSG;
 			up->timer = TIMECODE;
 			return;
@@ -547,7 +558,7 @@ modem_timeout(
 			      modem_setup);
 		rc = write(pp->io.fd, modem_setup, strlen(modem_setup));
 		if (rc < 0)
-			msyslog(LOG_ERR, "modem: write SETUP fails %m");
+			msyslog(LOG_ERR, "REFCLOCK: modem: write SETUP fails %m");
 		IGNORE(write(pp->io.fd, "\r", 1));
 		up->state = S_SETUP;
 		up->timer = SETUP;
@@ -581,6 +592,10 @@ modem_timeout(
 			refclock_receive(peer);
 		}
 		break;
+
+        default:
+                /* huh? */
+                break;
 	}
 	modem_close(peer);
 }
@@ -609,7 +624,7 @@ modem_close(
 		report_event(PEVNT_CLOCK, peer, "close");
 		dtr = TIOCM_DTR;
 		if (ioctl(pp->io.fd, TIOCMBIC, &dtr) < 0)
-			msyslog(LOG_ERR, "modem: ioctl(TIOCMBIC) failed: %m");
+			msyslog(LOG_ERR, "REFCLOCK: modem: ioctl(TIOCMBIC) failed: %m");
 		io_closeclock(&pp->io);
 		pp->io.fd = -1;
 	}
@@ -651,7 +666,7 @@ modem_poll(
 	 */
 	pp = peer->procptr;
 	up = pp->unitptr;
-	switch (peer->ttl) {
+	switch (peer->cfg.ttl) {
 
 	/*
 	 * In manual mode the calling program is activated by the ntpq
@@ -677,6 +692,10 @@ modem_poll(
 			return;
 
 		break;
+
+        default:
+                /* huh? */
+                break;
 	}
 	pp->polls++;
 	if (S_IDLE == up->state) {
@@ -701,7 +720,7 @@ modem_timer(
 	UNUSED_ARG(unit);
 
 	/*
-	 * This routine implments a timeout which runs for a programmed
+	 * This routine implements a timeout which runs for a programmed
 	 * interval. The counter is initialized by the state machine and
 	 * counts down to zero. Upon reaching zero, the state machine is
 	 * called. If flag1 is set while timer is zero, force a call.
@@ -716,7 +735,7 @@ modem_timer(
 	} else {
 		up->timer--;
 		if (up->timer == 0)
-			modem_timeout(peer, up->state);
+			modem_timeout(peer, (teModemState)up->state);
 	}
 }
 
@@ -733,11 +752,11 @@ modem_timecode(
 	struct refclockproc *pp;
 	int	day;		/* day of the month */
 	int	month;		/* month of the year */
-	u_long	mjd;		/* Modified Julian Day */
+	unsigned long	mjd;	/* Modified Julian Day */
 	double	dut1;		/* DUT adjustment */
 
-	u_int	dst;		/* ACTS daylight/standard time */
-	u_int	leap;		/* ACTS leap indicator */
+	unsigned int	dst;		/* ACTS daylight/standard time */
+	unsigned int	leap;		/* ACTS leap indicator */
 	double	msADV;		/* ACTS transmit advance (ms) */
 	char	utc[10];	/* ACTS timescale */
 	char	flag;		/* ACTS on-time character (* or #) */
@@ -777,7 +796,7 @@ modem_timecode(
 	 */
 	case LENACTS:
 		if (sscanf(str,
-		    "%5ld %2d-%2d-%2d %2d:%2d:%2d %2d %1d %3lf %5lf %9s %c",
+		    "%5lu %2d-%2d-%2d %2d:%2d:%2d %2u %1u %3lf %5lf %9s %c",
 		    &mjd, &pp->year, &month, &day, &pp->hour,
 		    &pp->minute, &pp->second, &dst, &leap, &dut1,
 		    &msADV, utc, &flag) != 13) {
@@ -802,7 +821,7 @@ modem_timecode(
 	 * USNO format: "jjjjj nnn hhmmss UTC"
 	 */
 	case LENUSNO:
-		if (sscanf(str, "%5ld %3d %2d%2d%2d %3s",
+		if (sscanf(str, "%5lu %3d %2d%2d%2d %3s",
 		    &mjd, &pp->day, &pp->hour, &pp->minute,
 		    &pp->second, utc) != 6) {
 			refclock_report(peer, CEVNT_BADREPLY);
@@ -825,7 +844,7 @@ modem_timecode(
 	 */
 	case LENPTB:
 		if (sscanf(str,
-		    "%*4d-%*2d-%*2d %*2d:%*2d:%2d %*5c%*12c%4d%2d%2d%2d%2d%5ld%2lf%c%2d%3lf%*15c%c",
+		    "%*4d-%*2d-%*2d %*2d:%*2d:%2d %*5c%*12c%4d%2d%2d%2d%2d%5lu%2lf%c%2d%3lf%*15c%c",
 		    &pp->second, &pp->year, &month, &day, &pp->hour,
 		    &pp->minute, &mjd, &dut1, &leapdir, &leapmonth,
 		    &msADV, &flag) != 12) {
@@ -906,7 +925,7 @@ modem_timecode(
 		return;
 
 	strlcpy(pp->a_lastcode, str, sizeof(pp->a_lastcode));
-	pp->lencode = strlen(pp->a_lastcode);
+	pp->lencode = (int)strlen(pp->a_lastcode);
 	if (!refclock_process(pp)) {
 		refclock_report(peer, CEVNT_BADTIME);
 		return;

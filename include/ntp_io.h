@@ -1,8 +1,6 @@
 #ifndef GUARD_NTP_IO_H
 #define GUARD_NTP_IO_H
 
-#include "ntp_workimpl.h"
-
 /*
  * POSIX says use <fnctl.h> to get O_* symbols and
  * SEEK_SET symbol form <unistd.h>.
@@ -13,9 +11,7 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 
-#include <isc/netaddr.h>
-
-#include "libntp.h"	/* This needs Something above for GETDTABLESIZE */
+#include "isc_netaddr.h"
 
 /*
  * NIC rule match types
@@ -40,15 +36,11 @@ typedef enum {
 
 
 extern int	qos;
-SOCKET		move_fd(SOCKET fd);
-extern bool	is_ip_address(const char *, u_short, sockaddr_u *);
-extern void	sau_from_netaddr(sockaddr_u *, const isc_netaddr_t *);
+extern bool	is_ip_address(const char *, unsigned short, sockaddr_u *);
 extern void	add_nic_rule(nic_rule_match match_type,
 			     const char *if_name, int prefixlen,
 			     nic_rule_action action);
-extern	void	maintain_activefds(int fd, int closing);
-
-/* hack to ignore GCC Unused Result */
-#define IGNORE(r) do{if(r){}}while(0)
+extern void	make_socket_nonblocking( SOCKET fd );
+extern SOCKET	move_fd( SOCKET fd );
 
 #endif	/* GUARD_NTP_IO_H */

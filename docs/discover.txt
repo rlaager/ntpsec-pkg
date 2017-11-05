@@ -3,7 +3,7 @@
 [cols="10%,90%",frame="none",grid="none",style="verse"]
 |==============================
 |image:pic/alice51.gif[]|
-http://www.eecis.udel.edu/%7emills/pictures.html[from 'Alice's Adventures in Wonderland', Lewis Carroll]
+{millshome}pictures.html[from 'Alice's Adventures in Wonderland', Lewis Carroll]
 
 Make sure who your friends are.
 
@@ -26,11 +26,13 @@ include::includes/hand.txt[]
 == Introduction ==
 
 This page describes the automatic server discovery schemes provided in
-NTPv4. There are two automatic server discovery schemes: broadcast and
-server pool, which are described on this page. The broadcast scheme
-utilizes the ubiquitous broadcast or one-to-many paradigm native to
-IPv4 and IPv6.  The server pool scheme uses DNS to resolve addresses
-of multiple volunteer servers scattered throughout the world.
+NTPv4. There are three automatic server discovery schemes: broadcast,
+manycast, and server pool; which are described on this page. The
+broadcast scheme utilizes the ubiquitous broadcast or one-to-many
+paradigm native to IPv4 and IPv6.  The manycast scheme is similar
+to specifying to broadcast, but the servers listen on a specific
+address known to the client.  The server pool scheme uses DNS to resolve
+addresses of multiple volunteer servers scattered throughout the world.
 
 All three schemes work in much the same way and might be described as
 _grab-n'-prune._ Through one means or another they grab a number of
@@ -55,9 +57,9 @@ below or above specified stratum levels. By default, servers of all
 strata are acceptable; however, the +tos+ command can be used to
 restrict the acceptable range from the +floor+ option, inclusive, to the
 +ceiling+ option, exclusive. Potential servers operating at the same
-stratum as the client will be avoided, unless the +cohort+ option is
-present. Additional filters can be supplied using the methods described
-on the link:authentic.html[Authentication Support] page.
+stratum as the client will be avoided.  Additional filters can be
+supplied using the methods described on the
+link:authentic.html[Authentication Support] page.
 
 The pruning process uses a set of unreach counters, one for each
 association created by the configuration or discovery processes. At each
@@ -101,12 +103,14 @@ results in a volley of six client/server exchanges at 2-s intervals
 during which both the synchronization and cryptographic protocols run
 concurrently.
 
-Following the volley, the server continues in listen-only mode and sends
-no further messages. If for some reason the broadcast server does not
+If for some reason the broadcast server does not
 respond to these messages, the client will cease transmission and
 continue in listen-only mode with a default propagation delay. The
 volley can be avoided by using the +broadcastdelay+ command with nonzero
 argument.
+
+Following the volley, the server continues in listen-only mode and sends
+no further messages for this association.
 
 A server is configured in broadcast mode using the +broadcast+ command
 and specifying the broadcast address of a local interface. If two or
@@ -133,7 +137,8 @@ release.
 
 Manycast is an automatic server discovery and configuration paradigm.
 It is intended as a means for a client to troll the nearby network
-neighborhood to find cooperating servers, validate them using
+neighborhood (not necessarily on the same link, where broadcast
+would work), to find cooperating servers, validate them using
 cryptographic means and evaluate their time values with respect to
 other servers that might be lurking in the vicinity. It uses the
 grab-n'-drop paradigm with the additional feature that active means
@@ -162,7 +167,8 @@ unicast server message.
 == Server Pool Scheme ==
 
 The idea of targeting servers on a random basis to distribute and
-balance the load is not a new one; however, the NTP pool scheme puts
+balance the load is not a new one; however, the
+http://www.pool.ntp.org/en/use.html[NTP Pool Project] puts
 this on steroids. At present, several thousand operators around the
 globe have volunteered their servers for public access. In general,
 NTP is a lightweight service and servers used for other purposes don't
@@ -172,21 +178,22 @@ advantages of multiple servers using the NTP mitigation algorithms.
 
 To support this service, custom DNS software is used by pool.ntp.org
 and its subdomains to discover a random selection of participating
-servers in response to a DNS query. The client receiving this list
-mobilizes some or all of them, similar to the manycast discovery
-scheme, and prunes the excess. Cryptographic authentication is not
-required.
+(in-country) servers in response to a DNS query. The client receiving
+this list mobilizes some or all of them, similar to the manycast
+discovery scheme, and prunes the excess. Cryptographic authentication
+is not required.
 
 The pool scheme is configured using one or more +pool+ commands with DNS
 names indicating the pool from which to draw. The +pool+ command can be
 used more than once; duplicate servers are detected and discarded. In
 principle, it is possible to use a configuration file containing a
-single line +pool   pool.ntp.org+. The
-http://www.pool.ntp.org/en/use.html[NTP Pool Project] offers
+single line +pool   pool.ntp.org+. The NTP Pool Project offers
 instructions on using the pool with the +server+ command, which is
 suboptimal but works with older versions of +ntpd+ predating the +pool+
-command. Consider replacing the multiple +server+
-commands in their example with a single +pool+ command.
+command.  Use of the +server+ command does a one-time DNS lookup, and
+uses the IP address returned thereafter.  If the server becomes unavailable,
+the DNS will not be re-resolved.  The +pool+ command will
+use multiple servers that the DNS resolves to, refreshing as required.
 
 '''''
 

@@ -3,7 +3,7 @@
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
 import re
-from waflib import Context,Task,Utils,Logs,Options,Errors,Node
+from waflib import Build,Context,Task,Utils,Logs,Options,Errors,Node
 from waflib.TaskGen import extension,taskgen_method
 from waflib.Configure import conf
 class valac(Task.Task):
@@ -100,8 +100,11 @@ def init_vala_task(self):
 				package_obj=self.bld.get_tgen_by_name(package)
 			except Errors.WafError:
 				continue
+			package_obj.post()
 			package_name=package_obj.target
 			for task in package_obj.tasks:
+				if isinstance(task,Build.inst):
+					continue
 				for output in task.outputs:
 					if output.name==package_name+".vapi":
 						valatask.set_run_after(task)
@@ -131,19 +134,13 @@ def init_vala_task(self):
 		valatask.outputs.append(self.dump_deps_node)
 	if self.is_lib and valatask.install_binding:
 		headers_list=[o for o in valatask.outputs if o.suffix()==".h"]
-		try:
-			self.install_vheader.source=headers_list
-		except AttributeError:
+		if headers_list:
 			self.install_vheader=self.add_install_files(install_to=valatask.header_path,install_from=headers_list)
 		vapi_list=[o for o in valatask.outputs if(o.suffix()in(".vapi",".deps"))]
-		try:
-			self.install_vapi.source=vapi_list
-		except AttributeError:
+		if vapi_list:
 			self.install_vapi=self.add_install_files(install_to=valatask.vapi_path,install_from=vapi_list)
 		gir_list=[o for o in valatask.outputs if o.suffix()=='.gir']
-		try:
-			self.install_gir.source=gir_list
-		except AttributeError:
+		if gir_list:
 			self.install_gir=self.add_install_files(install_to=getattr(self,'gir_path','${DATAROOTDIR}/gir-1.0'),install_from=gir_list)
 	if hasattr(self,'vala_resources'):
 		nodes=self.to_nodes(self.vala_resources)
@@ -163,6 +160,14 @@ def vala_file(self,node):
 	c_node=valatask.vala_dir_node.find_or_declare(name)
 	valatask.outputs.append(c_node)
 	self.source.append(c_node)
+@extension('.vapi')
+def vapi_file(self,node):
+	try:
+		valatask=self.valatask
+	except AttributeError:
+		valatask=self.valatask=self.create_task('valac')
+		self.init_vala_task()
+	valatask.inputs.append(node)
 @conf
 def find_valac(self,valac_name,min_version):
 	valac=self.find_program(valac_name,var='VALAC')

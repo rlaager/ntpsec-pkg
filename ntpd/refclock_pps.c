@@ -1,7 +1,7 @@
 /*
  * refclock_pps - clock driver for 1-pps signals
  */
-#include <config.h>
+#include "config.h"
 #include <stdio.h>
 #include <ctype.h>
 
@@ -9,7 +9,6 @@
 #include "ntp_io.h"
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
-#include "ntp_control.h"	/* for CTL_* clocktypes */
 
 /*
  * This driver requires the PPSAPI interface (RFC 2783)
@@ -105,8 +104,8 @@ struct	refclock refclock_pps = {
 	pps_start,		/* start up driver */
 	pps_shutdown,		/* shut down driver */
 	pps_poll,		/* transmit poll message */
-	noentry,		/* control (not used) */
-	noentry,		/* initialize driver (not used) */
+	NULL,			/* control (not used) */
+	NULL,			/* initialize driver (not used) */
 	pps_timer,		/* called once per second */
 };
 
@@ -135,8 +134,7 @@ pps_start(
 	pp->stratum = STRATUM_UNSPEC;
 	memcpy((char *)&pp->refid, REFID, REFIDLEN);
 	peer->sstclktype = CTL_SST_TS_ATOM;
-	up = emalloc(sizeof(struct ppsunit));
-	memset(up, 0, sizeof(struct ppsunit));
+	up = emalloc_zero(sizeof(struct ppsunit));
 	pp->unitptr = up;
 
 	/*
@@ -144,11 +142,11 @@ pps_start(
 	 * not necessarily the port used for the associated radio.
 	 */
 	snprintf(device, sizeof(device), DEVICE, unit);
-	up->fddev = open(peer->ppspath ? peer->ppspath : device,
+	up->fddev = open(peer->cfg.ppspath ? peer->cfg.ppspath : device,
 			     O_RDWR, 0777);
 	if (up->fddev <= 0) {
 		msyslog(LOG_ERR,
-			"refclock_pps: %m");
+			"REFCLOCK: refclock_pps: %m");
 		return false;
 	}
 
@@ -215,7 +213,7 @@ pps_timer(
         }
         if (rc != PPS_OK) return;
 
-	peer->flags |= FLAG_PPS;
+	peer->cfg.flags |= FLAG_PPS;
 
 	/*
 	 * If flag4 is lit, record each second offset to clockstats.
@@ -257,13 +255,13 @@ pps_poll(
 	pp->polls++;
 
 	mprintf_clock_stats(peer,
-	    "%ld %d %d %d %d",
+	    "%lu %d %d %d %d",
 	    up->ppsctl.sequence,
 	    up->pcount, up->scount, up->kcount, up->rcount);
 	up->pcount = up->scount = up->kcount = up->rcount = 0;
 
 	if (pp->codeproc == pp->coderecv) {
-		peer->flags &= ~FLAG_PPS;
+		peer->cfg.flags &= ~FLAG_PPS;
 		refclock_report(peer, CEVNT_TIMEOUT);
 		return;
 	}

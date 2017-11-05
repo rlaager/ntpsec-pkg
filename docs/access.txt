@@ -27,22 +27,25 @@ order with the last match found defining the restriction flags
 associated with the entry.
 
 The ACL is specified as a list of +restrict+ commands in the following
-format:
+formats:
 
-+restrict address [mask mask] [flag][...]+
++restrict address[/cidr] [mask mask] [flag][...]+
 
 The +address+ argument expressed in dotted-quad (for IPv4) or
 :-delimited (for IPv6) form is the address of a
 host or network. Alternatively, the +address+ argument can be a valid
 host DNS name. The +mask+ argument expressed in IPv4 or IPv6 numeric
 address form defaults to all mask bits on, meaning that the +address+ is
-treated as the address of an individual host. A default entry (address
-0.0.0.0, mask 0.0.0.0 for IPv4; and address :: mask :: for IPv6) is
-always the first entry in the list. +restrict default+, with no mask
-option, modifies both IPv4 and IPv6 default entries. +restrict source+
-configures a template restriction automatically added at runtime for
-each association, whether configured, ephemeral, or preemptable, and
-removed when the association is demobilized.
+treated as the address of an individual host.  Instead of an explicit
++mask+ the +address/cidr+ may be specified in CIDR notation.
+
+A default entry (address 0.0.0.0, mask 0.0.0.0 for IPv4; and
+address :: mask :: for IPv6) is always the first entry in the list.
++restrict default+, with no mask option, modifies both IPv4 and IPv6
+default entries. +restrict source+ configures a template restriction
+automatically added at runtime for each association, whether configured,
+ephemeral, or preemptable, and removed when the association is
+demobilized.
 
 Some flags have the effect to deny service, some have the effect to
 enable service and some are conditioned by other flags. The flags. are
@@ -58,13 +61,22 @@ of campus. Let's assume (not true!) that subnet 128.4.1 homes critical
 services like class rosters and spread sheets. A suitable ACL might look
 like this:
 
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 restrict default nopeer                 # deny new associations
 restrict 128.175.0.0 mask 255.255.0.0       # allow campus access
-restrict 128.4.0.0 mask 255.255.0.0 none    # allow ECE and CIS access
 restrict 128.4.1.0 mask 255.255.255.0 notrust # require authentication on subnet 1
 restrict time.nist.gov                      # allow access
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+Note that by design the 'restrict' declaration can only add
+restrictions to an IP range that has already been the subject of a
+previous restriction, not remove them.
+
+If the behavior of multiple restricts with identical or overlapping
+ranges seems confusing, bear in mind that each restrict creates an
+internal table entry associated with its subject IP range, and the table
+entries are checked in sequence when the flags applying to a
+particular IP need to be computed.
 
 While this facility may be useful for keeping unwanted, broken or
 malicious clients from congesting innocent servers, it should not be

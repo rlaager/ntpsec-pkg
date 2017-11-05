@@ -5,10 +5,12 @@
  * Copyright 2015 by the NTPsec project contributors
  * SPDX-License-Identifier: BSD-3-Clause
  */
-#include <config.h>
+#include "config.h"
 #include "ntp_fp.h"
 #include "ntp_calendar.h"
-#include "parse.h"
+#include "gpstolfp.h"
+
+#define GPSORIGIN       2524953600u  /* GPS origin - NTP origin in seconds */
 
 void
 gpstolfp(
@@ -23,8 +25,61 @@ gpstolfp(
       weeks += GPSWEEKS;
     }
 
-  lfp->l_ui = (uint32_t)(weeks * SECSPERWEEK + days * SECSPERDAY + seconds + GPSORIGIN); /* convert to NTP time */
-  lfp->l_uf = 0;
+   /* convert to NTP time, note no fractional seconds */
+  *lfp = lfptouint((uint64_t)weeks * SECSPERWEEK
+                   + (uint64_t)days * SECSPERDAY
+                   + (uint64_t)seconds
+                   + GPSORIGIN);
+  setlfpfrac(*lfp, 0);
+}
+
+
+void
+gpsweekadj(
+	unsigned int * week,
+	unsigned int build_week
+	)
+{
+	/* adjust for rollover */
+	while (*week < build_week)
+		*week += GPSWEEKS;
+}
+
+
+void
+gpstocal(
+	unsigned int week,
+	unsigned int TOW,
+	int UTC_offset,
+	struct calendar * out
+	)
+{
+	time64_t t;
+	
+	t = (time64_t)((int64_t)GPSORIGIN - UTC_offset);
+	t += (time64_t)week * SECSPERWEEK;
+	t += TOW;
+
+	ntpcal_ntp64_to_date(out, t);
+}
+
+
+void
+caltogps(
+	const struct calendar * in,
+	int UTC_offset,
+	unsigned int * week,
+	unsigned int * TOW
+	)
+{
+	time64_t t;
+
+	t = ntpcal_dayjoin(ntpcal_date_to_rd(in) - DAY_NTP_STARTS, 
+	                             ntpcal_date_to_daysec(in));
+	t -= (uint64_t)((int64_t)GPSORIGIN - UTC_offset);
+	*week = t / SECSPERWEEK;
+	if (NULL != TOW)
+		*TOW = t % SECSPERWEEK;
 }
 
 /*

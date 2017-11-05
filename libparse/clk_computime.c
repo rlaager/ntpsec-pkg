@@ -10,7 +10,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#include <config.h>
+#include "config.h"
 
 #include "ntp_fp.h"
 #include "ntp_calendar.h"
@@ -29,7 +29,8 @@
  * Parse        T:  :  :  :  :  :  :  rn
  *
  * T	Startcharacter "T" specifies start of the timestamp
- * YY	Year MM	Month 1-12
+ * YY	Year
+ * MM	Month 1-12
  * MD	Day of the month
  * WD	Day of week
  * HH	Hour
@@ -122,7 +123,8 @@ inp_computime(
 {
 	unsigned int rtc;
 
-	parseprintf(DD_PARSE, ("inp_computime(0x%lx, 0x%x, ...)\n", (long)parseio, ch));
+	parseprintf(DD_PARSE, ("inp_computime(0x%lx, 0x%x, ...)\n",
+                    (long unsigned)parseio, (unsigned int)ch));
 
 	switch (ch)
 	{

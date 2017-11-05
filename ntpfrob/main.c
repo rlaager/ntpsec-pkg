@@ -10,7 +10,9 @@
 #include "config.h"
 #include "ntpfrob.h"
 
-void usage(void)
+static void usage(void);
+
+static void usage(void)
 {
 	fputs(
 "usage:\n"
@@ -39,17 +41,25 @@ main(int argc, char **argv)
                 got_one = true;
 		switch (ch) {
 		case 'A':
+#ifdef HAVE_ADJTIMEX
 		    tickadj(mode==json, 0);
+#else
+		    fputs("ntpfrob: no adjtimex(2)\n", stderr);
+#endif /* HAVE_ADJTIMEX */
 		    break;
 		case 'a':
+#ifdef HAVE_ADJTIMEX
 		    tickadj(mode, atoi(optarg));
+#else
+		    fputs("ntpfrob: no adjtimex(2)\n", stderr);
+#endif /* HAVE_ADJTIMEX */
 		    break;
 		case 'b':
 		    bumpclock(atoi(optarg));
 		    break;
 		case 'c':
 		    jitter(mode);
-		    exit(0);
+                    /* never returns */
 		    break;
 		case 'e':
 		    precision(mode);
@@ -61,6 +71,7 @@ main(int argc, char **argv)
 		case 'p':
 #ifdef HAVE_SYS_TIMEPPS_H
 		    ppscheck(optarg);
+                    /* never returns */
 #else
 		    fputs("ntpfrob: no PPS kernel interface.\n", stderr);
 		    exit(0);

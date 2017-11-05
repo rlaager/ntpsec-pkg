@@ -18,7 +18,8 @@ def filter_comments(filename):
 			i+=1
 			while i<max:
 				c=txt[i]
-				if c==delim:break
+				if c==delim:
+					break
 				elif c=='\\':
 					i+=1
 				i+=1
@@ -27,7 +28,8 @@ def filter_comments(filename):
 		elif c=='/':
 			buf.append(txt[begin:i])
 			i+=1
-			if i==max:break
+			if i==max:
+				break
 			c=txt[i]
 			if c=='+':
 				i+=1
@@ -41,7 +43,8 @@ def filter_comments(filename):
 						c=None
 					elif prev=='+'and c=='/':
 						nesting-=1
-						if nesting==0:break
+						if nesting==0:
+							break
 						c=None
 					i+=1
 			elif c=='*':
@@ -50,7 +53,8 @@ def filter_comments(filename):
 				while i<max:
 					prev=c
 					c=txt[i]
-					if prev=='*'and c=='/':break
+					if prev=='*'and c=='/':
+						break
 					i+=1
 			elif c=='/':
 				i+=1
@@ -118,7 +122,8 @@ class d_parser(object):
 		code="".join(filter_comments(path))
 		names=self.get_strings(code)
 		for x in names:
-			if x in self.allnames:continue
+			if x in self.allnames:
+				continue
 			self.allnames.append(x)
 			self.tryfind(x)
 def scan(self):

@@ -4,7 +4,7 @@
  * ATTENTION: Get approval from Dave Mills on all changes to this file!
  *
  */
-#include <config.h>
+#include "config.h"
 
 #include <limits.h>
 #include <stdio.h>
@@ -15,13 +15,17 @@
 
 #include "ntpd.h"
 #include "ntp_io.h"
-#include "ntp_proto.h"
 #include "ntp_calendar.h"
 #include "ntp_stdlib.h"
 #include "ntp_syscall.h"
+#include "timespecops.h"
 
-#define NANOSECONDS	1e9
-#define MICROSECONDS	1e6
+#define NTP_MAXFREQ	500e-6
+
+#ifdef HAVE_KERNEL_PLL
+# define FREQTOD(x)	((x) / 65536e6)            /* NTP to double */
+# define DTOFREQ(x)	((int32_t)((x) * 65536e6)) /* double to NTP */
+#endif
 
 /*
  * This is an implementation of the clock discipline algorithm described
@@ -41,9 +45,7 @@
 #define	CLOCK_ALLAN	11	/* Allan intercept (log2 s) */
 #define CLOCK_LIMIT	30	/* poll-adjust threshold */
 #define CLOCK_PGATE	4.	/* poll-adjust gate */
-#define PPS_MAXAGE	120	/* kernel pps signal timeout (s) */
-#define	FREQTOD(x)	((x) / 65536e6) /* NTP to double */
-#define	DTOFREQ(x)	((int32_t)((x) * 65536e6)) /* double to NTP */
+/* #define PPS_MAXAGE	120	* kernel pps signal timeout (s) UNUSED */
 
 /*
  * Clock discipline state machine. This is used to control the
@@ -104,8 +106,8 @@
  */
 double	clock_max_back = CLOCK_MAX;	/* step threshold */
 double	clock_max_fwd =  CLOCK_MAX;	/* step threshold */
-double	clock_minstep = CLOCK_MINSTEP; /* stepout threshold */
-double	clock_panic = CLOCK_PANIC; /* panic threshold */
+static double	clock_minstep = CLOCK_MINSTEP; /* stepout threshold */
+static double	clock_panic = CLOCK_PANIC; /* panic threshold */
 double	clock_phi = CLOCK_PHI;	/* dispersion rate (s/s) */
 uint8_t	allan_xpt = CLOCK_ALLAN; /* Allan intercept (log2 s) */
 
@@ -114,13 +116,13 @@ uint8_t	allan_xpt = CLOCK_ALLAN; /* Allan intercept (log2 s) */
  */
 #ifndef ENABLE_LOCKCLOCK
 static double clock_offset;	/* offset */
-static u_long clock_epoch;	/* last update */
+static unsigned long clock_epoch;	/* last update */
 #endif /* ENABLE_LOCKCLOCK */
 double	clock_jitter;		/* offset jitter */
 double	drift_comp;		/* frequency (s/s) */
 static double init_drift_comp; /* initial frequency (PPM) */
 double	clock_stability;	/* frequency stability (wander) (s/s) */
-u_int	sys_tai;		/* TAI offset from UTC */
+unsigned int	sys_tai;		/* TAI offset from UTC */
 #if !defined(ENABLE_LOCKCLOCK) && defined(HAVE_KERNEL_PLL)
 static bool loop_started;	/* true after LOOP_DRIFTINIT */
 #endif /* !ENABLE_LOCKCLOCK && HAVE_KERNEL_PLL */
@@ -138,10 +140,10 @@ static char relative_path[PATH_MAX + 1]; /* relative path per recursive make */
 static char *this_file = NULL;
 
 static struct timex ntv;	/* ntp_adjtime() parameters */
-int	pll_status;		/* last kernel status bits */
+static int	pll_status;	/* last kernel status bits */
 #ifndef ENABLE_LOCKCLOCK
-#if defined(STA_NANO) && NTP_API == 4
-static u_int loop_tai;		/* last TAI offset */
+#if defined(STA_NANO) && defined(NTP_API) && NTP_API == 4
+static unsigned int loop_tai;		/* last TAI offset */
 #endif /* STA_NANO */
 #endif /* ENABLE_LOCKCLOCK */
 static	void	start_kern_loop(void);
@@ -155,19 +157,21 @@ bool	ntp_enable = true;	/* clock discipline enabled */
 bool	pll_control = false;	/* kernel support available */
 bool	kern_enable = true;	/* kernel support enabled */
 bool	hardpps_enable;		/* kernel PPS discipline enabled */
-bool	ext_enable;		/* external clock enabled */
-int	pps_stratum;		/* pps stratum */
-int	kernel_status;		/* from ntp_adjtime */
+#ifdef HAVE_KERNEL_PLL
+static bool	ext_enable;	/* external clock enabled */
+#endif /* HAVE_KERNEL_PLL */
 bool	allow_panic = false;	/* allow panic correction (-g) */
 bool	force_step_once = false; /* always step time once at startup (-G) */
 bool	mode_ntpdate = false;	/* exit on first clock set (-q) */
 int	freq_cnt;		/* initial frequency clamp */
-int	freq_set;		/* initial set frequency switch */
+static int freq_set;		/* initial set frequency switch */
 
 /*
  * Clock state machine variables
  */
-int	state = 0;		/* clock discipline state */
+#ifndef ENABLE_LOCKCLOCK
+static int	state = 0;	/* clock discipline state */
+#endif /* ENABLE_LOCKCLOCK */
 uint8_t	sys_poll;		/* time constant/poll (log2 s) */
 int	tc_counter;		/* jiggle counter */
 double	last_offset;		/* last offset (s) */
@@ -198,8 +202,8 @@ static void
 sync_status(const char *what, int ostatus, int nstatus)
 {
 	char obuf[256], nbuf[256], tbuf[1024];
-	snprintf(obuf, sizeof(obuf), "%04x", ostatus);
-	snprintf(nbuf, sizeof(nbuf), "%04x", nstatus);
+	snprintf(obuf, sizeof(obuf), "%04x", (unsigned)ostatus);
+	snprintf(nbuf, sizeof(nbuf), "%04x", (unsigned)nstatus);
 	snprintf(tbuf, sizeof(tbuf), "%s status: %s -> %s", what, obuf, nbuf);
 	report_event(EVNT_KERN, NULL, tbuf);
 }
@@ -255,13 +259,14 @@ ntp_adjtime_error_handler(
 	    case -1:
 		switch (saved_errno) {
 		    case EFAULT:
-			msyslog(LOG_ERR, "%s: %s line %d: invalid struct timex pointer: 0x%lx",
+			msyslog(LOG_ERR, "CLOCK: %s: %s line %d: invalid "
+                                         "struct timex pointer: 0x%lx",
 			    caller, file_name(), line,
-			    (long)((void *)ptimex)
+			    (long unsigned)((void *)ptimex)
 			);
 		    break;
 		    case EINVAL:
-			msyslog(LOG_ERR, "%s: %s line %d: invalid struct timex \"constant\" element value: %ld",
+			msyslog(LOG_ERR, "CLOCK: %s: %s line %d: invalid struct timex \"constant\" element value: %ld",
 			    caller, file_name(), line,
 			    (long)(ptimex->constant)
 			);
@@ -270,53 +275,55 @@ ntp_adjtime_error_handler(
 			if (tai_call) {
 			    errno = saved_errno;
 			    msyslog(LOG_ERR,
-				"%s: ntp_adjtime(TAI) failed: %m",
+				"CLOCK: %s: ntp_adjtime(TAI) failed: %m",
 				caller);
 			}
 			errno = saved_errno;
-			msyslog(LOG_ERR, "%s: %s line %d: ntp_adjtime: %m",
-			    caller, file_name(), line
+			msyslog(LOG_ERR,
+				"CLOCK: %s: %s line %d: ntp_adjtime: %m",
+				caller, file_name(), line
 			);
 		    break;
 		    default:
-			msyslog(LOG_NOTICE, "%s: %s line %d: unhandled errno value %d after failed ntp_adjtime call",
-			    caller, file_name(), line,
-			    saved_errno
+			msyslog(LOG_NOTICE,
+				"CLOCK: %s: %s line %d: unhandled errno value %d after failed ntp_adjtime call",
+				caller, file_name(), line,
+				saved_errno
 			);
 		    break;
 		}
 	    break;
 #ifdef TIME_OK
 	    case TIME_OK: /* 0: synchronized, no leap second warning */
-		/* msyslog(LOG_INFO, "kernel reports time is synchronized normally"); */
+		/* msyslog(LOG_INFO, "CLOCK: kernel reports time is synchronized normally"); */
 	    break;
 #else
 # warning TIME_OK is not defined
 #endif
 #ifdef TIME_INS
 	    case TIME_INS: /* 1: positive leap second warning */
-		msyslog(LOG_INFO, "kernel reports leap second insertion scheduled");
+		msyslog(LOG_INFO, "CLOCK: kernel reports leap second insertion scheduled");
 	    break;
 #else
 # warning TIME_INS is not defined
 #endif
 #ifdef TIME_DEL
 	    case TIME_DEL: /* 2: negative leap second warning */
-		msyslog(LOG_INFO, "kernel reports leap second deletion scheduled");
+		msyslog(LOG_INFO, "CLOCK: kernel reports leap second deletion scheduled");
 	    break;
 #else
 # warning TIME_DEL is not defined
 #endif
 #ifdef TIME_OOP
 	    case TIME_OOP: /* 3: leap second in progress */
-		msyslog(LOG_INFO, "kernel reports leap second in progress");
+		msyslog(LOG_INFO, "CLOCK: kernel reports leap second in progress");
 	    break;
 #else
 # warning TIME_OOP is not defined
 #endif
 #ifdef TIME_WAIT
 	    case TIME_WAIT: /* 4: leap second has occurred */
-		msyslog(LOG_INFO, "kernel reports leap second has occurred");
+		msyslog(LOG_INFO, "CLOCK: kernel reports leap second has occurred");
 	    break;
 #else
 # warning TIME_WAIT is not defined
@@ -402,8 +409,8 @@ or, from ntp_adjtime():
 		if (pps_call && !(ptimex->status & STA_PPSSIGNAL))
 			report_event(EVNT_KERN, NULL,
 			    "no PPS signal");
-		DPRINTF(1, ("kernel loop status %#x (%s)\n",
-			ptimex->status, des));
+		DPRINT(1, ("kernel loop status %#x (%s)\n",
+			   (unsigned)ptimex->status, des));
 		/*
 		 * This code may be returned when ntp_adjtime() has just
 		 * been called for the first time, quite a while after
@@ -416,16 +423,16 @@ or, from ntp_adjtime():
 		 * so an initial TIME_ERROR message is less confising,
 		 * or skipping the first message (ugh),
 		 * or ???
-		 * msyslog(LOG_INFO, "kernel reports time synchronization lost");
+		 * msyslog(LOG_INFO, "CLOCK: kernel reports time synchronization lost");
 		 */
-		msyslog(LOG_INFO, "kernel reports TIME_ERROR: %#x: %s",
-			ptimex->status, des);
+		msyslog(LOG_INFO, "CLOCK: kernel reports TIME_ERROR: %#x: %s",
+			(unsigned)ptimex->status, des);
 	    break;
 #else
 # warning TIME_ERROR is not defined
 #endif
 	    default:
-		msyslog(LOG_NOTICE, "%s: %s line %d: unhandled return value %d from ntp_adjtime() in %s at line %d",
+		msyslog(LOG_NOTICE, "CLOCK: %s: %s line %d: unhandled return value %d from ntp_adjtime() in %s at line %d",
 		    caller, file_name(), line,
 		    ret,
 		    __func__, __LINE__
@@ -516,12 +523,12 @@ local_clock(
 		if (  ( fp_offset > clock_max_fwd  && clock_max_fwd  > 0)
 		   || (-fp_offset > clock_max_back && clock_max_back > 0)) {
 			step_systime(fp_offset, ntp_set_tod);
-			msyslog(LOG_NOTICE, "ntpd: time set %+.6f s",
+			msyslog(LOG_NOTICE, "CLOCK: time set %+.6f s",
 			    fp_offset);
 			printf("ntpd: time set %+.6fs\n", fp_offset);
 		} else {
 			adj_systime(fp_offset, adjtime);
-			msyslog(LOG_NOTICE, "ntpd: time slew %+.6f s",
+			msyslog(LOG_NOTICE, "CLOCK: time slew %+.6f s",
 			    fp_offset);
 			printf("ntpd: time slew %+.6fs\n", fp_offset);
 		}
@@ -548,12 +555,8 @@ local_clock(
 		else
 			dtemp = (peer->delay - sys_mindly) / 2;
 		fp_offset += dtemp;
-#ifdef DEBUG
-		if (debug)
-			printf(
-		    "local_clock: size %d mindly %.6f huffpuff %.6f\n",
-			    sys_hufflen, sys_mindly, dtemp);
-#endif
+		DPRINT(1, ("local_clock: size %d mindly %.6f huffpuff %.6f\n",
+			   sys_hufflen, sys_mindly, dtemp));
 	}
 
 	/*
@@ -569,10 +572,10 @@ local_clock(
 	 * than 0.5 s or in ntpdate mode.
 	 */
 	osys_poll = sys_poll;
-	if (sys_poll < peer->minpoll)
-		sys_poll = peer->minpoll;
-	if (sys_poll > peer->maxpoll)
-		sys_poll = peer->maxpoll;
+	if (sys_poll < peer->cfg.minpoll)
+		sys_poll = peer->cfg.minpoll;
+	if (sys_poll > peer->cfg.maxpoll)
+		sys_poll = peer->cfg.maxpoll;
 	mu = current_time - clock_epoch;
 	clock_frequency = drift_comp;
 	rval = 1;
@@ -581,7 +584,7 @@ local_clock(
 	   || force_step_once ) {
 		if (force_step_once) {
 			force_step_once = false;  /* we want this only once after startup */
-			msyslog(LOG_NOTICE, "Doing intital time step" );
+			msyslog(LOG_NOTICE, "CLOCK: Doing intital time step" );
 		}
 
 		switch (state) {
@@ -608,18 +611,16 @@ local_clock(
 
 			clock_frequency = direct_freq(fp_offset);
 
-			/* fall through to EVNT_SPIK */
-
 		/*
 		 * In SPIK state we ignore succeeding outliers until
 		 * either an inlier is found or the stepout threshold is
 		 * exceeded.
 		 */
+		/* FALLTHRU to EVNT_SPIK */
+                        FALLTHRU
 		case EVNT_SPIK:
 			if (mu < clock_minstep)
 				return (0);
-
-			/* fall through to default */
 
 		/*
 		 * We get here by default in NSET and FSET states and
@@ -644,6 +645,8 @@ local_clock(
 		 * step threshold is always suppressed, even with a
 		 * long time constant.
 		 */
+			/* FALLTHRU to default */
+                        FALLTHRU
 		default:
 			snprintf(tbuf, sizeof(tbuf), "%+.6f s",
 			    fp_offset);
@@ -752,6 +755,7 @@ local_clock(
 	 * lad set the step threshold to something ridiculous.
 	 */
 	if (pll_control && kern_enable && freq_cnt == 0) {
+		static int kernel_status;	/* from ntp_adjtime */
 
 		/*
 		 * We initialize the structure for the ntp_adjtime()
@@ -777,7 +781,7 @@ local_clock(
 				dtemp = -.5;
 			else
 				dtemp = .5;
-			ntv.offset = (long)(clock_offset * NANOSECONDS + dtemp);
+			ntv.offset = (long)(clock_offset * NS_PER_S + dtemp);
 #ifdef STA_NANO
 			ntv.constant = sys_poll;
 #else /* STA_NANO */
@@ -786,9 +790,9 @@ local_clock(
 			if (ntv.constant < 0)
 				ntv.constant = 0;
 
-			ntv.esterror = (long)(clock_jitter * MICROSECONDS);
+			ntv.esterror = (long)(clock_jitter * US_PER_S);
 			ntv.maxerror = (long)((sys_rootdelay / 2 +
-			    sys_rootdisp) * MICROSECONDS);
+			    sys_rootdisp) * US_PER_S);
 			ntv.status = STA_PLL;
 
 			/*
@@ -826,24 +830,24 @@ local_clock(
 			ntp_adjtime_error_handler(__func__, &ntv, ntp_adj_ret, errno, hardpps_enable, false, __LINE__ - 1);
 		}
 		pll_status = ntv.status;
-		clock_offset = ntv.offset / NANOSECONDS;
+		clock_offset = ntv.offset * S_PER_NS;
 		clock_frequency = FREQTOD(ntv.freq);
 
 		/*
 		 * If the kernel PPS is lit, monitor its performance.
 		 */
 		if (ntv.status & STA_PPSTIME) {
-			clock_jitter = ntv.jitter / NANOSECONDS;
+			clock_jitter = ntv.jitter * S_PER_NS;
 		}
 
-#if defined(STA_NANO) && NTP_API == 4
+#if defined(STA_NANO) && defined(NTP_API) && NTP_API == 4
 		/*
 		 * If the TAI changes, update the kernel TAI.
 		 */
 		if (loop_tai != sys_tai) {
 			loop_tai = sys_tai;
 			ntv.modes = MOD_TAI;
-			ntv.constant = sys_tai;
+			ntv.constant = (long)sys_tai;
 			if ((ntp_adj_ret = ntp_adjtime_ns(&ntv)) != 0) {
 			    ntp_adjtime_error_handler(__func__, &ntv, ntp_adj_ret, errno, false, true, __LINE__ - 1);
 			}
@@ -858,8 +862,8 @@ local_clock(
 	 */
 	if (fabs(clock_frequency) > NTP_MAXFREQ)
 		msyslog(LOG_NOTICE,
-		    "frequency error %.0f PPM exceeds tolerance %.0f PPM",
-		    clock_frequency * MICROSECONDS, NTP_MAXFREQ * MICROSECONDS);
+		    "CLOCK: frequency error %.0f PPM exceeds tolerance %.0f PPM",
+		    clock_frequency * US_PER_S, NTP_MAXFREQ * US_PER_S);
 	dtemp = SQUARE(clock_frequency - drift_comp);
 	if (clock_frequency > NTP_MAXFREQ)
 		drift_comp = NTP_MAXFREQ;
@@ -890,7 +894,7 @@ local_clock(
 		tc_counter += sys_poll;
 		if (tc_counter > CLOCK_LIMIT) {
 			tc_counter = CLOCK_LIMIT;
-			if (sys_poll < peer->maxpoll) {
+			if (sys_poll < peer->cfg.maxpoll) {
 				tc_counter = 0;
 				sys_poll++;
 			}
@@ -899,7 +903,7 @@ local_clock(
 		tc_counter -= sys_poll << 1;
 		if (tc_counter < -CLOCK_LIMIT) {
 			tc_counter = -CLOCK_LIMIT;
-			if (sys_poll > peer->minpoll) {
+			if (sys_poll > peer->cfg.minpoll) {
 				tc_counter = 0;
 				sys_poll--;
 			}
@@ -917,13 +921,9 @@ local_clock(
 	 */
 	record_loop_stats(clock_offset, drift_comp, clock_jitter,
 	    clock_stability, sys_poll);
-#ifdef DEBUG
-	if (debug)
-		printf(
-		    "local_clock: offset %.9f jit %.9f freq %.3f stab %.3f poll %d\n",
-		    clock_offset, clock_jitter, drift_comp * MICROSECONDS,
-		    clock_stability * MICROSECONDS, sys_poll);
-#endif /* DEBUG */
+	DPRINT(1, ("local_clock: offset %.9f jit %.9f freq %.6f stab %.3f poll %d\n",
+		   clock_offset, clock_jitter, drift_comp * US_PER_S,
+		   clock_stability * US_PER_S, sys_poll));
 	return (rval);
 #endif /* ENABLE_LOCKCLOCK */
 }
@@ -1023,12 +1023,9 @@ rstclock(
 	double	offset		/* new offset */
 	)
 {
-#ifdef DEBUG
-	if (debug > 1)
-		printf("local_clock: mu %lu state %d poll %d count %d\n",
-		    current_time - clock_epoch, trans, sys_poll,
-		    tc_counter);
-#endif
+        DPRINT(2, ("local_clock: mu %lu state %d poll %d count %d\n",
+		   current_time - clock_epoch, trans, sys_poll,
+		   tc_counter));
 	if (trans != state && trans != EVNT_FSET)
 		report_event(trans, NULL, NULL);
 	state = trans;
@@ -1095,8 +1092,8 @@ set_freq(
 		}
 	}
 #endif /* HAVE_KERNEL_PLL */
-	mprintf_event(EVNT_FSET, NULL, "%s %.3f PPM", loop_desc,
-	    drift_comp * MICROSECONDS);
+	mprintf_event(EVNT_FSET, NULL, "%s %.6f PPM", loop_desc,
+	    drift_comp * US_PER_S);
 }
 #endif /* HAVE_LOCKCLOCK */
 
@@ -1123,7 +1120,7 @@ start_kern_loop(void)
 	newsigsys.sa_handler = pll_trap;
 	newsigsys.sa_flags = 0;
 	if (sigaction(SIGSYS, &newsigsys, &sigsys)) {
-		msyslog(LOG_ERR, "sigaction() trap SIGSYS: %m");
+		msyslog(LOG_ERR, "ERR: sigaction() trap SIGSYS: %m");
 		pll_control = false;
 	} else {
 		if (sigsetjmp(env, 1) == 0) {
@@ -1133,7 +1130,7 @@ start_kern_loop(void)
 		}
 		if (sigaction(SIGSYS, &sigsys, NULL)) {
 			msyslog(LOG_ERR,
-			    "sigaction() restore SIGSYS: %m");
+			    "ERR: sigaction() restore SIGSYS: %m");
 			pll_control = false;
 		}
 	}
@@ -1240,10 +1237,7 @@ loop_config(
 {
 	int	i;
 
-#ifdef DEBUG
-	if (debug > 1)
-		printf("loop_config: item %d freq %f\n", item, freq);
-#endif
+	DPRINT(2, ("loop_config: item %d freq %f\n", item, freq));
 	switch (item) {
 
 	/*
@@ -1265,7 +1259,7 @@ loop_config(
 		 * calibration phase.
 		 */
 		{
-			double ftemp = init_drift_comp / MICROSECONDS;
+			double ftemp = init_drift_comp / US_PER_S;
 			if (ftemp > NTP_MAXFREQ)
 				ftemp = NTP_MAXFREQ;
 			else if (ftemp < -NTP_MAXFREQ)
@@ -1308,7 +1302,7 @@ loop_config(
 		break;
 
 	case LOOP_PHI:		/* dispersion threshold (dispersion) */
-		clock_phi = freq / MICROSECONDS;
+		clock_phi = freq / US_PER_S;
 		break;
 
 	case LOOP_FREQ:		/* initial frequency (freq) */
@@ -1321,7 +1315,7 @@ loop_config(
 			freq = HUFFPUFF;
 		sys_hufflen = (int)(freq / HUFFPUFF);
 		sys_huffpuff = emalloc(sizeof(sys_huffpuff[0]) *
-		    sys_hufflen);
+		    (unsigned long)sys_hufflen);
 		for (i = 0; i < sys_hufflen; i++)
 			sys_huffpuff[i] = 1e9;
 		sys_mindly = 1e9;
@@ -1333,7 +1327,7 @@ loop_config(
 
 	case LOOP_MAX:		/* step threshold (step) */
 		clock_max_fwd = clock_max_back = freq;
-		if (freq == 0 || freq > 0.5)
+		if ( D_ISZERO_NS(freq) || freq > 0.5)
 			select_loop(false);
 		break;
 
@@ -1344,15 +1338,15 @@ loop_config(
 		 * limits are massive.  This assumes the reason to stop
 		 * using it is that it's pointless, not that it goes wrong.
 		 */
-		if (  (clock_max_back == 0 || clock_max_back > 0.5)
-		   || (clock_max_fwd  == 0 || clock_max_fwd  > 0.5))
+		if ( D_ISZERO_NS(clock_max_back) || (clock_max_back > 0.5)
+		   || D_ISZERO_NS(clock_max_fwd) || (clock_max_fwd  > 0.5))
 			select_loop(false);
 		break;
 
 	case LOOP_MAX_FWD:	/* step threshold (step) */
 		clock_max_fwd = freq;
-		if (  (clock_max_back == 0 || clock_max_back > 0.5)
-		   || (clock_max_fwd  == 0 || clock_max_fwd  > 0.5))
+		if ( D_ISZERO_NS(clock_max_back) || (clock_max_back > 0.5)
+		   || D_ISZERO_NS(clock_max_fwd) || (clock_max_fwd  > 0.5))
 			select_loop(false);
 		break;
 
@@ -1370,7 +1364,7 @@ loop_config(
 	case LOOP_LEAP:		/* not used, fall through */
 	default:
 		msyslog(LOG_NOTICE,
-		    "loop_config: unsupported option %d", item);
+		    "CONFIG: loop_config: unsupported option %d", item);
 	}
 }
 

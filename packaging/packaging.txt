@@ -1,0 +1,115 @@
+= Guidance for package builders =
+
+== Package parts ==
+
+Some useful components for package bulding can be found in the etc/
+subdirectory, including init boot time scripts, systemd unit files,
+and boilerplate for default ntpd configuration.
+
+== ntp.conf installation =
+
+Installation from source (waf install) does not attempt to put an ntp.conf
+or ntp.d in place. Your installable package should do this.
+
+The reason this is so is that NTPsec does not yet have an authorized
+pool group of its own. This may change in the future.
+
+== FHS noncompliance under Linux ==
+
+Thw function get_python_lib() in the Python distutils library is the
+only reliable way to know where in fact the ntp Python library can
+installed; under Linux, it normally returns something under /usr/lib.
+This corresponds to a system installation.
+
+Thus, if you install from the source distribution with prefix set to a
+value other than /usr - in particular, if it's the default value
+/usr/local corresponding to a user installation - the ntp Python
+library may get dropped in /usr/lib anyway, violating the Linux File
+Hierarchy Standard.
+
+We say 'may' because if the Python library directory corresponding
+to the prefixed library path already exists it will be used.
+
+Your installable package should arrange library installation to comply
+with the FHS.  If you are using --prefix=/usr (or, more generally, the
+default sys.prefix) this should not require special action.
+
+== Platforms without Python ==
+
+Many tools (actually, almost everything except the core daemon itself)
+have been moved from C to Python. This is an important step for
+improving maintainability and reducing attack surface.  However, we
+know that some platforms cannot support Python or choose not to
+include it in their core configuration.
+
+For these platorms, we recommend using cx_Freeze to render the NTPsec
+Python programs, and all their imported modules, into standalone files.
+These files can then be copied to a host that does not have Python
+installed and executed just as if Python was installed.
+
+cx_Freeze documentation lives
+http://cx-freeze.readthedocs.io/en/latest/index.html[here].
+
+Your OS package manager may have a package for cx_Freeze.  If not you
+can install it with pip like this:
+
+```
+pip install cx_Freeze
+````
+
+You may find that you also need to install the package 'patchelf'.
+
+Change to the root directory of the NTPsec source distribution and
+run the following command:
+
+```
+waf cxfreeze
+```
+
+Binary executables corresponding to every Python script will now be in
+the directory named dist along with the other files required for them
+to run.
+
+You can copy the dist directory, and its contents, to a host that does
+not have Python installed and execute the programs there.
+
+There appears to be no speed advantage, or disadvantage, to running the
+binaries created by cx_freeze.
+
+== Cross-era interoperability in modular calendar arithmetic ==
+
+The protocol necessarily uses time/date stamps of finite length in
+order to fit into fixed-size fields; they happen to have a 136-year
+cycle, but the problems this produces aren't dependent on the specific
+cycle length.  Thus, each instance of ntpd speaks time based on a
+specific epoch (cycle start date).  The epoch of era 0 was at the
+beginning of 1900; the epoch of era 1 will be in 2036.
+
+Two instances talking to each other have no way to know that they're
+based in the same era. To mitigate this problem, each instance
+has a pivot date and resolves incoming timestamps to the era that
+minimizes distance between now and the timestamp.  This procedure
+is part of the core protocol specification.
+
+An instance's pivot time is constructed from BUILD_EPOCH defined at
+configure time in config.h.  If BUILD_EPOCH is set to a known time
+then the binaries are reproducible.  By default the BUILD_EPOCH is the
+time when the last './waf configure' was run.  You can override the
+BUILD_EPOCH with '-waf --build-epoch' or using the SOURCE_DATE_EPOCH
+environment variable.
+
+More information on reproduceable builds is at:
+https://reproducible-builds.org/[https://reproducible-builds.org/]
+
+== Disambiguation of NMEA dates ==
+
+Due to bad design of NMEA0183, the reporting protocol used by many GPS
+sensors, the NMEA driver in NTPsec sometimes has to make an assumption
+about what century it is.  Choice of a base-century hits the same
+issues; so here the year derived from the BUILD_EPOCH is also used.  The
+alternative - trusting the system clock to report the right century -
+could produce very bad behavior near century boundaries, and also on
+cold-start of systems without an RTC.
+
+// end
+

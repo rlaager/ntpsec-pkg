@@ -3,12 +3,12 @@
  *	Controlled Clock
  */
 
-#include <config.h>
+#include "config.h"
 #include "ntpd.h"
 #include "ntp_io.h"
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
-#include "ntp_control.h"	/* for CTL_* clocktypes */
+#include "timespecops.h"
 
 #include <stdio.h>
 #include <ctype.h>
@@ -17,6 +17,9 @@
  * This driver supports the Arbiter 1088A/B Satellite Controlled Clock.
  * The claimed accuracy of this clock is 100 ns relative to the PPS
  * output when receiving four or more satellites.
+ *
+ * WARNING: This driver depends on the system clock for year disambiguation.
+ * It will thus not be usable for recovery if the system clock is trashed.  
  *
  * The receiver should be configured before starting the NTP daemon, in
  * order to establish reliable position and operating conditions. It
@@ -94,8 +97,8 @@
 #define MAXSTA		40		/* max length of status string */
 #define MAXPOS		80		/* max length of position string */
 
-#define COMMAND_HALT_BCAST ( (peer->ttl % 2) ? "O0" : "B0" )
-#define COMMAND_START_BCAST ( (peer->ttl % 2) ? "O5" : "B5" )
+#define COMMAND_HALT_BCAST ( (peer->cfg.ttl % 2) ? "O0" : "B0" )
+#define COMMAND_START_BCAST ( (peer->cfg.ttl % 2) ? "O5" : "B5" )
 
 /*
  * ARB unit control structure
@@ -124,9 +127,9 @@ struct	refclock refclock_arbiter = {
 	arb_start,		/* start up driver */
 	arb_shutdown,		/* shut down driver */
 	arb_poll,		/* transmit poll message */
-	noentry,		/* not used (old arb_control) */
-	noentry,		/* initialize driver (not used) */
-	noentry			/* timer - not used */
+	NULL,			/* not used (old arb_control) */
+	NULL,			/* initialize driver (not used) */
+	NULL			/* timer - not used */
 };
 
 
@@ -139,7 +142,7 @@ arb_start(
 	struct peer *peer
 	)
 {
-	register struct arbunit *up;
+	struct arbunit *up;
 	struct refclockproc *pp;
 	int fd;
 	char device[20];
@@ -148,8 +151,8 @@ arb_start(
 	 * Open serial port. Use CLK line discipline, if available.
 	 */
 	snprintf(device, sizeof(device), DEVICE, unit);
-	fd = refclock_open(peer->path ? peer->path : device,
-			   peer->baud ? peer->baud : SPEED232, LDISC_CLK);
+	fd = refclock_open(peer->cfg.path ? peer->cfg.path : device,
+			   peer->cfg.baud ? peer->cfg.baud : SPEED232, LDISC_CLK);
 	if (fd <= 0)
 		/* coverity[leaked_handle] */
 		return false;
@@ -179,16 +182,14 @@ arb_start(
 	pp->clockdesc = DESCRIPTION;
 	memcpy((char *)&pp->refid, REFID, REFIDLEN);
 	peer->sstclktype = CTL_SST_TS_UHF;
-	if (peer->ttl > 1) {
-		msyslog(LOG_NOTICE, "ARBITER: Invalid mode %d", peer->ttl);
+	if (peer->cfg.ttl > 1) {
+		msyslog(LOG_NOTICE, "REFCLOCK ARBITER: Invalid mode %u", peer->cfg.ttl);
 		close(fd);
 		pp->io.fd = -1;
 		free(up);
 		return false;
 	}
-#ifdef DEBUG
-	if(debug) { printf("arbiter: mode = %d.\n", peer->ttl); }
-#endif
+	DPRINT(1, ("arbiter: mode = %u.\n", peer->cfg.ttl));
 	IGNORE(write(pp->io.fd, COMMAND_HALT_BCAST, 2));
 	return true;
 }
@@ -203,7 +204,7 @@ arb_shutdown(
 	struct peer *peer
 	)
 {
-	register struct arbunit *up;
+	struct arbunit *up;
 	struct refclockproc *pp;
 
 	UNUSED_ARG(unit);
@@ -225,7 +226,7 @@ arb_receive(
 	struct recvbuf *rbufp
 	)
 {
-	register struct arbunit *up;
+	struct arbunit *up;
 	struct refclockproc *pp;
 	struct peer *peer;
 	l_fp trtmp;
@@ -266,7 +267,7 @@ arb_receive(
 	if (up->tcswitch == 0) {
 
 		/*
-		 * Collect statistics. If nothing is recogized, just
+		 * Collect statistics. If nothing is recognized, just
 		 * ignore; sometimes the clock doesn't stop spewing
 		 * timecodes for awhile after the B0 command.
 		 *
@@ -309,10 +310,7 @@ arb_receive(
 			strlcat(up->latlon, " ", sizeof(up->latlon));
 			strlcat(up->latlon, tbuf + 2, sizeof(up->latlon));
 			record_clock_stats(peer, up->latlon);
-#ifdef DEBUG
-			if (debug)
-				printf("arbiter: %s\n", up->latlon);
-#endif
+			DPRINT(1, ("arbiter: %s\n", up->latlon));
 			IGNORE(write(pp->io.fd, COMMAND_START_BCAST, 2));
 		}
 	}
@@ -336,7 +334,7 @@ arb_receive(
 	strlcpy(pp->a_lastcode, tbuf, sizeof(pp->a_lastcode));
 	pp->a_lastcode[LENARB - 2] = up->qualchar;
 	strlcat(pp->a_lastcode, up->status, sizeof(pp->a_lastcode));
-	pp->lencode = strlen(pp->a_lastcode);
+	pp->lencode = (int)strlen(pp->a_lastcode);
 	syncchar = ' ';
 	if (sscanf(pp->a_lastcode, "%c%2d %3d %2d:%2d:%2d",
 	    &syncchar, &pp->year, &pp->day, &pp->hour,
@@ -358,7 +356,7 @@ arb_receive(
 		break;
 
 	    case '4':		/* unlock accuracy < 1 us */
-		pp->disp = 1e-6;
+		pp->disp = S_PER_US;
 		break;
 
 	    case '5':		/* unlock accuracy < 10 us */
@@ -370,7 +368,7 @@ arb_receive(
 		break;
 
 	    case '7':		/* unlock accuracy < 1 ms */
-		pp->disp = .001;
+		pp->disp = S_PER_MS;
 		break;
 
 	    case '8':		/* unlock accuracy < 10 ms */
@@ -430,7 +428,7 @@ arb_poll(
 	struct peer *peer
 	)
 {
-	register struct arbunit *up;
+	struct arbunit *up;
 	struct refclockproc *pp;
 
 	UNUSED_ARG(unit);
@@ -460,10 +458,7 @@ arb_poll(
 	}
 	refclock_receive(peer);
 	record_clock_stats(peer, pp->a_lastcode);
-#ifdef DEBUG
-	if (debug)
-		printf("arbiter: timecode %d %s\n",
-		   pp->lencode, pp->a_lastcode);
-#endif
+	DPRINT(1, ("arbiter: timecode %d %s\n",
+		   pp->lencode, pp->a_lastcode));
 }
 

@@ -93,7 +93,7 @@ def parse_flags(self,line,uselib_store,env=None,force_static=False,posix=None):
 		elif x.startswith('-std='):
 			prefix='CXXFLAGS'if'++'in x else'CFLAGS'
 			app(prefix,x)
-		elif x=='-pthread'or x.startswith('+'):
+		elif x.startswith('+')or x in('-pthread','-fPIC','-fpic','-fPIE','-fpie'):
 			app('CFLAGS',x)
 			app('CXXFLAGS',x)
 			app('LINKFLAGS',x)
@@ -113,9 +113,9 @@ def parse_flags(self,line,uselib_store,env=None,force_static=False,posix=None):
 			static=True
 		elif x=='-Wl,-Bdynamic'or x=='-Bdynamic':
 			static=False
-		elif x.startswith('-Wl'):
+		elif x.startswith('-Wl')or x in('-rdynamic','-pie'):
 			app('LINKFLAGS',x)
-		elif x.startswith(('-m','-f','-dynamic')):
+		elif x.startswith(('-m','-f','-dynamic','-O')):
 			app('CFLAGS',x)
 			app('CXXFLAGS',x)
 		elif x.startswith('-bundle'):
@@ -130,6 +130,8 @@ def parse_flags(self,line,uselib_store,env=None,force_static=False,posix=None):
 			app('LINKFLAGS',tmp)
 		elif x.endswith(('.a','.so','.dylib','.lib')):
 			appu('LINKFLAGS',x)
+		else:
+			self.to_log('Unhandled flag %r'%x)
 @conf
 def validate_cfg(self,kw):
 	if not'path'in kw:
@@ -430,6 +432,8 @@ def post_check(self,*k,**kw):
 		if kw.get('add_have_to_env',1):
 			if kw.get('uselib_store'):
 				self.env[self.have_define(kw['uselib_store'])]=1
+			elif kw['execute']and kw.get('define_ret'):
+				self.env[define_name]=is_success
 			else:
 				self.env[define_name]=int(is_success)
 	if'header_name'in kw:
@@ -571,7 +575,8 @@ def have_define(self,key):
 	return(self.env.HAVE_PAT or'HAVE_%s')%Utils.quote_define_name(key)
 @conf
 def write_config_header(self,configfile='',guard='',top=False,defines=True,headers=False,remove=True,define_prefix=''):
-	if not configfile:configfile=WAF_CONFIG_H
+	if not configfile:
+		configfile=WAF_CONFIG_H
 	waf_guard=guard or'W_%s_WAF'%Utils.quote_define_name(configfile)
 	node=top and self.bldnode or self.path.get_bld()
 	node=node.make_node(configfile)
@@ -676,6 +681,8 @@ def get_cc_version(conf,cc,gcc=False,icc=False,clang=False):
 			conf.env.DEST_BINFMT='elf'
 		elif isD('__WINNT__')or isD('__CYGWIN__')or isD('_WIN32'):
 			conf.env.DEST_BINFMT='pe'
+			if not conf.env.IMPLIBDIR:
+				conf.env.IMPLIBDIR=conf.env.LIBDIR
 			conf.env.LIBDIR=conf.env.BINDIR
 		elif isD('__APPLE__'):
 			conf.env.DEST_BINFMT='mac-o'
@@ -849,3 +856,19 @@ def multicheck(self,*k,**kw):
 		if x.hasrun!=Task.SUCCESS:
 			if x.args.get('mandatory',True):
 				self.fatal(kw.get('fatalmsg')or'One of the tests has failed, read config.log for more information')
+@conf
+def check_gcc_o_space(self,mode='c'):
+	if int(self.env.CC_VERSION[0])>4:
+		return
+	self.env.stash()
+	if mode=='c':
+		self.env.CCLNK_TGT_F=['-o','']
+	elif mode=='cxx':
+		self.env.CXXLNK_TGT_F=['-o','']
+	features='%s %sshlib'%(mode,mode)
+	try:
+		self.check(msg='Checking if the -o link must be split from arguments',fragment=SNIP_EMPTY_PROGRAM,features=features)
+	except self.errors.ConfigurationError:
+		self.env.revert()
+	else:
+		self.env.commit()

@@ -3,6 +3,7 @@
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
 import os
+import functools
 from waflib import Context,Task,Utils,Options,Errors,Logs
 from waflib.TaskGen import taskgen_method,before_method,feature,extension
 from waflib.Configure import conf
@@ -33,7 +34,8 @@ class glib_genmarshal(Task.Task):
 		get=self.env.get_flat
 		cmd1="%s %s --prefix=%s --header > %s"%(get('GLIB_GENMARSHAL'),self.inputs[0].srcpath(),get('GLIB_GENMARSHAL_PREFIX'),self.outputs[0].abspath())
 		ret=bld.exec_command(cmd1)
-		if ret:return ret
+		if ret:
+			return ret
 		c='''#include "%s"\n'''%self.outputs[0].name
 		self.outputs[1].write(c)
 		cmd2="%s %s --prefix=%s --body >> %s"%(get('GLIB_GENMARSHAL'),self.inputs[0].srcpath(),get('GLIB_GENMARSHAL_PREFIX'),self.outputs[1].abspath())
@@ -96,7 +98,7 @@ def add_settings_enums(self,namespace,filename_list):
 	if hasattr(self,'settings_enum_namespace'):
 		raise Errors.WafError("Tried to add gsettings enums to %r more than once"%self.name)
 	self.settings_enum_namespace=namespace
-	if type(filename_list)!='list':
+	if not isinstance(filename_list,list):
 		filename_list=[filename_list]
 	self.settings_enum_files=filename_list
 @feature('glib2')
@@ -133,18 +135,28 @@ def process_settings(self):
 		schema_task.set_outputs(target_node)
 		schema_task.env.GLIB_VALIDATE_SCHEMA_OUTPUT=target_node.abspath()
 	def compile_schemas_callback(bld):
-		if not bld.is_install:return
-		Logs.pprint('YELLOW','Updating GSettings schema cache')
-		command=Utils.subst_vars("${GLIB_COMPILE_SCHEMAS} ${GSETTINGSSCHEMADIR}",bld.env)
-		self.bld.exec_command(command)
+		if not bld.is_install:
+			return
+		compile_schemas=Utils.to_list(bld.env.GLIB_COMPILE_SCHEMAS)
+		destdir=Options.options.destdir
+		paths=bld._compile_schemas_registered
+		if destdir:
+			paths=(os.path.join(destdir,path.lstrip(os.sep))for path in paths)
+		for path in paths:
+			Logs.pprint('YELLOW','Updating GSettings schema cache %r'%path)
+			if self.bld.exec_command(compile_schemas+[path]):
+				Logs.warn('Could not update GSettings schema cache %r'%path)
 	if self.bld.is_install:
-		if not self.env.GSETTINGSSCHEMADIR:
+		schemadir=self.env.GSETTINGSSCHEMADIR
+		if not schemadir:
 			raise Errors.WafError('GSETTINGSSCHEMADIR not defined (should have been set up automatically during configure)')
 		if install_files:
-			self.add_install_files(install_to=self.env.GSETTINGSSCHEMADIR,install_from=install_files)
-			if not hasattr(self.bld,'_compile_schemas_registered'):
+			self.add_install_files(install_to=schemadir,install_from=install_files)
+			registered_schemas=getattr(self.bld,'_compile_schemas_registered',None)
+			if not registered_schemas:
+				registered_schemas=self.bld._compile_schemas_registered=set()
 				self.bld.add_post_fun(compile_schemas_callback)
-				self.bld._compile_schemas_registered=True
+			registered_schemas.add(schemadir)
 class glib_validate_schema(Task.Task):
 	run_str='rm -f ${GLIB_VALIDATE_SCHEMA_OUTPUT} && ${GLIB_COMPILE_SCHEMAS} --dry-run ${GLIB_COMPILE_SCHEMAS_OPTIONS} && touch ${GLIB_VALIDATE_SCHEMA_OUTPUT}'
 	color='PINK'

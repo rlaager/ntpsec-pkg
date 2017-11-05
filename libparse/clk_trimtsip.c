@@ -7,7 +7,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#include <config.h>
+#include "config.h"
 #include "ntp_syslog.h"
 #include "ntp_types.h"
 #include "ntp_fp.h"
@@ -24,6 +24,7 @@
 #include "binio.h"
 #include "ieee754io.h"
 #include "trimble.h"
+#include "gpstolfp.h"
 
 /*
  * Trimble low level TSIP parser / time converter
@@ -130,7 +131,7 @@ inp_tsip(
 			parseio->parse_index = 0;
 			parseio->parse_data[parseio->parse_index++] = ch;
 			parseio->parse_dtime.parse_msglen = 0;
-			parseio->parse_dtime.parse_msg[parseio->parse_dtime.parse_msglen++] = ch;
+			parseio->parse_dtime.parse_msg[parseio->parse_dtime.parse_msglen++] = (unsigned char)ch;
 			parseio->parse_dtime.parse_stime = *tstamp; /* pick up time stamp at packet start */
 		} else if (t->t_dle) {
 			/* Double DLE -> insert a DLE */
@@ -149,7 +150,7 @@ inp_tsip(
 			parseio->parse_ldsize = (unsigned short) (parseio->parse_index + 1);
 			memcpy(parseio->parse_ldata, parseio->parse_data, parseio->parse_ldsize);
 			parseio->parse_dtime.parse_msg[parseio->parse_dtime.parse_msglen++] = DLE;
-			parseio->parse_dtime.parse_msg[parseio->parse_dtime.parse_msglen++] = ch;
+			parseio->parse_dtime.parse_msg[parseio->parse_dtime.parse_msglen++] = (unsigned char)ch;
 			t->t_in_pkt = t->t_dle = 0;
 			return PARSE_INP_TIME|PARSE_INP_DATA;
 		}
@@ -158,18 +159,10 @@ inp_tsip(
 	    default:		/* collect data */
 		t->t_dle = 0;
 		parseio->parse_data[parseio->parse_index++] = ch;
-		parseio->parse_dtime.parse_msg[parseio->parse_dtime.parse_msglen++] = ch;
+		parseio->parse_dtime.parse_msg[parseio->parse_dtime.parse_msglen++] = (unsigned char)ch;
 	}
 
   return PARSE_INP_SKIP;
-}
-
-static short
-getshort(
-	 unsigned char *p
-	 )
-{
-	return (short) get_msb_short(&p);
 }
 
 /*
@@ -186,9 +179,9 @@ cvt_trimtsip(
 	     void          *local
 	     )
 {
-        register struct trimble *t = (struct trimble *)local; /* get local data space */
+        struct trimble *t = (struct trimble *)local; /* get local data space */
 #define mb(_X_) (buffer[2+(_X_)]) /* shortcut for buffer access */
-	register uint8_t cmd;
+	uint8_t cmd;
 
 	UNUSED_ARG(format);
 
@@ -216,7 +209,7 @@ cvt_trimtsip(
 		    case CMD_RCURTIME:
 			    {			/* GPS time */
 				    l_fp secs;
-				    int   week = getshort((unsigned char *)&mb(4));
+				    int week = getmsb_short(&mb(4));
 				    l_fp utcoffset;
 				    l_fp gpstime;
 
@@ -224,7 +217,7 @@ cvt_trimtsip(
 				    if (fetch_ieee754(&bp, IEEE_SINGLE, &secs, trim_offsets) != IEEE_OK)
 					    return CVT_FAIL|CVT_BADFMT;
 
-				    if ((secs.l_i <= 0) ||
+				    if ((lfpsint(secs) <= 0) ||
 					(t->t_utcknown == 0))
 				    {
 					    clock_time->flags = PARSEB_POWERUP;
@@ -241,14 +234,14 @@ cvt_trimtsip(
 				    if (fetch_ieee754(&bp, IEEE_SINGLE, &utcoffset, trim_offsets) != IEEE_OK)
 					    return CVT_FAIL|CVT_BADFMT;
 
-				    L_SUB(&secs, &utcoffset); /* adjust GPS time to UTC time */
+				    secs -= utcoffset; /* adjust GPS time to UTC time */
 
 				    gpstolfp((unsigned short)week, (unsigned short)0,
-					     secs.l_ui, &gpstime);
+					     lfpuint(secs), &gpstime);
 
-				    gpstime.l_uf = secs.l_uf;
+				    setlfpfrac(gpstime, lfpfrac(secs));
 
-				    clock_time->utctime = gpstime.l_ui - JAN_1970;
+				    clock_time->utctime = (time_t)(lfpuint(gpstime) - JAN_1970);
 
 				    clock_time->usecond = lfp_intv_to_tspec(gpstime).tv_nsec / 1000;
 
@@ -271,6 +264,9 @@ cvt_trimtsip(
 				      case STATUS_BAD:
 					clock_time->flags |= PARSEB_NOSYNC|PARSEB_POWERUP;
 					break;
+                                      default:
+                                        /* huh? */
+                                        break;
 				      }
 
 				    if (t->t_mode == 0)
@@ -313,15 +309,21 @@ cvt_trimtsip(
 				    unsigned char *lbp;
 
 				    /* UTC correction data - derive a leap warning */
-				    int tls   = t->t_gpsutc     = (unsigned short) getshort((unsigned char *)&mb(12)); /* current leap correction (GPS-UTC) */
-				    int tlsf  = t->t_gpsutcleap = (unsigned short) getshort((unsigned char *)&mb(24)); /* new leap correction */
+				    /* current leap correction (GPS-UTC) */
+				    int tls = t->t_gpsutc = get_msb_ushort(&mb(12));
 
-				    t->t_weekleap   = (unsigned short) getshort((unsigned char *)&mb(20)); /* week no of leap correction */
+                                    /* new leap correction */
+				    int tlsf = t->t_gpsutcleap = get_msb_ushort(&mb(24));
+
+                                    /* week no of leap correction */
+				    t->t_weekleap = get_msb_ushort(&mb(20));
 				    if (t->t_weekleap < GPSWRAP)
 				      t->t_weekleap = (unsigned short)(t->t_weekleap + GPSWEEKS);
 
-				    t->t_dayleap    = (unsigned short) getshort((unsigned char *)&mb(22)); /* day in week of leap correction */
-				    t->t_week = (unsigned short) getshort((unsigned char *)&mb(18)); /* current week no */
+                                    /* day in week of leap correction */
+				    t->t_dayleap = get_msb_ushort(&mb(22));
+                                    /* current week no */
+				    t->t_week = get_msb_ushort(&mb(18));
 				    if (t->t_week < GPSWRAP)
 				      /* coverity[copy_paste_error] */ 
 				      t->t_week = (unsigned short)(t->t_weekleap + GPSWEEKS);
@@ -330,7 +332,7 @@ cvt_trimtsip(
 				    if (fetch_ieee754(&lbp, IEEE_SINGLE, &t0t, trim_offsets) != IEEE_OK)
 					    return CVT_FAIL|CVT_BADFMT;
 
-				    t->t_utcknown = t0t.l_ui != 0;
+				    t->t_utcknown = lfpuint(t0t) != 0;
 
 				    if ((t->t_utcknown) && /* got UTC information */
 					(tlsf != tls)   && /* something will change */

@@ -1,7 +1,7 @@
 /*
  * ntp_timer.c - event timer support routines
  */
-#include <config.h>
+#include "config.h"
 
 #include "ntp_machine.h"
 #include "ntpd.h"
@@ -17,10 +17,14 @@
 #include "ntp_syscall.h"
 #endif /* HAVE_KERNEL_PLL */
 
+#ifdef HAVE_TIMER_CREATE
 /* TC_ERR represents the timer_create() error return value. */
-#define	TC_ERR	(-1)
+# define	TC_ERR	(-1)
+#endif
 
-static void check_leapsec(uint32_t, const time_t*, bool);
+#define	EVENT_TIMEOUT	0	/* one second, that is */
+
+static void check_leapsec(time_t, bool);
 
 /*
  * These routines provide support for the event timer.  The timer is
@@ -37,28 +41,28 @@ volatile int interface_interval;     /* init_io() sets def. 300s */
 /*
  * The counters and timeouts
  */
-static  u_long interface_timer;	/* interface update timer */
-static	u_long adjust_timer;	/* second timer */
-static	u_long stats_timer;	/* stats timer */
-static	u_long leapf_timer;	/* Report leapfile problems once/day */
-static	u_long huffpuff_timer;	/* huff-n'-puff timer */
-static	u_long worker_idle_timer;/* next check for idle intres */
-u_long	leapsec;	        /* seconds to next leap (proximity class) */
-int     leapdif;                /* TAI difference step at next leap second*/
-u_long	orphwait; 		/* orphan wait time */
+static unsigned long interface_timer;	/* interface update timer */
+static unsigned long adjust_timer;	/* second timer */
+static unsigned long stats_timer;	/* stats timer */
+static unsigned long leapf_timer;	/* Report leapfile problems once/day */
+static unsigned long huffpuff_timer;	/* huff-n'-puff timer */
+unsigned long	leapsec;	        /* secs to next leap (proximity class) */
+unsigned int	leap_smear_intv;	/* Duration of smear.  Enables smear mode. */
+int	leapdif;		/* TAI difference step at next leap second*/
+unsigned long	orphwait; 	/* orphan wait time */
 
 /*
  * Statistics counter for the interested.
  */
-volatile u_long alarm_overflow;
+volatile unsigned long alarm_overflow;
 
-u_long current_time;		/* seconds since startup */
+unsigned long current_time;		/* seconds since startup */
 
 /*
  * Stats.  Time of last reset and number of calls to transmit().
  */
-u_long timer_timereset;
-u_long timer_xmtcalls;
+unsigned long timer_timereset;
+unsigned long timer_xmtcalls;
 
 static	void catchALRM (int);
 
@@ -70,7 +74,7 @@ typedef struct itimerspec intervaltimer;
 typedef struct itimerval intervaltimer;
 #define	itv_frac	tv_usec
 #endif
-intervaltimer itimer;
+static intervaltimer itimer;
 
 void	set_timer_or_die(const intervaltimer *);
 
@@ -93,7 +97,7 @@ set_timer_or_die(
 	rc = setitimer(ITIMER_REAL, &itimer, NULL);
 #endif
 	if (-1 == rc) {
-		msyslog(LOG_ERR, "interval timer %s failed, %m",
+		msyslog(LOG_ERR, "ERR:interval timer %s failed, %m",
 			setfunc);
 		exit(1);
 	}
@@ -153,7 +157,7 @@ init_timer(void)
 	 */
 #ifdef HAVE_TIMER_CREATE
 	if (TC_ERR == timer_create(CLOCK_REALTIME, NULL, &timer_id)) {
-		msyslog(LOG_ERR, "timer_create failed, %m");
+		msyslog(LOG_ERR, "ERR: timer_create failed, %m");
 		exit(1);
 	}
 #endif
@@ -165,27 +169,6 @@ init_timer(void)
 }
 
 
-/*
- * intres_timeout_req(s) is invoked in the parent to schedule an idle
- * timeout to fire in s seconds, if not reset earlier by a call to
- * intres_timeout_req(0), which clears any pending timeout.  When the
- * timeout expires, worker_idle_timer_fired() is invoked (again, in the
- * parent).
- *
- * ntpdig and ntpd each provide implementations adapted to their timers.
- */
-void
-intres_timeout_req(
-	u_int	seconds		/* 0 cancels */
-	)
-{
-	if (0 == seconds) {
-		worker_idle_timer = 0;
-		return;
-	}
-	worker_idle_timer = current_time + seconds;
-}
-
 
 /*
  * timer - event timer
@@ -195,8 +178,7 @@ timer(void)
 {
 	struct peer *	p;
 	struct peer *	next_peer;
-	l_fp		now;
-	time_t          tnow;
+	time_t          now;
 
 	/*
 	 * The basic timerevent is one second.  This is used to adjust the
@@ -210,7 +192,7 @@ timer(void)
 #ifdef REFCLOCK
 		for (p = peer_list; p != NULL; p = next_peer) {
 			next_peer = p->p_link;
-			if (FLAG_REFCLOCK & p->flags)
+			if (FLAG_REFCLOCK & p->cfg.flags)
 				refclock_timer(p);
 		}
 #endif /* REFCLOCK */
@@ -234,7 +216,7 @@ timer(void)
 			p->throttle--;
 		if (p->nextdate <= current_time) {
 #ifdef REFCLOCK
-			if (FLAG_REFCLOCK & p->flags)
+			if (FLAG_REFCLOCK & p->cfg.flags)
 				refclock_transmit(p);
 			else
 #endif	/* REFCLOCK */
@@ -263,15 +245,14 @@ timer(void)
 		sys_rootdisp = 0;
 	}
 
-	get_systime(&now);
-	time(&tnow);
+	time(&now);
 
 	/*
 	 * Leapseconds. Get time and defer to worker if either something
 	 * is imminent or every 8th second.
 	 */
 	if (leapsec > LSPROX_NOWARN || 0 == (current_time & 7))
-		check_leapsec(now.l_ui, &tnow,
+		check_leapsec(now,
                                 (sys_leap == LEAP_NOTINSYNC));
         if (sys_leap != LEAP_NOTINSYNC) {
                 if (leapsec >= LSPROX_ANNOUNCE && leapdif) {
@@ -297,13 +278,10 @@ timer(void)
 	 */
 	if (interface_interval && interface_timer <= current_time) {
 		timer_interfacetimeout(current_time +
-		    interface_interval);
-		DPRINTF(2, ("timer: interface update\n"));
+		    (unsigned long)interface_interval);
+		DPRINT(2, ("timer: interface update\n"));
 		interface_update(NULL, NULL);
 	}
-
-	if (worker_idle_timer && worker_idle_timer <= current_time)
-		worker_idle_timer_fired();
 
 	/*
 	 * Finally, write hourly stats and do the hourly
@@ -314,9 +292,9 @@ timer(void)
 		write_stats();
 		if (leapf_timer <= current_time) {
 			leapf_timer += SECSPERDAY;
-			check_leap_file(true, now.l_ui, &tnow);
+			check_leap_file(true, now);
 		} else {
-			check_leap_file(false, now.l_ui, &tnow);
+			check_leap_file(false, now);
 		}
 	}
 }
@@ -354,7 +332,7 @@ if (debug >= 4 && msg != NULL)
 
 
 void
-timer_interfacetimeout(u_long timeout)
+timer_interfacetimeout(unsigned long timeout)
 {
 	interface_timer = timeout;
 }
@@ -382,9 +360,8 @@ check_leap_sec_in_progress( const leap_result_t *lsdata ) {
 
 static void
 check_leapsec(
-	uint32_t        now  ,
-	const time_t * tpiv ,
-        bool           reset)
+	time_t now,
+        bool   reset)
 {
 	static const char leapmsg_p_step[] =
 	    "Positive leap second, stepped backward.";
@@ -400,7 +377,6 @@ check_leapsec(
 
 	leap_result_t lsdata;
 	uint32_t       lsprox;
-	
 #ifdef HAVE_KERNEL_PLL
 	leapsec_electric((pll_control && kern_enable) ? electric_on : electric_off);
 #else
@@ -414,10 +390,12 @@ check_leapsec(
 		leapsec_reset_frame();
 		memset(&lsdata, 0, sizeof(lsdata));
 	} else {
-		int fired = leapsec_query(&lsdata, now, tpiv);
+		int fired = leapsec_query(&lsdata, now);
 
-		DPRINTF(1, ("*** leapsec_query: fired %i, now %u (0x%08X), tai_diff %i, ddist %u\n",
-		      fired, now, now, lsdata.tai_diff, lsdata.ddist));
+		DPRINT(1, ("*** leapsec_query: fired %i, now %lli (0x%llX), "
+			   "tai_diff %i, ddist %u\n",
+			   fired, (long long)now, (long long unsigned)now,
+			   lsdata.tai_diff, lsdata.ddist));
 #ifdef ENABLE_LEAP_SMEAR
 		leap_smear.in_progress = false;
 		leap_smear.doffset = 0.0;
@@ -426,15 +404,15 @@ check_leapsec(
 		      if (lsdata.tai_diff) {
 			      if (leap_smear.interval == 0) {
 				      leap_smear.interval = leap_smear_intv;
-				      leap_smear.intv_end = vint64u(lsdata.ttime);
+				      leap_smear.intv_end = lsdata.ttime;
 				      leap_smear.intv_start = leap_smear.intv_end - leap_smear.interval;
-				      DPRINTF(1, ("*** leapsec_query: setting leap_smear interval %li, begin %.0f, end %.0f\n",
-					      leap_smear.interval, leap_smear.intv_start, leap_smear.intv_end));
+				      DPRINT(1, ("*** leapsec_query: setting leap_smear interval %li, begin %.0f, end %.0f\n",
+						 leap_smear.interval, leap_smear.intv_start, leap_smear.intv_end));
 			      }
 		      }
 		      else {
 			      if (leap_smear.interval)
-				      DPRINTF(1, ("*** leapsec_query: clearing leap_smear interval\n"));
+				      DPRINT(1, ("*** leapsec_query: clearing leap_smear interval\n"));
 			      leap_smear.interval = 0;
 		      }
 
@@ -444,14 +422,9 @@ check_leapsec(
 				      double leap_smear_time = dtemp - leap_smear.intv_start;
 				      /*
 				       * For now we just do a linear interpolation over the smear interval
+				       * https://developers.google.com/time/smear
 				       */
-#if 0
-				      // linear interpolation
 				      leap_smear.doffset = -(leap_smear_time * lsdata.tai_diff / leap_smear.interval);
-#else
-				      // Google approach: lie(t) = (1.0 - cos(pi * t / w)) / 2.0
-				      leap_smear.doffset = -((double) lsdata.tai_diff - cos( M_PI * leap_smear_time / leap_smear.interval)) / 2.0;
-#endif
 				      /*
 				       * TODO see if we're inside an
 				       * inserted leap second, so we
@@ -461,13 +434,13 @@ check_leapsec(
 				       */
 				      leap_smear.in_progress = true;
 #if 0 && defined( DEBUG )
-				      msyslog(LOG_NOTICE, "*** leapsec_query: [%.0f:%.0f] (%li), now %u (%.0f), smear offset %.6f ms\n",
+				      msyslog(LOG_NOTICE, "CLOCK: *** leapsec_query: [%.0f:%.0f] (%li), now %u (%.0f), smear offset %.6f ms\n",
 					      leap_smear.intv_start, leap_smear.intv_end, leap_smear.interval,
 					      now, leap_smear_time, leap_smear.doffset);
 #else
-				      DPRINTF(1, ("*** leapsec_query: [%.0f:%.0f] (%li), now %u (%.0f), smear offset %.6f ms\n",
-					      leap_smear.intv_start, leap_smear.intv_end, leap_smear.interval,
-					      now, leap_smear_time, leap_smear.doffset));
+				      DPRINT(1, ("*** leapsec_query: [%.0f:%.0f] (%li), now %lld (%.0f), smear offset %.6f ms\n",
+						 leap_smear.intv_start, leap_smear.intv_end, leap_smear.interval,
+						 (long long)now, leap_smear_time, leap_smear.doffset));
 #endif
 
 			      }
@@ -479,7 +452,7 @@ check_leapsec(
 		/*
 		 * Update the current leap smear offset, eventually 0.0 if outside smear interval.
 		 */
-		DTOLFP(leap_smear.doffset, &leap_smear.offset);
+		leap_smear.offset = dtolfp(leap_smear.doffset);
 #endif	/* ENABLE_LEAP_SMEAR */
 
 		/* Full hit. Eventually step the clock, but always
@@ -505,14 +478,14 @@ check_leapsec(
 				}
 			}
 			if (leapmsg)
-				msyslog(LOG_NOTICE, "%s", leapmsg);
+				msyslog(LOG_NOTICE, "CLOCK: %s", leapmsg);
 			report_event(EVNT_LEAP, NULL, NULL);
 			lsprox  = LSPROX_NOWARN;
 			leapsec = LSPROX_NOWARN;
-			sys_tai = lsdata.tai_offs;
+			sys_tai = (unsigned int)lsdata.tai_offs;
 		} else {
 			lsprox  = lsdata.proximity;
-			sys_tai = lsdata.tai_offs;
+			sys_tai = (unsigned int)lsdata.tai_offs;
 		}
 	}
 
@@ -522,7 +495,7 @@ check_leapsec(
 	 * we let the normal clock correction take over, even if a jump
 	 * is involved.
          * Also make sure the alarming events are edge-triggered, that is,
-         * ceated only when the threshold is crossed.
+         * created only when the threshold is crossed.
          */
 	if (  (leapsec > 0 || lsprox < LSPROX_ALERT)
 	    && leapsec < lsprox                     ) {

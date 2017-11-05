@@ -24,6 +24,7 @@ ntpviz [-d LOGDIR] [-g] [-n name] [-p DAYS]
           --peer-jitters=hosts |
           --peer-offsets=hosts]
          [-D DLVL | --debug DLVL]
+         [-N | --nice]
          [-V | --version]
          [@OPTIONFILE]
 
@@ -31,7 +32,7 @@ ntpviz [-d LOGDIR] [-g] [-n name] [-p DAYS]
 
 This utility analyzes files in an NTP log directory and generates
 statistical plots from them.  It can output either PNG images or the
-GNUPLOT programs to generate them to standard output.  In its default
+gnuplot programs to generate them to standard output.  In its default
 mode it generates an HTML directory containing an index page and
 either (a) all plots, for a single statfiles directory, or (b) a
 subset of comparative plots for multiple directories.
@@ -44,7 +45,7 @@ subset of comparative plots for multiple directories.
 
 -g or --generate::
     Run plot through gnuplot to make png.  The default is to generate
-    GNUPLOT programs.
+    gnuplot programs.
 
 -o OUTDIR or --outdir OUTDIR::
     Set the directory for all output to be OUTDIR.  If OUTDIR does
@@ -63,7 +64,7 @@ subset of comparative plots for multiple directories.
 
 -e TIME or --endtime TIME::
     With -s and -e you set the start and end times.  TIME is either numeric
-    POSIX time (sconds since the start of the epoch) or ISO 8601-style
+    POSIX time (seconds since the start of the epoch) or ISO 8601-style
     timestamps (yyyy-mmm-ddThh:mm:ss). +
     The default end time is the last logfile entry timestamp.   +
     The default start time is computed as the end time minus DAYS. +
@@ -90,13 +91,16 @@ subset of comparative plots for multiple directories.
     2 leaves the plot file in the system temp directory. +
     9 is painfully verbose. 9 also includes profile data.
 
+-N or --nice::
+    Run at the lowest possible priority.  Only available on UNIX.
+
 -V or --version:
     Print program version and exit.
 
 === Individual Plots ===
 
 The plot options choose what graph is generated; invoke only one.  By
-default, the GNUPLOT for the graph is reported; with -g you get the
+default, the gnuplot for the graph is reported; with -g you get the
 rendered PNG.
 
 The following plots are available:
@@ -123,7 +127,7 @@ The following plots are available:
    Clock time-jitter plot from the loop statistics (field 5).
 
 --local-gps::
-   Plot GPS Time Dilution of Precision (tdop) and Number of Sats Used
+   Plot GPS Time Dilution of Precision (TDOP) and Number of Sats Used
    (nSats).  This plot is only generated if there is a log file named
    gpsd in the log file directory.
 
@@ -161,7 +165,7 @@ are generated into the output directory.
 
 When an index is generated, ntpviz will look for two files in the
 output directory.  Neither of these files need be present, and the
-'header' and 'footer' files may contain arbitrary html.
+'header' and 'footer' files may contain arbitrary HTML.
 
 The first file is named 'header'.  The contents of that file will be
 added almost at the top of the body on the generated index page.
@@ -181,7 +185,7 @@ standard error on, for example, missing logfile data required for a plot.
 
 Any command line options can also be placed into a command file.  The
 command file name (OPTIONFILE) is prefixed on the command line with an
-ampersand (@).
+atsign (@).
 
 Each line in the command file should contain just one option.  Multiple
 options per line are allowed, but discouraged.  Blank lines are allowed.
@@ -203,13 +207,13 @@ These two ways to invoke ntpviz are equivalent:
 
 == REQUIREMENTS ==
 
-Python and GNUPLOT.  The plots will look better with the 'liberation'
+Python and gnuplot.  The plots will look better with the 'liberation'
 font package installed.
 
 == AUTHORS ==
 
-Eric S. Raymond, Gary E. Miller, and Daniel Drown. The GNUPLOT in this
+Eric S. Raymond, Gary E. Miller, and Daniel Drown. The gnuplot in this
 package is largely based on templates in Daniel Drown's 'chrony-graph'
-project, https://github.com/ddrown/chrony-graph/tree/ntpd .
+project: https://github.com/ddrown/chrony-graph/tree/ntpd
 
 // end

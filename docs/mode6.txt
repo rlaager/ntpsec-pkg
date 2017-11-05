@@ -3,7 +3,7 @@
 [cols="10%,90%",frame="none",grid="none",style="verse"]
 |==============================
 |image:pic/which-way-is.up.jpg[]|
-http://www.eecis.udel.edu/%7emills/pictures.html[from 'Pogo', Walt Kelly]
+{millshome}pictures.html[from 'Pogo', Walt Kelly]
 
 Keeping control of the situation.
 
@@ -28,9 +28,13 @@ include::includes/hand.txt[]
 
 This page describes the Mode 6 protocol used to get status information
 from a running ntpd and configure some of its behaviors on the fly.
-The protocol is normally used by the 'ntpq' program distributed with
-the suite. It is fully documented here so that other clients can be
-written.
+The protocol is normally used by the 'ntpq' and 'ntpmon' program
+distributed with the suite. It is fully documented here so that other
+clients can be written.
+
+(Note that the most efficient way to write a new client is to use
+the Python Mode 6 libraries included in the distribution. Both 'ntpq'
+and 'ntpmon' use these.)
 
 [[packet]]
 == Mode 6 packet structure ==
@@ -40,7 +44,7 @@ They use the same structure (header, plus extension, plus optional
 MAC) as time synchronization messages, but the layout and semantics of
 the header fields are different.  They are distinguished from time
 synchronization packets by their Mode field, which has the value 6
-(0110).
+(110).
 
 .Mode 6 packet structure
 -------------------------------------------------------------------------
@@ -87,6 +91,9 @@ Requests to ntpd are single UDP packets; ntpd expects them to be
 padded to a 4-octet boundary.  Responses may be multiple UDP packets;
 they may arrive out of order, and the client is responsible for
 reassembling the payloads.
+
+All multibyte numeric fields are interpreted as big-endian
+2s-complement integers.
 
 [[varlists]]
 == Variable-Value Lists ==
@@ -157,7 +164,7 @@ request requires authentication from the client.
 |CTL_OP_UNSETTRAP	| 31	| -     | unset trap (obsolete, unused)
 |=====================================================================
 
-The CTRL_OP_TRAP and CTL_OP_UNSETTRAP opcodes relate to an obsolete
+The CTL_OP_SETTRAP and CTL_OP_UNSETTRAP opcodes relate to an obsolete
 notification facility supported in some older versions of the
 software. CTL_OP_WRITECLOCK is unimplemented and will throw a
 permission error. CTL_OP_ASYNCMSG is reserved for expansion. The
@@ -226,7 +233,7 @@ The response payload is a textual varlist.
 This request is used to change the configuration of ntpd without
 restarting the daemon.  It requires authentication.
 
-The request payload should be a line line of text in the syntax of the
+The request payload should be a line of text in the syntax of the
 ntp.conf configuration file.  The response payload will begin with either
 an error message or the string "Config Succeeded", followed by a NUL.
 
@@ -237,7 +244,7 @@ expect this and truncate it at the first NUL.
 === CTL_OP_READ_MRU ===
 
 This request is used to retrieve information about recent traffic
-between ntpd and its peers; in NTP-speak this traffic summary is
+between ntpd and its clients and peers; in NTP-speak this traffic summary is
 called the "MRU list", where MRU stands for "most recently used".  It does
 not require authentication.
 
@@ -288,9 +295,19 @@ limit::		Limit on MRU entries returned.  One of frags= or limit=
 
 mincount::	(decimal) Return entries with packet count >= mincount.
 
+maxlstint::	(decimal) Return entries with lstint <= maxlstint.
+		(lstint is now-time of most recent packet)
+
 laddr::		Return entries associated with the server's IP
 		address given.  No port specification is needed,
 		and any supplied is ignored.
+
+recent::	Set the reporting start point to retrieve roughly
+		a specified number of most recent entries
+		'Roughly' because the logic cannot anticipate
+		update volume. Use this to volume-limit the
+		response when you are monitoring something like
+		a pool server with a very long MRU list.
 
 resall::	0x-prefixed hex restrict bits, which must all be
 		lit for an MRU entry to be included.
@@ -372,14 +389,14 @@ client that is willing to accumulate an entire set of MRU list
 fragments and then perform stale-record elimination of its own before
 displaying or passing on the report (that is, as opposed to
 incremental display with an attempt to suppress stale records on the
-fly).  
+fly).
 
 === CTL_OP_READ_ORDLIST_A ===
 
 This request is used for two purposes: to retrieve restriction lists
 and to retrieve interface statistics.  For the former use, the request
 payload should be the string "addr_restrictions"; for the latter case,
-the request payload should be be "ifstats" or empty.  Both uses
+the request payload should be "ifstats" or empty.  Both uses
 require authentication.  The response payload is, in both cases, a
 textual varlist.
 
@@ -407,7 +424,8 @@ flags.#:: Space-separated list of flag names applying to the address.
 	  These flag names are the same as those used in the
 	  "restrict" directive of the configuration syntax.
 
-hits.#:: Packet count for the address
+hits.#:: The number of times this rule has been matched.  Not updated
+	 for default rules.
 
 mask.#:: Subnet mask qualifying the address to express a range.
 
@@ -462,15 +480,21 @@ informs ntpd that the Mode 6 client is ready to receive.  It does
 not require authentication.
 
 The request retrieves a nonce specific to this client, which will be
-played back to ntpd tp demonstrate that the client is capable of
+played back to ntpd to demonstrate that the client is capable of
 receiving responses at the source IP address that requested the nonce,
-is and thereby unlikely to be forging the source ddress.  This check
+and is thereby unlikely to be forging the source address.  This check
 prevents CTL_OP_READ_MRU from being used for flooding attacks.
 
 The request has no payload.  The response will be a textual varlist
 containing one string-valued variable, "nonce". The value need not by
 interpreted by the client, only replayed as part of a following MRU-list
 request.
+
+Each nonce becomes invalid 16 seconds after the request for it was
+received by ntpd. While the issue time is encoded in the nonce, it
+is safer practice not to rely on the nonce format but instead to track
+the last nonce transmission time in your client and re-request based
+on that.
 
 [[auth]]
 == Authentication ==
@@ -492,13 +516,12 @@ The cryptographic hash is normally 16 octets of MD5 hash, but if ntpd
 is built with OpenSSL support it is possible to use and generate
 20-octet-long SHA1 keys as well.
 
-== Known bugs ==
+== Compatibility Notes ==
 
-The quality of legacy ntpd implementations of this protocol is poor.
-Clients should be prepared for the following quirk:
+The "recent" parameter of CTL_OP_READ_MRU is not supported in versions
+prior to NTPsec 0.9.6.
 
-* In textual varlists, value literals may have spurious trailing NULs
-  which must be stripped.
+Export of the count of control requests (ss_numctlreq) is new in NTPsec.
 
 '''''
 

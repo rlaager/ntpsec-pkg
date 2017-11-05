@@ -10,7 +10,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#include <config.h>
+#include "config.h"
 #include "ntp_fp.h"
 #include "ntp_calendar.h"
 
@@ -160,7 +160,8 @@ inp_varitext(
   struct varitext *t = (struct varitext *)parseio->parse_pdata;
   int    rtc;
 
-  parseprintf(DD_PARSE, ("inp_varitext(0x%lx, 0x%x, ...)\n", (long)parseio, ch));
+  parseprintf(DD_PARSE, ("inp_varitext(0x%lx, 0x%x, ...)\n",
+              (unsigned long)parseio, (unsigned)ch));
 
   if (!t)
     return PARSE_INP_SKIP;	/* local data not allocated - sigh! */
@@ -182,12 +183,12 @@ inp_varitext(
 
   if (t->start_found)
     {
-      if ((rtc = parse_addchar(parseio, ch)) != PARSE_INP_SKIP)
+      if ((rtc = (int)parse_addchar(parseio, ch)) != PARSE_INP_SKIP)
 	{
 	  parseprintf(DD_PARSE, ("inp_varitext: ABORTED due to too many characters\n"));
 
 	  memset(t, 0, sizeof(struct varitext));
-	  return rtc;
+	  return (unsigned long)rtc;
 	}
 
       if (t->end_found)
@@ -197,10 +198,10 @@ inp_varitext(
 	      parseprintf(DD_PARSE, ("inp_varitext: END seen\n"));
 
 	      memset(t, 0, sizeof(struct varitext));
-	      if ((rtc = parse_addchar(parseio, 0)) == PARSE_INP_SKIP)
+	      if ((rtc = (int)parse_addchar(parseio, 0)) == PARSE_INP_SKIP)
 		return parse_end(parseio);
 	      else
-		return rtc;
+		return (unsigned long)rtc;
 	    }
 	}
 
@@ -211,7 +212,7 @@ inp_varitext(
 
     }
 
-  t->previous_ch = ch;
+  t->previous_ch = (unsigned char)ch;
 
   return PARSE_INP_SKIP;
 }

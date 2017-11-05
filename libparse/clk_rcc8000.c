@@ -13,7 +13,7 @@
  *
  */
 
-#include <config.h>
+#include "config.h"
 #include "ntp_fp.h"
 #include "ntp_calendar.h"
 
@@ -98,15 +98,15 @@ cvt_rcc8000(
 	 *      1 - Leap year
 	 */
 #define RCC8000_VALID  0x8
-#define RCC8000_REJECT 0x4
-#define RCC8000_BST    0x2
-#define RCC8000_LEAPY  0x1
+/* #define RCC8000_REJECT 0x4 UNUSED */
+/* #define RCC8000_BST    0x2 UNUSED */
+/* #define RCC8000_LEAPY  0x1 UNUSED */
 
 	clock_time->flags = 0;
 
 	if ( (RCCP >= '0' && RCCP <= '9') || (RCCP >= 'A' && RCCP <= 'F') )
 	{
-		register int flag;
+		int flag;
 
 		flag = (RCCP >= '0' && RCCP <= '9' ) ?  RCCP - '0' : RCCP - 'A' + 10;
 
@@ -133,7 +133,8 @@ inp_rcc8000(
 {
 	unsigned int rtc;
 
-	parseprintf(DD_PARSE, ("inp_rcc8000(0x%lx, 0x%x, ...)\n", (long)parseio, ch));
+	parseprintf(DD_PARSE, ("inp_rcc8000(0x%lx, 0x%x, ...)\n",
+                    (unsigned long)parseio, (unsigned)ch));
 
 	switch (ch)
 	{

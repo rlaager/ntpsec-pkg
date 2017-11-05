@@ -6,7 +6,7 @@
  * it to round-trip through atolfp(). 1444359386.1798776096, for example, may
  * dump as ...095 or ...097.
  */
-#include <config.h>
+#include "config.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -16,13 +16,14 @@
 
 char *
 dolfptoa(
-	uint32_t fpi,
-	uint32_t fpv,
+	l_fp lfp,
 	bool neg,
 	short ndec,
 	bool msec
 	)
 {
+	uint32_t fpi = lfpuint(lfp);
+	uint32_t fpv = lfpfrac(lfp);
 	uint8_t *cp, *cpend, *cpdec;
 	int dec;
 	uint8_t cbuf[24];
@@ -31,7 +32,7 @@ dolfptoa(
 	/*
 	 * Get a string buffer before starting
 	 */
-	LIB_GETBUF(buf);
+	buf = lib_getbuf();
 
 	/*
 	 * Zero the character buffer
@@ -66,15 +67,29 @@ dolfptoa(
 		dec   += 3;
 		cpdec += 3;
 	}
-	if ((size_t)dec > sizeof(cbuf) - (cpend - cbuf))
-		dec = sizeof(cbuf) - (cpend - cbuf);
+	if (dec > (long)sizeof(cbuf) - (cpend - cbuf))
+		dec = (long)sizeof(cbuf) - (cpend - cbuf);
 	
 	/*
 	 * If there's a fraction to deal with, do so.
 	 */
 	for (/*NOP*/;  dec > 0 && fpv != 0;  dec--)  {
 		uint32_t digit, tmph, tmpl;
-		
+
+		/* FIXME - get rid of this ugly kludge! */
+#define M_ADD(r_i, r_f, a_i, a_f)	/* r += a */ \
+		do { \
+			uint32_t add_t = (r_f); \
+			(r_f) += (a_f); \
+			(r_i) += (a_i) + ((uint32_t)(r_f) < add_t); \
+		} while (false)
+
+#define	M_LSHIFT(v_i, v_f)		/* v <<= 1 */ \
+		do { \
+			(v_i) = ((uint32_t)(v_i) << 1) | ((uint32_t)(v_f) >> 31);	\
+			(v_f) = ((uint32_t)(v_f) << 1); \
+		} while (false)
+
 		/*
 		 * The scheme here is to multiply the fraction
 		 * (0.1234...) by ten.  This moves a junk of BCD into
@@ -88,6 +103,8 @@ dolfptoa(
 		M_LSHIFT(digit, fpv);
 		M_LSHIFT(digit, fpv);
 		M_ADD(digit, fpv, tmph, tmpl);
+#undef M_ADD
+#undef M_SHIFT
 		*cpend++ = (uint8_t)digit;
 	}
 
@@ -143,37 +160,33 @@ dolfptoa(
 
 char *
 mfptoa(
-	uint32_t	fpi,
-	uint32_t	fpf,
+	l_fp	lfp,
 	short	ndec
 	)
 {
-	bool	isneg;
+	bool	isneg = L_ISNEG(lfp);
 
-	isneg = M_ISNEG(fpi);
 	if (isneg) {
-		M_NEG(fpi, fpf);
+		L_NEG(lfp);
 	}
 
-	return dolfptoa(fpi, fpf, isneg, ndec, false);
+	return dolfptoa(lfp, isneg, ndec, false);
 }
 
 
 char *
 mfptoms(
-	uint32_t	fpi,
-	uint32_t	fpf,
+	l_fp	lfp,
 	short	ndec
 	)
 {
-	bool	isneg;
+	bool	isneg = L_ISNEG(lfp);
 
-	isneg = M_ISNEG(fpi);
 	if (isneg) {
-		M_NEG(fpi, fpf);
+		L_NEG(lfp);
 	}
 
-	return dolfptoa(fpi, fpf, isneg, ndec, true);
+	return dolfptoa(lfp, isneg, ndec, true);
 }
 
 

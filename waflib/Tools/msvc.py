@@ -27,7 +27,7 @@ traffic unicows url urlmon user32 userenv usp10 uuid uxtheme vcomp vcompd vdmdbg
 version vfw32 wbemuuid  webpost wiaguid wininet winmm winscard winspool winstrm
 wintrust wldap32 wmiutils wow32 ws2_32 wsnmp32 wsock32 wst wtsapi32 xaswitch xolehlp
 '''.split()
-all_msvc_platforms=[('x64','amd64'),('x86','x86'),('ia64','ia64'),('x86_amd64','amd64'),('x86_ia64','ia64'),('x86_arm','arm'),('amd64_x86','x86'),('amd64_arm','arm')]
+all_msvc_platforms=[('x64','amd64'),('x86','x86'),('ia64','ia64'),('x86_amd64','amd64'),('x86_ia64','ia64'),('x86_arm','arm'),('x86_arm64','arm64'),('amd64_x86','x86'),('amd64_arm','arm'),('amd64_arm64','arm64')]
 all_wince_platforms=[('armv4','arm'),('armv4i','arm'),('mipsii','mips'),('mipsii_fp','mips'),('mipsiv','mips'),('mipsiv_fp','mips'),('sh4','sh'),('x86','cex86')]
 all_icl_platforms=[('intel64','amd64'),('em64t','amd64'),('ia32','x86'),('Itanium','ia64')]
 def options(opt):
@@ -41,7 +41,7 @@ def setup_msvc(conf,versiondict):
 		platforms=Utils.to_list(conf.env.MSVC_TARGETS)or[i for i,j in all_msvc_platforms+all_icl_platforms+all_wince_platforms]
 	desired_versions=getattr(Options.options,'msvc_version','').split(',')
 	if desired_versions==['']:
-		desired_versions=conf.env.MSVC_VERSIONS or list(reversed(list(versiondict.keys())))
+		desired_versions=conf.env.MSVC_VERSIONS or list(reversed(sorted(versiondict.keys())))
 	lazy_detect=getattr(Options.options,'msvc_lazy',True)
 	if conf.env.MSVC_LAZY_AUTODETECT is False:
 		lazy_detect=False
@@ -54,11 +54,17 @@ def setup_msvc(conf,versiondict):
 					del val[arch]
 		conf.env.MSVC_INSTALLED_VERSIONS=versiondict
 	for version in desired_versions:
+		Logs.debug('msvc: detecting %r - %r',version,desired_versions)
 		try:
 			targets=versiondict[version]
 		except KeyError:
 			continue
+		seen=set()
 		for arch in platforms:
+			if arch in seen:
+				continue
+			else:
+				seen.add(arch)
 			try:
 				cfg=targets[arch]
 			except KeyError:
@@ -243,13 +249,16 @@ class target_compiler(object):
 		self.is_valid=True
 		(self.bindirs,self.incdirs,self.libdirs)=vs
 	def __str__(self):
-		return str((self.bindirs,self.incdirs,self.libdirs))
+		return str((self.compiler,self.cpu,self.version,self.bat_target,self.bat))
 	def __repr__(self):
-		return repr((self.bindirs,self.incdirs,self.libdirs))
+		return repr((self.compiler,self.cpu,self.version,self.bat_target,self.bat))
 @conf
 def gather_msvc_targets(conf,versions,version,vc_path):
 	targets={}
-	if os.path.isfile(os.path.join(vc_path,'vcvarsall.bat')):
+	if os.path.isfile(os.path.join(vc_path,'VC','Auxiliary','Build','vcvarsall.bat')):
+		for target,realtarget in all_msvc_platforms[::-1]:
+			targets[target]=target_compiler(conf,'msvc',realtarget,version,target,os.path.join(vc_path,'VC','Auxiliary','Build','vcvarsall.bat'))
+	elif os.path.isfile(os.path.join(vc_path,'vcvarsall.bat')):
 		for target,realtarget in all_msvc_platforms[::-1]:
 			targets[target]=target_compiler(conf,'msvc',realtarget,version,target,os.path.join(vc_path,'vcvarsall.bat'))
 	elif os.path.isfile(os.path.join(vc_path,'Common7','Tools','vsvars32.bat')):
@@ -257,7 +266,7 @@ def gather_msvc_targets(conf,versions,version,vc_path):
 	elif os.path.isfile(os.path.join(vc_path,'Bin','vcvars32.bat')):
 		targets['x86']=target_compiler(conf,'msvc','x86',version,'',os.path.join(vc_path,'Bin','vcvars32.bat'))
 	if targets:
-		versions['msvc '+version]=targets
+		versions['msvc %s'%version]=targets
 @conf
 def gather_wince_targets(conf,versions,version,vc_path,vsvars,supported_platforms):
 	for device,platforms in supported_platforms:
@@ -284,6 +293,34 @@ def gather_winphone_targets(conf,versions,version,vc_path,vsvars):
 	if targets:
 		versions['winphone '+version]=targets
 @conf
+def gather_vswhere_versions(conf,versions):
+	try:
+		import json
+	except ImportError:
+		Logs.error('Visual Studio 2017 detection requires Python 2.6')
+		return
+	prg_path=os.environ.get('ProgramFiles(x86)',os.environ.get('ProgramFiles','C:\\Program Files (x86)'))
+	vswhere=os.path.join(prg_path,'Microsoft Visual Studio','Installer','vswhere.exe')
+	args=[vswhere,'-products','*','-legacy','-format','json']
+	try:
+		txt=conf.cmd_and_log(args)
+	except Errors.WafError as e:
+		Logs.debug('msvc: vswhere.exe failed %s',e)
+		return
+	if sys.version_info[0]<3:
+		try:
+			txt=txt.decode(sys.stdout.encoding or'cp1252')
+		except UnicodeError:
+			txt=txt.decode('utf-8','replace')
+	arr=json.loads(txt)
+	arr.sort(key=lambda x:x['installationVersion'])
+	for entry in arr:
+		ver=entry['installationVersion']
+		ver=str('.'.join(ver.split('.')[:2]))
+		path=str(os.path.abspath(entry['installationPath']))
+		if os.path.exists(path)and('msvc %s'%ver)not in versions:
+			conf.gather_msvc_targets(versions,ver,path)
+@conf
 def gather_msvc_versions(conf,versions):
 	vc_paths=[]
 	for(v,version,reg)in gather_msvc_detected_versions():
@@ -294,6 +331,13 @@ def gather_msvc_versions(conf,versions):
 				msvc_version=Utils.winreg.OpenKey(Utils.winreg.HKEY_LOCAL_MACHINE,reg+"\\Setup\\Microsoft Visual C++")
 			path,type=Utils.winreg.QueryValueEx(msvc_version,'ProductDir')
 		except WindowsError:
+			try:
+				msvc_version=Utils.winreg.OpenKey(Utils.winreg.HKEY_LOCAL_MACHINE,"SOFTWARE\\Wow6432node\\Microsoft\\VisualStudio\\SxS\\VS7")
+				path,type=Utils.winreg.QueryValueEx(msvc_version,version)
+			except WindowsError:
+				continue
+			else:
+				vc_paths.append((version,os.path.abspath(str(path))))
 			continue
 		else:
 			vc_paths.append((version,os.path.abspath(str(path))))
@@ -333,8 +377,10 @@ def gather_icl_versions(conf,versions):
 			continue
 		targets={}
 		for target,arch in all_icl_platforms:
-			if target=='intel64':targetDir='EM64T_NATIVE'
-			else:targetDir=target
+			if target=='intel64':
+				targetDir='EM64T_NATIVE'
+			else:
+				targetDir=target
 			try:
 				Utils.winreg.OpenKey(all_versions,version+'\\'+targetDir)
 				icl_version=Utils.winreg.OpenKey(all_versions,version)
@@ -378,8 +424,10 @@ def gather_intel_composer_versions(conf,versions):
 			continue
 		targets={}
 		for target,arch in all_icl_platforms:
-			if target=='intel64':targetDir='EM64T_NATIVE'
-			else:targetDir=target
+			if target=='intel64':
+				targetDir='EM64T_NATIVE'
+			else:
+				targetDir=target
 			try:
 				try:
 					defaults=Utils.winreg.OpenKey(all_versions,version+'\\Defaults\\C++\\'+targetDir)
@@ -416,11 +464,13 @@ def detect_msvc(self):
 	return self.setup_msvc(self.get_msvc_versions())
 @conf
 def get_msvc_versions(self):
-	dct={}
+	dct=Utils.ordered_iter_dict()
 	self.gather_icl_versions(dct)
 	self.gather_intel_composer_versions(dct)
 	self.gather_wsdk_versions(dct)
 	self.gather_msvc_versions(dct)
+	self.gather_vswhere_versions(dct)
+	Logs.debug('msvc: detected versions %r',list(dct.keys()))
 	return dct
 @conf
 def find_lt_names_msvc(self,libname,is_static=False):
@@ -520,7 +570,7 @@ def autodetect(conf,arch=False):
 	v.MSVC_COMPILER=compiler
 	try:
 		v.MSVC_VERSION=float(version)
-	except TypeError:
+	except ValueError:
 		v.MSVC_VERSION=float(version[:-3])
 def _get_prog_names(conf,compiler):
 	if compiler=='intel':
@@ -544,7 +594,8 @@ def find_msvc(conf):
 	v.MSVC_MANIFEST=(compiler=='msvc'and version>=8)or(compiler=='wsdk'and version>=6)or(compiler=='intel'and version>=11)
 	cxx=conf.find_program(compiler_name,var='CXX',path_list=path)
 	env=dict(conf.environ)
-	if path:env.update(PATH=';'.join(path))
+	if path:
+		env.update(PATH=';'.join(path))
 	if not conf.cmd_and_log(cxx+['/nologo','/help'],env=env):
 		conf.fatal('the msvc compiler could not be identified')
 	v.CC=v.CXX=cxx
@@ -652,7 +703,7 @@ def make_winapp(self,family):
 @after_method('propagate_uselib_vars')
 def make_winphone_app(self):
 	make_winapp(self,'WINAPI_FAMILY_PHONE_APP')
-	conf.env.append_unique('LINKFLAGS',['/NODEFAULTLIB:ole32.lib','PhoneAppModelHost.lib'])
+	self.env.append_unique('LINKFLAGS',['/NODEFAULTLIB:ole32.lib','PhoneAppModelHost.lib'])
 @feature('winapp')
 @after_method('process_use')
 @after_method('propagate_uselib_vars')

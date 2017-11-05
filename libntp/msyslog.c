@@ -5,24 +5,30 @@
  * Converted to use varargs, much better ... jks
  */
 
-#include <config.h>
+#include "config.h"
 
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdio.h>
-#include <string.h>
 
 #include "ntp.h"
 #include "ntp_debug.h"
 #include "ntp_syslog.h"
 
-bool	syslogit = true;	/* log messages to syslog */
-bool	termlogit = false;	/* duplicate to stdout/err */
+/* Use XSI-compliant strerror_r(3), prototype in string.h.
+ * Don't try moving this further up, else hilarity will ensue...
+ */
+#undef _GNU_SOURCE
+#include <string.h>
+
+/* start out with syslog and stderr, otherwise startup errors lost */
+bool    syslogit = true;        /* log messages to syslog */
+bool    termlogit = true;       /* duplicate to stdout/err */
 bool	termlogit_pid = true;
 bool	msyslog_include_timestamp = true;
 FILE *	syslog_file;
-char *	syslog_fname;
-char *	syslog_abs_fname;
+static char *	syslog_fname;
+static char *	syslog_abs_fname;
 
 /* libntp default ntp_syslogmask is all bits lit */
 #define INIT_NTP_SYSLOGMASK	~(uint32_t)0
@@ -31,8 +37,10 @@ uint32_t ntp_syslogmask = INIT_NTP_SYSLOGMASK;
 extern	char *	progname;
 
 /* Declare the local functions */
-void	addto_syslog	(int, const char *);
+static	int	mvfprintf(FILE *, const char *, va_list) NTP_PRINTF(2, 0);
+static void	addto_syslog	(int, const char *);
 #ifndef VSNPRINTF_PERCENT_M
+static	void	errno_to_str(int, char *, size_t);
 void	format_errmsg	(char *, size_t, const char *, int);
 
 /* format_errmsg() is under #ifndef VSNPRINTF_PERCENT_M above */
@@ -75,31 +83,27 @@ format_errmsg(
 	}
 	*n = '\0';
 }
-#endif	/* VSNPRINTF_PERCENT_M */
 
 
 /*
  * errno_to_str() - a thread-safe strerror() replacement.
  *		    Hides the varied signatures of strerror_r().
  */
-void
+static void
 errno_to_str(
 	int	err,
 	char *	buf,
 	size_t	bufsiz
 	)
 {
-#ifdef _GNU_SOURCE
-	char	*rc;
-#else
 	int rc;
-#endif /* _GNU_SOURCE */
 
 	rc = strerror_r(err, buf, bufsiz);
 	if (rc)
 		snprintf(buf, bufsiz, "strerror_r(%d): errno %d",
 			 err, errno);
 }
+#endif	/* VSNPRINTF_PERCENT_M */
 
 
 /*
@@ -107,7 +111,7 @@ errno_to_str(
  * This routine adds the contents of a buffer to the syslog or an
  * application-specific logfile.
  */
-void
+static void
 addto_syslog(
 	int		level,
 	const char *	msg
@@ -141,8 +145,8 @@ addto_syslog(
 	else
 		if (syslog_file != NULL)
 			log_to_file = true;
-#if DEBUG
-	if (debug > 0)
+#if defined(DEBUG) && DEBUG
+	if (debug > 0) /* SPECIAL DEBUG */
 		log_to_term = true;
 #endif
 	if (!(log_to_file || log_to_term))
@@ -215,7 +219,7 @@ mvsnprintf(
 }
 
 
-int
+static int
 mvfprintf(
 	FILE *		fp,
 	const char *	fmt,
@@ -242,25 +246,6 @@ mvfprintf(
 	return vfprintf(fp, nfmt, ap);
 }
 
-
-int
-mfprintf(
-	FILE *		fp,
-	const char *	fmt,
-	...
-	)
-{
-	va_list		ap;
-	int		rc;
-
-	va_start(ap, fmt);
-	rc = mvfprintf(fp, fmt, ap);
-	va_end(ap);
-
-	return rc;
-}
-
-
 int
 mprintf(
 	const char *	fmt,
@@ -272,25 +257,6 @@ mprintf(
 
 	va_start(ap, fmt);
 	rc = mvfprintf(stdout, fmt, ap);
-	va_end(ap);
-
-	return rc;
-}
-
-
-int
-msnprintf(
-	char *		buf,
-	size_t		bufsiz,
-	const char *	fmt,
-	...
-	)
-{
-	va_list	ap;
-	size_t	rc;
-
-	va_start(ap, fmt);
-	rc = mvsnprintf(buf, bufsiz, fmt, ap);
 	va_end(ap);
 
 	return rc;
@@ -369,7 +335,7 @@ init_logging(
 						    ? LOG_NTP
 						    : 0);
 #  ifdef DEBUG
-	if (debug)
+	if (debug) /* SPECIAL DEBUG */
 		setlogmask(LOG_UPTO(LOG_DEBUG));
 	else
 #  endif /* DEBUG */
@@ -400,7 +366,7 @@ change_logfile(
 	size_t		cd_octets;
 	size_t		octets;
 
-	//NTP_REQUIRE(fname != NULL);
+	//REQUIRE(fname != NULL);
 	log_fname = fname;
 
 	/*
@@ -444,7 +410,7 @@ change_logfile(
 				 log_fname);
 		} else
 			abs_fname = estrdup(log_fname);
-		TRACE(1, ("attempting to open log %s\n", abs_fname));
+		TPRINT(1, ("attempting to open log %s\n", abs_fname));
 		new_file = fopen(abs_fname, "a");
 	}
 
@@ -455,7 +421,7 @@ change_logfile(
 
 	/* leave a pointer in the old log */
 	if (leave_crumbs && (syslogit || log_fname != syslog_abs_fname))
-		msyslog(LOG_NOTICE, "switching logging to file %s",
+		msyslog(LOG_NOTICE, "LOG: switching logging to file %s",
 			abs_fname);
 
 	if (syslog_file != NULL &&
@@ -503,7 +469,7 @@ setup_logfile(
 {
 	if (NULL == syslog_fname && NULL != name) {
 		if (-1 == change_logfile(name, true))
-			msyslog(LOG_ERR, "Cannot open log file %s, %m",
+			msyslog(LOG_ERR, "LOG: Cannot open log file %s, %m",
 				name);
 		return ;
 	} 
@@ -511,16 +477,16 @@ setup_logfile(
 		return;
 
 	if (-1 == change_logfile(syslog_fname, false))
-		msyslog(LOG_ERR, "Cannot reopen log file %s, %m",
+		msyslog(LOG_ERR, "LOG: Cannot reopen log file %s, %m",
 			syslog_fname);
 }
 
 /*
- *  * reopen_logfile()
- *   *
- *    * reopen current logfile in case the old file has been renamed by logrotate
- *     *
- *      */
+ * reopen_logfile()
+ *
+ * reopen current logfile in case the old file has been renamed by logrotate
+ *
+ */
 
 void
 reopen_logfile(void)
@@ -533,7 +499,8 @@ reopen_logfile(void)
 
 	new_file = fopen(syslog_fname, "a");
 	if (NULL == new_file) {
-		msyslog(LOG_ERR, "reopen_logfile: couldn't open %s %m", syslog_fname);
+		msyslog(LOG_ERR, "LOG: reopen_logfile: couldn't open %s %m", 
+                        syslog_fname);
 		return;
 	}
 
@@ -546,14 +513,14 @@ reopen_logfile(void)
 	 */
 	if (ftell(syslog_file) == ftell(new_file)) {
 		/* just for debugging */
-		msyslog(LOG_INFO, "reopen_logfile: same length, ignored");
+		msyslog(LOG_INFO, "LOG: reopen_logfile: same length, ignored");
 		fclose(new_file);
 		return;
 	}
 
-	msyslog(LOG_INFO, "reopen_logfile: closing old file");
+	msyslog(LOG_INFO, "LOG: reopen_logfile: closing old file");
 	fclose(syslog_file);
 	syslog_file = new_file;
-	msyslog(LOG_INFO, "reopen_logfile: using %s", syslog_fname);
+	msyslog(LOG_INFO, "LOG: reopen_logfile: using %s", syslog_fname);
 }
 

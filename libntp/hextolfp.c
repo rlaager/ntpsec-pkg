@@ -1,7 +1,7 @@
 /*
  * hextolfp - convert an ascii hex string to an l_fp number
  */
-#include <config.h>
+#include "config.h"
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
@@ -15,10 +15,10 @@ hextolfp(
 	l_fp *lfp
 	)
 {
-	register const char *cp;
-	register const char *cpstart;
-	register u_long dec_i;
-	register u_long dec_f;
+	const char *cp;
+	const char *cpstart;
+	unsigned long dec_i;
+	unsigned long dec_f;
 	char *ind = NULL;
 	static const char *digits = "0123456789abcdefABCDEF";
 
@@ -37,8 +37,8 @@ hextolfp(
 	while (*cp != '\0' && (cp - cpstart) < 8 &&
 	       (ind = strchr(digits, *cp)) != NULL) {
 		dec_i = dec_i << 4;	/* multiply by 16 */
-		dec_i += ((ind - digits) > 15) ? (ind - digits) - 6
-			: (ind - digits);
+		dec_i += (unsigned long)(((ind - digits) > 15) ? (ind - digits) - 6
+			: (ind - digits));
 		cp++;
 	}
 
@@ -51,8 +51,8 @@ hextolfp(
 	while (*cp != '\0' && (cp - cpstart) < 8 &&
 	       (ind = strchr(digits, *cp)) != NULL) {
 		dec_f = dec_f << 4;	/* multiply by 16 */
-		dec_f += ((ind - digits) > 15) ? (ind - digits) - 6
-			: (ind - digits);
+		dec_f += (unsigned long)(((ind - digits) > 15) ? (ind - digits) - 6
+			: (ind - digits));
 		cp++;
 	}
 
@@ -62,7 +62,6 @@ hextolfp(
 	if (*cp != '\0' && !isspace((unsigned char)*cp))
 	    return false;
 
-	lfp->l_ui = dec_i;
-	lfp->l_uf = dec_f;
+	*lfp = lfpinit_u(dec_i, dec_f);
 	return true;
 }

@@ -11,7 +11,7 @@
  * SPDX-License-Identifier: BSD-2-clause
  */
 
-#include <config.h>
+#include "config.h"
 
 #include <stdio.h>
 #include <ctype.h>
@@ -20,11 +20,16 @@
 #include <string.h>
 #include <limits.h>
 #include <libgen.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "ntpd.h"
 #include "ntp_config.h"
 #include "ntp_scanner.h"
+#include "ntp_debug.h"
 #include "ntp_parser.tab.h"
+#include "timespecops.h"      /* for D_ISZERO_NS() */
 
 /* ntp_keyword.h declares finite state machine and token text */
 #include "ntp_keyword.h"
@@ -36,22 +41,22 @@
  */
 
 #define MAX_LEXEME (1024 + 1)	/* The maximum size of a lexeme */
-char yytext[MAX_LEXEME];	/* Buffer for storing the input text/lexeme */
-uint32_t conf_file_sum;		/* Simple sum of characters read */
+static char yytext[MAX_LEXEME];	/* Buffer for storing the input text/lexeme */
+static uint32_t conf_file_sum;	/* Simple sum of characters read */
 
 static struct FILE_INFO * lex_stack = NULL;
 
-
-
-/* CONSTANTS 
- * ---------
+/* CONSTANTS AND MACROS
+ * --------------------
  */
+#define ENDSWITH(str, suff) (strcmp(str + strlen(str) - strlen(suff), suff)==0) 
+#define CONF_ENABLE(s)	ENDSWITH(s, ".conf")
 
 
 /* SCANNER GLOBAL VARIABLES 
  * ------------------------
  */
-const char special_chars[] = "{}(),;|=";
+static const char special_chars[] = "{}(),;|=";
 
 
 /* FUNCTIONS
@@ -75,7 +80,7 @@ keyword(
 	size_t i;
 	const char *text;
 
-	i = token - LOWEST_KEYWORD_ID;
+	i = (size_t)(token - LOWEST_KEYWORD_ID);
 
 	if (i < COUNTOF(keyword_text))
 		text = keyword_text[i];
@@ -167,13 +172,13 @@ lex_getch(
 		ch = stream->backch;
 		stream->backch = EOF;
 		if (stream->fpi)
-			conf_file_sum += ch;
+			conf_file_sum += (unsigned int)ch;
 	} else if (stream->fpi) {
 		/* fetch next 7-bit ASCII char (or EOF) from file */
 		while ((ch = fgetc(stream->fpi)) != EOF && ch > SCHAR_MAX)
 			stream->curpos.ncol++;
 		if (EOF != ch) {
-			conf_file_sum += ch;
+			conf_file_sum += (unsigned int)ch;
 			stream->curpos.ncol++;
 		}
 	} else {
@@ -229,7 +234,7 @@ lex_ungetch(
 	/* keep for later reference and update checksum */
 	stream->backch = (uint8_t)ch;
 	if (stream->fpi)
-		conf_file_sum -= stream->backch;
+		conf_file_sum -= (unsigned int)stream->backch;
 
 	/* update position */
 	if (stream->backch == '\n') {
@@ -299,6 +304,7 @@ lex_init_stack(
 	if (NULL != lex_stack || NULL == path)
 		return false;
 
+	//fprintf(stderr, "lex_init_stack(%s)\n", path);
 	lex_stack = lex_open(path, mode);
 	return (NULL != lex_stack);
 }
@@ -338,10 +344,44 @@ lex_flush_stack()
 	return retv;
 }
 
+/* Reversed string comparison - we want to LIFO directory subfiles so they
+ * actually get evaluated in sort order. 
+ */
+static int rcmpstring(const void *p1, const void *p2)
+{
+    return strcmp(*(const char * const *)p1, *(const char * const *)p2);
+}
+
+bool is_directory(const char *path)
+{
+	struct stat sb;
+	return stat(path, &sb) == 0 && S_ISDIR(sb.st_mode);
+}
+
+void reparent(char *fullpath, size_t fullpathsize,
+	      const char *dir, const char *base)
+{
+	fullpath[0] = '\0';
+	if (base[0] != DIR_SEP) {
+		char *dirpart = strdup(dir);
+		char *end;
+		strlcpy(fullpath, dirname(dirpart), fullpathsize-2);
+		end = fullpath + strlen(fullpath);
+		*end++ = DIR_SEP;
+		*end++ = '\0';
+		free(dirpart);
+	}
+	strlcat(fullpath, base, fullpathsize);
+}
+
 /* Push another file on the parsing stack. If the mode is NULL, create a
  * FILE_INFO suitable for in-memory parsing; otherwise, create a
  * FILE_INFO that is bound to a local/disc file. Note that 'path' must
  * not be NULL, or the function will fail.
+ *
+ * If the pathname is a directory, push all subfiles and
+ * subdirectories with paths satisying the predicate CONF_ENABLE(),
+ * recursively depth first to be interpreted in ASCII sort order.
  *
  * Relative pathnames are interpreted relative to the directory
  * of the previous entry on the stack, not the current directory.
@@ -351,29 +391,62 @@ lex_flush_stack()
  * Returns true if a new info record was pushed onto the stack.
  */
 bool lex_push_file(
-	const char * path,
-	const char * mode
+	const char * path
 	)
 {
 	struct FILE_INFO * next = NULL;
 
 	if (NULL != path) {
 		char fullpath[PATH_MAX];
-		fullpath[0] = '\0';
-		if (path[0] != DIR_SEP && lex_stack != NULL) {
-			char *end;
-			strlcpy(fullpath,
-				dirname(lex_stack->fname),sizeof(fullpath)-2);
-			end = fullpath + strlen(fullpath);
-			*end++ = DIR_SEP;
-			*end++ = '\0';
-		}
-		strlcat(fullpath, path, sizeof(fullpath));
-		fprintf(stderr, "Opening %s\n", fullpath);
-		next = lex_open(fullpath, mode);
-		if (NULL != next) {
-			next->st_next = lex_stack;
-			lex_stack = next;
+		if (lex_stack != NULL)
+		    reparent(fullpath, sizeof(fullpath), lex_stack->fname, path);
+		else
+		    strlcpy(fullpath, path, sizeof(fullpath));
+		//fprintf(stderr, "lex_push_file(%s)\n", fullpath);
+		if (is_directory(fullpath)) {
+			/* directory scanning */
+			DIR *dfd;
+			struct dirent *dp;
+			char **baselist;
+			int basecount = 0;
+			if ((dfd = opendir(fullpath)) == NULL)
+				return false;
+			baselist = (char **)malloc(sizeof(char *));
+			while ((dp = readdir(dfd)) != NULL)
+			{
+			    if (!CONF_ENABLE(dp->d_name))
+			    	continue;
+			    baselist[basecount++] = strdup(dp->d_name);
+			    baselist = realloc(baselist,
+                                       (size_t)(basecount+1) * sizeof(char *));
+			}
+			closedir(dfd);
+			qsort(baselist, (size_t)basecount, sizeof(char *),
+                              rcmpstring);
+			for (int i = 0; i < basecount; i++) {
+				char subpath[PATH_MAX];
+				strlcpy(subpath, fullpath, PATH_MAX);
+				if (strlen(subpath) < PATH_MAX - 1) {
+				    char *ep = subpath + strlen(subpath);
+				    *ep++ = DIR_SEP;
+				    *ep = '\0';
+				}
+				strlcat(subpath, baselist[i], PATH_MAX);
+				/* This should barf safely if the complete
+				 * filename was too long to fit in the buffer.
+				 */ 
+				lex_push_file(subpath);
+			}
+			for (int i = 0; i < basecount; i++)
+				free(baselist[i]);
+			free(baselist);
+			return basecount > 0;
+		} else {
+			next = lex_open(fullpath, "r");
+			if (NULL != next) {
+				next->st_next = lex_stack;
+				lex_stack = next;
+			}
 		}
 	}
 	return (NULL != next);
@@ -463,7 +536,7 @@ is_keyword(
 
 	for (i = 0; lexeme[i]; i++) {
 		while (curr_s && (lexeme[i] != SS_CH(sst[curr_s])))
-			curr_s = SS_OTHER_N(sst[curr_s]);
+			curr_s = (int)SS_OTHER_N(sst[curr_s]);
 
 		if (curr_s && (lexeme[i] == SS_CH(sst[curr_s]))) {
 			if ('\0' == lexeme[i + 1]
@@ -491,7 +564,7 @@ is_integer(
 {
 	int	i;
 	int	is_neg;
-	u_int	u_val;
+	unsigned int	u_val;
 	
 	i = 0;
 
@@ -520,7 +593,7 @@ is_integer(
 }
 
 
-/* U_int -- assumes is_integer() has returned false */
+/* unsigned int -- assumes is_integer() has returned false */
 static int
 is_u_int(
 	char *lexeme
@@ -555,8 +628,8 @@ is_double(
 	char *lexeme
 	)
 {
-	u_int num_digits = 0;  /* Number of digits read */
-	u_int i;
+	unsigned int num_digits = 0;  /* Number of digits read */
+	unsigned int i;
 
 	i = 0;
 
@@ -624,8 +697,7 @@ is_EOC(
 	int ch
 	)
 {
-	if ((old_config_style && (ch == '\n')) ||
-	    (!old_config_style && (ch == ';')))
+	if ( ch == '\n')
 		return true;
 	return false;
 }
@@ -727,7 +799,7 @@ yylex(void)
 			 * a single string following as in:
 			 * setvar Owner = "The Boss" default
 			 */
-			if ('=' == ch && old_config_style)
+			if ('=' == ch )
 				followedby = FOLLBY_STRING;
 			yytext[0] = (char)ch;
 			yytext[1] = '\0';
@@ -806,24 +878,15 @@ yylex(void)
 	if (followedby == FOLLBY_TOKEN && !instring) {
 		token = is_keyword(yytext, &followedby);
 		if (token) {
-			/*
-			 * T_Server is exceptional as it forces the
-			 * following token to be a string in the
-			 * non-simulator parts of the configuration,
-			 * but in the simulator configuration section,
-			 * "server" is followed by "=" which must be
-			 * recognized as a token not a string.
-			 */
-			if (T_Server == token && !old_config_style)
-				followedby = FOLLBY_TOKEN;
 			goto normal_return;
 		} else if (is_integer(yytext)) {
 			yylval_was_set = true;
 			errno = 0;
-			if ((yylval.Integer = strtol(yytext, NULL, 10)) == 0
+			yylval.Integer = (int)strtol(yytext, NULL, 10);
+			if (yylval.Integer == 0
 			    && ((errno == EINVAL) || (errno == ERANGE))) {
 				msyslog(LOG_ERR, 
-					"Integer cannot be represented: %s",
+					"CONFIG: Integer cannot be represented: %s",
 					yytext);
 				if (lex_from_file()) {
 					exit(1);
@@ -838,7 +901,7 @@ yylex(void)
 		} else if (is_u_int(yytext)) {
 			yylval_was_set = true;
 			if ('0' == yytext[0] &&
-			    'x' == tolower((unsigned long)yytext[1]))
+			    'x' == tolower((int)yytext[1]))
 				converted = sscanf(&yytext[2], "%x",
 						   &yylval.U_int);
 			else
@@ -846,7 +909,7 @@ yylex(void)
 						   &yylval.U_int);
 			if (1 != converted) {
 				msyslog(LOG_ERR, 
-					"U_int cannot be represented: %s",
+					"CONFIG: U_int cannot be represented: %s",
 					yytext);
 				if (lex_from_file()) {
 					exit(1);
@@ -861,14 +924,16 @@ yylex(void)
 		} else if (is_double(yytext)) {
 			yylval_was_set = true;
 			errno = 0;
-			if ((yylval.Double = atof(yytext)) == 0 && errno == ERANGE) {
-				msyslog(LOG_ERR,
-					"Double too large to represent: %s",
-					yytext);
-				exit(1);
+			yylval.Double = atof(yytext);
+			if ( D_ISZERO_NS(yylval.Double) && errno == ERANGE) {
+			    /* FIXME, POSIX says atof() never returns errors */
+			    msyslog(LOG_ERR,
+				    "CONFIG: Double too large to represent: %s",
+				    yytext);
+			    exit(1);
 			} else {
-				token = T_Double;
-				goto normal_return;
+			    token = T_Double;
+			    goto normal_return;
 			}
 		} else {
 			/* Default: Everything is a string */
@@ -919,10 +984,10 @@ yylex(void)
 
 normal_return:
 	if (T_EOC == token)
-		DPRINTF(4,("\t<end of command>\n"));
+		DPRINT(4,("\t<end of command>\n"));
 	else
-		DPRINTF(4, ("yylex: lexeme '%s' -> %s\n", yytext,
-			    token_name(token)));
+		DPRINT(4, ("yylex: lexeme '%s' -> %s\n", yytext,
+			   token_name(token)));
 
 	if (!yylval_was_set)
 		yylval.Integer = token;
@@ -932,8 +997,8 @@ normal_return:
 lex_too_long:
 	yytext[min(sizeof(yytext) - 1, 50)] = 0;
 	msyslog(LOG_ERR, 
-		"configuration item on line %d longer than limit of %lu, began with '%s'",
-		lex_stack->curpos.nline, (u_long)min(sizeof(yytext) - 1, 50),
+		"CONFIG: configuration item on line %d longer than limit of %lu, began with '%s'",
+		lex_stack->curpos.nline, (unsigned long)min(sizeof(yytext) - 1, 50),
 		yytext);
 
 	/*

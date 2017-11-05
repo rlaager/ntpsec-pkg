@@ -24,49 +24,48 @@
 /*
  * some constants useful for GPS time conversion
  */
-#define GPSORIGIN       2524953600u                /* GPS origin - NTP origin in seconds */
 #define GPSWRAP         990                        /* assume week count less than this in the previous epoch */
 #define GPSWEEKS        1024                       /* number of weeks until the GPS epch rolls over */
 
 /*
  * state flags
  */
-#define PARSEB_POWERUP            0x00000001 /* no synchronisation */
-#define PARSEB_NOSYNC             0x00000002 /* timecode currently not confirmed */
+#define PARSEB_POWERUP            0x00000001U /* no synchronisation */
+#define PARSEB_NOSYNC             0x00000002U /* timecode currently not confirmed */
 
 /*
  * time zone information
  */
-#define PARSEB_ANNOUNCE           0x00000010 /* switch time zone warning (DST switch) */
-#define PARSEB_DST                0x00000020 /* DST in effect */
-#define PARSEB_UTC		  0x00000040 /* UTC time */
+#define PARSEB_ANNOUNCE           0x00000010U /* switch time zone warning (DST switch) */
+#define PARSEB_DST                0x00000020U /* DST in effect */
+#define PARSEB_UTC		  0x00000040U /* UTC time */
 
 /*
  * leap information
  */
-#define PARSEB_LEAPDEL		  0x00000100 /* LEAP deletion warning */
-#define PARSEB_LEAPADD		  0x00000200 /* LEAP addition warning */
-#define PARSEB_LEAPS		  0x00000300 /* LEAP warnings */
-#define PARSEB_LEAPSECOND	  0x00000400 /* actual leap second */
+#define PARSEB_LEAPDEL		  0x00000100U /* LEAP deletion warning */
+#define PARSEB_LEAPADD		  0x00000200U /* LEAP addition warning */
+#define PARSEB_LEAPS		  0x00000300U /* LEAP warnings */
+#define PARSEB_LEAPSECOND	  0x00000400U /* actual leap second */
 /*
  * optional status information
  */
-#define PARSEB_CALLBIT		  0x00001000 /* "call bit" used to signalize irregularities in the control facilities */
-#define PARSEB_POSITION		  0x00002000 /* position available */
-#define PARSEB_MESSAGE            0x00004000 /* addtitional message data */
+#define PARSEB_CALLBIT		  0x00001000U /* "call bit" used to signalize irregularities in the control facilities */
+#define PARSEB_POSITION		  0x00002000U /* position available */
+#define PARSEB_MESSAGE            0x00004000U /* addtitional message data */
 /*
  * feature information
  */
-#define PARSEB_S_LEAP		  0x00010000 /* supports LEAP */
-#define PARSEB_S_CALLBIT	  0x00020000 /* supports callbit information */
-#define PARSEB_S_PPS     	  0x00040000 /* supports PPS time stamping */
-#define PARSEB_S_POSITION	  0x00080000 /* supports position information (GPS) */
+#define PARSEB_S_LEAP		  0x00010000U /* supports LEAP */
+#define PARSEB_S_CALLBIT	  0x00020000U /* supports callbit information */
+#define PARSEB_S_PPS     	  0x00040000U /* supports PPS time stamping */
+#define PARSEB_S_POSITION	  0x00080000U /* supports position information (GPS) */
 
 /*
  * time stamp availability
  */
-#define PARSEB_TIMECODE		  0x10000000 /* valid time code sample */
-#define PARSEB_PPS		  0x20000000 /* valid PPS sample */
+#define PARSEB_TIMECODE		  0x10000000U /* valid time code sample */
+#define PARSEB_PPS		  0x20000000U /* valid PPS sample */
 
 #define PARSE_TCINFO		(PARSEB_ANNOUNCE|PARSEB_POWERUP|PARSEB_NOSYNC|PARSEB_DST|\
 				 PARSEB_UTC|PARSEB_LEAPS|PARSEB_CALLBIT|PARSEB_S_LEAP|\
@@ -109,11 +108,7 @@
  */
 #define PARSE_TCMAX	    400	  /* maximum addition data size */
 
-typedef union
-{
-  struct timeval tv;		/* timeval - kernel view */
-  l_fp           fp;		/* fixed point - ntp view */
-} timestamp_t;
+typedef l_fp timestamp_t;
 
 /*
  * standard time stamp structure
@@ -213,7 +208,7 @@ struct clocktime		/* clock time broken up from time code */
   long usecond;
   long utcoffset;	/* in seconds */
   time_t utctime;	/* the actual time - alternative to date/time */
-  unsigned long flags;		/* current clock status */
+  unsigned long flags;	/* current clock status */
 };
 
 typedef struct clocktime clocktime_t;
@@ -240,12 +235,6 @@ typedef struct clocktime clocktime_t;
 #define PARSE_INP_DATA  0x04	/* additional data to pass up */
 #define PARSE_INP_SYNTH 0x08	/* just pass up synthesized time */
 
-/*
- * PPS edge info
- */
-#define SYNC_ZERO	0x00
-#define SYNC_ONE	0x01
-
 typedef unsigned long parse_inp_fnc_t(parse_t *, char, timestamp_t *);
 typedef unsigned long parse_cvt_fnc_t(unsigned char *, int, struct format *, clocktime_t *, void *);
 typedef unsigned long parse_pps_fnc_t(parse_t *, int, timestamp_t *);
@@ -269,32 +258,45 @@ struct clockformat
 
 typedef struct clockformat clockformat_t;
 
+extern clockformat_t *clockformats[];
+extern clockformat_t clock_computime;
+extern clockformat_t clock_dcf7000;
+extern clockformat_t clock_hopf6021;
+extern clockformat_t clock_meinberg[];
+extern clockformat_t clock_rawdcf;
+extern clockformat_t clock_rcc8000;
+extern clockformat_t clock_schmid;
+extern clockformat_t clock_sel240x;
+extern clockformat_t clock_trimtaip;
+extern clockformat_t clock_trimtsip;
+extern clockformat_t clock_varitext;
+extern clockformat_t clock_wharton_400a;
+extern unsigned short nformats;
+
+
+
 /*
  * parse interface
  */
 extern bool  parse_ioinit (parse_t *);
 extern void parse_ioend (parse_t *);
 extern int  parse_ioread (parse_t *, char, timestamp_t *);
-extern int  parse_iopps (parse_t *, int, timestamp_t *);
 extern void parse_iodone (parse_t *);
 extern bool  parse_timecode (parsectl_t *, parse_t *);
 extern int  parse_getfmt (parsectl_t *, parse_t *);
 extern bool  parse_setfmt (parsectl_t *, parse_t *);
 extern bool  parse_setcs (parsectl_t *, parse_t *);
 
-extern unsigned int parse_restart (parse_t *, char);
 extern unsigned int parse_addchar (parse_t *, char);
 extern unsigned int parse_end (parse_t *);
 
-extern int Strok (const unsigned char *, const unsigned char *);
+extern int Strok (const unsigned char *, const unsigned char *)
+		__attribute__((pure));
 extern int Stoi (const unsigned char *, long *, int);
 
 extern time_t parse_to_unixtime (clocktime_t *, unsigned long *);
 extern unsigned long updatetimeinfo (parse_t *, unsigned long);
-extern void syn_simple (parse_t *, timestamp_t *, struct format *, unsigned long);
-extern parse_pps_fnc_t pps_simple;
 extern parse_pps_fnc_t pps_one;
-extern parse_pps_fnc_t pps_zero;
 extern bool parse_timedout (parse_t *, timestamp_t *, struct timespec *);
 
 #endif

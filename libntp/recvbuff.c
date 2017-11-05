@@ -1,4 +1,4 @@
-#include <config.h>
+#include "config.h"
 
 #include <stdio.h>
 
@@ -12,11 +12,11 @@
 /*
  * Memory allocation.
  */
-static u_long full_recvbufs;	/* recvbufs on full_recv_fifo */
-static u_long free_recvbufs;	/* recvbufs on free_recv_list */
-static u_long total_recvbufs;	/* total recvbufs currently in use */
-static u_long lowater_adds;	/* number of times we have added memory */
-static u_long buffer_shortfall;	/* number of missed free receive buffers
+static unsigned long full_recvbufs;	/* recvbufs on full_recv_fifo */
+static unsigned long free_recvbufs;	/* recvbufs on free_recv_list */
+static unsigned long total_recvbufs;	/* total recvbufs currently in use */
+static unsigned long lowater_adds;	/* # of times we have added memory */
+static unsigned long buffer_shortfall;	/* # of missed free receive buffers
 					   between replenishments */
 
 static DECL_FIFO_ANCHOR(recvbuf_t) full_recv_fifo;
@@ -27,25 +27,25 @@ static void uninit_recvbuff(void);
 #endif
 
 
-u_long
+unsigned long
 free_recvbuffs (void)
 {
 	return free_recvbufs;
 }
 
-u_long
+unsigned long
 full_recvbuffs (void)
 {
 	return full_recvbufs;
 }
 
-u_long
+unsigned long
 total_recvbuffs (void)
 {
 	return total_recvbufs;
 }
 
-u_long
+unsigned long
 lowater_additions(void)
 {
 	return lowater_adds;
@@ -58,10 +58,10 @@ initialise_buffer(recvbuf_t *buff)
 }
 
 static void
-create_buffers(int nbufs)
+create_buffers(unsigned int nbufs)
 {
-	register recvbuf_t *bufp;
-	int i, abuf;
+	recvbuf_t *bufp;
+	unsigned int i, abuf;
 
 	abuf = nbufs + buffer_shortfall;
 	buffer_shortfall = 0;
@@ -89,7 +89,7 @@ create_buffers(int nbufs)
 }
 
 void
-init_recvbuff(int nbufs)
+init_recvbuff(unsigned int nbufs)
 {
 
 	/*
@@ -136,13 +136,13 @@ void
 freerecvbuf(recvbuf_t *rb)
 {
 	if (rb == NULL) {
-		msyslog(LOG_ERR, "freerecvbuff received NULL buffer");
+		msyslog(LOG_ERR, "ERR: freerecvbuff received NULL buffer");
 		return;
 	}
 
 	rb->used--;
 	if (rb->used != 0)
-		msyslog(LOG_ERR, "******** freerecvbuff non-zero usage: %d *******", rb->used);
+		msyslog(LOG_ERR, "ERR: ******** freerecvbuff non-zero usage: %d *******", rb->used);
 	LINK_SLIST(free_recv_list, rb, link);
 	free_recvbufs++;
 }
@@ -152,7 +152,7 @@ void
 add_full_recv_buffer(recvbuf_t *rb)
 {
 	if (rb == NULL) {
-		msyslog(LOG_ERR, "add_full_recv_buffer received NULL buffer");
+		msyslog(LOG_ERR, "ERR: add_full_recv_buffer received NULL buffer");
 		return;
 	}
 	LINK_FIFO(full_recv_fifo, rb, link);

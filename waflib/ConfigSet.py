@@ -12,9 +12,12 @@ class ConfigSet(object):
 		if filename:
 			self.load(filename)
 	def __contains__(self,key):
-		if key in self.table:return True
-		try:return self.parent.__contains__(key)
-		except AttributeError:return False
+		if key in self.table:
+			return True
+		try:
+			return self.parent.__contains__(key)
+		except AttributeError:
+			return False
 	def keys(self):
 		keys=set()
 		cur=self
@@ -74,7 +77,8 @@ class ConfigSet(object):
 		return self
 	def get_flat(self,key):
 		s=self[key]
-		if isinstance(s,str):return s
+		if isinstance(s,str):
+			return s
 		return' '.join(s)
 	def _get_list_value_for_modification(self,key):
 		try:
@@ -115,8 +119,10 @@ class ConfigSet(object):
 		env=self
 		while 1:
 			table_list.insert(0,env.table)
-			try:env=env.parent
-			except AttributeError:break
+			try:
+				env=env.parent
+			except AttributeError:
+				break
 		merged_table={}
 		for table in table_list:
 			merged_table.update(table)

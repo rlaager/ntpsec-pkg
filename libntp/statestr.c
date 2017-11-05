@@ -2,13 +2,12 @@
  * pretty printing of status information
  */
 
-#include <config.h>
+#include "config.h"
 
 #include <stdio.h>
 #include <string.h>
 
 #include "ntp_stdlib.h"
-#include "ntp_fp.h"
 #include "ntp.h"
 #include "lib_strbuf.h"
 #include "ntp_refclock.h"
@@ -268,7 +267,7 @@ getcode(
 		codetab++;
 	}
 
-	LIB_GETBUF(buf);
+	buf = lib_getbuf();
 	snprintf(buf, LIB_BUFLENGTH, "%s_%d", codetab->string, code);
 
 	return buf;
@@ -287,7 +286,7 @@ getevents(
 	if (cnt == 0)
 		return "no events";
 
-	LIB_GETBUF(buf);
+	buf = lib_getbuf();
 	snprintf(buf, LIB_BUFLENGTH, "%d event%s", cnt,
 		 (1 == cnt)
 		     ? ""
@@ -317,21 +316,21 @@ decode_bitflags(
 	char *		lim;
 	size_t		b;
 	int		rc;
-	int		saved_errno;	/* for use in DPRINTF with %m */
+	int		saved_errno;	/* for use in DPRINT/TPRINT with %m */
 
 	saved_errno = errno;
-	LIB_GETBUF(buf);
+	buf = lib_getbuf();
 	pch = buf;
 	lim = buf + LIB_BUFLENGTH;
 	sep = "";
 
 	for (b = 0; b < tab_ct; b++) {
 		if (tab[b].code & bits) {
-			rc = snprintf(pch, (lim - pch), "%s%s", sep,
+			rc = snprintf(pch, (size_t)(lim - pch), "%s%s", sep,
 				      tab[b].string);
 			if (rc < 0)
 				goto toosmall;
-			pch += (u_int)rc;
+			pch += (unsigned int)rc;
 			if (pch >= lim)
 				goto toosmall;
 			sep = sep2;
@@ -352,7 +351,7 @@ decode_bitflags(
 			   :
 #endif
 			     "",
-		 bits, (int)LIB_BUFLENGTH);
+		 (unsigned)bits, (int)LIB_BUFLENGTH);
 	errno = saved_errno;
 
 	return buf;
@@ -371,7 +370,7 @@ peer_st_flags(
 
 const char *
 res_match_flags(
-	u_short mf
+	unsigned short mf
 	)
 {
 	return decode_bitflags(mf, " ", res_match_bits,
@@ -381,7 +380,7 @@ res_match_flags(
 
 const char *
 res_access_flags(
-	u_short af
+	unsigned short af
 	)
 {
 	return decode_bitflags(af, " ", res_access_bits,
@@ -395,7 +394,7 @@ k_st_flags(
 	uint32_t st
 	)
 {
-	return decode_bitflags(st, " ", k_st_bits, COUNTOF(k_st_bits));
+	return decode_bitflags((int)st, " ", k_st_bits, COUNTOF(k_st_bits));
 }
 #endif	/* HAVE_KERNEL_PLL */
 
@@ -413,7 +412,7 @@ statustoa(
 	char *	cc;
 	uint8_t	pst;
 
-	LIB_GETBUF(cb);
+	cb = lib_getbuf();
 
 	switch (type) {
 
@@ -433,9 +432,9 @@ statustoa(
 			 getevents(CTL_PEER_NEVNT(st)));
 		if (CTL_PEER_EVENT(st) != EVNT_UNSPEC) {
 			cc = cb + strlen(cb);
-			snprintf(cc, LIB_BUFLENGTH - (cc - cb), ", %s",
-				 getcode(CTL_PEER_EVENT(st),
-					 peer_codes));
+			snprintf(cc, (size_t)(LIB_BUFLENGTH - (cc - cb)),
+                                 ", %s",
+				 getcode(CTL_PEER_EVENT(st), peer_codes));
 		}
 		break;
 	
@@ -444,6 +443,10 @@ statustoa(
 			 getevents(CTL_SYS_NEVNT(st)),
 			 getcode((st) & 0xf, clock_codes));
 		break;
+
+        default:
+                /* huh? */
+                break;
 	}
 
 	return cb;

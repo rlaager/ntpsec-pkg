@@ -1,7 +1,7 @@
 /*
  * emalloc - return new memory obtained from the system.  Belch if none.
  */
-#include <config.h>
+#include "config.h"
 #include "ntp_types.h"
 #include "ntp_malloc.h"
 #include "ntp_syslog.h"
@@ -44,18 +44,18 @@ ereallocz(
 	if (NULL == mem) {
 		termlogit = true;
 #ifndef EREALLOC_CALLSITE
-		msyslog(LOG_ERR, "fatal out of memory (%lu bytes)",
+		msyslog(LOG_ERR, "ERR: fatal out of memory (%lu bytes)",
 			(unsigned long)newsz);
 #else
 		msyslog(LOG_ERR,
-			"fatal out of memory %s line %d (%lu bytes)",
+			"ERR: fatal out of memory %s line %d (%lu bytes)",
 			file, line, (unsigned long)newsz);
 #endif
 		exit(1);
 	}
 
 	if (zero_init && newsz > priorsz)
-		zero_mem(mem + priorsz, newsz - priorsz);
+		memset(mem + priorsz, '\0', newsz - priorsz);
 
 	return mem;
 }
@@ -99,10 +99,10 @@ oreallocarray(
 	if ((nmemb >= MUL_NO_OVERFLOW || size >= MUL_NO_OVERFLOW) &&
 	    nmemb > 0 && SIZE_MAX / nmemb < size) {
 #ifndef EREALLOC_CALLSITE
-		msyslog(LOG_ERR, "fatal allocation size overflow");
+		msyslog(LOG_ERR, "ERR: fatal allocation size overflow");
 #else
 		msyslog(LOG_ERR,
-			"fatal allocation size overflow %s line %d",
+			"ERR: fatal allocation size overflow %s line %d",
 			file, line);
 #endif
 		exit(1);
@@ -137,15 +137,4 @@ estrdup_impl(
 
 	return copy;
 }
-
-
-#if 0
-#ifndef EREALLOC_CALLSITE
-void *
-emalloc(size_t newsz)
-{
-	return ereallocz(NULL, newsz, 0, false);
-}
-#endif
-#endif
 

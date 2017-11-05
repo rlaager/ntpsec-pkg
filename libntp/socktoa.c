@@ -2,7 +2,7 @@
  * socktoa.c	socktoa(), sockporttoa(), and sock_hash()
  */
 
-#include <config.h>
+#include "config.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -10,8 +10,7 @@
 
 #include <stdio.h>
 #include <arpa/inet.h>
-#include <isc/netaddr.h>
-#include <isc/sockaddr.h>
+#include "isc_netaddr.h"
 
 #include "ntp_fp.h"
 #include "lib_strbuf.h"
@@ -29,10 +28,10 @@ socktoa(
 	int		saved_errno;
 	char *		res;
 	char *		addr;
-	u_long		scope;
+	unsigned long	scope;
 
 	saved_errno = errno;
-	LIB_GETBUF(res);
+	res = lib_getbuf();
 
 	if (NULL == sock) {
 		strlcpy(res, "(null)", LIB_BUFLENGTH);
@@ -51,7 +50,7 @@ socktoa(
 			scope = SCOPE_VAR(sock);
 			if (0 != scope && !strchr(res, '%')) {
 				addr = res;
-				LIB_GETBUF(res);
+				res = lib_getbuf();
 				snprintf(res, LIB_BUFLENGTH, "%s%%%lu",
 					 addr, scope);
 				res[LIB_BUFLENGTH - 1] = '\0';
@@ -81,7 +80,7 @@ sockporttoa(
 
 	saved_errno = errno;
 	atext = socktoa(sock);
-	LIB_GETBUF(buf);
+	buf = lib_getbuf();
 	snprintf(buf, LIB_BUFLENGTH,
 		 (IS_IPV6(sock))
 		     ? "[%s]:%hu"
@@ -96,12 +95,12 @@ sockporttoa(
 /*
  * sock_hash - hash a sockaddr_u structure
  */
-u_short
+unsigned short
 sock_hash(
 	const sockaddr_u *addr
 	)
 {
-	u_int hashVal;
+	unsigned int hashVal;
 	size_t len;
 	const uint8_t *pch;
 
@@ -129,34 +128,13 @@ sock_hash(
 		pch = (const void *)&SOCK_ADDR6(addr);
 		len = sizeof(SOCK_ADDR6(addr));
 		break;
+        default:
+                /* huh? */
+                break;
 	}
 
-	for (u_int j = 0; j < len ; j++)
+	for (unsigned int j = 0; j < len ; j++)
 		hashVal = 37 * hashVal + pch[j];
 
-	return (u_short)(hashVal & USHRT_MAX);
-}
-
-
-int
-sockaddr_masktoprefixlen(
-	const sockaddr_u *	psa
-	)
-{
-	isc_netaddr_t	isc_na;
-	isc_sockaddr_t	isc_sa;
-	u_int		pfxlen;
-	bool		result;
-	int		rc;
-
-	ZERO(isc_sa);
-	memcpy(&isc_sa.type, psa,
-	       min(sizeof(isc_sa.type), sizeof(*psa)));
-	isc_netaddr_fromsockaddr(&isc_na, &isc_sa);
-	result = isc_netaddr_masktoprefixlen_bool(&isc_na, &pfxlen);
-	rc = (result)
-		 ? (int)pfxlen
-		 : -1;
-
-	return rc;
+	return (unsigned short)(hashVal & USHRT_MAX);
 }

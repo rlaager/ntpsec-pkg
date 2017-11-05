@@ -9,13 +9,20 @@ Serial Port: /dev/neoclock4x-u
 
 image:pic/neoclock4x.gif[float="right",link="http://www.linum.com"]
 
+== Warning ==
+
+This driver reports only two-digit years, and is thus reliant on the
+system clock to be near correct before samples will be processed
+properly. You will not be able to use it to run autonomously, nor will
+it reliably recover from a trashed or zeroed system clock.
+
 == Description ==
 
 The refclock_neoclock4x driver supports the NeoClock4X receiver
 available from http://www.linum.com[Linum Software GmbH]. The receiver
 is available as a http://www.dcf77.de[DCF77] or TDF receiver. Both
 receivers have the same output string. For more information about the
-NeoClock4X receiver please visit http://www.linux-funkuhr.de.  
+NeoClock4X receiver please visit http://www.linux-funkuhr.de.
 
 == Driver Options ==
 

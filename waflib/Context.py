@@ -5,9 +5,9 @@
 import os,re,imp,sys
 from waflib import Utils,Errors,Logs
 import waflib.Node
-HEXVERSION=0x1090600
-WAFVERSION="1.9.6"
-WAFREVISION="dbcda7ec6a52a88c7a605a357eb5713438ac2704"
+HEXVERSION=0x1090d00
+WAFVERSION="1.9.13"
+WAFREVISION="66f1d5bc9472557082b82aced1cbf6a9d6cd1a27"
 ABI=99
 DBFILE='.wafpickle-%s-%d-%d'%(sys.platform,sys.hexversion,ABI)
 APPNAME='APPNAME'
@@ -34,8 +34,8 @@ def create_context(cmd_name,*k,**kw):
 	ctx.fun=cmd_name
 	return ctx
 class store_context(type):
-	def __init__(cls,name,bases,dict):
-		super(store_context,cls).__init__(name,bases,dict)
+	def __init__(cls,name,bases,dct):
+		super(store_context,cls).__init__(name,bases,dct)
 		name=cls.__name__
 		if name in('ctx','Context'):
 			return
@@ -245,9 +245,14 @@ class Context(ctx):
 		if self.logger:
 			self.logger.info('from %s: %s'%(self.path.abspath(),msg))
 		try:
-			msg='%s\n(complete log in %s)'%(msg,self.logger.handlers[0].baseFilename)
+			logfile=self.logger.handlers[0].baseFilename
 		except AttributeError:
 			pass
+		else:
+			if os.environ.get('WAF_PRINT_FAILURE_LOG'):
+				msg='Log from (%s):\n%s\n'%(logfile,Utils.readf(logfile))
+			else:
+				msg='%s\n(complete log in %s)'%(msg,logfile)
 		raise self.errors.ConfigurationError(msg,ex=ex)
 	def to_log(self,msg):
 		if not msg:
@@ -376,7 +381,8 @@ def load_tool(tool,tooldir=None,ctx=None,with_sys_path=True):
 			Context.tools[tool]=ret
 			return ret
 		else:
-			if not with_sys_path:sys.path.insert(0,waf_dir)
+			if not with_sys_path:
+				sys.path.insert(0,waf_dir)
 			try:
 				for x in('waflib.Tools.%s','waflib.extras.%s','waflib.%s','%s'):
 					try:
@@ -387,7 +393,8 @@ def load_tool(tool,tooldir=None,ctx=None,with_sys_path=True):
 				else:
 					__import__(tool)
 			finally:
-				if not with_sys_path:sys.path.remove(waf_dir)
+				if not with_sys_path:
+					sys.path.remove(waf_dir)
 			ret=sys.modules[x%tool]
 			Context.tools[tool]=ret
 			return ret

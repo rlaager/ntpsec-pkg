@@ -7,7 +7,7 @@
  * data.
  */
 
-#include <config.h>
+#include "config.h"
 
 #include "ntp_fp.h"
 #include "timespecops.h"
@@ -20,33 +20,30 @@
 #include <setjmp.h>
 #include <stdbool.h>
 
-#ifdef STRUCT_NTPTIMEVAL_HAS_TIME_TV_NSEC
+#ifdef HAVE_STRUCT_NTPTIMEVAL_TIME_TV_NSEC
 #define tv_frac_sec tv_nsec
 #else
 #define tv_frac_sec tv_usec
 #endif
 
-/* microseconds per second */
-#define MICROSECONDS 1000000
-
 /*
  * Convert usec to a time stamp fraction.
  */
-# define TVUTOTSF(tvu, tsf)						\
-	((tsf) = (uint32_t)						\
-		 ((((uint64_t)(tvu) << 32) + MICROSECONDS / 2) /		\
-		  MICROSECONDS))
+# define TVUTOTSF(tvu)	\
+	(uint32_t)((((uint64_t)(tvu) << 32) + US_PER_S / 2) / US_PER_S)
 
-/*
- * Convert a struct timeval to a time stamp.
- */
-#define TVTOTS(tv, ts) \
-	do { \
-		(ts)->l_ui = (u_long)(tv)->tv_sec; \
-		TVUTOTSF((tv)->tv_usec, (ts)->l_uf); \
-	} while (false)
+/* nano seconds per micro second */
+#define NS_PER_US_FLOAT	1000.0
 
-#define NS_PER_MS_FLOAT	1000.0
+#ifndef HAVE_STRUCT_NTPTIMEVAL
+struct ntptimeval
+{
+	struct timeval	time;		/* current time (ro) */
+	long int	maxerror;	/* maximum error (us) (ro) */
+	long int	esterror;	/* estimated error (us) (ro) */
+};
+
+#endif	/* !HAVE_STRUCT_NTPTIMEVAL */
 
 /* MUSL port shim */
 #ifndef HAVE_NTP_GETTIME
@@ -60,7 +57,7 @@ int ntp_gettime(struct ntptimeval *ntv)
 	ntv->time = tntx.time;
 	ntv->maxerror = tntx.maxerror;
 	ntv->esterror = tntx.esterror;
-#if defined(STRUCT_NTPTIMEVAL_HAS_TAI)
+#if defined(HAVE_STRUCT_NTPTIMEVAL_TAI)
 	ntv->tai = tntx.tai;
 #endif
 	return result;
@@ -77,8 +74,6 @@ int ntp_gettime(struct ntptimeval *ntv)
 \11PPSSIGNAL\12PPSJITTER\13PPSWANDER\14PPSERROR\15CLOCKERR\
 \16NANO\17MODE\20CLK"
 
-#define SCALE_FREQ 65536		/* frequency scale */
-
 /*
  * These constants are used to round the time stamps computed from
  * a struct timeval to the microsecond (more or less).  This keeps
@@ -90,11 +85,11 @@ int ntp_gettime(struct ntptimeval *ntv)
 /*
  * Function prototypes
  */
-const char *	snprintb	(size_t, char *, u_int, const char *);
+const char *	snprintb	(size_t, char *, unsigned int, const char *);
 const char *	timex_state	(int);
 
 #ifdef SIGSYS
-void pll_trap		(int);
+void pll_trap(int) __attribute__((noreturn));
 
 static struct sigaction newsigsys;	/* new sigaction status */
 static struct sigaction sigsys;		/* current sigaction status */
@@ -113,8 +108,6 @@ main(
 	char *argv[]
 	)
 {
-	extern int ntp_optind;
-	extern char *ntp_optarg;
 	struct ntptimeval ntv;
 	struct timeval tv;
 	struct timex ntx, _ntx;
@@ -147,13 +140,11 @@ main(
 			ntx.modes |= MOD_NANO;
 			break;
 #endif
-#ifdef NTP_API
-# if NTP_API > 3
+#if defined NTP_API && NTP_API > 3
 		case 'T':
 			ntx.modes = MOD_TAI;
 			ntx.constant = atoi(ntp_optarg);
 			break;
-# endif
 #endif
 		case 'c':
 			cost++;
@@ -166,7 +157,7 @@ main(
 
 		case 'f':
 			ntx.modes |= MOD_FREQUENCY;
-			ntx.freq = (long)(atof(ntp_optarg) * SCALE_FREQ);
+			ntx.freq = (long)FP_SCALE(atof(ntp_optarg));
 			break;
 
 		case 'j':
@@ -228,12 +219,8 @@ main(
 #else
 "",
 #endif
-#ifdef NTP_API
-# if NTP_API > 3
+#if defined NTP_API && NTP_API > 3
 "-T tai_offset	set TAI offset\n",
-# else
-"",
-# endif
 #else
 "",
 #endif
@@ -313,7 +300,7 @@ main(
 		const char *ofmt2 = "  time %s, (.%0*d),\n";
 		const char *ofmt3 = "  maximum error %lu us, estimated error %lu us";
 		const char *ofmt4 = "  ntptime=%x.%x unixtime=%x.%0*d %s";
-#if NTP_API > 3
+#if defined NTP_API && NTP_API > 3
 		const char *ofmt5 = ", TAI offset %ld\n";
 #else
 		const char *ofmt6 = "\n";
@@ -323,7 +310,7 @@ main(
 		const char *jfmt2 = "\"time\":\"%s\",\"fractional-time\":\".%0*d\",";
 		const char *jfmt3 = "\"maximum-error\":%lu,\"estimated-error\":%lu,";
 		const char *jfmt4 = "\"raw-ntp-time\":\"%x.%x\",\"raw-unix-time\":\"%x.%0*d %s\",";
-#if NTP_API > 3
+#if defined NTP_API && NTP_API > 3
 		const char *jfmt5 = "\"TAI-offset\":%d,";
 #else
 		const char *jfmt6 = "";
@@ -340,24 +327,24 @@ main(
 #endif
 		tv.tv_sec = ntv.time.tv_sec;
 		tv.tv_usec = ntv.time.tv_frac_sec;
-		TVTOTS(&tv, &ts);
-		ts.l_ui += JAN_1970;
-		ts.l_uf += ts_roundbit;
-		ts.l_uf &= ts_mask;
-		printf(json ? jfmt2 : ofmt2,  json ? rfc3339date(&ts) : prettydate(&ts), fdigits, (int)time_frac);
-		printf(json ? jfmt3 : ofmt3,  (u_long)ntv.maxerror, (u_long)ntv.esterror);
+		ts = tspec_stamp_to_lfp(tval_to_tspec(tv));
+		setlfpfrac(ts, lfpfrac(ts) + ts_roundbit);
+		setlfpfrac(ts, lfpfrac(ts) & ts_mask);
+		printf(json ? jfmt2 : ofmt2,  json ? rfc3339date(ts) : prettydate(ts), fdigits, (int)time_frac);
+		printf(json ? jfmt3 : ofmt3,  (unsigned long)ntv.maxerror, (unsigned long)ntv.esterror);
 		if (rawtime)
 			printf(json ? jfmt4 : ofmt4,
-			       (u_int)ts.l_ui, (u_int)ts.l_uf,
+			       (unsigned int)lfpuint(ts),
+			       (unsigned int)lfpfrac(ts),
 			       (int)ntv.time.tv_sec, fdigits,
 			       (int)time_frac,
 
 			       ctime_r((time_t *)&ntv.time.tv_sec, ascbuf));
-#if defined(STRUCT_NTPTIMEVAL_HAS_TAI)
+#if defined(HAVE_STRUCT_NTPTIMEVAL_TAI)
 		printf(json ? jfmt5 : ofmt5, (long)ntv.tai);
 #else
 		fputs(json ? jfmt6 : ofmt6, stdout);
-#endif /* STRUCT_NTPTIMEVAL_HAS_TAI */
+#endif /* HAVE_STRUCT_NTPTIMEVAL_TAI */
 	}
 	status = ntp_adjtime_ns(&ntx);
 	if (status < 0) {
@@ -367,40 +354,40 @@ main(
 	} else {
 		char binbuf[132];
 		/* oldstyle formats */
-		char *ofmt7 = "ntp_adjtime() returns code %d (%s)\n";
-		char *ofmt8 = "  modes %s,\n";
-		char *ofmt9 = "  offset %.3f";
-		char *ofmt10 = " us, frequency %.3f ppm, interval %d s,\n";
-		char *ofmt11 = "  maximum error %lu us, estimated error %lu us,\n";
-		char *ofmt12 = "  status %s,\n";
-		char *ofmt13 = "  time constant %lu, precision %.3f us, tolerance %.0f ppm,\n";
-		char *ofmt14 = "  pps frequency %.3f ppm, stability %.3f ppm, jitter %.3f us,\n";
-		char *ofmt15 = "  intervals %lu, jitter exceeded %lu, stability exceeded %lu, errors %lu.\n";
+		const char *ofmt7 = "ntp_adjtime() returns code %d (%s)\n";
+		const char *ofmt8 = "  modes %s,\n";
+		const char *ofmt9 = "  offset %.3f";
+		const char *ofmt10 = " us, frequency %.3f ppm, interval %d s,\n";
+		const char *ofmt11 = "  maximum error %lu us, estimated error %lu us,\n";
+		const char *ofmt12 = "  status %s,\n";
+		const char *ofmt13 = "  time constant %lu, precision %.3f us, tolerance %.0f ppm,\n";
+		const char *ofmt14 = "  pps frequency %.3f ppm, stability %.3f ppm, jitter %.3f us,\n";
+		const char *ofmt15 = "  intervals %lu, jitter exceeded %lu, stability exceeded %lu, errors %lu.\n";
 		/* JSON formats */
-		char *jfmt7 = "\"adjtime-code\":%d,\"adjtime-status\":\"%s\",";
-		char *jfmt8 = "\"modes\":\"%s\",";
-		char *jfmt9 = "\"offset\":%.3f,";
-		char *jfmt10 = "\"frequency\":%.3f,\"interval\":%d,";
-		char *jfmt11 = "\"maximum-error\":%lu,\"estimated-error\":%lu,";
-		char *jfmt12 = "\"status\":\"%s\",";
-		char *jfmt13 = "\"time-constant\":%lu,\"precision\":%.3f,\"tolerance\":%.0f,";
-		char *jfmt14 = "\"pps-frequency\":%.3f,\"stability\":%.3f,\"jitter\":%.3f,";
-		char *jfmt15 = "\"intervals\":%lu,\"jitter-exceeded\":%lu,\"stability-exceeded\":%lu,\"errors:%lu\n";
+		const char *jfmt7 = "\"adjtime-code\":%d,\"adjtime-status\":\"%s\",";
+		const char *jfmt8 = "\"modes\":\"%s\",";
+		const char *jfmt9 = "\"offset\":%.3f,";
+		const char *jfmt10 = "\"frequency\":%.3f,\"interval\":%d,";
+		const char *jfmt11 = "\"maximum-error\":%lu,\"estimated-error\":%lu,";
+		const char *jfmt12 = "\"status\":\"%s\",";
+		const char *jfmt13 = "\"time-constant\":%lu,\"precision\":%.3f,\"tolerance\":%.0f,";
+		const char *jfmt14 = "\"pps-frequency\":%.3f,\"stability\":%.3f,\"jitter\":%.3f,";
+		const char *jfmt15 = "\"intervals\":%lu,\"jitter-exceeded\":%lu,\"stability-exceeded\":%lu,\"errors:%lu\n";
 
 		flash = ntx.status;
 		printf(json ? jfmt7 : ofmt7, status, timex_state(status));
 		printf(json ? jfmt8 : ofmt8,
 		       snprintb(sizeof(binbuf), binbuf, ntx.modes, TIMEX_MOD_BITS));
-		ftemp = (double)ntx.offset/NS_PER_MS_FLOAT;
+		ftemp = (double)ntx.offset/NS_PER_US_FLOAT;
 		printf(json ? jfmt9 : ofmt9, ftemp);
-		ftemp = (double)ntx.freq / SCALE_FREQ;
+		ftemp = FP_UNSCALE(ntx.freq);
 		printf(json ? jfmt10 : ofmt10, ftemp, 1 << ntx.shift);
 		printf(json ? jfmt11 : ofmt11,
-		     (u_long)ntx.maxerror, (u_long)ntx.esterror);
+		     (unsigned long)ntx.maxerror, (unsigned long)ntx.esterror);
 		printf(json ? jfmt12 : ofmt12,
 		       snprintb(sizeof(binbuf), binbuf,
-			       (u_int)ntx.status, TIMEX_STA_BITS));
-		ftemp = (double)ntx.tolerance / SCALE_FREQ;
+			       (unsigned int)ntx.status, TIMEX_STA_BITS));
+		ftemp = FP_UNSCALE(ntx.tolerance);
 		/*
 		 * Before the introduction of ntp_adjtime_ns() the
 		 * ntptime code divided this by 1000 when the STA_NANO
@@ -410,16 +397,16 @@ main(
 		 */
 		gtemp = (double)ntx.precision;
 		printf(json ? jfmt13 : ofmt13,
-			(u_long)ntx.constant, gtemp, ftemp);
+			(unsigned long)ntx.constant, gtemp, ftemp);
 		if (ntx.shift != 0) {
-			ftemp = (double)ntx.ppsfreq / SCALE_FREQ;
-			gtemp = (double)ntx.stabil / SCALE_FREQ;
-			htemp = (double)ntx.jitter/NS_PER_MS_FLOAT;
+		  ftemp = FP_UNSCALE(ntx.ppsfreq);
+		  gtemp = FP_UNSCALE(ntx.stabil);
+			htemp = (double)ntx.jitter/NS_PER_US_FLOAT;
 			printf(json ? jfmt14 : ofmt14,
 			    ftemp, gtemp, htemp);
 			printf(json ? jfmt15 : ofmt15,
-			    (u_long)ntx.calcnt, (u_long)ntx.jitcnt,
-			    (u_long)ntx.stbcnt, (u_long)ntx.errcnt);
+			    (unsigned long)ntx.calcnt, (unsigned long)ntx.jitcnt,
+			    (unsigned long)ntx.stbcnt, (unsigned long)ntx.errcnt);
 		}
 		if (json)
 		    /* hack to avoid trailing comma - not semabtically needed */ 
@@ -464,7 +451,7 @@ const char *
 snprintb(
 	size_t		buflen,
 	char *		buf,
-	u_int		v,
+	unsigned int	v,
 	const char *	bits
 	)
 {
@@ -486,7 +473,7 @@ snprintb(
 		*cp++ = '(';
 		any = false;
 		while ((i = *bits++) != 0) {
-			if (v & (1 << (i - 1))) {
+			if (v & (unsigned int)(1 << (i - 1))) {
 				if (any) {
 					*cp++ = ',';
 					if (cp >= cplim)

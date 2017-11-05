@@ -7,6 +7,14 @@ Name: jjy
 Reference ID: JJY
 Serial Port: +/dev/jjyu+; See corresponding receiver
 
+== Warning ==
+
+Some modes of this driver report only two-digit years, and are thus
+reliant on the system clock to be near correct before samples will be
+processed properly. You will not be able to use them to run
+autonomously, nor will it reliably recover from a trashed or zeroed
+system clock.
+
 == Description ==
 
 This driver supports the following the JJY receivers and the GPS clock
@@ -31,10 +39,10 @@ refclock jjy unit X subtype 1 time1 0.NNN flag1 {0|1};;
   time from the receiver, a fixed-point decimal number in seconds. You
   may specify the time offset from several tens of milliseconds (
   0.0NN seconds ) to a hundred and several tens of milliseconds (
-  0.1NN seconds ) for this clock. + 
+  0.1NN seconds ) for this clock. +
   Flag1 has no effect for time synchronization. When flag1 is set to
   1, status commands are issued before DATE and STIM commands, and
-  write a response text into the clockstats file. 
+  write a response text into the clockstats file.
 +
 [width="100%",cols="<50%,<50%",]
 |====================================
@@ -75,7 +83,7 @@ Time code format::
 Command        -\-> Reply +
 +{ENQ}1J{ETX}+ -\-> +{STX}JYYMMDDWHHMMSSS{ETX}+
 
-* [[subtype-3]]Echo Keisokuki Co.,Ltd. LT-2000 http://www.clock.co.jp/ (domain no longer registered)
+* [[subtype-3]]Echo Keisokuki Co.,Ltd. LT-2000
 +
 NTP configuration ( {ntpconf} )::
 +
@@ -95,6 +103,8 @@ Time code format::
 |( Every second before 0.5 second )|      | +YYMMDDWHHMMSS{ST1}{ST2}{ST3}{ST4}{CR}+
 |#                                 | -\-> | ( Subtype 1 : Request&Send )
 |===================================================================
++
+Note: Echo Keisokuki has been dissolved. Some business of the company was taken over by FreqTime Co., Ltd. in July, 2015.
 
 * [[subtype-4]]CITIZEN T.I.C. CO.,LTD. JJY-200 http://www.tic-citizen.co.jp/ (Japanese only)
 +
@@ -361,6 +371,9 @@ filegen clockstats file clockstats type day enable
 
 == Driver Options ==
 
++unit+ 'number'::
+  The driver unit number, defaulting to 0. Used as a distinguishing
+  suffix in the driver device name. 
 +time1+ 'time'::
   Specifies the time offset calibration factor, in seconds and fraction,
   with default 0.0.

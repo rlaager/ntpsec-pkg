@@ -2,7 +2,7 @@
  * socket.c - low-level socket operations
  */
 
-#include <config.h>
+#include "config.h"
 
 #include <stdio.h>
 
@@ -24,7 +24,7 @@
  * and may exceed the current file descriptor limits.
  * We are using following strategy:
  * - keep a current socket fd boundary initialized with
- *   max(0, min(GETDTABLESIZE() - FD_CHUNK, FOPEN_MAX))
+ *   max(0, min(sysconf(_SC_OPEN_MAX) - FD_CHUNK, FOPEN_MAX))
  * - attempt to move the descriptor to the boundary or
  *   above.
  *   - if that fails and boundary > 0 set boundary
@@ -70,18 +70,18 @@ move_fd(
 	static SOCKET socket_boundary = -1;
 	SOCKET newfd;
 
-	NTP_REQUIRE((int)fd >= 0);
+	REQUIRE((int)fd >= 0);
 
 	/*
 	 * check whether boundary has be set up
 	 * already
 	 */
 	if (socket_boundary == -1) {
-		socket_boundary = max(0, min(GETDTABLESIZE() - FD_CHUNK,
+		socket_boundary = max(0, min(sysconf(_SC_OPEN_MAX) - FD_CHUNK,
 					     min(FOPEN_MAX, FD_PREFERRED_SOCKBOUNDARY)));
-		TRACE(1, ("move_fd: estimated max descriptors: %d, "
-			  "initial socket boundary: %d\n",
-			  GETDTABLESIZE(), socket_boundary));
+		TPRINT(1, ("move_fd: estimated max descriptors: %d, "
+			   "initial socket boundary: %d\n",
+			   (int)sysconf(_SC_OPEN_MAX), socket_boundary));
 	}
 
 	/*
@@ -103,11 +103,11 @@ move_fd(
 			return fd;
 		}
 		socket_boundary = max(0, socket_boundary - FD_CHUNK);
-		TRACE(1, ("move_fd: selecting new socket boundary: %d\n",
-			  socket_boundary));
+		TPRINT(1, ("move_fd: selecting new socket boundary: %d\n",
+			   socket_boundary));
 	} while (socket_boundary > 0);
 #else
-	NTP_REQUIRE((int)fd >= 0);
+	REQUIRE((int)fd >= 0);
 #endif /* defined(F_DUPFD) */
 	return fd;
 }
@@ -127,42 +127,8 @@ make_socket_nonblocking(
 
 	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
 		msyslog(LOG_ERR,
-			"fcntl(O_NONBLOCK) fails on fd #%d: %m", fd);
+			"ERR: fcntl(O_NONBLOCK) fails on fd #%d: %m", fd);
 		exit(1);
 	}
 }
 
-#if 0
-
-/* The following subroutines should probably be moved here */
-
-static SOCKET
-open_socket(
-	sockaddr_u *	addr,
-	int		bcast,
-	int		turn_off_reuse,
-	endpt *		interf
-	)
-void
-sendpkt(
-	sockaddr_u *		dest,
-	endpt *			ep,
-	int			ttl,
-	struct pkt *		pkt,
-	int			len
-	)
-
-static inline int
-read_refclock_packet(SOCKET fd, struct refclockio *rp, l_fp ts)
-
-static inline int
-read_network_packet(
-	SOCKET			fd,
-	endpt *			itf,
-	l_fp			ts
-	)
-
-void
-kill_asyncio(int startfd)
-
-#endif /* 0 */

@@ -55,24 +55,24 @@ format_time_fraction(
 	)
 {
 	char *		cp;
-	u_int		prec_u;
+	unsigned int	prec_u;
 	u_time		secs_u;
-	u_int		u;
+	unsigned int	u;
 	long		fraclimit;
 	int		notneg;	/* flag for non-negative value	*/
 	ldiv_t		qr;
 
-	//DEBUG_REQUIRE(prec != 0);
+	//REQUIRE(prec != 0);
 
-	LIB_GETBUF(cp);
+	cp = lib_getbuf();
 	secs_u = (u_time)secs;
 	
 	/* check if we need signed or unsigned mode */
 	notneg = (prec < 0);
-	prec_u = abs(prec);
+	prec_u = (unsigned int)abs(prec);
 	/* fraclimit = (long)pow(10, prec_u); */
 	for (fraclimit = 10, u = 1; u < prec_u; u++) {
-		//DEBUG_INSIST(fraclimit < fraclimit * 10);
+		//INSIST(fraclimit < fraclimit * 10);
 		fraclimit *= 10;
 	}
 
@@ -87,7 +87,7 @@ format_time_fraction(
 			qr.quot--;
 			qr.rem += fraclimit;
 		}
-		secs_u += (time_t)qr.quot;
+		secs_u += (u_time)qr.quot;
 		frac = qr.rem;
 	}
 
@@ -103,7 +103,7 @@ format_time_fraction(
 
 	/* finally format the data and return the result */
 	snprintf(cp, LIB_BUFLENGTH, "%s%llu.%0*ld",
-	    notneg? "" : "-", secs_u, prec_u, frac);
+	    notneg? "" : "-", secs_u, (int)prec_u, frac);
 	
 	return cp;
 }

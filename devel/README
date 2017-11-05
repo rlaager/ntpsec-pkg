@@ -22,8 +22,11 @@ ifdex-ignores::
 make-tarball::
 	Script for building a release tarball.
 
-packaging.txt::
-	Guidance for binary package builders.
+ntpv5.txt::
+	Design notes towards NTPv5.
+
+pre-release.txt::
+	A collection of ideas about testing before a release.
 
 release::
 	Script for shipping a release.

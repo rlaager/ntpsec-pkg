@@ -1,14 +1,13 @@
 /*
  * authkeys.c - routines to manage the storage of authentication keys
  */
-#include <config.h>
+#include "config.h"
 
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "ntp.h"
-#include "ntp_fp.h"
 #include "ntpd.h"
 #include "ntp_lists.h"
 #include "ntp_malloc.h"
@@ -46,6 +45,7 @@ symkey_alloc *	authallocs;
 #endif	/* DEBUG */
 
 static inline unsigned short	auth_log2(double x);
+static void	auth_moremem	(int);
 static void		auth_resize_hashtable(void);
 static void		allocsymkey(symkey **, keyid_t,	unsigned short,
 				    unsigned short, unsigned short, uint8_t *);
@@ -54,22 +54,22 @@ static void		freesymkey(symkey *, symkey **);
 static void		free_auth_mem(void);
 #endif
 
-symkey key_listhead;		/* list of all in-use keys */
+static symkey key_listhead;		/* list of all in-use keys */
 /*
  * The hash table. This is indexed by the low order bits of the
  * keyid. This gets updated in auth_resize_hashtable
  */
 #define KEYHASH(keyid)	((keyid) & authhashmask)
 #define INIT_AUTHHASHSIZE 64
-unsigned short authhashbuckets = INIT_AUTHHASHSIZE;
-unsigned short authhashmask = INIT_AUTHHASHSIZE - 1;
-symkey **key_hash;
+static unsigned short authhashbuckets = INIT_AUTHHASHSIZE;
+static unsigned short authhashmask = INIT_AUTHHASHSIZE - 1;
+static symkey **key_hash;
 
 unsigned int authkeynotfound;		/* keys not found */
 unsigned int authkeylookups;		/* calls to lookup keys */
 unsigned int authnumkeys;		/* number of active keys */
 unsigned int authkeyuncached;		/* cache misses */
-unsigned int authnokey;		/* calls to encrypt with no key */
+static unsigned int authnokey;		/* calls to encrypt with no key */
 unsigned int authencryptions;		/* calls to encrypt */
 unsigned int authdecryptions;		/* calls to decrypt */
 
@@ -77,7 +77,7 @@ unsigned int authdecryptions;		/* calls to decrypt */
  * Storage for free symkey structures.  We malloc() such things but
  * never free them.
  */
-symkey *authfreekeys;
+static symkey *authfreekeys;
 int authnumfreekeys;
 
 #define	MEMINC	16		/* number of new free ones to get */
@@ -148,7 +148,7 @@ free_auth_mem(void)
 /*
  * auth_moremem - get some more free key structures
  */
-void
+static void
 auth_moremem(
 	int	keycount
 	)
@@ -166,7 +166,7 @@ auth_moremem(
 	i = (keycount > 0)
 		? keycount
 		: MEMINC;
-	sk = emalloc_zero(i * sizeof(*sk) + MOREMEM_EXTRA_ALLOC);
+	sk = emalloc_zero((unsigned int)i * sizeof(*sk) + MOREMEM_EXTRA_ALLOC);
 #ifdef DEBUG
 	base = sk;
 #endif
@@ -195,7 +195,7 @@ auth_prealloc_symkeys(
 	int	allocated;
 	int	additional;
 
-	allocated = authnumkeys + authnumfreekeys;
+	allocated = (int)authnumkeys + authnumfreekeys;
 	additional = keycount - allocated;
 	if (additional > 0)
 		auth_moremem(additional);
@@ -226,7 +226,7 @@ auth_resize_hashtable(void)
 	size_t		newalloc;
 	symkey *	sk;
 
-	totalkeys = authnumkeys + authnumfreekeys;
+	totalkeys = authnumkeys + (unsigned int)authnumfreekeys;
 	hashbits = auth_log2(totalkeys / 4.0) + 1;
 	hashbits = max(4, hashbits);
 	hashbits = min(15, hashbits);
@@ -267,7 +267,7 @@ allocsymkey(
 	if (authnumfreekeys < 1)
 		auth_moremem(-1);
 	UNLINK_HEAD_SLIST(sk, authfreekeys, llink.f);
-	//DEBUG_ENSURE(sk != NULL);
+	//ENSURE(sk != NULL);
 	sk->keyid = id;
 	sk->flags = flags;
 	sk->type = type;
@@ -297,53 +297,13 @@ freesymkey(
                 sk->secret = NULL;
 	}
 	UNLINK_SLIST(unlinked, *bucket, sk, hlink, symkey);
-	//DEBUG_ENSURE(sk == unlinked);
+	//ENSURE(sk == unlinked);
 	UNLINK_DLIST(sk, llink);
 	memset((char *)sk + offsetof(symkey, symkey_payload), '\0',
 	       sizeof(*sk) - offsetof(symkey, symkey_payload));
 	LINK_SLIST(authfreekeys, sk, llink.f);
 	authnumkeys--;
 	authnumfreekeys++;
-}
-
-
-/*
- * auth_findkey - find a key in the hash table
- */
-struct savekey *
-auth_findkey(
-	keyid_t		id
-	)
-{
-	for (symkey * sk = key_hash[KEYHASH(id)]; sk != NULL; sk = sk->hlink) {
-		if (id == sk->keyid) {
-			return sk;
-		}
-	}
-
-	return NULL;
-}
-
-
-/*
- * auth_havekey - return true if the key id is zero or known
- */
-int
-auth_havekey(
-	keyid_t		id
-	)
-{
-	if (0 == id || cache_keyid == id) {
-		return true;
-	}
-
-	for (symkey * sk = key_hash[KEYHASH(id)]; sk != NULL; sk = sk->hlink) {
-		if (id == sk->keyid) {
-			return true;
-		}
-	}
-
-	return false;
 }
 
 
@@ -486,7 +446,7 @@ authistrusted(
 
 
 void
-MD5auth_setkey(
+mac_setkey(
 	keyid_t keyno,
 	int	keytype,
 	const uint8_t *key,
@@ -497,8 +457,8 @@ MD5auth_setkey(
 	uint8_t *	secret;
 	size_t		secretsize;
 	
-	//DEBUG_ENSURE(keytype <= USHRT_MAX);
-	//DEBUG_ENSURE(len < 4 * 1024);
+	//ENSURE(keytype <= USHRT_MAX);
+	//ENSURE(len < 4 * 1024);
 	/*
 	 * See if we already have the key.  If so just stick in the
 	 * new value.
@@ -529,7 +489,7 @@ MD5auth_setkey(
 	allocsymkey(bucket, keyno, 0, (unsigned short)keytype,
 		    (unsigned short)secretsize, secret);
 #ifdef DEBUG
-	if (debug >= 4) {
+	if (debug >= 4) { /* SPECIAL DEBUG */
 		printf("auth_setkey: key %d type %d len %d ", (int)keyno,
 		    keytype, (int)secretsize);
 		for (size_t j = 0; j < secretsize; j++)
@@ -594,7 +554,7 @@ authencrypt(
 		return 0;
 	}
 
-	return MD5authencrypt(cache_type, cache_secret, pkt, length);
+	return mac_authencrypt(cache_type, cache_secret, pkt, length);
 }
 
 
@@ -621,6 +581,5 @@ authdecrypt(
 		return false;
 	}
 
-	return MD5authdecrypt(cache_type, cache_secret, pkt, length,
-			      size);
+	return mac_authdecrypt(cache_type, cache_secret, pkt, length, size);
 }

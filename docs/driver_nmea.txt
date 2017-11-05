@@ -7,7 +7,6 @@ Name: nmea
 Reference ID: GPS
 Serial Port: /dev/gps__u__; 4800-115200bps, 8N1
 Serial Port: /dev/gpspps__u__; for PPS
-Serial Port: /dev/gps__u__; symlink to server:port (for nmead)
 Features: +tty_clk+
 
 == Description ==
@@ -187,8 +186,8 @@ the total but otherwise ignored.
 
 http://support.ntp.org/bin/view/Support/ConfiguringNMEARefclocks[Configuring
 NMEA Refclocks] might give further useful hints for specific hardware
-devices that exhibit strange or curious behaviour. Not that it
-describes NTP Classic and the old refclock confihuration syntax, and
+devices that exhibit strange or curious behaviour. Note that it
+describes NTP Classic and the old refclock configuration syntax, and
 assumes the old default speed of 4800 baud.
 
 To make a specific setting, select the corresponding decimal values from
@@ -218,6 +217,9 @@ switched on by sending the following string.
 
 == Driver Options ==
 
++unit+ 'number'::
+  The driver unit number, defaulting to 0. Used as a distinguishing
+  suffix in the driver device name. 
 +time1+ 'time'::
   Specifies the PPS time offset calibration factor, in seconds and
   fraction, with default 0.0.
@@ -262,4 +264,20 @@ link:refclock.html[Reference Clock Drivers]
 
 '''''
 
+== Known bugs ==
+
+If your GPS has firmware made more than 1024 weeks (19 years and 36
+weeks) in the past, its internal date counter will almost certainly
+wrap around and generate spurious timestamps.  Beginning in January
+2018, newer GPSes may have a longer wraparound (8192 weeks, or 157
+years and 28 weeks) but it is not safe to bet that any given receiver
+will have firmware updated to take advantage of this.
+
+This problem is fundamental and cannot be compensated for in code
+without relying on the accuracy of the local system clock, which
+is exactly what an NTP implementation may not do without risking
+perverse failure modes (especially at startup time). The only
+remedy is not to use ancient GPS hardware.
+
+'''''
 include::includes/footer.txt[]

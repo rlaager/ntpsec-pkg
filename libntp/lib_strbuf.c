@@ -1,30 +1,30 @@
 /*
  * lib_strbuf - library string storage
  */
-#include <config.h>
+#include "config.h"
 
-#include <isc/net.h>
+#include "isc_netaddr.h"
 
 #include "ntp_fp.h"
 #include "ntp_stdlib.h"
 #include "lib_strbuf.h"
 
-
 /*
  * Storage declarations
  */
 int		debug;
-libbufstr	lib_stringbuf[LIB_NUMBUF];
-int		lib_nextbuf;
-
 
 /*
- * This stub is required to pacify the Mac OS X linker, which will
- * refuse to consider a module a candidate to be linked unless it
- * has an executable entry point called from somewhere else that
- * is linked.
+ * Macro to get a pointer to the next buffer
  */
-void
-init_lib(void)
+char *lib_getbuf(void)
 {
+    static libbufstr	lib_stringbuf[LIB_NUMBUF];
+    static int		lib_nextbuf;
+    char *bufp;
+
+    ZERO(lib_stringbuf[lib_nextbuf]);
+    (bufp) = &lib_stringbuf[lib_nextbuf++][0];
+    lib_nextbuf %= (int)COUNTOF(lib_stringbuf);
+    return bufp;
 }

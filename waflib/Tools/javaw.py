@@ -57,7 +57,7 @@ def apply_java(self):
 		tmp.append(y)
 	tsk.srcdir=tmp
 	if getattr(self,'compat',None):
-		tsk.env.append_value('JAVACFLAGS',['-source',self.compat])
+		tsk.env.append_value('JAVACFLAGS',['-source',str(self.compat)])
 	if hasattr(self,'sourcepath'):
 		fold=[isinstance(x,Node.Node)and x or self.path.find_dir(x)for x in self.to_list(self.sourcepath)]
 		names=os.pathsep.join([x.srcpath()for x in fold])
@@ -66,6 +66,7 @@ def apply_java(self):
 	if names:
 		tsk.env.append_value('JAVACFLAGS',['-sourcepath',names])
 @feature('javac')
+@before_method('propagate_uselib_vars')
 @after_method('apply_java')
 def use_javac_files(self):
 	lst=[]

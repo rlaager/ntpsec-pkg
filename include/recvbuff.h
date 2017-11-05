@@ -60,7 +60,7 @@ struct recvbuf {
 #endif /* REFCLOCK */
 };
 
-extern	void	init_recvbuff(int);
+extern	void	init_recvbuff(unsigned int); /* not really pure */
 
 /* freerecvbuf - make a single recvbuf available for reuse
  */
@@ -75,18 +75,16 @@ extern	void	freerecvbuf(struct recvbuf *);
 
 /* signal safe - no malloc */
 extern	struct recvbuf *get_free_recv_buffer(void);
-/* signal unsafe - may malloc */
-extern	struct recvbuf *get_free_recv_buffer_alloc(void);
 
 /*   Add a buffer to the full list
  */
 extern	void	add_full_recv_buffer(struct recvbuf *);
 
 /* number of recvbufs on freelist */
-extern u_long free_recvbuffs(void);		
-extern u_long full_recvbuffs(void);		
-extern u_long total_recvbuffs(void);
-extern u_long lowater_additions(void);
+extern unsigned long free_recvbuffs(void);    /* not really pure */
+extern unsigned long full_recvbuffs(void);    /* not really pure */
+extern unsigned long total_recvbuffs(void);   /* not really pure */
+extern unsigned long lowater_additions(void); /* not really pure */
 		
 /*  Returns the next buffer in the full list.
  *
@@ -102,6 +100,6 @@ extern	void purge_recv_buffers_for_fd(SOCKET);
 /*
  * Checks to see if there are buffers to process
  */
-extern bool has_full_recv_buffer(void);
+extern bool has_full_recv_buffer(void); /* not really pure */
 
 #endif	/* GUARD_RECVBUFF_H */

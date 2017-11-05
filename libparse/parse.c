@@ -7,7 +7,7 @@
  *
  */
 
-#include <config.h>
+#include "config.h"
 #include "ntp_fp.h"
 #include "timespecops.h"
 #include "ntp_calendar.h"
@@ -19,10 +19,14 @@
 
 # include <stdio.h>
 
-extern clockformat_t *clockformats[];
-extern unsigned short nformats;
+/*
+ * PPS edge info
+ */
+#define SYNC_ONE	0x01
 
 static unsigned long timepacket (parse_t *);
+static unsigned int parse_restart (parse_t *, char);
+static parse_pps_fnc_t pps_simple;
 
 bool
 parse_timedout(
@@ -35,10 +39,10 @@ parse_timedout(
 
 	l_fp delt;
 
-	delt = tstamp->fp;
-	L_SUB(&delt, &parseio->parse_lastchar.fp);
+	delt = *tstamp;
+	delt -= parseio->parse_lastchar;
 	delta = lfp_uintv_to_tspec(delt);
-	if (cmp_tspec(delta, *del) == TIMESPEC_GREATER_THAN)
+       if (cmp_tspec(delta, *del) > 0)
 	{
 		parseprintf(DD_PARSE, ("parse: timedout: TRUE\n"));
 		return true;
@@ -53,7 +57,7 @@ parse_timedout(
 /*ARGSUSED*/
 bool
 parse_ioinit(
-	register parse_t *parseio
+	parse_t *parseio
 	)
 {
 	parseprintf(DD_PARSE, ("parse_iostart\n"));
@@ -76,7 +80,7 @@ parse_ioinit(
 /*ARGSUSED*/
 void
 parse_ioend(
-	register parse_t *parseio
+	parse_t *parseio
 	)
 {
 	parseprintf(DD_PARSE, ("parse_ioend\n"));
@@ -88,7 +92,7 @@ parse_ioend(
 	    free(parseio->parse_data);
 }
 
-unsigned int
+static unsigned int
 parse_restart(
 	      parse_t *parseio,
 	      char ch
@@ -132,7 +136,9 @@ parse_addchar(
 		/*
 		 * collect into buffer
 		 */
-		parseprintf(DD_PARSE, ("parse: parse_addchar: buffer[%d] = 0x%x\n", parseio->parse_index, ch));
+		parseprintf(DD_PARSE,
+                            ("parse: parse_addchar: buffer[%d] = 0x%x\n",
+                             parseio->parse_index, (unsigned)ch));
 		parseio->parse_data[parseio->parse_index++] = (char)ch;
 		return PARSE_INP_SKIP;
 	}
@@ -162,12 +168,12 @@ parse_end(
 /*ARGSUSED*/
 int
 parse_ioread(
-	register parse_t *parseio,
-	register char ch,
-	register timestamp_t *tstamp
+	parse_t *parseio,
+	char ch,
+	timestamp_t *tstamp
 	)
 {
-	register unsigned int updated = CVT_NONE;
+	unsigned int updated = CVT_NONE;
 	/*
 	 * within STREAMS CSx (x < 8) chars still have the upper bits set
 	 * so we normalize the characters by masking unnecessary bits off.
@@ -192,9 +198,14 @@ parse_ioread(
 	    case PARSE_IO_CS8:
 		ch &= (char) 0xFFU;
 		break;
+
+            default:
+                /* huh? */
+                break;
 	}
 
-	parseprintf(DD_PARSE, ("parse_ioread(0x%lx, char=0x%x, ..., ...)\n", (unsigned long)parseio, ch & 0xFF));
+	parseprintf(DD_PARSE, ("parse_ioread(0x%lx, char=0x%x, ..., ...)\n",
+                    (unsigned long)parseio, (unsigned)(ch & 0xFF)));
 
 	if (!clockformats[parseio->parse_lformat]->convert)
 	{
@@ -244,40 +255,6 @@ parse_ioread(
 }
 
 /*
- * parse_iopps
- *
- * take status line indication and derive synchronisation information
- * from it.
- * It can also be used to decode a serial serial data format (such as the
- * ONE, ZERO, MINUTE sync data stream from DCF77)
- */
-/*ARGSUSED*/
-int
-parse_iopps(
-	register parse_t *parseio,
-	register int status,
-	register timestamp_t *ptime
-	)
-{
-	register unsigned int updated = CVT_NONE;
-
-	/*
-	 * PPS pulse information will only be delivered to ONE clock format
-	 * this is either the last successful conversion module with a ppssync
-	 * routine, or a fixed format with a ppssync routine
-	 */
-	parseprintf(DD_PARSE, ("parse_iopps: STATUS %s\n", (status == SYNC_ONE) ? "ONE" : "ZERO"));
-
-	if (clockformats[parseio->parse_lformat]->syncpps)
-	{
-		updated = (unsigned int) clockformats[parseio->parse_lformat]->syncpps(parseio, status == SYNC_ONE, ptime);
-		parseprintf(DD_PARSE, ("parse_iopps: updated = 0x%x\n", updated));
-	}
-
-	return (updated & CVT_MASK) != CVT_NONE;
-}
-
-/*
  * parse_iodone
  *
  * clean up internal status for new round
@@ -285,7 +262,7 @@ parse_iopps(
 /*ARGSUSED*/
 void
 parse_iodone(
-	register parse_t *parseio
+	parse_t *parseio
 	)
 {
 	/*
@@ -300,12 +277,11 @@ parse_iodone(
 /*
  * convert a struct clock to UTC since Jan, 1st 1970 0:00 (the UNIX EPOCH)
  */
-#define days_per_year(x)	((x) % 4 ? 365 : ((x % 400) ? ((x % 100) ? 366 : 365) : 366))
 
 time_t
 parse_to_unixtime(
-	register clocktime_t   *clock_time,
-	register unsigned long *cvtrtc
+	clocktime_t   *clock_time,
+	unsigned long *cvtrtc
 	)
 {
 #define SETRTC(_X_)	{ if (cvtrtc) *cvtrtc = (_X_); }
@@ -313,7 +289,7 @@ parse_to_unixtime(
 	{
 		0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 	};
-	register int i;
+	int i;
 	time_t t;
 
 	if (clock_time->utctime)
@@ -341,14 +317,8 @@ parse_to_unixtime(
 		return -1;		/* bad month */
 	}
 
-#if 0								/* Y2KFixes */
-				/* adjust leap year */
-	if (clock_time->month < 3 && days_per_year(clock_time->year) == 366)
-	    t--;
-#else								/* Y2KFixes [ */
-	if ( clock_time->month >= 3  &&  isleap_4(clock_time->year) )
+	if ( clock_time->month >= 3  &&  is_leapyear(clock_time->year) )
 	    t++;		/* add one more if within leap year */
-#endif								/* Y2KFixes ] */
 
 	for (i = 1; i < clock_time->month; i++)
 	{
@@ -471,8 +441,8 @@ Strok(
 
 unsigned long
 updatetimeinfo(
-	       register parse_t *parseio,
-	       register unsigned long   flags
+	       parse_t *parseio,
+	       unsigned long   flags
 	       )
 {
 		parseio->parse_lstate          = parseio->parse_dtime.parse_state | flags | PARSEB_TIMECODE;
@@ -480,30 +450,10 @@ updatetimeinfo(
 		parseio->parse_dtime.parse_state = parseio->parse_lstate;
 
 	parseprintf(DD_PARSE, ("updatetimeinfo status=0x%lx, time=%x\n",
-			       (long)parseio->parse_dtime.parse_state,
-	                       parseio->parse_dtime.parse_time.fp.l_ui));
+			       (unsigned long)parseio->parse_dtime.parse_state,
+	                       lfpuint(parseio->parse_dtime.parse_time)));
 
 	return CVT_OK;		/* everything fine and dandy... */
-}
-
-
-/*
- * syn_simple
- *
- * handle a sync time stamp
- */
-/*ARGSUSED*/
-void
-syn_simple(
-	register parse_t *parseio,
-	register timestamp_t *ts,
-	register struct format *format,
-	register unsigned long why
-	)
-{
-	UNUSED_ARG(format);
-	UNUSED_ARG(why);
-	parseio->parse_dtime.parse_stime = *ts;
 }
 
 /*
@@ -512,11 +462,11 @@ syn_simple(
  * handle a pps time stamp
  */
 /*ARGSUSED*/
-unsigned long
+static unsigned long
 pps_simple(
-	register parse_t *parseio,
-	register int status,
-	register timestamp_t *ptime
+	parse_t *parseio,
+	int status,
+	timestamp_t *ptime
 	)
 {
 	UNUSED_ARG(status);
@@ -534,31 +484,12 @@ pps_simple(
 /*ARGSUSED*/
 unsigned long
 pps_one(
-	register parse_t *parseio,
-	register int status,
-	register timestamp_t *ptime
+	parse_t *parseio,
+	int status,
+	timestamp_t *ptime
 	)
 {
 	if (status)
-		return pps_simple(parseio, status, ptime);
-
-	return CVT_NONE;
-}
-
-/*
- * parse_pps_fnc_t pps_zero
- *
- * handle a pps time stamp in ZERO edge
- */
-/*ARGSUSED*/
-unsigned long
-pps_zero(
-	register parse_t *parseio,
-	register int status,
-	register timestamp_t *ptime
-	)
-{
-	if (!status)
 		return pps_simple(parseio, status, ptime);
 
 	return CVT_NONE;
@@ -571,11 +502,11 @@ pps_zero(
  */
 static unsigned long
 timepacket(
-	register parse_t *parseio
+	parse_t *parseio
 	)
 {
-	register unsigned short format;
-	register time_t t;
+	unsigned short format;
+	time_t t;
 	unsigned long cvtrtc;		/* current conversion result */
 	clocktime_t clock_time;
 
@@ -608,7 +539,7 @@ timepacket(
 
 	default:
 		/* shouldn't happen */
-		msyslog(LOG_WARNING, "parse: INTERNAL error: bad return code of convert routine \"%s\"", clockformats[format]->name);
+		msyslog(LOG_WARNING, "ERR: parse: INTERNAL error: bad return code of convert routine \"%s\"", clockformats[format]->name);
 		return CVT_FAIL|cvtrtc;
 	}
 
@@ -621,7 +552,7 @@ timepacket(
 	 * time stamp
 	 */
 	struct timespec ts = {t, clock_time.usecond * 1000};
-	parseio->parse_dtime.parse_time.fp = tspec_stamp_to_lfp(ts);
+	parseio->parse_dtime.parse_time = tspec_stamp_to_lfp(ts);
 	
 	parseio->parse_dtime.parse_format       = format;
 
@@ -670,7 +601,7 @@ parse_setfmt(
 	{
 		if (dct->parseformat.parse_count)
 		{
-			register unsigned short i;
+			unsigned short i;
 
 			for (i = 0; i < nformats; i++)
 			{

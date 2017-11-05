@@ -6,59 +6,11 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#include <config.h>
+#include "config.h"
 #include "ntp_fp.h"
 #include "ntp_calendar.h"
 
 #include "parse.h"
-
-#ifdef CLOCK_SCHMID
-extern clockformat_t clock_schmid;
-#endif
-
-#ifdef CLOCK_DCF7000
-extern clockformat_t clock_dcf7000;
-#endif
-
-#ifdef CLOCK_MEINBERG
-extern clockformat_t clock_meinberg[];
-#endif
-
-#ifdef CLOCK_RAWDCF
-extern clockformat_t clock_rawdcf;
-#endif
-
-#ifdef CLOCK_TRIMTAIP
-extern clockformat_t clock_trimtaip;
-#endif
-
-#ifdef CLOCK_TRIMTSIP
-extern clockformat_t clock_trimtsip;
-#endif
-
-#ifdef CLOCK_RCC8000
-extern clockformat_t clock_rcc8000;
-#endif
-
-#ifdef CLOCK_HOPF6021
-extern clockformat_t clock_hopf6021;
-#endif
-
-#ifdef CLOCK_COMPUTIME
-extern clockformat_t clock_computime;
-#endif
-
-#ifdef CLOCK_WHARTON_400A
-extern clockformat_t clock_wharton_400a;
-#endif
-
-#ifdef CLOCK_VARITEXT
-extern clockformat_t clock_varitext;
-#endif
-
-#ifdef CLOCK_SEL240X
-extern clockformat_t clock_sel240x;
-#endif
 
 /*
  * format definitions

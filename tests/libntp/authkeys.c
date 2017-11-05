@@ -4,12 +4,8 @@
 #include "unity.h"
 #include "unity_fixture.h"
 
+#include <openssl/evp.h>
 
-#ifdef HAVE_OPENSSL
-# include "openssl/err.h"
-# include "openssl/rand.h"
-# include "openssl/evp.h"
-#endif
 #include "ntp.h"
 
 TEST_GROUP(authkeys);
@@ -38,20 +34,23 @@ TEST_TEAR_DOWN(authkeys) {}
 
 
 
-static const int KEYTYPE = KEY_TYPE_MD5;
+static const int KEYTYPE = NID_md5;
 
 
-void AddTrustedKey(keyid_t keyno) {
+static void AddTrustedKey(keyid_t);
+static void AddUntrustedKey(keyid_t);
+
+static void AddTrustedKey(keyid_t keyno) {
 	/*
 	 * We need to add a MD5-key in addition to setting the
 	 * trust, because authhavekey() requires type != 0.
 	 */
-	MD5auth_setkey(keyno, KEYTYPE, NULL, 0);
+	mac_setkey(keyno, KEYTYPE, NULL, 0);
 
 	authtrust(keyno, true);
 }
 
-void AddUntrustedKey(keyid_t keyno) {
+static void AddUntrustedKey(keyid_t keyno) {
 	authtrust(keyno, false);
 }
 
@@ -80,14 +79,12 @@ TEST(authkeys, HaveKeyCorrect) {
 
 	AddTrustedKey(KEYNO);
 
-	TEST_ASSERT_TRUE(auth_havekey(KEYNO));
 	TEST_ASSERT_TRUE(authhavekey(KEYNO));
 }
 
 TEST(authkeys, HaveKeyIncorrect) {
 	const keyid_t KEYNO = 2;
 
-	TEST_ASSERT_FALSE(auth_havekey(KEYNO));
 	TEST_ASSERT_FALSE(authhavekey(KEYNO));
 }
 

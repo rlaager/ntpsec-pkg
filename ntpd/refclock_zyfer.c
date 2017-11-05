@@ -4,13 +4,12 @@
  * Harlan Stenn, Jan 2002
  */
 
-#include <config.h>
+#include "config.h"
 #include "ntp.h"
 #include "ntpd.h"
 #include "ntp_io.h"
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
-#include "ntp_control.h"
 
 #include <stdio.h>
 #include <ctype.h>
@@ -102,9 +101,9 @@ struct	refclock refclock_zyfer = {
 	zyfer_start,		/* start up driver */
 	zyfer_shutdown,		/* shut down driver */
 	zyfer_poll,		/* transmit poll message */
-	noentry,		/* not used (old zyfer_control) */
-	noentry,		/* initialize driver (not used) */
-	noentry			/* timer - not used */
+	NULL,			/* not used (old zyfer_control) */
+	NULL,			/* initialize driver (not used) */
+	NULL			/* timer - not used */
 };
 
 
@@ -117,7 +116,7 @@ zyfer_start(
 	struct peer *peer
 	)
 {
-	register struct zyferunit *up;
+	struct zyferunit *up;
 	struct refclockproc *pp;
 	int fd;
 	char device[20];
@@ -127,20 +126,19 @@ zyfer_start(
 	 * Something like LDISC_ACTS that looked for ! would be nice...
 	 */
 	snprintf(device, sizeof(device), DEVICE, unit);
-	fd = refclock_open(peer->path ? peer->path : device,
-			   peer->baud ? peer->baud : SPEED232,
+	fd = refclock_open(peer->cfg.path ? peer->cfg.path : device,
+			   peer->cfg.baud ? peer->cfg.baud : SPEED232,
 			   LDISC_RAW);
 	if (fd <= 0)
 		/* coverity[leaked_handle] */
 		return false;
 
-	msyslog(LOG_NOTICE, "zyfer(%d) fd: %d", unit, fd);
+	msyslog(LOG_NOTICE, "REFCLOCK: zyfer(%d) fd: %d", unit, fd);
 
 	/*
 	 * Allocate and initialize unit structure
 	 */
-	up = emalloc(sizeof(struct zyferunit));
-	memset(up, 0, sizeof(struct zyferunit));
+	up = emalloc_zero(sizeof(struct zyferunit));
 	pp = peer->procptr;
 	pp->io.clock_recv = zyfer_receive;
 	pp->io.srcclock = peer;
@@ -178,7 +176,7 @@ zyfer_shutdown(
 	struct peer *peer
 	)
 {
-	register struct zyferunit *up;
+	struct zyferunit *up;
 	struct refclockproc *pp;
 
 	UNUSED_ARG(unit);
@@ -200,7 +198,7 @@ zyfer_receive(
 	struct recvbuf *rbufp
 	)
 {
-	register struct zyferunit *up;
+	struct zyferunit *up;
 	struct refclockproc *pp;
 	struct peer *peer;
 	int tmode;		/* Time mode */
@@ -238,7 +236,7 @@ zyfer_receive(
 			return;
 	} else {
 		memcpy(pp->a_lastcode + pp->lencode, p, rbufp->recv_length);
-		pp->lencode += rbufp->recv_length;
+		pp->lencode += (int)rbufp->recv_length;
 		pp->a_lastcode[pp->lencode] = '\0';
 	}
 
@@ -306,7 +304,7 @@ zyfer_poll(
 	struct peer *peer
 	)
 {
-	register struct zyferunit *up;
+	struct zyferunit *up;
 	struct refclockproc *pp;
 
 	UNUSED_ARG(unit);
