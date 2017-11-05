@@ -18,6 +18,9 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include "timespecops.h"
+#include "ntpfrob.h"
+
 #ifdef HAVE_SYS_TIMEPPS_H
 #include <sys/timepps.h>
 
@@ -31,12 +34,13 @@
                 (vvp)->tv_nsec -= (uvp)->tv_nsec;                       \
                 if ((vvp)->tv_nsec < 0) {                               \
                         (vvp)->tv_sec--;                                \
-                        (vvp)->tv_nsec += 1000000000;                   \
+                        (vvp)->tv_nsec += NS_PER_S;                   \
                 }                                                       \
         } while (0)
 
+static void Chew(struct timespec *, struct timespec *, unsigned, unsigned);
 
-void
+static void
 Chew(struct timespec *tsa, struct timespec *tsc, unsigned sa, unsigned sc)
 {
 	struct timespec ts;
@@ -47,7 +51,7 @@ Chew(struct timespec *tsa, struct timespec *tsc, unsigned sa, unsigned sc)
 
 	ts = *tsc;
 	timespecsub(&ts,tsa);
-	printf("%.9f ", ts.tv_sec + ts.tv_nsec / 1e9);
+	printf("%.9f ", ts.tv_sec + ts.tv_nsec * S_PER_NS);
 	printf("\n");
 	fflush(stdout);
 }
@@ -59,7 +63,7 @@ static int err(int out, const char *legend)
 }
 #endif /* HAVE_SYS_TIMEPPS_H */
 
-void ppscheck(char *device)
+void ppscheck(const char *device)
 {
 #ifndef HAVE_SYS_TIMEPPS_H
 	(void)device;
@@ -69,9 +73,9 @@ void ppscheck(char *device)
 	int fd;
 	pps_info_t pi;
 	pps_params_t pp;
-	pps_handle_t ph;
+	pps_handle_t ph = 0;    /* 0 to prevent spurious uninialized warning */
 	int i, mode;
-	u_int olda = 0, oldc = 0;
+	unsigned int olda = 0, oldc = 0;
 	struct timespec to;
 
 	if (device == NULL)
@@ -88,11 +92,18 @@ void ppscheck(char *device)
 	if (i < 0)
 		err(1, "time_pps_getcap");
 
+        memset(&pp, 0, sizeof(pp));
 	/* pp.mode = PPS_CAPTUREASSERT | PPS_ECHOASSERT; */
 	pp.mode = PPS_CAPTUREBOTH;
 	/* pp.mode = PPS_CAPTUREASSERT; */
 
-	/* coverity[uninit_use_in_call] */
+#ifdef PPS_API_VERS
+        pp.api_version = PPS_API_VERS;
+#else
+        /* FreeBSD, NetBSD do not publicly define PPS_ABI_VERS, assume 1 */
+        pp.api_version = 1;
+#endif
+
 	i = time_pps_setparams(ph, &pp);
 	if (i < 0)
 		err(1, "time_pps_setparams");
@@ -105,7 +116,9 @@ void ppscheck(char *device)
 			err(1, "time_pps_fetch");
 		if (olda == pi.assert_sequence &&
 		    oldc == pi.clear_sequence) {
-			usleep(10000);
+			/* used to be usleep(10000) - 0.1 sec */
+			const struct timespec tenth = {0, 100000};
+			nanosleep(&tenth, NULL);
 			continue;
 		}
 
@@ -115,6 +128,7 @@ void ppscheck(char *device)
 		oldc = pi.clear_sequence;
 	}
 #endif /* HAVE_SYS_TIMEPPS_H */
+        /* either way, never returns */
 }
 
 /* end */

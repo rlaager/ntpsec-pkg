@@ -4,7 +4,7 @@
  * One of our serious platform dependencies (things POSIX doesn't
  * specify a facility for) is isolated here.
  */
-#include <config.h>
+#include "config.h"
 
 #ifdef HAVE_SYS_IOCTL_H
 # include <sys/ioctl.h>
@@ -17,33 +17,27 @@
 #include "ntp_stdlib.h"
 #include "timespecops.h"
 
-#if defined(SO_BINTIME) && defined(SCM_BINTIME) && defined(CMSG_FIRSTHDR)
-#  define USE_PACKET_TIMESTAMP
-#  define USE_SCM_BINTIME
-#  ifdef OVERRIDE_BINTIME_CTLMSGBUF_SIZE
-#   define CMSG_BUFSIZE OVERRIDE_BINTIME_CTLMSGBUF_SIZE
-#  else
-#   define CMSG_BUFSIZE  1536 /* moderate default */
-#  endif
-#elif defined(SO_TIMESTAMPNS) && defined(SCM_TIMESTAMPNS) && defined(CMSG_FIRSTHDR)
-#  define USE_PACKET_TIMESTAMP
-#  define USE_SCM_TIMESTAMPNS
-#  ifdef OVERRIDE_TIMESTAMPNS_CTLMSGBUF_SIZE
-#   define CMSG_BUFSIZE OVERRIDE_TIMESTAMPNS_CTLMSGBUF_SIZE
-#  else
-#   define CMSG_BUFSIZE  1536 /* moderate default */
-#  endif
-#elif defined(SO_TIMESTAMP) && defined(SCM_TIMESTAMP) && defined(CMSG_FIRSTHDR)
-#  define USE_PACKET_TIMESTAMP
-#  define USE_SCM_TIMESTAMP
-#  ifdef OVERRIDE_TIMESTAMP_CTLMSGBUF_SIZE
-#   define CMSG_BUFSIZE OVERRIDE_TIMESTAMP_CTLMSGBUF_SIZE
-#  else
-#   define CMSG_BUFSIZE  1536 /* moderate default */
-#  endif
-#else
-/* fill in for old/other timestamp interfaces */
-#endif
+/* We handle 2 flavors of timestamp:
+ * SO_TIMESTAMPNS/SCM_TIMESTAMPNS  Linux
+ * SO_TIMESTAMP/SCM_TIMESTAMP      FreeBSD, NetBSD, OpenBSD, Linux, macOS,
+ *                                 Solaris
+ *
+ * Linux supports both SO_TIMESTAMP and SO_TIMESTAMPNS so it's
+ * important to check for SO_TIMESTAMPNS first to get the better accuracy.
+ *
+ * Note that the if/elif tests are done in several places.
+ * It's important that they all check in the same order to
+ * be consistent in case some systems support more than one.
+ *
+ * If SO_xxx exists, we assume that SCM_xxx does too.
+ * All flavors assume the CMSG_xxx macros exist.
+ *
+ * FreeBSD has SO_BINTIME/SCM_BINTIME
+ *   It has better resolution, but it doesn't work for IPv6
+ *   bintime documentation is at
+ *   http://phk.freebsd.dk/pubs/timecounter.pdf
+ */
+
 
 void
 enable_packetstamps(
@@ -52,47 +46,40 @@ enable_packetstamps(
     )
 {
 	const int	on = 1;
+	static bool	once = false;
 
-#ifdef USE_SCM_TIMESTAMP
-	{
-		if (setsockopt(fd, SOL_SOCKET, SO_TIMESTAMP,
-			       (char*)&on, sizeof(on)))
-			msyslog(LOG_DEBUG,
-				"setsockopt SO_TIMESTAMP on fails on address %s: %m",
-				socktoa(addr));
-		else
-			DPRINTF(4, ("setsockopt SO_TIMESTAMP enabled on fd %d address %s\n",
-				    fd, socktoa(addr)));
+#if defined (SO_TIMESTAMPNS)
+	if (!once) {
+		once = true;
+		msyslog(LOG_INFO, "INIT: Using SO_TIMESTAMPNS");
 	}
-#endif
-#ifdef USE_SCM_TIMESTAMPNS
-	{
-		if (setsockopt(fd, SOL_SOCKET, SO_TIMESTAMPNS,
-			       (char*)&on, sizeof(on)))
-			msyslog(LOG_DEBUG,
-				"setsockopt SO_TIMESTAMPNS on fails on address %s: %m",
+	if (setsockopt(fd, SOL_SOCKET, SO_TIMESTAMPNS,
+			       (const void *)&on, sizeof(on)))
+		msyslog(LOG_DEBUG,
+			"ERR: setsockopt SO_TIMESTAMPNS on fails on address %s: %m",
 				socktoa(addr));
-		else
-			DPRINTF(4, ("setsockopt SO_TIMESTAMPNS enabled on fd %d address %s\n",
+	else
+		DPRINT(4, ("ERR: setsockopt SO_TIMESTAMPNS enabled on fd %d address %s\n",
 				    fd, socktoa(addr)));
+#elif defined(SO_TIMESTAMP)
+	if (!once) {
+		once = true;
+		msyslog(LOG_INFO, "INIT: Using SO_TIMESTAMP");
 	}
-#endif
-#ifdef USE_SCM_BINTIME
-	{
-		if (setsockopt(fd, SOL_SOCKET, SO_BINTIME,
-			       (char*)&on, sizeof(on)))
-			msyslog(LOG_DEBUG,
-				"setsockopt SO_BINTIME on fails on address %s: %m",
-				socktoa(addr));
-		else
-			DPRINTF(4, ("setsockopt SO_BINTIME enabled on fd %d address %s\n",
-				    fd, socktoa(addr)));
-	}
+	if (setsockopt(fd, SOL_SOCKET, SO_TIMESTAMP,
+			       (const void*)&on, sizeof(on)))
+		msyslog(LOG_DEBUG,
+			"ERR: setsockopt SO_TIMESTAMP on fails on address %s: %m",
+			socktoa(addr));
+	else
+		DPRINT(4, ("setsockopt SO_TIMESTAMP enabled on fd %d address %s\n",
+			    fd, socktoa(addr)));
+#else
+# error "Can't get packet timestamp"
 #endif
 }
 
 
-#ifdef USE_PACKET_TIMESTAMP
 /*
  * extract timestamps from control message buffer
  */
@@ -104,19 +91,15 @@ fetch_packetstamp(
 	)
 {
 	struct cmsghdr *	cmsghdr;
-#ifdef USE_SCM_BINTIME
-	struct bintime *	btp;
-#endif
-#ifdef USE_SCM_TIMESTAMPNS
+#if defined(SO_TIMESTAMPNS)
 	struct timespec *	tsp;
-#endif
-#ifdef USE_SCM_TIMESTAMP
+#elif defined(SO_TIMESTAMP)
 	struct timeval *	tvp;
 #endif
 	unsigned long		ticks;
 	double			fuzz;
 	l_fp			lfpfuzz;
-	l_fp			nts;
+	l_fp			nts = 0;  /* network time stamp */
 #ifdef ENABLE_DEBUG_TIMING
 	l_fp			dts;
 #endif
@@ -125,93 +108,70 @@ fetch_packetstamp(
 	UNUSED_ARG(rb);
 #endif
 
+/* There should be only one cmsg. */
 	cmsghdr = CMSG_FIRSTHDR(msghdr);
-	while (cmsghdr != NULL) {
-		switch (cmsghdr->cmsg_type)
-		{
-#ifdef USE_SCM_BINTIME
-		case SCM_BINTIME:
-#endif  /* USE_SCM_BINTIME */
-#ifdef USE_SCM_TIMESTAMPNS
-		case SCM_TIMESTAMPNS:
-#endif	/* USE_SCM_TIMESTAMPNS */
-#ifdef USE_SCM_TIMESTAMP
-		case SCM_TIMESTAMP:
-#endif	/* USE_SCM_TIMESTAMP */
-#if defined(USE_SCM_BINTIME) || defined (USE_SCM_TIMESTAMPNS) || defined(USE_SCM_TIMESTAMP)
-			switch (cmsghdr->cmsg_type)
-			{
-#ifdef USE_SCM_BINTIME
-			case SCM_BINTIME:
-				btp = (struct bintime *)CMSG_DATA(cmsghdr);
-				/*
-				 * bintime documentation is at http://phk.freebsd.dk/pubs/timecounter.pdf
-				 */
-				nts.l_i = btp->sec + JAN_1970;
-				nts.l_uf = (uint32_t)(btp->frac >> 32);
-				if (sys_tick > measured_tick &&
-				    sys_tick > 1e-9) {
-					ticks = (unsigned long)(nts.l_uf / (unsigned long)(sys_tick * FRAC));
-					nts.l_uf = (unsigned long)(ticks * (unsigned long)(sys_tick * FRAC));
-				}
-                                DPRINTF(4, ("fetch_timestamp: system bintime network time stamp: %ld.%09lu\n",
-                                            (long)btp->sec, (unsigned long)((nts.l_uf / FRAC) * 1e9)));
-				break;
-#endif  /* USE_SCM_BINTIME */
-#ifdef USE_SCM_TIMESTAMPNS
-			case SCM_TIMESTAMPNS:
-				tsp = (struct timespec *)CMSG_DATA(cmsghdr);
-				if (sys_tick > measured_tick &&
-				    sys_tick > 1e-9) {
-					ticks = (unsigned long)((tsp->tv_nsec * 1e-9) /
-						       sys_tick);
-					tsp->tv_nsec = (long)(ticks * 1e9 *
-							      sys_tick);
-				}
-				DPRINTF(4, ("fetch_timestamp: system nsec network time stamp: %ld.%09ld\n",
-					    tsp->tv_sec, tsp->tv_nsec));
-				nts = tspec_stamp_to_lfp(*tsp);
-				break;
-#endif	/* USE_SCM_TIMESTAMPNS */
-#ifdef USE_SCM_TIMESTAMP
-			case SCM_TIMESTAMP:
-				tvp = (struct timeval *)CMSG_DATA(cmsghdr);
-				if (sys_tick > measured_tick &&
-				    sys_tick > 1e-6) {
-					ticks = (unsigned long)((tvp->tv_usec * 1e-6) /
-						       sys_tick);
-					tvp->tv_usec = (long)(ticks * 1e6 *
-							      sys_tick);
-				}
-				DPRINTF(4, ("fetch_timestamp: system usec network time stamp: %jd.%06ld\n",
-					    (intmax_t)tvp->tv_sec, (long)tvp->tv_usec));
-				nts = tspec_stamp_to_lfp(tval_to_tspec(*tvp));
-				break;
-#endif  /* USE_SCM_TIMESTAMP */
-			}
-			fuzz = ntp_random() * 2. / FRAC * sys_fuzz;
-			DTOLFP(fuzz, &lfpfuzz);
-			L_ADD(&nts, &lfpfuzz);
-#ifdef ENABLE_DEBUG_TIMING
-			dts = ts;
-			L_SUB(&dts, &nts);
-			collect_timing(rb, "input processing delay", 1,
-				       &dts);
-			DPRINTF(4, ("fetch_timestamp: timestamp delta: %s (incl. fuzz)\n",
-				    lfptoa(&dts, 9)));
-#endif	/* ENABLE_DEBUG_TIMING */
-			ts = nts;  /* network time stamp */
-			break;
-#endif	/* USE_SCM_BINTIME || USE_SCM_TIMESTAMPNS || USE_SCM_TIMESTAMP */
-
-		default:
-			DPRINTF(4, ("fetch_timestamp: skipping control message 0x%x\n",
-				    cmsghdr->cmsg_type));
-		}
-		cmsghdr = CMSG_NXTHDR(msghdr, cmsghdr);
+	if (NULL == cmsghdr) {
+		DPRINT(4, ("fetch_timestamp: can't find timestamp\n"));
+		msyslog(LOG_ERR,
+			"ERR: fetch_timestamp: no msghdrs, %s",
+			socktoa(&rb->recv_srcadr));
+		exit(2);
+		/* return ts;	** Kludge to use time from select. */
 	}
+#if defined(SO_TIMESTAMPNS)
+	if (SCM_TIMESTAMPNS != cmsghdr->cmsg_type) {
+#elif defined(SO_TIMESTAMP)
+	if (SCM_TIMESTAMP != cmsghdr->cmsg_type) {
+#else
+# error "Can't get packet timestamp"
+#endif
+		DPRINT(4,	
+                        ("fetch_timestamp: strange control message 0x%x\n",
+			     (unsigned)cmsghdr->cmsg_type));
+		msyslog(LOG_ERR,
+			"ERR: fetch_timestamp: strange control message 0x%x",
+                             (unsigned)cmsghdr->cmsg_type);
+		exit(2);
+		/* Could loop and skip strange types. */
+		/* cmsghdr = CMSG_NXTHDR(msghdr, cmsghdr); */
+	}
+
+/* cmsghdr now points to a timestamp slot */
+
+#if defined(SO_TIMESTAMPNS)
+	tsp = (struct timespec *)CMSG_DATA(cmsghdr);
+	if (sys_tick > measured_tick && sys_tick > S_PER_NS) {
+	    ticks = (unsigned long) ((tsp->tv_nsec * S_PER_NS) / sys_tick);
+	    tsp->tv_nsec = (long) (ticks * NS_PER_S * sys_tick);
+	}
+	DPRINT(4, ("fetch_timestamp: system nsec network time stamp: %ld.%09ld\n",
+		tsp->tv_sec, tsp->tv_nsec));
+	nts = tspec_stamp_to_lfp(*tsp);
+#elif defined(SO_TIMESTAMP)
+	tvp = (struct timeval *)CMSG_DATA(cmsghdr);
+	if (sys_tick > measured_tick && sys_tick > S_PER_NS) {
+	    ticks = (unsigned long) ((tvp->tv_usec * S_PER_NS) / sys_tick);
+	    tvp->tv_usec = (long)(ticks * US_PER_S * sys_tick);
+	}
+	DPRINT(4, ("fetch_timestamp: system usec network time stamp: %jd.%06ld\n",
+		(intmax_t)tvp->tv_sec, (long)tvp->tv_usec));
+	nts = tspec_stamp_to_lfp(tval_to_tspec(*tvp));
+#else
+# error "Can't get packet timestamp"
+#endif
+	fuzz = ntp_random() * 2. / FRAC * sys_fuzz;
+	lfpfuzz = dtolfp(fuzz);
+	nts += lfpfuzz;
+#ifdef ENABLE_DEBUG_TIMING
+	dts = ts;
+	dts -= nts;
+	collect_timing(rb, "input processing delay", 1, dts);
+	DPRINT(4, ("fetch_timestamp: timestamp delta: %s (incl. fuzz)\n",
+		lfptoa(dts, 9)));
+#endif	/* ENABLE_DEBUG_TIMING */
+	ts = nts;
+
 	return ts;
 }
-#endif	/* USE_PACKET_TIMESTAMP */
 
 // end

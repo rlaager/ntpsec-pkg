@@ -16,7 +16,6 @@
 #include "ntp_malloc.h"
 #include "ntp_refclock.h"
 #include "ntp_control.h"
-#include "ntp_intres.h"
 #include "recvbuff.h"
 
 /*
@@ -25,38 +24,23 @@
  */
 
 /*
- * macro for debugging output - cut down on #ifdef pollution.
- *
- * DPRINTF() is for use by ntpd only, and compiles away to nothing
- * without DEBUG (configure --disable-debugging).
- *
- * TRACE() is similar for libntp and utilities, which retain full
- * debug capability even when compiled without DEBUG.
- *
- * The calling convention is not attractive:
- *     DPRINTF(debuglevel, (fmt, ...));
- *     DPRINTF(2, ("shows #ifdef DEBUG and if debug >= %d\n", 2));
+ * macro to silence -Wimplicit-fallthrough
+ * of course gcc and clang do it differently
  */
-#ifdef DEBUG
-# define DPRINTF(lvl, arg)				\
-	do { 						\
-		if (debug >= (lvl))			\
-			mprintf arg;			\
-	} while (0)
+#ifdef __clang__
+# define FALLTHRU
+#elif defined __GNUC__ && (6 < __GNUC__ )
+# define FALLTHRU __attribute__ ((fallthrough));
 #else
-# define DPRINTF(lvl, arg)	do {} while (0)
+# define FALLTHRU
 #endif
 
 
 /* ntp_config.c */
-#define	TAI_1972	10	/* initial TAI offset (s) */
-extern	char	*keysdir;	/* crypto keys and leaptable directory */
-
 extern	const char	*getconfig	(const char *);
 extern	void	readconfig(const char *);
 extern	void	ctl_clr_stats	(void);
-extern	u_short ctlpeerstatus	(struct peer *);
-extern	u_short ctlsysstatus	(void);
+extern	unsigned short ctlpeerstatus	(struct peer *);
 extern	void	init_control	(void);
 extern	void	process_control (struct recvbuf *, int);
 extern	void	report_event	(int, struct peer *, const char *);
@@ -69,8 +53,8 @@ extern	int	mprintf_event	(int, struct peer *, const char *, ...)
  * variable indices and text format.
  */
 struct ctl_var {
-	u_short code;
-	u_short flags;
+	unsigned short code;
+	unsigned short flags;
 	const char *text;
 };
 /*
@@ -84,13 +68,12 @@ struct ctl_var {
 #define	EOV		0x80
 
 #define	RO	(CAN_READ)
-#define	WO	(CAN_WRITE)
 #define	RW	(CAN_READ|CAN_WRITE)
 
-extern	char *	add_var (struct ctl_var **, u_long, u_short);
+extern	char *	add_var (struct ctl_var **, unsigned long, unsigned short);
 extern	void	free_varlist (struct ctl_var *);
-extern	void	set_var (struct ctl_var **, const char *, u_long, u_short);
-extern	void	set_sys_var (const char *, u_long, u_short);
+extern	void	set_var (struct ctl_var **, const char *, unsigned long, unsigned short);
+extern	void	set_sys_var (const char *, unsigned long, unsigned short);
 extern	const char *	get_ext_sys_var(const char *tag);
 
 /* ntp_io.c */
@@ -101,12 +84,11 @@ typedef struct interface_info {
 
 typedef void	(*interface_receiver_t)	(void *, interface_info_t *);
 
-extern	void	interface_enumerate	(interface_receiver_t, void *);
+extern  bool listen_to_virtual_ips;
 extern	endpt *	getinterface		(sockaddr_u *, uint32_t);
 extern	endpt *	select_peerinterface	(struct peer *, sockaddr_u *,
 					 endpt *);
 extern	endpt *	findinterface		(sockaddr_u *);
-extern	endpt *	findbcastinter		(sockaddr_u *);
 extern	void	enable_broadcast	(endpt *, sockaddr_u *);
 extern	void	interface_update	(interface_receiver_t, void *);
 extern  void    io_handler              (void);
@@ -114,12 +96,11 @@ extern	void	init_io 	(void);
 extern  SOCKET	open_socket	(sockaddr_u *, bool, bool, endpt *);
 extern	void	io_open_sockets	(void);
 extern	void	io_clr_stats	(void);
-extern	void	sendpkt 	(sockaddr_u *, endpt *, int, void *, int);
-#ifdef DEBUG
-extern	void	collect_timing  (struct recvbuf *, const char *, int, l_fp *);
+extern	void	sendpkt 	(sockaddr_u *, endpt *, void *, int);
+#ifdef ENABLE_DEBUG_TIMING
+extern	void	collect_timing  (struct recvbuf *, const char *, int, l_fp);
 #endif
-#define		latoa(pif)	localaddrtoa(pif)
-extern const char * localaddrtoa(endpt *);
+extern const char * latoa(endpt *);
 
 /* ntp_loopfilter.c */
 extern	void	init_loopfilter(void);
@@ -128,8 +109,7 @@ extern	void	adj_host_clock(void);
 extern	void	loop_config(int, double);
 extern	void	select_loop(int);
 extern	void	huffpuff(void);
-extern	u_long	sys_clocktime;
-extern	u_int	sys_tai;
+extern	unsigned int	sys_tai;
 extern 	int	freq_cnt;
 
 /* ntp_monitor.c */
@@ -139,24 +119,25 @@ extern 	int	freq_cnt;
 extern	void	init_mon	(void);
 extern	void	mon_start	(int);
 extern	void	mon_stop	(int);
-extern	u_short	ntp_monitor	(struct recvbuf *, u_short);
+extern	unsigned short	ntp_monitor	(struct recvbuf *, unsigned short);
 extern	void	mon_clearinterface(endpt *interface);
+extern  int	mon_get_oldest_age(l_fp);
 
 /* ntp_peer.c */
 extern	void	init_peer	(void);
 extern	struct peer *findexistingpeer(sockaddr_u *, const char *,
-				      struct peer *, int, uint8_t);
+				      struct peer *, int);
 extern	struct peer *findpeer	(struct recvbuf *, int, int *);
 extern	struct peer *findpeerbyassoc(associd_t);
 extern  void	set_peerdstadr	(struct peer *, endpt *);
 extern	struct peer *newpeer	(sockaddr_u *, const char *,
-				 endpt *, uint8_t, uint8_t,
-				 uint8_t, uint8_t, u_int, uint8_t, uint32_t,
-				 keyid_t, const bool);
+				 endpt *, uint8_t, struct peer_ctl *,
+				 uint8_t, const bool);
+extern	void	peer_update_hash (struct peer *);
 extern	void	peer_all_reset	(void);
 extern	void	peer_clr_stats	(void);
-extern	void	peer_reset	(struct peer *);
 extern	void	refresh_all_peerinterfaces(void);
+extern  void	peer_refresh_interface(struct peer *);
 extern	void	unpeer		(struct peer *);
 extern	void	clear_all	(void);
 extern	int	score_all	(struct peer *);
@@ -167,55 +148,37 @@ extern	void	peer_cleanup	(void);
 extern	void	transmit	(struct peer *);
 extern	void	receive 	(struct recvbuf *);
 extern	void	peer_clear	(struct peer *, const char *, const bool);
-extern	void 	process_packet	(struct peer *, struct pkt *, u_int);
-extern	void	clock_select	(void);
 extern	void	set_sys_leap	(uint8_t);
 
-extern	u_long	leapsec;	/* seconds to next leap (proximity class) */
-extern  int     leapdif;        /* TAI difference step at next leap second*/
 extern	int	sys_orphan;
 extern	double	sys_mindisp;
-extern	double	sys_maxdist;
 extern	double	sys_maxdisp;
 
 extern	void	poll_update	(struct peer *, uint8_t);
 
-extern	void	clear		(struct peer *);
 extern	void	clock_filter	(struct peer *, double, double, double);
 extern	void	init_proto	(const bool);
 extern	void	set_sys_tick_precision(double);
-extern	void	proto_config	(int, u_long, double);
+extern	void	proto_config	(int, unsigned long, double);
 extern	void	proto_clr_stats (void);
 
-/* ntp_refclock.c */
-#ifdef	REFCLOCK
-extern	bool	refclock_newpeer (uint8_t, int, struct peer *);
-extern	void	refclock_unpeer (struct peer *);
-extern	void	refclock_receive (struct peer *);
-extern	void	refclock_transmit (struct peer *);
-extern	void	init_refclock	(void);
-#endif	/* REFCLOCK */
-
-/* ntp_request.c */
-extern	void	reset_auth_stats(void);
-extern u_long	auth_timereset;
 
 
 /* ntp_restrict.c */
 extern	void	init_restrict	(void);
-extern	u_short	restrictions	(sockaddr_u *);
+extern	unsigned short	restrictions	(sockaddr_u *);
 extern	void	hack_restrict	(int, sockaddr_u *, sockaddr_u *,
-				 u_short, u_short, u_long);
-extern	void	restrict_source	(sockaddr_u *, bool, u_long);
+				 unsigned short, unsigned short, unsigned long);
+extern	void	restrict_source	(sockaddr_u *, bool, unsigned long);
 
 /* ntp_timer.c */
 extern	void	init_timer	(void);
 extern	void	reinit_timer	(void);
 extern	void	timer		(void);
 extern	void	timer_clr_stats (void);
-extern	void	timer_interfacetimeout (u_long);
+extern	void	timer_interfacetimeout (unsigned long);
 extern	volatile int interface_interval;
-extern	u_long	orphwait;		/* orphan wait time */
+extern	unsigned long	orphwait;		/* orphan wait time */
 
 /* ntp_util.c */
 extern	void	init_util	(void);
@@ -227,17 +190,15 @@ extern	void	record_loop_stats (double, double, double, double, int);
 extern	void	record_clock_stats (struct peer *, const char *);
 extern	int	mprintf_clock_stats(struct peer *, const char *, ...)
 			NTP_PRINTF(2, 3);
-extern	void	record_raw_stats (sockaddr_u *srcadr, sockaddr_u *dstadr, l_fp *t1, l_fp *t2, l_fp *t3, l_fp *t4, int leap, int version, int mode, int stratum, int ppoll, int precision, double root_delay, double root_dispersion, uint32_t refid, u_int outcount);
-extern	void	check_leap_file	(int is_daily_check, uint32_t ntptime, const time_t * systime);
-extern	void	record_crypto_stats (sockaddr_u *, const char *);
-#ifdef DEBUG
+extern	void	record_raw_stats (struct peer *,
+				  int leap, int version, int mode, int stratum,
+				  int ppoll, int precision, double root_delay,
+				  double root_dispersion, uint32_t refid,
+				  unsigned int outcount);
+extern	void	check_leap_file	(bool is_daily_check, time_t systime);
+#ifdef ENABLE_DEBUG_TIMING
 extern	void	record_timing_stats (const char *);
 #endif
-extern	char *	fstostr(time_t);	/* NTP timescale seconds */
-
-/* ntpvis.c */
-void packet_dump(char *, size_t, struct pkt *, size_t);
-size_t packet_undump(char *, int len, char *);
 
 /* packetstamp.c */
 extern void	enable_packetstamps(int, sockaddr_u *);
@@ -249,55 +210,41 @@ extern l_fp	fetch_packetstamp(struct recvbuf *, struct msghdr *, l_fp);
 #define MOREDEBUGSIG	SIGUSR1
 #define LESSDEBUGSIG	SIGUSR2
 
+/* Signal we use for DNS completion
+ * No (forked) children so this should be unused.
+ */
+#define SIGDNS	SIGCHLD
+
 /*
  * Last half: ntpd variables
  * -------------------------
  */
 
 /* ntp_config.c */
-extern char *	progname;
+extern const char *progname;
 extern char	*sys_phone[];		/* ACTS phone numbers */
 extern char *ntp_signd_socket;
-extern struct config_tree_tag *cfg_tree_history;
 
 /* ntp_control.c */
 extern keyid_t	ctl_auth_keyid;		/* keyid used for authenticating write requests */
-
-/*
- * Statistic counters to keep track of requests and responses.
- */
-extern u_long	ctltimereset;		/* time stats reset */
-extern u_long	numctlreq;		/* number of requests we've received */
-extern u_long	numctlbadpkts;		/* number of bad control packets */
-extern u_long	numctlresponses; 	/* number of resp packets sent with data */
-extern u_long	numctlfrags; 		/* number of fragments sent */
-extern u_long	numctlerrors;		/* number of error responses sent */
-extern u_long	numctltooshort;		/* number of too short input packets */
-extern u_long	numctlinputresp; 	/* number of responses on input */
-extern u_long	numctlinputfrag; 	/* number of fragments on input */
-extern u_long	numctlinputerr;		/* number of input pkts with err bit set */
-extern u_long	numctlbadoffset; 	/* number of input pkts with nonzero offset */
-extern u_long	numctlbadversion;	/* number of input pkts with unknown version */
-extern u_long	numctldatatooshort;	/* data too short for count */
-extern u_long	numctlbadop; 		/* bad op code found in packet */
-extern u_long	numasyncmsgs;		/* number of async messages we've sent */
+extern	void	reset_auth_stats(void);
 
 /*
  * Other statistics of possible interest
  */
-extern u_long packets_dropped;	/* total number of packets dropped on reception */
-extern u_long	packets_ignored;	/* received on wild card interface */
-extern u_long	packets_received;	/* total number of packets received */
-extern u_long	packets_sent;		/* total number of packets sent */
-extern u_long	packets_notsent; 	/* total number of packets which couldn't be sent */
+extern unsigned long packets_dropped;	/* # packets dropped on reception */
+extern unsigned long packets_ignored;	/* received on wild card interface */
+extern unsigned long packets_received;	/* total number of packets received */
+extern unsigned long packets_sent;	/* total number of packets sent */
+extern unsigned long packets_notsent; 	/* total number of packets which couldn't be sent */
 
-extern volatile u_long handler_calls;	/* number of calls to interrupt handler */
-extern volatile u_long handler_pkts;	/* number of pkts received by handler */
-extern u_long	io_timereset;		/* time counters were reset */
+extern volatile unsigned long handler_calls;	/* number of calls to interrupt handler */
+extern volatile unsigned long handler_pkts;	/* number of pkts received by handler */
+extern unsigned long	io_timereset;		/* time counters were reset */
 
 /* ntp_io.c */
 extern bool	disable_dynamic_updates;
-extern u_int	sys_ifnum;		/* next .ifnum to assign */
+extern unsigned int	sys_ifnum;		/* next .ifnum to assign */
 extern endpt *	any_interface;		/* IPv4 wildcard */
 extern endpt *	any6_interface;		/* IPv6 wildcard */
 extern endpt *	loopback_interface;	/* IPv4 loopback for refclocks */
@@ -308,12 +255,7 @@ extern double	drift_comp;		/* clock frequency (s/s) */
 extern double	clock_stability;	/* clock stability (s/s) */
 extern double	clock_max_back;		/* max backward offset before step (s) */
 extern double	clock_max_fwd;		/* max forward offset before step (s) */
-extern double	clock_panic;		/* max offset before panic (s) */
 extern double	clock_phi;		/* dispersion rate (s/s) */
-extern double	clock_minstep;		/* step timeout (s) */
-#ifdef HAVE_KERNEL_PLL
-extern int	pll_status;		/* status bits for kernel pll */
-#endif /* HAVE_KERNEL_PLL */
 
 /*
  * Clock state machine control flags
@@ -322,7 +264,6 @@ extern bool	ntp_enable;		/* clock discipline enabled */
 extern bool	pll_control;		/* kernel support available */
 extern bool	kern_enable;		/* kernel support enabled */
 extern bool	hardpps_enable;		/* kernel PPS discipline enabled */
-extern bool	ext_enable;		/* external clock enabled */
 extern bool	cal_enable;		/* refclock calibrate enable */
 extern bool	allow_panic;		/* allow panic correction (-g) */
 extern bool	force_step_once;	/* always step time once at startup (-G) */
@@ -333,9 +274,7 @@ extern int	peer_ntpdate;		/* count of ntpdate peers */
  * Clock state machine variables
  */
 extern uint8_t	sys_poll;		/* system poll interval (log2 s) */
-extern int	state;			/* clock discipline state */
 extern int	tc_counter;		/* poll-adjust counter */
-extern u_long	last_time;		/* time of last clock update (s) */
 extern double	last_offset;		/* last clock offset (s) */
 extern uint8_t	allan_xpt;		/* Allan intercept (log2 s) */
 extern double	clock_jitter;		/* clock jitter (s) */
@@ -346,37 +285,29 @@ extern double	sys_jitter;		/* system jitter (s) */
 extern uint8_t	mon_hash_bits;		/* log2 size of hash table */
 extern mon_entry ** mon_hash;		/* MRU hash table */
 extern mon_entry mon_mru_list;		/* mru listhead */
-extern u_int	mon_enabled;		/* MON_OFF (0) or other MON_* */
-extern u_int	mru_alloc;		/* mru list + free list count */
-extern u_int	mru_entries;		/* mru list count */
-extern u_int	mru_peakentries;	/* highest mru_entries */
-extern u_int	mru_initalloc;		/* entries to preallocate */
-extern u_int	mru_incalloc;		/* allocation batch factor */
-extern u_int	mru_mindepth;		/* preempt above this */
-extern int	mru_maxage;		/* for entries older than */
-extern u_int	mru_maxdepth; 		/* MRU size hard limit */
+extern unsigned int	mon_enabled;		/* MON_OFF (0) or other MON_* */
+extern unsigned int	mru_entries;		/* mru list count */
+extern unsigned int	mru_peakentries;	/* highest mru_entries */
+extern unsigned int	mru_initalloc;		/* entries to preallocate */
+extern unsigned int	mru_incalloc;		/* allocation batch factor */
+extern unsigned int	mru_mindepth;		/* preempt above this */
+extern int	mru_maxage;		/* recycle if older than this */
+extern int	mru_minage;		/* recycle if older than this & full */
+extern unsigned int	mru_maxdepth; 		/* MRU size hard limit */
+extern unsigned long	mru_exists;		/* slot already exists */
+extern unsigned long	mru_new;		/* allocated new slot */
+extern unsigned long	mru_recycleold;		/* recycle: age > maxage */
+extern unsigned long	mru_recyclefull;	/* recycle: full and age > minage */
+extern unsigned long	mru_none;		/* couldn't allocate slot */
 extern int	mon_age;		/* preemption limit */
 
 /* ntp_peer.c */
-extern struct peer *peer_hash[NTP_HASH_SIZE];	/* peer hash table */
-extern int	peer_hash_count[NTP_HASH_SIZE];	/* count of in each bucket */
-extern struct peer *assoc_hash[NTP_HASH_SIZE];	/* association ID hash table */
-extern int	assoc_hash_count[NTP_HASH_SIZE];/* count of in each bucket */
 extern struct peer *peer_list;		/* peer structures list */
-extern int	peer_count;		/* count in peer_list */
-extern int	peer_free_count;	/* count in peer_free */
 
 /*
  * Miscellaneous statistic counters which may be queried.
  */
-extern u_long	peer_timereset;		/* time stat counters were zeroed */
-extern u_long	findpeer_calls;		/* number of calls to findpeer */
-extern u_long	assocpeer_calls;	/* number of calls to findpeerbyassoc */
-extern u_long	peer_allocations;	/* number of allocations from the free list */
-extern u_long	peer_demobilizations;	/* number of structs freed to free list */
-extern int	total_peer_structs;	/* number of peer structs in circulation */
 extern int	peer_associations;	/* mobilized associations */
-extern int	peer_preempt;		/* preemptable associations */
 
 /* ntp_proto.c */
 /*
@@ -392,44 +323,34 @@ extern uint32_t	sys_refid;		/* reference id */
 extern l_fp	sys_reftime;		/* last update time */
 extern struct peer *sys_peer;		/* current peer */
 extern int	sys_maxclock;		/* maximum candidates */
-extern int	sys_minclock;		/* minimum candidates */
 
 /*
  * Nonspecified system state variables.
  */
 extern l_fp	sys_authdelay;		/* authentication delay */
-extern u_long 	sys_epoch;		/* last clock update time */
-extern keyid_t	sys_private;		/* private value for session seed */
-extern int	sys_manycastserver;	/* respond to manycast client pkts */
-extern int	sys_minclock;		/* minimum survivors */
 extern int	sys_minsane;		/* minimum candidates */
-extern int	sys_floor;		/* cluster stratum floor */
-extern int	sys_ceiling;		/* cluster stratum ceiling */
-extern uint8_t	sys_ttl[MAX_TTL];	/* ttl mapping vector */
-extern int	sys_ttlmax;		/* max ttl mapping vector index */
 
 /*
  * Statistics counters
  */
-extern u_long	sys_stattime;		/* time since reset */
-extern u_long	sys_received;		/* packets received */
-extern u_long	sys_processed;		/* packets for this host */
-extern u_long	sys_restricted;	 	/* restricted packets */
-extern u_long	sys_newversion;		/* current version  */
-extern u_long	sys_oldversion;		/* old version */
-extern u_long	sys_restricted;		/* access denied */
-extern u_long	sys_badlength;		/* bad length or format */
-extern u_long	sys_badauth;		/* bad authentication */
-extern u_long	sys_declined;		/* declined */
-extern u_long	sys_limitrejected;	/* rate exceeded */
-extern u_long	sys_kodsent;		/* KoD sent */
-extern u_long	use_stattime;		/* time since reset */
+extern unsigned long	sys_stattime;		/* time since reset */
+extern unsigned long	sys_received;		/* packets received */
+extern unsigned long	sys_processed;		/* packets for this host */
+extern unsigned long	sys_restricted;	 	/* restricted packets */
+extern unsigned long	sys_newversion;		/* current version  */
+extern unsigned long	sys_oldversion;		/* old version */
+extern unsigned long	sys_badlength;		/* bad length or format */
+extern unsigned long	sys_badauth;		/* bad authentication */
+extern unsigned long	sys_declined;		/* declined */
+extern unsigned long	sys_limitrejected;	/* rate exceeded */
+extern unsigned long	sys_kodsent;		/* KoD sent */
+extern unsigned long	use_stattime;		/* time since reset */
 
 /* Signalling */
 extern volatile bool sawALRM;
 extern volatile bool sawHUP;
+extern volatile bool sawDNS;
 extern volatile bool sawQuit;		/* SIGQUIT, SIGINT, SIGTERM */
-extern sigset_t blockMask;
 
 /* ntp_restrict.c */
 extern restrict_u *	restrictlist4;	/* IPv4 restriction list */
@@ -437,8 +358,7 @@ extern restrict_u *	restrictlist6;	/* IPv6 restriction list */
 extern int		ntp_minpkt;
 extern uint8_t		ntp_minpoll;
 
-/* ntp_scanner.c */
-extern uint32_t		conf_file_sum;	/* Simple sum of characters */
+/* ntp_signd.c */
 
 #ifdef ENABLE_MSSNTP
 /* ntp_signd.c */
@@ -447,32 +367,22 @@ extern void send_via_ntp_signd(struct recvbuf *, int, keyid_t, int,
 #endif
 
 /* ntp_timer.c */
-extern volatile u_long alarm_overflow;
-extern u_long	current_time;		/* seconds since startup */
-extern u_long	timer_timereset;
-extern u_long	timer_xmtcalls;
-extern bool	leap_sec_in_progress;
+extern volatile unsigned long alarm_overflow;
+extern unsigned long	current_time;		/* seconds since startup */
+extern unsigned long	timer_timereset;
+extern unsigned long	timer_xmtcalls;
+extern bool		leap_sec_in_progress;
 #ifdef ENABLE_LEAP_SMEAR
 extern struct leap_smear_info leap_smear;
-extern int	leap_smear_intv;
+extern unsigned int		leap_smear_intv;
 #endif
 
 /* ntp_util.c */
 extern	char	statsdir[MAXFILENAME];
 extern	bool	stats_control;		/* write stats to fileset? */
-extern	int	stats_write_period;	/* # of seconds between writes. */
-extern	double	stats_write_tolerance;
 extern	double	wander_threshold;
 
 /* ntpd.c */
-extern	bool	initializing;	/* initializing flag */
-#ifdef ENABLE_DROPROOT
-extern	bool	droproot;	/* flag: try to drop root privileges after startup */
-extern	bool	root_dropped;	/* root has been dropped */
-extern char *user;		/* user to switch to */
-extern char *group;		/* group to switch to */
-extern const char *chrootdir;	/* directory to chroot() to */
-#endif
 #ifdef HAVE_WORKING_FORK
 extern	int	waitsync_fd_to_close;	/* -w/--wait-sync */
 #endif

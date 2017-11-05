@@ -23,7 +23,7 @@ include::includes/misc-options.txt[]
 // If you change this, be very sure to keep that synchronized.
 
 [[tos]]
-+tos+ [+beacon+ 'beacon' | +ceiling+ 'ceiling' | +cohort+ {+0+ | +1+} | +floor+ 'floor' | +maxclock+ 'maxclock' | +maxdist+ 'maxdist' | +minclock+ 'minclock' | +mindist+ 'mindist' | +minsane+ 'minsane' | +orphan+ 'stratum' | +orphanwait+ 'delay']::
++tos+ [+ceiling+ 'ceiling' | +floor+ 'floor' | +maxclock+ 'maxclock' | +maxdist+ 'maxdist' | +minclock+ 'minclock' | +mindist+ 'mindist' | +minsane+ 'minsane' | +orphan+ 'stratum' | +orphanwait+ 'delay']::
   This command alters certain system variables used by the clock
   selection and clustering algorithms. The default values of these
   variables have been carefully optimized for a wide range of network
@@ -32,21 +32,10 @@ include::includes/misc-options.txt[]
   knobs. It can be used to select the quality and quantity of peers used
   to synchronize the system clock and is most useful in dynamic server
   discovery schemes. The options are as follows:
-  +beacon+ 'beacon';;
-    The manycast server sends packets at intervals of 64 s if less than
-    _maxclock_ servers are available. Otherwise, it sends packets at the
-    _beacon_ interval in seconds. The default is 3600 s. See the
-    link:discover.html[Automatic Server Discovery] page for further
-    details.
   +ceiling+ 'ceiling';;
     Specify the maximum stratum (exclusive) for acceptable server
     packets. The default is 16. See the link:discover.html[Automatic
     Server Discovery] page for further details.
-  +cohort+ { +0+ | +1+ };;
-    Specify whether (1) or whether not (0) a server packet will be
-    accepted for the same stratum as the client. The default is 0. See
-    the link:discover.html[Automatic Server Discovery] page for further
-    details.
   +floor+ 'floor';;
     Specify the minimum stratum (inclusive) for acceptable server
     packets. The default is 1. See the link:discover.html[Automatic
@@ -96,12 +85,6 @@ include::includes/misc-options.txt[]
     and selectable before using backup sources, and avoids transient use
     of the backup sources at startup.
 
-[[ttl]]
-+ttl+ 'hop ...'::
-  This command specifies a list of TTL values in increasing order. up to
-  8 values can be specified. In manycast mode these values are used in
-  turn in an expanding-ring search. The default is eight multiples of 32
-  starting at 31.
 +dscp+ 'dscp'::
   This command specifies the Differentiated Services Code Point (DSCP)
   value that is used in sent NTP packets. The default value is 46 for

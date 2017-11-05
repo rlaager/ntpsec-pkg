@@ -1,17 +1,36 @@
 #include "config.h"
 
-#include <ntp.h>
-#include <ntp_fp.h>
-#include <refidsmear.h>
+#include "ntp.h"
+#include "ntp_fp.h"
 
 #include "unity.h"
 #include "unity_fixture.h"
 
 #include <stdio.h>
 
+static l_fp	convertRefIDToLFP(uint32_t r) __attribute__((const));
+
+static l_fp
+convertRefIDToLFP(uint32_t r)
+{
+	l_fp temp = 0;
+
+	r = ntohl(r);
+
+	// printf("%03d %08x: ", (r >> 24) & 0xFF, (r & 0x00FFFFFF) );
+
+	setlfpfrac(temp, r << 10);	/* 22 fractional bits */
+
+	r = (r >> 22) & 0x3;
+	r |= ~(r & 2) + 1;
+	setlfpuint(temp, r);
+
+	return temp;
+}
+
 TEST_GROUP(refidsmear);
 
-TEST_SETUP(refidsmear) {init_lib();}
+TEST_SETUP(refidsmear) {}
 
 TEST_TEAR_DOWN(refidsmear) {}
 
@@ -44,7 +63,7 @@ rtol(uint32_t r, const char *es)
 	snprintf(msg, 100, "rtol was called with r=%#.8x, es=%s", r, es);
 
 	l = convertRefIDToLFP(htonl(r));
-	as = lfptoa(&l, 8);
+	as = lfptoa(l, 8);
 
 	//printf("refid %#x, smear %s\n", r, as);
 
@@ -67,7 +86,7 @@ rtoltor(uint32_t er, const char *es)
 	snprintf(msg, 100, "rtoltor was called with er=%#.8x, es=%s", er, es);
 
 	l = convertRefIDToLFP(htonl(er));
-	as = lfptoa(&l, 8);
+	as = lfptoa(l, 8);
 
 	ar = convertLFPToRefID(l);
 

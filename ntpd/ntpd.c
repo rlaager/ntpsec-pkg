@@ -2,19 +2,20 @@
  * ntpd.c - main program for the fixed point NTP daemon
  */
 
-#include <config.h>
+#include "config.h"
 
 #include "ntp_machine.h"
 #include "ntpd.h"
 #include "ntp_io.h"
 #include "ntp_stdlib.h"
-#include "ntp_random.h"
 
 #include "ntp_config.h"
 #include "ntp_syslog.h"
 #include "ntp_assert.h"
-#include "isc/error.h"
-#include "isc/formatcheck.h"
+#ifdef ENABLE_DNS_LOOKUP
+#include "ntp_dns.h"
+#endif
+#include "isc_error.h"
 
 #include <unistd.h>
 #include <sys/stat.h>
@@ -31,15 +32,13 @@
 
 #include "recvbuff.h"
 
-extern bool sandbox(const bool droproot,
-		    const char *user, const char *group,
-		    const char *chrootdir,
-		    bool want_dynamic_interface_tracking);
+#include "version.h"
 
 void catchQuit (int sig);
 static volatile int signo = 0;
 /* In an ideal world, 'finish_safe()' would declared as noreturn... */
-static	void		finish_safe	(int);
+static	void	finish_safe	(int)
+			__attribute__	((__noreturn__));
 
 #ifdef SIGDANGER
 # include <ulimit.h>
@@ -47,10 +46,8 @@ static	void		finish_safe	(int);
 
 #if defined(HAVE_DNS_SD_H) && defined(ENABLE_MDNS_REGISTRATION)
 # include <dns_sd.h>
-DNSServiceRef mdns;
+static DNSServiceRef mdns;
 #endif
-
-#include <sodium.h>
 
 static void check_minsane(void);
 
@@ -76,30 +73,29 @@ static const char *driftfile, *pidfile;
  * attempt fails, then try again once per minute for up to 5
  * times. After all, we may be starting before mDNS.
  */
-bool mdnsreg = false;
+static bool mdnsreg = false;
 int mdnstries = 5;
 #endif  /* ENABLE_MDNS_REGISTRATION */
 
-bool droproot = false;
-char *user;		/* User to switch to */
-char *group;		/* group to switch to */
-const char *chrootdir;	/* directory to chroot to */
+static bool droproot = false;
+static char *user;		/* User to switch to */
+static char *group;		/* group to switch to */
+static const char *chrootdir;	/* directory to chroot to */
 
 #ifdef HAVE_WORKING_FORK
 int	waitsync_fd_to_close = -1;	/* -w/--wait-sync */
 #endif
 
-char *progname;
-
-#ifdef HAVE_NETINFO_NI_H
-extern bool	check_netinfo;
-#endif
+const char *progname;
 
 #if defined(HAVE_WORKING_FORK)
 static int	wait_child_sync_if	(int, long);
 #endif
 
 static	void	catchHUP	(int);
+#ifdef ENABLE_DNS_LOOKUP
+static	void	catchDNS	(int);
+#endif
 
 # ifdef	DEBUG
 static	void	moredebug	(int);
@@ -108,28 +104,22 @@ static	void	lessdebug	(int);
 static	void	no_debug	(int);
 # endif	/* !DEBUG */
 
-int	saved_argc;
-char **	saved_argv;
+static int	saved_argc;
+static char **	saved_argv;
 
-int		ntpdmain		(int, char **);
-static void	mainloop		(void);
-static void	set_process_priority	(void);
-static void	assertion_failed	(const char *, int,
-					 isc_assertiontype_t,
-					 const char *)
+static int	ntpdmain(int, char **) __attribute__((noreturn));
+static void	mainloop		(void)
 			__attribute__	((__noreturn__));
-static void	library_fatal_error	(const char *, int,
-					 const char *, va_list)
-					ISC_FORMAT_PRINTF(3, 0);
-static void	library_unexpected_error(const char *, int,
-					 const char *, va_list)
-					ISC_FORMAT_PRINTF(3, 0);
+static void	set_process_priority	(void);
+static  void    close_all_beyond(int);
+static  void    close_all_except(int);
 
-#define ALL_OPTIONS "46c:dD:f:gGhi:I:k:l:LmnNp:PqRs:t:u:UVw:xyYzZ"
+
+#define ALL_OPTIONS "46abc:dD:f:gGhi:I:k:l:LmnNp:Pqr:Rs:t:u:U:Vw:xzZ"
 static const struct option longoptions[] = {
     { "ipv4",		    0, 0, '4' },
     { "ipv6",		    0, 0, '6' },
-    { "noauthreq",	    0, 0, 'A' },
+    { "assert",	            0, 0, 'a' },
     { "configfile",	    1, 0, 'c' },
     { "debug",		    0, 0, 'd' },
     { "set-debug-level",    1, 0, 'D' },
@@ -144,14 +134,14 @@ static const struct option longoptions[] = {
     { "novirtualips",	    0, 0, 'L' },
     { "nofork",		    0, 0, 'n' },
     { "nice",		    0, 0, 'N' },
+    { "pidfile",	    1, 0, 'p' },
+    { "priority",	    1, 0, 'P' },
     { "quit",		    0, 0, 'q' },
     { "dumpopts",	    0, 0, 'R' },
     { "statsdir",	    1, 0, 's' },
     { "trustedkey",	    1, 0, 't' },
     { "user",		    1, 0, 'u' },
     { "updateinterval",	    1, 0, 'U' },
-    { "capture",	    1, 0, 'y' },
-    { "replay",		    1, 0, 'Y' },
     { "var",		    1, 0, 'z' },
     { "dvar",		    1, 0, 'Z' },
     { "slew",		    0, 0, 'x' },
@@ -168,11 +158,7 @@ static void ntpd_usage(void)
     P("				- prohibits the option 'ipv6'\n");
     P("   -6 no  ipv6           Force IPv6 DNS name resolution\n");
     P("				- prohibits the option 'ipv4'\n");
-    P("   -a no  authreq        Require crypto authentication\n");
-    P("				- prohibits the option 'authnoreq'\n");
-    P("   -A no  authnoreq      Do not require crypto authentication\n");
-    P("				- prohibits the option 'authreq'\n");
-    P("   -b no  bcastsync      Allow us to sync to broadcast servers\n");
+    P("   -a no  assert         REQUIRE(false) to test assert handler\n");
     P("   -c Str configfile     configuration file name\n");
     P("   -d no  debug-level    Increase output debug message level\n");
     P("				- may appear multiple times\n");
@@ -230,7 +216,6 @@ parse_cmdline_opts(
 	)
 {
 	static bool	parsed = false;
-	int sawV = 0;
 
 	if (parsed)
 	    return;
@@ -247,10 +232,19 @@ parse_cmdline_opts(
 	    case '6':
 		opt_ipv6 = true;
 		break;
+	    case 'a':
+		fputs("Testing assert failure.\n", stderr);
+		REQUIRE(false);
+		break;
 	    case 'b':
+		fputs("ERROR: Obsolete and unsupported broadcast option -b\n",
+                      stderr);
+		ntpd_usage();
+		exit(1);
 		break;
 	    case 'c':
-		explicit_config = ntp_optarg;
+		if (ntp_optarg != NULL)
+			explicit_config = ntp_optarg;
 		break;
 	    case 'd':
 #ifdef DEBUG
@@ -260,11 +254,13 @@ parse_cmdline_opts(
 		break;
 	    case 'D':
 #ifdef DEBUG
-		debug = atoi(ntp_optarg);
+		if (ntp_optarg != NULL)
+			debug = atoi(ntp_optarg);
 #endif
 		break;
 	    case 'f':
-		driftfile = ntp_optarg;
+		if (ntp_optarg != NULL)
+			driftfile = ntp_optarg;
 		break;
 	    case 'g':
 		allow_panic = true;
@@ -278,7 +274,8 @@ parse_cmdline_opts(
 	    case 'i':
 #ifdef ENABLE_DROPROOT
 		droproot = true;
-		chrootdir = ntp_optarg;
+		if (ntp_optarg != NULL)
+			chrootdir = ntp_optarg;
 #endif
 		break;
 	    case 'I':
@@ -289,7 +286,8 @@ parse_cmdline_opts(
 		/* defer */
 		break;
 	    case 'l':
-		logfilename = ntp_optarg;
+		if (ntp_optarg != NULL)
+			logfilename = ntp_optarg;
 		break;
 	    case 'L':
 		listen_to_virtual_ips = false;
@@ -309,99 +307,88 @@ parse_cmdline_opts(
 		need_priority = true;
 		break;
 	    case 'p':
-		pidfile = ntp_optarg;
+		if (ntp_optarg != NULL)
+			pidfile = ntp_optarg;
 		break;
 	    case 'P':
-		config_priority = atoi(ntp_optarg);
-		config_priority_override = true;
-		need_priority = true;
+		if (ntp_optarg != NULL) {
+			config_priority = atoi(ntp_optarg);
+			config_priority_override = true;
+			need_priority = true;
+		}
 		break;
 	    case 'q':
 		mode_ntpdate = true;
 		nofork = true;
 		break;
 	    case 'r':
-		{
-		    double tmp;
-		    if (sscanf(ntp_optarg, "%lf", &tmp) != 1) {
-			msyslog(LOG_ERR,
-				"command line broadcast delay value %s undecodable",
-				ntp_optarg);
-			exit(0);
-		    }
-		}
+		fputs("ERROR: Obsolete and unsupported broadcast option -r\n",
+                      stderr);
+		ntpd_usage();
+		exit(1);
 	        break;
 	    case 'R':	/* undocumented -- dump CLI options for testing */
 		dumpopts = true;
 		nofork = true;
 		break;
 	    case 's':
-		strlcpy(statsdir, ntp_optarg, sizeof(statsdir));
+		if (ntp_optarg != NULL)
+			strlcpy(statsdir, ntp_optarg, sizeof(statsdir));
 		break;
 	    case 't':
 		/* defer */
 		break;
 	    case 'u':
 #ifdef ENABLE_DROPROOT
-		droproot = true;
-		/* coverity[overwrite_var] Leak is real but harmless */
-		user = estrdup(ntp_optarg);
-		/* coverity[overwrite_var] Leak is real but harmless */
-		group = strrchr(user, ':');
-		if (group != NULL) {
-			size_t	len;
+		if (ntp_optarg != NULL) {
+                        char *gp;
 
-			*group++ = '\0'; /* get rid of the ':' */
-			len = group - user;
-			group = estrdup(group);
-			user = erealloc(user, len);
+			droproot = true;
+                        if ( user ) {
+			    fputs("ERROR: more than one -u given.\n",
+				  stderr);
+			    ntpd_usage();
+			    exit(1);
+                        }
+                        user = estrdup(ntp_optarg);
+
+			gp = strrchr(user, ':');
+			if (gp) {
+				*gp++ = '\0'; /* get rid of the ':' */
+				group = estrdup(gp);
+			} else {
+                                group  = NULL;
+                        }
 		}
 #endif
 		break;
 	    case 'U':
+		if (ntp_optarg != NULL)
 		{
-		    long val = atol(argv[ntp_optind]);
+			long val = atol(ntp_optarg);
 
-		    if (val >= 0)
-			    interface_interval = val;
-		    else {
-			    fprintf(stderr,
-				    "command line interface update interval %ld must not be negative\n",
-				    val);
-			    msyslog(LOG_ERR,
-				    "command line interface update interval %ld must not be negative",
-				    val);
-			    exit(0);
-		    }
+			if (val >= 0)
+				interface_interval = (int)val;
+			else {
+				fprintf(stderr,
+					"command line interface update interval %ld must not be negative\n",
+					val);
+				msyslog(LOG_ERR,
+					"CONFIG: command line interface update interval %ld must not be negative",
+					val);
+				exit(0);
+			}
 		}
 		break;
 	    case 'V':
-		sawV++;
-		switch (sawV) {
-		  case 1:
-			printf("ntpd %s\n", Version);
-			break;
-		  case 2:
-			printf("ntpd %s\n", VVersion);
-			break;
-		  default:
-			printf("ntpd no-more\n");
-			break;
-		}
-		break;
+		printf("%s\n", ntpd_version());
+		exit(0);
 	    case 'w':
-		wait_sync = strtod(ntp_optarg, NULL);
+		if (ntp_optarg != NULL)
+			wait_sync = (long)strtod(ntp_optarg, NULL);
 		break;
 	    case 'x':
 		/* defer */
-		break;
-	    case 'y':
-		nofork = true;
-		/* further processed by interception code */
-		break;
-	    case 'Y':
-		nofork = true;
-		/* further processed by interception code */
 		break;
 	    case 'z':
 		/* defer */
@@ -410,7 +397,8 @@ parse_cmdline_opts(
 		/* defer */
 		break;
 	    default:
-		fputs("Unknown command line switch or missing argument.\n", stderr);
+		fputs("Unknown command line switch or missing argument.\n",
+                      stderr);
 		ntpd_usage();
 		exit(1);
 	    } /*switch*/
@@ -425,9 +413,6 @@ parse_cmdline_opts(
 		cmdline_server_count = argc - ntp_optind;
 		cmdline_servers = argv + ntp_optind;
 	}
-
-	if (sawV > 0)
-		exit(0);
 }
 
 #ifdef NO_MAIN_ALLOWED
@@ -450,7 +435,7 @@ main(
 static void
 catch_danger(int signo)
 {
-	msyslog(LOG_INFO, "ntpd: setpgid(): %m");
+	msyslog(LOG_INFO, "ERR: setpgid(): %m");
 	/* Make the system believe we'll free something, but don't do it! */
 	return;
 }
@@ -463,8 +448,8 @@ static void
 set_process_priority(void)
 {
 # ifdef DEBUG
-	if (debug > 1)
-		msyslog(LOG_DEBUG, "set_process_priority: %s",
+	if (debug > 1) /* SPECIAL DEBUG */
+		msyslog(LOG_DEBUG, "INIT: set_process_priority: %s",
 			((!need_priority)
 			 ? "Leave priority alone"
 			 : "Attempt to set priority"
@@ -487,20 +472,28 @@ set_process_priority(void)
 				sched.sched_priority = config_priority;
 		}
 		if ( sched_setscheduler(0, SCHED_FIFO, &sched) == -1 )
-			msyslog(LOG_ERR, "sched_setscheduler(): %m");
+			msyslog(LOG_ERR, "INIT: sched_setscheduler(): %m");
 		else
 			need_priority = false;
 	}
 #endif
 	if (need_priority)
-		msyslog(LOG_ERR, "set_process_priority: No way found to improve our priority");
+		msyslog(LOG_ERR, "INIT: set_process_priority: No way found to improve our priority");
+}
+
+const char *ntpd_version(void)
+{
+    static char versionbuf[64];
+    snprintf(versionbuf, sizeof(versionbuf),
+	     "ntpd ntpsec-%s+%d %s", VERSION, VCS_TICK, VCS_DATE);
+    return versionbuf;
 }
 
 /*
  * Main program.  Initialize us, disconnect us from the tty if necessary,
  * and loop waiting for I/O and/or timer expiries.
  */
-int
+static int
 ntpdmain(
 	int argc,
 	char *argv[]
@@ -549,33 +542,25 @@ ntpdmain(
 		char buf[1024];	/* Secret knowledge of msyslog buf length */
 		char *cp = buf;
 
-		msyslog(LOG_NOTICE, "ntpd %s: Starting", Version);
+		msyslog(LOG_NOTICE, "INIT: %s: Starting", ntpd_version());
 
 		/* Note that every arg has an initial space character */
 		snprintf(cp, sizeof(buf), "Command line:");
 		cp += strlen(cp);
 
 		for (int i = 0; i < saved_argc ; ++i) {
-			snprintf(cp, sizeof(buf) - (cp - buf),
+			snprintf(cp, sizeof(buf) - (size_t)(cp - buf),
 				" %s", saved_argv[i]);
 			cp += strlen(cp);
 		}
-		msyslog(LOG_INFO, "%s", buf);
+		msyslog(LOG_INFO, "INIT: %s", buf);
 	}
-
-	/*
-	 * Install trap handlers to log errors and assertion failures.
-	 * Default handlers print to stderr which doesn't work if detached.
-	 */
-	isc_assertion_setcallback(assertion_failed);
-	isc_error_setfatal(library_fatal_error);
-	isc_error_setunexpected(library_unexpected_error);
 
 	uid = getuid();
 	if (uid && !dumpopts) {
 		termlogit = true;
 		msyslog(LOG_ERR,
-			"must be run as root, not uid %ld", (long)uid);
+			"INIT: must be run as root, not uid %ld", (long)uid);
 		exit(1);
 	}
 
@@ -590,16 +575,16 @@ ntpdmain(
 	    /* -w requires a fork() even with debug > 0 */
 	    nofork = false;
 	    if (pipe(pipe_fds)) {
+		termlogit = true;
 		exit_code = (errno) ? errno : -1;
 		msyslog(LOG_ERR,
-			"Pipe creation failed for --wait-sync: %m");
+			"INIT: Pipe creation failed for --wait-sync: %m");
 		exit(exit_code);
 	    }
 	    waitsync_fd_to_close = pipe_fds[1];
 	}
 # endif	/* HAVE_WORKING_FORK */
 
-	init_lib();
 	init_network();
 	/*
 	 * Detach us from the terminal.  May need an #ifndef GIZMO.
@@ -610,7 +595,7 @@ ntpdmain(
 		rc = fork();
 		if (-1 == rc) {
 			exit_code = (errno) ? errno : -1;
-			msyslog(LOG_ERR, "fork: %m");
+			msyslog(LOG_ERR, "INIT: fork: %m");
 			exit(exit_code);
 		}
 		if (rc > 0) {	
@@ -625,6 +610,7 @@ ntpdmain(
 		 * close all open files excepting waitsync_fd_to_close.
 		 * msyslog() unreliable until after init_logging().
 		 */
+		termlogit = false;    /* do not use stderr after fork */
 		closelog();
 		if (syslog_file != NULL) {
 			fclose(syslog_file);
@@ -640,7 +626,7 @@ ntpdmain(
 		setup_logfile(logfilename);
 
 		if (setsid() == (pid_t)-1)
-			msyslog(LOG_ERR, "setsid(): %m");
+			msyslog(LOG_ERR, "INIT: setsid(): %m");
 #  ifdef SIGDANGER
 		/* Don't get killed by low-on-memory signal. */
 		sa.sa_handler = catch_danger;
@@ -651,14 +637,6 @@ ntpdmain(
 # endif		/* HAVE_WORKING_FORK */
 	}
 
-        /*
-	 * Initialize libsodium and its RNG
-	 */
-	if (sodium_init() < 0) {
-		msyslog(LOG_ERR, "sodium_init() failed");
-		exit(1);
-	}
-
 	/*
 	 * Set up signals we pay attention to locally.
 	 */
@@ -667,13 +645,16 @@ ntpdmain(
 	signal_no_reset(SIGTERM, catchQuit);
 	signal_no_reset(SIGHUP, catchHUP);
 	signal_no_reset(SIGBUS, catchQuit);  /* FIXME: It's broken, can't continue. */
+#ifdef ENABLE_DNS_LOOKUP
+	signal_no_reset(SIGDNS, catchDNS);
+#endif
 
 # ifdef DEBUG
-	(void) signal_no_reset(MOREDEBUGSIG, moredebug);
-	(void) signal_no_reset(LESSDEBUGSIG, lessdebug);
+	signal_no_reset(MOREDEBUGSIG, moredebug);
+	signal_no_reset(LESSDEBUGSIG, lessdebug);
 # else
-	(void) signal_no_reset(MOREDEBUGSIG, no_debug);
-	(void) signal_no_reset(LESSDEBUGSIG, no_debug);
+	signal_no_reset(MOREDEBUGSIG, no_debug);
+	signal_no_reset(LESSDEBUGSIG, no_debug);
 # endif	/* DEBUG */
 
 	/*
@@ -686,7 +667,7 @@ ntpdmain(
 	 *
 	 * Exactly what command-line options are we expecting here?
 	 */
-	INIT_SSL();
+	ssl_init();
 	init_auth();
 	init_util();
 	init_restrict();
@@ -711,10 +692,31 @@ ntpdmain(
 	while ((op = ntp_getopt_long(argc, argv, ALL_OPTIONS,
 				     longoptions, NULL)) != -1) {
 	    switch (op) {
+            case '4':
+            case '6':
+                /* handled elsewhere */
+                break;
+	    case 'b':
+		fputs("ERROR: Obsolete and unsupported broadcast option -b\n",
+                      stderr);
+		ntpd_usage();
+		exit(1);
+		break;
+            case 'c':
+            case 'd':
+            case 'D':
+                /* handled elsewhere */
+                break;
 	    case 'f':
 		stats_config(STATS_FREQ_FILE, driftfile);
 		break;
+            case 'g':
+            case 'h':
+            case 'i':
+                /* handled elsewhere */
+                break;
 	    case 'I':
+		if (ntp_optarg != NULL)
 	        {
 		    sockaddr_u	addr;
 		    add_nic_rule(
@@ -725,36 +727,70 @@ ntpdmain(
 	        }
 		break;
 	    case 'k':
-		getauthkeys(ntp_optarg);
+		if (ntp_optarg != NULL)
+			getauthkeys(ntp_optarg);
 		break;
+            case 'l':
+            case 'L':
+            case 'm':
+            case 'n':
+            case 'N':
+                /* handled elsewhere */
+                break;
 	    case 'p':
 		stats_config(STATS_PID_FILE, pidfile);
 		break;
+            case 'P':
+            case 'q':
+                /* handled elsewhere */
+                break;
+	    case 'r':
+		fputs("ERROR: Obsolete and unsupported broadcast option -r\n",
+                      stderr);
+		ntpd_usage();
+		exit(1);
+		break;
+            case 'R':
+                /* handled elsewhere */
+                break;
 	    case 's':
 		stats_config(STATS_STATSDIR, statsdir);
 		break;
 	    case 't':
+		if (ntp_optarg != NULL)
 		{
-		    u_long tkey = (int)atol(ntp_optarg);
+		    unsigned long tkey = (unsigned long)atol(ntp_optarg);
 		    if (tkey == 0 || tkey > NTP_MAXKEY) {
 			msyslog(LOG_ERR,
-				"command line trusted key %s is invalid",
+				"INIT: command line trusted key %s is invalid",
 				ntp_optarg);
-			exit(0);
+			exit(1);
 		    } else {
-			authtrust(tkey, true);
+			authtrust((keyid_t)tkey, true);
 		    }
 	        }
 		break;
+	    case 'u':
+	    case 'U':
+	    case 'v':
+	    case 'w':
+                /* handled elsewhere */
+                break;
 	    case 'x':
 		loop_config(LOOP_MAX, 600);
 		break;
 	    case 'z':
-		set_sys_var(ntp_optarg, strlen(ntp_optarg) + 1, RW);
+		if (ntp_optarg != NULL)
+			set_sys_var(ntp_optarg, strlen(ntp_optarg) + 1, RW);
 		break;
 	    case 'Z':
-		set_sys_var(ntp_optarg, strlen(ntp_optarg) + 1, (u_short) (RW | DEF));
-		break;
+		if (ntp_optarg != NULL)
+			set_sys_var(ntp_optarg, strlen(ntp_optarg) + 1,
+                                    (unsigned short) (RW | DEF));
+                break;
+            default:
+		msyslog(LOG_ERR, "INIT: Unknown option: %c", (char)op);
+		exit(1);
 	    }
 	}
 
@@ -767,12 +803,15 @@ ntpdmain(
 	{
 	    struct rlimit rlim;
 	    rlim.rlim_max = rlim.rlim_cur = RLIM_INFINITY;
+#ifdef RLIMIT_MEMLOCK
 	    if (setrlimit(RLIMIT_MEMLOCK, &rlim) < 0)
-		msyslog(LOG_WARNING, "setrlimit() failed: not locking into RAM");
-	    else if (mlockall(MCL_CURRENT|MCL_FUTURE) < 0)
-		msyslog(LOG_WARNING, "mlockall() failed: not locking into RAM");
+		msyslog(LOG_WARNING, "INIT: setrlimit() failed: not locking into RAM");
 	    else
-		msyslog(LOG_INFO, "successfully locked into RAM");
+#endif
+	    if (mlockall(MCL_CURRENT|MCL_FUTURE) < 0)
+		msyslog(LOG_WARNING, "INIT: mlockall() failed: not locking into RAM");
+	    else
+		msyslog(LOG_INFO, "INIT: successfully locked into RAM");
 	}
 
 #ifdef ENABLE_EARLY_DROPROOT
@@ -786,7 +825,7 @@ ntpdmain(
 		 * ports that allow binding to NTP_PORT with uid != 0
 		 */
 		disable_dynamic_updates = true;
-		msyslog(LOG_INFO, "running as non-root disables dynamic interface tracking");
+		msyslog(LOG_INFO, "INIT: running as non-root disables dynamic interface tracking");
 	}
 #endif
 
@@ -837,12 +876,12 @@ ntpdmain(
 		else if (opt_ipv6)
 			ipv4_works = false;
 	} else if (!ipv4_works && !ipv6_works) {
-		msyslog(LOG_ERR, "Neither IPv4 nor IPv6 networking detected, fatal.");
+		msyslog(LOG_ERR, "INIT: Neither IPv4 nor IPv6 networking detected, fatal.");
 		exit(1);
 	} else if (opt_ipv4 && !ipv4_works)
-		msyslog(LOG_WARNING, "-4/--ipv4 ignored, IPv4 networking not found.");
+		msyslog(LOG_WARNING, "INIT: -4/--ipv4 ignored, IPv4 networking not found.");
 	else if (opt_ipv6 && !ipv6_works)
-		msyslog(LOG_WARNING, "-6/--ipv6 ignored, IPv6 networking not found.");
+		msyslog(LOG_WARNING, "INIT: -6/--ipv6 ignored, IPv6 networking not found.");
 
 	/*
 	 * Get the configuration.
@@ -851,6 +890,11 @@ ntpdmain(
 	readconfig(getconfig(explicit_config));
 	check_minsane();
 
+        if ( 8 > sizeof(time_t) ) {
+	    msyslog(LOG_ERR, "INIT: This system has a 32-bit time_t.");
+	    msyslog(LOG_ERR, "INIT: This ntpd will fail on 2038-01-19T03:14:07Z.");
+        }
+
 	loop_config(LOOP_DRIFTINIT, 0);
 	/* report_event(EVNT_SYSRESTART, NULL, NULL); */
 
@@ -858,12 +902,12 @@ ntpdmain(
 	/* drop root privileges */
 	if (sandbox(droproot, user, group, chrootdir, interface_interval!=0) && interface_interval) {
 		interface_interval = 0;
-		msyslog(LOG_INFO, "running as non-root disables dynamic interface tracking");
+		msyslog(LOG_INFO, "INIT: running as non-root disables dynamic interface tracking");
 	}
 #endif
 	
 	mainloop();
-	return 1;
+        /* unreachable, mainloop() never returns */
 }
 
 /*
@@ -891,9 +935,16 @@ static void mainloop(void)
 			 * Out here, signals are unblocked.  Call timer routine
 			 * to process expiry.
 			 */
-			timer();
 			sawALRM = false;
+			timer();
 		}
+
+#ifdef ENABLE_DNS_LOOKUP
+		if (sawDNS) {
+			sawDNS = false;
+			dns_check();
+		}
+#endif
 
 # ifdef ENABLE_DEBUG_TIMING
 		{
@@ -921,14 +972,14 @@ static void mainloop(void)
 # ifdef ENABLE_DEBUG_TIMING
 					l_fp dts = pts;
 
-					L_SUB(&dts, &rbuf->recv_time);
-					DPRINTF(2, ("processing timestamp delta %s (with prec. fuzz)\n", lfptoa(&dts, 9)));
-					collect_timing(rbuf, "buffer processing delay", 1, &dts);
+					dts -= rbuf->recv_time;
+					DPRINT(2, ("processing timestamp delta %s (with prec. fuzz)\n", lfptoa(dts, 9)));
+					collect_timing(rbuf, "buffer processing delay", 1, dts);
 					bufcount++;
 # endif
 					(*rbuf->receiver)(rbuf);
 				} else {
-					msyslog(LOG_ERR, "fatal: receive buffer callback NULL");
+					msyslog(LOG_ERR, "ERR: fatal: receive buffer callback NULL");
 					abort();
 				}
 
@@ -937,10 +988,10 @@ static void mainloop(void)
 			}
 # ifdef ENABLE_DEBUG_TIMING
 			get_systime(&tsb);
-			L_SUB(&tsb, &tsa);
+			tsb -= tsa;
 			if (bufcount) {
-				collect_timing(NULL, "processing", bufcount, &tsb);
-				DPRINTF(2, ("processing time for %d buffers %s\n", bufcount, lfptoa(&tsb, 9)));
+				collect_timing(NULL, "processing", bufcount, tsb);
+				DPRINT(2, ("processing time for %d buffers %s\n", bufcount, lfptoa(tsb, 9)));
 			}
 		}
 # endif
@@ -950,16 +1001,14 @@ static void mainloop(void)
 		 */
 		if (sawHUP) {
 			sawHUP = false;
-			msyslog(LOG_INFO, "Saw SIGHUP");
+			msyslog(LOG_INFO, "LOG: Saw SIGHUP");
 
 			reopen_logfile();
 
 			{
-			l_fp snow;
 			time_t tnow;
-			get_systime(&snow);
 			time(&tnow);
-			check_leap_file(false, snow.l_ui, &tnow);
+			check_leap_file(false, tnow);
 			}
 		}
 
@@ -970,16 +1019,16 @@ static void mainloop(void)
 # if defined(HAVE_DNS_SD_H) && defined(ENABLE_MDNS_REGISTRATION)
 		if (mdnsreg && (current_time - mdnsreg ) > 60 && mdnstries && sys_leap != LEAP_NOTINSYNC) {
 			mdnsreg = current_time;
-			msyslog(LOG_INFO, "Attempting to register mDNS");
+			msyslog(LOG_INFO, "INIT: Attempting to register mDNS");
 			if ( DNSServiceRegister (&mdns, 0, 0, NULL, "_ntp._udp", NULL, NULL,
 			    htons(NTP_PORT), 0, NULL, NULL, NULL) != kDNSServiceErr_NoError ) {
 				if (!--mdnstries) {
-					msyslog(LOG_ERR, "Unable to register mDNS, giving up.");
+					msyslog(LOG_ERR, "INIT: Unable to register mDNS, giving up.");
 				} else {	
-					msyslog(LOG_INFO, "Unable to register mDNS, will try later.");
+					msyslog(LOG_INFO, "INIT: Unable to register mDNS, will try later.");
 				}
 			} else {
-				msyslog(LOG_INFO, "mDNS service registered.");
+				msyslog(LOG_INFO, "INIT: mDNS service registered.");
 				mdnsreg = false;
 			}
 		}
@@ -1002,9 +1051,9 @@ finish_safe(
 	sig_desc = strsignal(sig);
 	if (sig_desc == NULL)
 		sig_desc = "";
-	msyslog(LOG_NOTICE, "%s exiting on signal %d (%s)", progname,
+	msyslog(LOG_NOTICE, "ERR: %s exiting on signal %d (%s)", progname,
 		sig, sig_desc);
-	/* See Bug 2513 and Bug 2522 re the unlink of PIDFILE */
+	/* See Classic Bugs 2513 and Bug 2522 re the unlink of PIDFILE */
 # if defined(HAVE_DNS_SD_H) && defined(ENABLE_MDNS_REGISTRATION)
 	if (mdns != NULL)
 		DNSServiceRefDeallocate(mdns);
@@ -1031,6 +1080,16 @@ static void catchHUP(int sig)
 	sawHUP = true;
 }
 
+#ifdef ENABLE_DNS_LOOKUP
+/*
+ * catchDNS - set flag to process answer DNS lookup
+ */
+static void catchDNS(int sig)
+{
+	UNUSED_ARG(sig);
+	sawDNS = true;
+}
+#endif
 
 /*
  * wait_child_sync_if - implements parent side of -w/--wait-sync
@@ -1039,7 +1098,7 @@ static void catchHUP(int sig)
 static int
 wait_child_sync_if(
 	int	pipe_read_fd,
-	long	wait_sync
+	long	wait_sync1
 	)
 {
 	int	rc;
@@ -1050,12 +1109,12 @@ wait_child_sync_if(
 	fd_set	readset;
 	struct timespec wtimeout;
 
-	if (0 == wait_sync)
+	if (0 == wait_sync1)
 		return 0;
 
 	/* waitsync_fd_to_close used solely by child */
 	close(waitsync_fd_to_close);
-	wait_end_time = time(NULL) + wait_sync;
+	wait_end_time = time(NULL) + wait_sync1;
 	do {
 		cur_time = time(NULL);
 		wait_rem = (wait_end_time > cur_time)
@@ -1072,7 +1131,7 @@ wait_child_sync_if(
 				continue;
 			exit_code = (errno) ? errno : -1;
 			msyslog(LOG_ERR,
-				"--wait-sync select failed: %m");
+				"ERR: --wait-sync select failed: %m");
 			return exit_code;
 		}
 		if (0 == rc) {
@@ -1097,7 +1156,7 @@ wait_child_sync_if(
 	} while (wait_rem > 0);
 
 	fprintf(stderr, "%s: -w/--wait-sync %ld timed out.\n",
-		progname, wait_sync);
+		progname, wait_sync1);
 	return ETIMEDOUT;
 }
 # endif	/* HAVE_WORKING_FORK */
@@ -1122,7 +1181,7 @@ static void check_minsane()
     if (sys_minsane > 1) return;  /* already adjusted, assume reasonable */
 
     for (peer = peer_list; peer != NULL; peer = peer->p_link) {
-	if (peer->flags & FLAG_NOSELECT) continue;
+	if (peer->cfg.flags & FLAG_NOSELECT) continue;
 	servers++;
 	if (peer->cast_flags & MDF_POOL) {
 	    /* pool server */
@@ -1133,82 +1192,9 @@ static void check_minsane()
     }
 
     if (servers >= 5)
-	msyslog(LOG_ERR, "Found %d servers, suggest minsane at least 3", servers);
+	msyslog(LOG_ERR, "SYNC: Found %d servers, suggest minsane at least 3", servers);
     else if (servers == 4)
-        msyslog(LOG_ERR, "Found 4 servers, suggest minsane of 2");
-
-};
-
-
-/*
- * assertion_failed - Redirect assertion failures to msyslog().
- */
-static void
-assertion_failed(
-	const char *file,
-	int line,
-	isc_assertiontype_t type,
-	const char *cond
-	)
-{
-	isc_assertion_setcallback(NULL);    /* Avoid recursion */
-
-	msyslog(LOG_ERR, "%s:%d: %s(%s) failed",
-		file, line, isc_assertion_typetotext(type), cond);
-	msyslog(LOG_ERR, "exiting (due to assertion failure)");
-
-	abort();
-}
-
-
-/*
- * library_fatal_error - Handle fatal errors from our libraries.
- */
-static void
-library_fatal_error(
-	const char *file,
-	int line,
-	const char *format,
-	va_list args
-	)
-{
-	char errbuf[256];
-
-	isc_error_setfatal(NULL);  /* Avoid recursion */
-
-	msyslog(LOG_ERR, "%s:%d: fatal error:", file, line);
-	vsnprintf(errbuf, sizeof(errbuf), format, args);
-	msyslog(LOG_ERR, "%s", errbuf);
-	msyslog(LOG_ERR, "exiting (due to fatal error in library)");
-
-	abort();
-}
-
-
-/*
- * library_unexpected_error - Handle non fatal errors from our libraries.
- */
-# define MAX_UNEXPECTED_ERRORS 100
-int unexpected_error_cnt = 0;
-static void
-library_unexpected_error(
-	const char *file,
-	int line,
-	const char *format,
-	va_list args
-	)
-{
-	char errbuf[256];
-
-	if (unexpected_error_cnt >= MAX_UNEXPECTED_ERRORS)
-		return;	/* avoid clutter in log */
-
-	msyslog(LOG_ERR, "%s:%d: unexpected error:", file, line);
-	vsnprintf(errbuf, sizeof(errbuf), format, args);
-	msyslog(LOG_ERR, "%s", errbuf);
-
-	if (++unexpected_error_cnt == MAX_UNEXPECTED_ERRORS)
-		msyslog(LOG_ERR, "Too many errors.  Shutting up.");
+        msyslog(LOG_ERR, "SYNC: Found 4 servers, suggest minsane of 2");
 
 }
 
@@ -1225,10 +1211,10 @@ moredebug(
 	int saved_errno = errno;
 
 	UNUSED_ARG(sig);
-	if (debug < 255)
+	if (debug < 255) /* SPECIAL DEBUG */
 	{
 		debug++;
-		msyslog(LOG_DEBUG, "debug raised to %d", debug);
+		msyslog(LOG_DEBUG, "LOG: debug raised to %d", debug);
 	}
 	errno = saved_errno;
 }
@@ -1245,10 +1231,10 @@ lessdebug(
 	int saved_errno = errno;
 
 	UNUSED_ARG(sig);
-	if (debug > 0)
+	if (debug > 0) /* SPECIAL DEBUG */
 	{
 		debug--;
-		msyslog(LOG_DEBUG, "debug lowered to %d", debug);
+		msyslog(LOG_DEBUG, "LOG: debug lowered to %d", debug);
 	}
 	errno = saved_errno;
 }
@@ -1266,7 +1252,63 @@ no_debug(
 {
 	int saved_errno = errno;
 
-	msyslog(LOG_DEBUG, "ntpd not compiled for debugging (signal %d)", sig);
+	msyslog(LOG_DEBUG, "LOG: ntpd not compiled for debugging (signal %d)", sig);
 	errno = saved_errno;
 }
 # endif	/* !DEBUG */
+
+/*
+ * close_all_except()
+ *
+ * Close all file descriptors except the given keep_fd.
+ */
+static void
+close_all_except(
+	int keep_fd
+	)
+{
+	int fd;
+
+	for (fd = 0; fd < keep_fd; fd++)
+		close(fd);
+
+	close_all_beyond(keep_fd);
+}
+
+
+/*
+ * close_all_beyond()
+ *
+ * Close all file descriptors after the given keep_fd, which is the
+ * highest fd to keep open.  See
+ *
+ * http://stackoverflow.com/questions/899038/getting-the-highest-allocated-file-descriptor
+ */
+static void
+close_all_beyond(
+	int keep_fd
+	)
+{
+# ifdef HAVE_CLOSEFROM
+	closefrom(keep_fd + 1);
+# elif defined(F_CLOSEM)
+	/*
+	 * From 'Writing Reliable AIX Daemons,' SG24-4946-00,
+	 * by Eric Agar (saves us from doing 32767 system
+	 * calls)
+	 */
+	if (fcntl(keep_fd + 1, F_CLOSEM, 0) == -1)
+		msyslog(LOG_ERR, "INIT: F_CLOSEM(%d): %m", keep_fd + 1);
+# else  /* !HAVE_CLOSEFROM && !F_CLOSEM follows */
+	int fd;
+	int max_fd;
+
+	/* includes POSIX case */
+	max_fd = sysconf(_SC_OPEN_MAX);
+	if (10000 < max_fd)
+		msyslog(LOG_ERR, "INIT: close_all_beyond: closing %d files", max_fd);
+	for (fd = keep_fd + 1; fd < max_fd; fd++)
+		close(fd);
+# endif /* !HAVE_CLOSEFROM && !F_CLOSEM */
+}
+

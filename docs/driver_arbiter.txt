@@ -15,6 +15,11 @@ This refclock is deprecated and obsolete. The NTPsec maintainers plan
 to remove it in a future release.  If you have a requirement for it,
 please make this known to us.
 
+This driver reports only two-digit years, and is thus reliant on the
+system clock to be near correct before samples will be processed
+properly. You will not be able to use it to run autonomously, nor will
+it reliably recover from a trashed or zeroed system clock.
+
 == Description ==
 
 This driver supports the Arbiter 1088A/B Satellite Controlled Clock. The
@@ -99,6 +104,9 @@ over the last 16 seconds.
 
 == Driver Options ==
 
++unit+ 'number'::
+  The driver unit number, defaulting to 0. Used as a distinguishing
+  suffix in the driver device name. 
 +time1+ 'time'::
   Specifies the time offset calibration factor, in seconds and fraction,
   with default 0.0.
@@ -141,6 +149,20 @@ David L. Mills <mills@udel.edu>
 == Additional Information ==
 
 link:refclock.html[Reference Clock Drivers]
+
+== Known bugs ==
+
+If your Arbiter has firmware made more than 1024 weeks (19 years and 36
+weeks) in the past, its internal date counter may wrap around
+and generate spurious timestamps.
+
+This problem is fundamental and cannot be compensated for in code
+without relying on the accuracy of the local system clock, which
+is exactly what an NTP implementation may not do without risking
+perverse failure modes (especially at startup time).
+
+The only sure remedy is to be sure the Arbiter's firmware has been
+updated within the current GPS era.
 
 '''''
 

@@ -13,12 +13,6 @@
 #include "ntp_tty.h"
 #include "recvbuff.h"
 
-
-#define SAMPLE(x)	pp->coderecv = (pp->coderecv + 1) % MAXSTAGE; \
-			pp->filter[pp->coderecv] = (x); \
-			if (pp->coderecv == pp->codeproc) \
-				pp->codeproc = (pp->codeproc + 1) % MAXSTAGE;
-
 /*
  * Configuration flag values
  */
@@ -39,19 +33,12 @@
 #define	CLK_HAVEFLAG4	0x80
 
 /*
- * Constant for disabling event reporting in
- * refclock_receive. ORed in leap
- * parameter
- */
-#define REFCLOCK_OWN_STATES	0x80
-
-/*
  * Structure for returning clock status
  */
 struct refclockstat {
 	uint8_t	flags;		/* clock flags */
 	uint8_t	haveflags;	/* bit array of valid flags */
-	u_short	lencode;	/* length of last timecode */
+	unsigned short	lencode;	/* length of last timecode */
 	const char *p_lastcode;	/* last timecode received */
 	uint32_t	polls;		/* transmit polls */
 	uint32_t	noresponse;	/* no response to poll */
@@ -84,7 +71,7 @@ struct refclockio {
 	struct peer *srcclock;	/* refclock peer */
 	size_t	datalen;	/* length of data */
 	int	fd;		/* file descriptor */
-	u_long	recvcount;	/* count of receive completions */
+	unsigned long	recvcount;	/* count of receive completions */
 	bool	active;		/* true when in use */
 };
 
@@ -95,12 +82,12 @@ struct refclockio {
 #define	NCLKBUGTIMES	32
 
 struct refclockbug {
-	uint8_t	nvalues;	/* values following */
-	uint8_t	ntimes;		/* times following */
-	u_short	svalues;	/* values format sign array */
+	uint8_t		nvalues;	/* values following */
+	uint8_t		ntimes;		/* times following */
+	unsigned short	svalues;	/* values format sign array */
 	uint32_t	stimes;		/* times format sign array */
 	uint32_t	values[NCLKBUGVALUES]; /* real values */
-	l_fp	times[NCLKBUGTIMES]; /* real times */
+	l_fp		times[NCLKBUGTIMES]; /* real times */
 };
 
 /*
@@ -122,7 +109,7 @@ struct refclockproc {
 	uint8_t	lastevent;	/* last exception event */
 	const char *clockname;	/* clock name (tag for logging) */
 	const char *clockdesc;	/* clock description */
-	u_long	nextaction;	/* local activity timeout */
+	unsigned long	nextaction;	/* local activity timeout */
 	void	(*action)(struct peer *); /* timeout callback */
 
 	char	a_lastcode[BMAX]; /* last timecode received */
@@ -156,11 +143,11 @@ struct refclockproc {
 	/*
 	 * Status tallies
  	 */
-	u_long	timestarted;	/* time we started this */
-	u_long	polls;		/* polls sent */
-	u_long	noreply;	/* no replies to polls */
-	u_long	badformat;	/* bad format reply */
-	u_long	baddata;	/* bad data reply */
+	unsigned long	timestarted;	/* time we started this */
+	unsigned long	polls;		/* polls sent */
+	unsigned long	noreply;	/* no replies to polls */
+	unsigned long	badformat;	/* bad format reply */
+	unsigned long	baddata;	/* bad data reply */
 };
 
 /*
@@ -168,7 +155,6 @@ struct refclockproc {
  * ntp_refclock.c and particular clock drivers. This must agree with the
  * structure defined in the driver.
  */
-#define	noentry	NULL		/* flag for null routine */
 
 struct refclock {
 	const char *basename;
@@ -188,11 +174,14 @@ extern	bool	io_addclock	(struct refclockio *);
 extern	void	io_closeclock	(struct refclockio *);
 
 #ifdef REFCLOCK
+extern	bool	refclock_newpeer (uint8_t, int, struct peer *);
+extern	void	refclock_unpeer (struct peer *);
+extern	void	refclock_receive (struct peer *);
+extern	void	init_refclock	(void);
 extern	void	refclock_control(sockaddr_u *,
 				 const struct refclockstat *,
 				 struct refclockstat *);
-extern	int	refclock_open	(char *, u_int, u_int);
-extern	bool	refclock_setup	(int, u_int, u_int);
+extern	int	refclock_open	(char *, unsigned int, unsigned int);
 extern	void	refclock_timer	(struct peer *);
 extern	void	refclock_transmit(struct peer *);
 extern 	bool	refclock_process(struct refclockproc *);
@@ -205,7 +194,105 @@ extern	int	refclock_gtlin	(struct recvbuf *, char *, int, l_fp *);
 extern	size_t	refclock_gtraw	(struct recvbuf *, char *, size_t, l_fp *);
 extern	bool	indicate_refclock_packet(struct refclockio *,
 					 struct recvbuf *);
-extern	void	process_refclock_packet(struct recvbuf *);
+
+extern struct refclock refclock_none;
+
+#ifdef CLOCK_ARBITER
+extern  struct refclock refclock_arbiter;
+#else
+#define refclock_arbiter refclock_none
+#endif
+
+#ifdef CLOCK_GENERIC
+extern	struct refclock	refclock_parse;
+#else
+#define	refclock_parse	refclock_none
+#endif
+
+#if defined(CLOCK_GPSDJSON)
+extern struct refclock refclock_gpsdjson;
+#else
+#define refclock_gpsdjson refclock_none
+#endif
+
+#ifdef CLOCK_HPGPS
+extern	struct refclock	refclock_hpgps;
+#else
+#define	refclock_hpgps	refclock_none
+#endif
+
+#ifdef CLOCK_JJY
+extern	struct refclock	refclock_jjy;
+#else
+#define	refclock_jjy refclock_none
+#endif
+
+#ifdef CLOCK_LOCAL
+extern	struct refclock	refclock_local;
+#else
+#define	refclock_local	refclock_none
+#endif
+
+#ifdef CLOCK_MODEM
+extern	struct refclock	refclock_modem;
+#else
+#define refclock_modem	refclock_none
+#endif
+
+#ifdef CLOCK_NEOCLOCK
+extern	struct refclock	refclock_neoclock4x;
+#else
+#define	refclock_neoclock4x	refclock_none
+#endif
+
+#ifdef CLOCK_NMEA
+extern	struct refclock refclock_nmea;
+#else
+#define	refclock_nmea	refclock_none
+#endif
+
+#if defined(CLOCK_ONCORE)
+extern	struct refclock refclock_oncore;
+#else
+#define refclock_oncore refclock_none
+#endif
+
+#if defined (CLOCK_PPS) && defined(HAVE_PPSAPI)
+extern	struct refclock	refclock_pps;
+#else
+#define refclock_pps	refclock_none
+#endif
+
+#ifdef CLOCK_SPECTRACOM
+extern	struct refclock	refclock_spectracom;
+#else
+#define	refclock_spectracom	refclock_none
+#endif
+
+#ifdef CLOCK_TRUETIME
+extern	struct refclock	refclock_true;
+#else
+#define	refclock_true	refclock_none
+#endif
+
+#ifdef CLOCK_SHM
+extern	struct refclock refclock_shm;
+#else
+#define refclock_shm refclock_none
+#endif
+
+#ifdef CLOCK_TRIMBLE
+extern	struct refclock refclock_trimble;
+#else
+#define refclock_trimble refclock_none
+#endif
+
+#ifdef CLOCK_ZYFER
+extern	struct refclock	refclock_zyfer;
+#else
+#define	refclock_zyfer refclock_none
+#endif
+
 #endif /* REFCLOCK */
 
 #endif /* GUARD_NTP_REFCLOCK_H */

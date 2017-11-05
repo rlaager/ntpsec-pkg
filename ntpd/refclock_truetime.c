@@ -3,7 +3,7 @@
  *	Receiver Version 3.0C - tested plain, with CLKLDISC
  */
 
-#include <config.h>
+#include "config.h"
 #include <stdio.h>
 #include <ctype.h>
 
@@ -12,18 +12,18 @@
 #include "ntp_io.h"
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
-#include "ntp_control.h"	/* for CTL_* clocktypes */
 
 /* This should be an atom clock but those are very hard to build.
  *
- * The PCL720 from P C Labs has an Intel 8253 lookalike, as well as a bunch
- * of TTL input and output pins, all brought out to the back panel.  If you
- * wire a PPS signal (such as the TTL PPS coming out of a GOES or other
- * Kinemetrics/Truetime clock) to the 8253's GATE0, and then also wire the
- * 8253's OUT0 to the PCL720's INPUT3.BIT0, then we can read CTR0 to get the
- * number of uSecs since the last PPS upward swing, mediated by reading OUT0
- * to find out if the counter has wrapped around (this happens if more than
- * 65535us (65ms) elapses between the PPS event and our being called.)
+ * The PCL720 from P C Labs has an Intel 8253 lookalike, as well as a
+ * bunch of TTL input and output pins, all brought out to the back
+ * panel.  If you wire a PPS signal (such as the TTL PPS coming out of
+ * a Kinemetrics/Truetime clock) to the 8253's GATE0, and then also
+ * wire the 8253's OUT0 to the PCL720's INPUT3.BIT0, then we can read
+ * CTR0 to get the number of uSecs since the last PPS upward swing,
+ * mediated by reading OUT0 to find out if the counter has wrapped
+ * around (this happens if more than 65535us (65ms) elapses between
+ * the PPS event and our being called.)
  */
 #ifdef ENABLE_PPS720
 # undef min	/* XXX */
@@ -37,10 +37,12 @@
 
 /*
  * Support for Kinemetrics Truetime Receivers
- *	GOES:           (468-DC, usable with GPS->GOES converting antenna)
  *	GPS/TM-TMD:	
  *	XL-DC:		(a 151-602-210, reported by the driver as a GPS/TM-TMD)
  *	GPS-800 TCU:	(an 805-957 with the RS232 Talker/Listener module)
+ *
+ * WARNING: This driver depends on the system clock for year disambiguation.
+ * It will thus not be usable for recovery if the system clock is trashed.  
  *
  * Most of this code is originally from refclock_wwvb.c (now 
  * refclock_spectracom.c) with thanks.
@@ -53,7 +55,6 @@
  *	L - Line feed
  *
  * Quality codes indicate possible error of
- *   468-DC GOES Receiver:
  *   GPS-TM/TMD Receiver: (default quality codes for XL-DC)
  *       ?     +/- 1  milliseconds	#     +/- 100 microseconds
  *       *     +/- 10 microseconds	.     +/- 1   microsecond
@@ -64,26 +65,9 @@
  *
  * The carriage return start bit begins on 0 seconds and extends to 1 bit time.
  *
- * Notes on the 468-DC receiver:
- *
- * Send the clock a 'R' or 'C' and once per second a timestamp will
- * appear.  Send a 'P' to get the satellite position once.
- *
- * Notes on the 468-DC receiver:
- *
- * Since the old east/west satellite locations are only historical, you can't
- * set your clock propagation delay settings correctly and still use
- * automatic mode. The manual says to use a compromise when setting the
- * switches. This results in significant errors. The solution; use fudge
- * time1 and time2 to incorporate corrections. If your clock is set for
- * 50 and it should be 58 for using the west and 46 for using the east,
- * use the line
- *
- * refclock truetime time1 +0.008 time2 -0.004
- *
- * This corrects the 4 milliseconds advance and 8 milliseconds retard
- * needed. The software will ask the clock which satellite it sees.
- *
+ * This driver used to support the 468-DC receiver, but  
+ * http://www.ebay.com/gds/468-DC-SATELLITE-CLOCK-/10000000006640775/g.html
+ * tells us that the GOES sats were shut down in 2005.
  */
 
 
@@ -102,28 +86,22 @@
 #define	DESCRIPTION	"Kinemetrics/TrueTime Receiver"
 
 /*
- * Tags which station (satellite) we see
- */
-#define GOES_WEST	0	/* Default to WEST satellite and apply time1 */
-#define GOES_EAST	1	/* until you discover otherwise */
-
-/*
  * used by the state machine
  */
-enum true_event	{e_Init, e_Huh, e_F18, e_F50, e_F51, e_Satellite,
-		 e_Poll, e_Location, e_TS, e_Max};
-const char *events[] = {"Init", "Huh", "F18", "F50", "F51", "Satellite",
-			"Poll", "Location", "TS"};
+enum true_event	{e_Init, e_Huh, e_F18, e_F50, e_F51,
+		 e_Location, e_TS, e_Max};
+static const char *events[] = {"Init", "Huh", "F18", "F50", "F51",
+			"Location", "TS"};
 #define eventStr(x) (((int)x<(int)e_Max) ? events[(int)x] : "?")
 
 enum true_state	{s_Base, s_InqTM, s_InqTCU, s_InqGOES,
 		 s_Init, s_F18, s_F50, s_Start, s_Auto, s_Max};
-const char *states[] = {"Base", "InqTM", "InqTCU", "InqGOES",
+static const char *states[] = {"Base", "InqTM", "InqTCU", "InqGOES",
 			"Init", "F18", "F50", "Start", "Auto"};
 #define stateStr(x) (((int)x<(int)s_Max) ? states[(int)x] : "?")
 
-enum true_type	{t_unknown, t_goes, t_tm, t_tcu, t_omega, t_tl3, t_Max};
-const char *types[] = {"unknown", "goes", "tm", "tcu", "omega", "tl3"};
+enum true_type	{t_unknown, t_tm, t_tcu, t_tl3, t_Max};
+static const char *types[] = {"unknown", "tm", "tcu", "tl3"};
 #define typeStr(x) (((int)x<(int)t_Max) ? types[(int)x] : "?")
 
 /*
@@ -153,7 +131,7 @@ static	void	true_send	(struct peer *, const char *);
 static	void	true_doevent	(struct peer *, enum true_event);
 
 #ifdef ENABLE_PPS720
-static	u_long	true_sample720	(void);
+static	unsigned long	true_sample720	(void);
 #endif
 
 /*
@@ -164,9 +142,9 @@ struct	refclock refclock_true = {
 	true_start,		/* start up driver */
 	true_shutdown,		/* shut down driver */
 	true_poll,		/* transmit poll message */
-	noentry,		/* not used (old true_control) */
-	noentry,		/* initialize driver (not used) */
-	noentry			/* timer - not used */
+	NULL,			/* not used (old true_control) */
+	NULL,			/* initialize driver (not used) */
+	NULL			/* timer - not used */
 };
 
 
@@ -222,7 +200,7 @@ true_start(
 	struct peer *peer
 	)
 {
-	register struct true_unit *up;
+	struct true_unit *up;
 	struct refclockproc *pp;
 	char device[40];
 	int fd;
@@ -231,8 +209,8 @@ true_start(
 	 * Open serial port
 	 */
 	snprintf(device, sizeof(device), DEVICE, unit);
-	fd = refclock_open(peer->path ? peer->path : device,
-			   peer->baud ? peer->baud : SPEED232, LDISC_CLK);
+	fd = refclock_open(peer->cfg.path ? peer->cfg.path : device,
+			   peer->cfg.baud ? peer->cfg.baud : SPEED232, LDISC_CLK);
 	if (fd <= 0)
 		/* coverity[leaked_handle] */
 		return false;
@@ -288,7 +266,7 @@ true_shutdown(
 	struct peer *peer
 	)
 {
-	register struct true_unit *up;
+	struct true_unit *up;
 	struct refclockproc *pp;
 
 	UNUSED_ARG(unit);
@@ -310,17 +288,15 @@ true_receive(
 	struct recvbuf *rbufp
 	)
 {
-	register struct true_unit *up;
+	struct true_unit *up;
 	struct refclockproc *pp;
 	struct peer *peer;
-	u_short new_station;
 	char synced;
 	int i;
-	int lat, lon, off;	/* GOES Satellite position */
 	/* These variables hold data until we decide to keep it */
 	char	rd_lastcode[BMAX];
 	l_fp	rd_tmp;
-	u_short	rd_lencode;
+	unsigned short	rd_lencode;
 
 	/*
 	 * Get the clock this applies to and pointers to the data.
@@ -332,7 +308,7 @@ true_receive(
 	/*
 	 * Read clock output.  Automatically handles CLKLDISC.
 	 */
-	rd_lencode = refclock_gtlin(rbufp, rd_lastcode, BMAX, &rd_tmp);
+	rd_lencode = (unsigned short)refclock_gtlin(rbufp, rd_lastcode, BMAX, &rd_tmp);
 	rd_lastcode[rd_lencode] = '\0';
 
 	/*
@@ -367,49 +343,6 @@ true_receive(
 	}
 
 	/*
-	 * Timecode: "nnnnn+nnn-nnn"
-	 * (from GOES clock when asked about satellite position)
-	 */
-	if ((pp->a_lastcode[5] == '+' || pp->a_lastcode[5] == '-') &&
-	    (pp->a_lastcode[9] == '+' || pp->a_lastcode[9] == '-') &&
-	    sscanf(pp->a_lastcode, "%5d%*c%3d%*c%3d", &lon, &lat, &off) == 3
-	    ) {
-		const char *label = "Botch!";
-
-		/*
-		 * This is less than perfect.  Call the (satellite)
-		 * either EAST or WEST and adjust slop accodingly
-		 * Perfectionists would recalculate the exact delay
-		 * and adjust accordingly...
-		 */
-		if (lon > 7000 && lon < 14000) {
-			if (lon < 10000) {
-				new_station = GOES_EAST;
-				label = "EAST";
-			} else {
-				new_station = GOES_WEST;
-				label = "WEST";
-			}
-				
-			if (new_station != up->station) {
-				double dtemp;
-
-				dtemp = pp->fudgetime1;
-				pp->fudgetime1 = pp->fudgetime2;
-				pp->fudgetime2 = dtemp;
-				up->station = new_station;
-			}
-		}
-		else {
-			/*refclock_report(peer, CEVNT_BADREPLY);*/
-			label = "UNKNOWN";
-		}
-		true_debug(peer, "GOES: station %s\n", label);
-		true_doevent(peer, e_Satellite);
-		return;
-	}
-
-	/*
 	 * Timecode: "Fnn"
 	 * (from TM/TMD clock when it wants to tell us what it's up to.)
 	 */
@@ -436,7 +369,7 @@ true_receive(
 	    strncmp(pp->a_lastcode, " TRUETIME XL", 12) == 0) {
 		true_doevent(peer, e_F18);
 		NLOG(NLOG_CLOCKSTATUS) {
-			msyslog(LOG_INFO, "TM/TMD/XL: %s", pp->a_lastcode);
+			msyslog(LOG_INFO, "REFCLOCK: TM/TMD/XL: %s", pp->a_lastcode);
 		}
 		return;
 	}
@@ -452,7 +385,7 @@ true_receive(
 	    pp->a_lastcode[18] == '+') {
 		true_doevent(peer, e_Location);
 		NLOG(NLOG_CLOCKSTATUS) {
-			msyslog(LOG_INFO, "TCU-800: %s", pp->a_lastcode);
+			msyslog(LOG_INFO, "REFCLOCK: TCU-800: %s", pp->a_lastcode);
 		}
 		return;
 	}
@@ -487,22 +420,23 @@ true_receive(
 			l_fp   off;
 
 #ifdef CLOCK_PPS
+			uint32_t sec;
 			/*
 			 * find out what time it really is. Include
 			 * the count from the PCL720
 			 */
-			if (!clocktime(pp->day, pp->hour, pp->minute, 
-				       pp->second, GMT, pp->lastrec.l_ui, 
-				       &pp->yearstart, &off.l_ui)) {
+			if (!clocktime(pp->year, pp->day, pp->hour, pp->minute,
+				       pp->second, GMT, lfpuint(pp->lastrec),
+				       &pp->yearstart, &sec)) {
 				refclock_report(peer, CEVNT_BADTIME);
 				return;
 			}
-			off.l_uf = 0;
+			off = lfpinut(sec, 0);
 #endif
 
 			pp->usec = true_sample720();
 #ifdef CLOCK_PPS
-			TVUTOTSF(pp->usec, off.l_uf);
+			TVUTOTSF(pp->usec, lfpfrac(off));
 #endif
 
 			/*
@@ -516,7 +450,7 @@ true_receive(
 			/*
 			 * Create a true offset for feeding to pps_sample()
 			 */
-			L_SUB(&off, &pp->lastrec);
+			off -= pp->lastrec;
 
 			pps_sample(peer, &off);
 #endif
@@ -530,13 +464,6 @@ true_receive(
 		 */
 		if (!up->polled)
 			return;
-
-                /* We only call doevent if additional things need be done
-                 * at poll interval.  Currently, its only for GOES.  We also
-                 * call it for clock unknown so that it gets logged.
-                 */
-                if (up->type == t_goes || up->type == t_unknown)
-                    true_doevent(peer, e_Poll);
 
 		if (!refclock_process(pp)) {
 			refclock_report(peer, CEVNT_BADTIME);
@@ -580,10 +507,12 @@ true_send(
 
 	pp = peer->procptr;
 	if (!(pp->sloppyclockflag & CLK_FLAG1)) {
-		int len = strlen(cmd);
+                ssize_t ret;
+		size_t len = strlen(cmd);
 
 		true_debug(peer, "Send '%s'\n", cmd);
-		if (write(pp->io.fd, cmd, (unsigned)len) != len)
+		ret = write(pp->io.fd, cmd, len);
+		if (ret < 0 || (size_t)ret != len)
 			refclock_report(peer, CEVNT_FAULT);
 		else
 			pp->polls++;
@@ -607,7 +536,7 @@ true_doevent(
 	up = pp->unitptr;
 	if (event != e_TS) {
 		NLOG(NLOG_CLOCKSTATUS) {
-			msyslog(LOG_INFO, "TRUE: clock %s, state %s, event %s",
+			msyslog(LOG_INFO, "REFCLOCK: TRUETIME: clock %s, state %s, event %s",
 				typeStr(up->type),
 				stateStr(up->state),
 				eventStr(event));
@@ -616,44 +545,6 @@ true_doevent(
 	true_debug(peer, "clock %s, state %s, event %s\n",
 		   typeStr(up->type), stateStr(up->state), eventStr(event));
 	switch (up->type) {
-	case t_goes:
-		switch (event) {
-		case e_Init:	/* FALLTHROUGH */
-		case e_Satellite:
-			/*
-			 * Switch back to on-second time codes and return.
-			 */
-			true_send(peer, "C");
-			up->state = s_Start;
-			break;
-		case e_Poll:
-			/*
-			 * After each poll, check the station (satellite).
-			 */
-			true_send(peer, "P");
-			/* No state change needed. */
-			break;
-		default:
-			break;
-		}
-		/* FALLTHROUGH */
-	case t_omega:
-		switch (event) {
-		case e_Init:
-			true_send(peer, "C");
-			up->state = s_Start;
-			break;
-		case e_TS:
-			if (up->state != s_Start && up->state != s_Auto) {
-				true_send(peer, "\03\r");
-				break;
-			}
-			up->state = s_Auto;
-			break;
-		default:
-			break;
-		}
-		break;
 	case t_tm:
 		switch (event) {
 		case e_Init:
@@ -670,7 +561,7 @@ true_doevent(
                             strncmp(pp->a_lastcode, " TRUETIME XL", 12) == 0) {
                                 true_doevent(peer, e_F18);
                                 NLOG(NLOG_CLOCKSTATUS) {
-                                    msyslog(LOG_INFO, "TM/TMD/XL: %s", 
+                                    msyslog(LOG_INFO, "REFCLOCK: TM/TMD/XL: %s", 
                                             pp->a_lastcode);
                                 }
                                 return;
@@ -728,8 +619,6 @@ true_doevent(
                 }
                 break;
 	case t_unknown:
-               if (event == e_Poll)
-                   break;
 		switch (up->state) {
 		case s_Base:
 			if (event != e_Init)
@@ -739,10 +628,6 @@ true_doevent(
 			break;
 		case s_InqGOES:
 			switch (event) {
-			case e_Satellite:
-				up->type = t_goes;
-				true_doevent(peer, e_Init);
-				break;
 			case e_Init:	/*FALLTHROUGH*/
 			case e_Huh:
                                 sleep(1);               /* wait for it */
@@ -764,7 +649,7 @@ true_doevent(
 				break;
 			default:
                                 msyslog(LOG_INFO, 
-                                        "TRUE: TM/TMD init fellthrough!");
+                                        "REFCLOCK: TRUETIME: TM/TMD init fellthrough!");
 			        break;
 			}
 			break;
@@ -781,7 +666,7 @@ true_doevent(
 				break;
 			default:
                                 msyslog(LOG_INFO, 
-                                        "TRUE: TCU init fellthrough!");
+                                        "REFCLOCK: TRUETIME: TCU init fellthrough!");
                                 break;
 			}
 			break;
@@ -795,12 +680,15 @@ true_doevent(
 		case s_Start:
 		case s_Auto:
 		case s_Max:
-			msyslog(LOG_INFO, "TRUE: state %s is unexpected!",
+			msyslog(LOG_INFO, "REFCLOCK: TRUETIME: state %s is unexpected!",
 				stateStr(up->state));
+		default:
+			/* huh? */
+			break;
 		}
 		break;
 	default:
-                msyslog(LOG_INFO, "TRUE: cannot identify refclock!");
+                msyslog(LOG_INFO, "REFCLOCK: TRUETIME: cannot identify refclock!");
 		abort();    
 		/* NOTREACHED */
 	}
@@ -814,7 +702,7 @@ true_doevent(
 		 * they represent hardware maximums.)
 		 */
 		NLOG(NLOG_CLOCKINFO) {
-			msyslog(LOG_NOTICE, "PCL-720 initialized");
+			msyslog(LOG_NOTICE, "REFCLOCK: PCL-720 initialized");
 		}
 		up->pcl720init++;
 	}
@@ -863,7 +751,7 @@ true_poll(
 /*
  * true_sample720 - sample the PCL-720
  */
-static u_long
+static unsigned long
 true_sample720(void)
 {
 	unsigned long f;
@@ -874,13 +762,13 @@ true_sample720(void)
 	 */
 	if (inb(pcl720_data_16_23(PCL720_IOB)) & 0x01) {
 		NLOG(NLOG_CLOCKINFO) {
-			msyslog(LOG_NOTICE, "PCL-720 out of synch");
+			msyslog(LOG_NOTICE, "REFCLOCK: PCL-720 out of synch");
 		}
 		return (0);
 	}
 	f = (65536 - pcl720_read(PCL720_IOB, PCL720_CTR));
 #ifdef DEBUG_PPS720
-	msyslog(LOG_DEBUG, "PCL-720: %luus", f);
+	msyslog(LOG_DEBUG, "REFCLOCK: PCL-720: %luus", f);
 #endif
 	return (f);
 }

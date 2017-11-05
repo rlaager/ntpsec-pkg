@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include "ntp.h"
 #include "ntp_stdlib.h"
 
 char	*progname;
@@ -73,8 +74,6 @@ main (
 
 	progname = argv[0];
 
-	init_lib();
-
 	if (argc<=1) {
 	  usage:
 		printf ("usage: %s [uu:]{r[c][l]|w|snnn}\n",argv[0]);
@@ -89,9 +88,7 @@ main (
 		exit (0);
 	}
 
-	srand(time(NULL));
-		
-	unit = strtoul(argv[1], &argp, 10);
+	unit = (int)strtoul(argv[1], &argp, 10);
 	if (argp == argv[1])
 		unit = 2;
 	else if (*argp == ':')
@@ -146,12 +143,12 @@ again:
 
 	case 'w': {
 		/* To show some life action, we read the system
-		 * clock and use a bit of fuzz from 'random()' to get a
+		 * clock and use a bit of fuzz from 'ntp_random()' to get a
 		 * bit of wobbling into the values (so we can observe a
 		 * certain jitter!)
 		 */
 		time_t clk_sec, rcv_sec;
-		uint   clk_frc, rcv_frc;
+		unsigned int clk_frc, rcv_frc;
 
 		/* Here we have a high-resolution system clock, and
 		 * we're not afraid to use it!
@@ -159,16 +156,16 @@ again:
 		struct timespec tmptime;
 		if (0 == clock_gettime(CLOCK_REALTIME, &tmptime)) {
 			rcv_sec = tmptime.tv_sec;
-			rcv_frc = (uint)tmptime.tv_nsec;
+			rcv_frc = (unsigned int)tmptime.tv_nsec;
 		}
 		else
 		{
 			time(&rcv_sec);
-			rcv_frc = (uint)random() % 1000000000u;
+			rcv_frc = (unsigned int)ntp_random() % 1000000000u;
 		}
 		/* add a wobble of ~3.5msec to the clock time */
 		clk_sec = rcv_sec;
-		clk_frc = rcv_frc + (uint)(random()%7094713 - 3547356);
+		clk_frc = rcv_frc + (unsigned int)(ntp_random()%7094713 - 3547356);
 		/* normalise result -- the SHM driver is picky! */
 		while ((int)clk_frc < 0) {
 			clk_frc += 1000000000;
@@ -190,10 +187,10 @@ again:
 		p->mode=0;
 		if (!p->valid) {
 			p->clockTimeStampSec    = clk_sec;
-			p->clockTimeStampUSec   = clk_frc / 1000; /* truncate! */
+			p->clockTimeStampUSec   = (int)(clk_frc / 1000); /* truncate! */
 			p->clockTimeStampNSec   = clk_frc;
 			p->receiveTimeStampSec  = rcv_sec;
-			p->receiveTimeStampUSec = rcv_frc / 1000; /* truncate! */
+			p->receiveTimeStampUSec = (int)(rcv_frc / 1000); /* truncate! */
 			p->receiveTimeStampNSec = rcv_frc;
 			printf ("%ld.%09u %ld.%09u\n",
 				(long)p->clockTimeStampSec  , p->clockTimeStampNSec  ,

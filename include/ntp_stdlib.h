@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <string.h>
+#include <signal.h>
 #include <errno.h>
 #include <stdarg.h>
 
@@ -16,44 +17,29 @@
 #include "ntp_malloc.h"
 #include "ntp_syslog.h"
 
+#ifdef HAVE_BSD_STRING_H
+#include <bsd/string.h>
+#endif
+
 #ifdef __GNUC__
 #define NTP_PRINTF(fmt, args) __attribute__((__format__(__printf__, fmt, args)))
 #else
 #define NTP_PRINTF(fmt, args)
 #endif
 
-extern const char *Version;
-extern const char *VVersion;
+extern const char *ntpd_version(void);
 
 extern	int	mprintf(const char *, ...) NTP_PRINTF(1, 2);
-extern	int	mfprintf(FILE *, const char *, ...) NTP_PRINTF(2, 3);
-extern	int	mvfprintf(FILE *, const char *, va_list) NTP_PRINTF(2, 0);
 extern	int	mvsnprintf(char *, size_t, const char *, va_list)
 			NTP_PRINTF(3, 0);
-extern	int	msnprintf(char *, size_t, const char *, ...)
-			NTP_PRINTF(3, 4);
 extern	void	msyslog(int, const char *, ...) NTP_PRINTF(2, 3);
 extern	void	init_logging	(const char *, uint32_t, int);
 extern	int	change_logfile	(const char *, int);
 extern	void	reopen_logfile  (void);
 extern	void	setup_logfile	(const char *);
-extern	void	errno_to_str(int, char *, size_t);
-
-/*
- * When building without OpenSSL, use a few macros of theirs to
- * minimize source differences in NTP.
- */
-#ifndef HAVE_OPENSSL
-#define NID_md5	4	/* from openssl/objects.h */
-/* from openssl/evp.h */
-#define EVP_MAX_MD_SIZE	64	/* longest known is SHA512 */
-#endif
-
-typedef void (*ctrl_c_fn)(void);
 
 /* authkeys.c */
 extern	void	auth_delkeys	(void);
-extern	int	auth_havekey	(keyid_t);
 extern	int	authdecrypt	(keyid_t, uint32_t *, int, int);
 extern	int	authencrypt	(keyid_t, uint32_t *, int);
 extern	int	authhavekey	(keyid_t);
@@ -62,24 +48,9 @@ extern	bool	authreadkeys	(const char *);
 extern	void	authtrust	(keyid_t, bool);
 extern	bool	authusekey	(keyid_t, int, const uint8_t *);
 
-/*
- * Based on the NTP timestamp, calculate the NTP timestamp of
- * the corresponding calendar unit. Use the pivot time to unfold
- * the NTP timestamp properly, or the current system time if the
- * pivot pointer is NULL.
- */
-extern	uint32_t	calyearstart	(uint32_t ntptime, const time_t *pivot);
-extern	uint32_t	calmonthstart	(uint32_t ntptime, const time_t *pivot);
-extern	uint32_t	calweekstart	(uint32_t ntptime, const time_t *pivot);
-extern	uint32_t	caldaystart	(uint32_t ntptime, const time_t *pivot);
-
-extern	const char *clockname	(int);
-extern	int	clocktime	(int, int, int, int, int, uint32_t, uint32_t *, uint32_t *);
+extern	int	clocktime	(int, int, int, int, int, int, uint32_t, uint32_t *, uint32_t *);
 extern	void	init_auth	(void);
-extern	void	init_lib	(void);
 extern	void	init_network	(void);
-extern	struct savekey *auth_findkey (keyid_t);
-extern	void	auth_moremem	(int);
 extern	void	auth_prealloc_symkeys(int);
 extern	int	ymd2yd		(int, int, int);
 
@@ -97,9 +68,9 @@ int ntp_getopt_long(int argc, char* const argv[], const char *optstring,
 		    const struct option *longopts, int *longindex);
 
 /* a_md5encrypt.c */
-extern	int	MD5authdecrypt	(int, uint8_t *, uint32_t *, int, int);
-extern	int	MD5authencrypt	(int, uint8_t *, uint32_t *, int);
-extern	void	MD5auth_setkey	(keyid_t, int, const uint8_t *, size_t);
+extern	bool	mac_authdecrypt	(int, uint8_t *, uint32_t *, int, int);
+extern	int	mac_authencrypt	(int, uint8_t *, uint32_t *, int);
+extern	void	mac_setkey	(keyid_t, int, const uint8_t *, size_t);
 extern	uint32_t	addr2refid	(sockaddr_u *);
 
 /* emalloc.c */
@@ -140,8 +111,6 @@ extern	char *	estrdup_impl(const char *, const char *, int);
 
 extern	const char *	humanlogtime	(void);
 extern	const char *	humantime	(time_t);
-extern	char *	mfptoa		(uint32_t, uint32_t, short);
-extern	char *	mfptoms		(uint32_t, uint32_t, short);
 extern	const char * eventstr	(int);
 extern	const char * ceventstr	(int);
 extern	const char * res_match_flags(unsigned short);
@@ -150,23 +119,19 @@ extern	const char * res_access_flags(unsigned short);
 extern	const char * k_st_flags	(uint32_t);
 #endif
 extern	char *	statustoa	(int, int);
-extern	sockaddr_u * netof	(sockaddr_u *);
+extern	sockaddr_u * netof6	(sockaddr_u *);
 extern	char *	numtoa		(uint32_t);
 extern	const char * socktoa	(const sockaddr_u *);
 extern	const char * sockporttoa(const sockaddr_u *);
-extern	unsigned short	sock_hash	(const sockaddr_u *);
-extern	int	sockaddr_masktoprefixlen(const sockaddr_u *);
-extern	bool	octtoint	(const char *, unsigned long *);
-extern	unsigned long	ranp2		(int);
+extern	unsigned short	sock_hash(const sockaddr_u *) __attribute__((pure));
 extern	const char *refid_str	(uint32_t, int);
 
-extern	bool	decodenetnum	(const char *, sockaddr_u *);
+extern	int	decodenetnum	(const char *, sockaddr_u *);
 
 extern	void	signal_no_reset (int, void (*func)(int));
-extern	void	set_ctrl_c_hook (ctrl_c_fn);
+extern void signal_no_reset1(int, void (*func)(int, siginfo_t *, void *));
 
 extern	void	getauthkeys 	(const char *);
-extern	void	rereadkeys	(void);
 
 /*
  * Variable declarations for libntp.
@@ -199,24 +164,8 @@ extern int	ntp_optind;		/* global argv index */
 extern bool	ipv4_works;
 extern bool	ipv6_works;
 
-/* machines.c */
-typedef void (*pset_tod_using)(const char *);
-extern pset_tod_using	set_tod_using;
-
 /* ssl_init.c */
-#ifdef HAVE_OPENSSL
 extern	void	ssl_init		(void);
-extern	bool	ssl_init_done;
-#define	INIT_SSL()				\
-	do {					\
-		if (!ssl_init_done)		\
-			ssl_init();		\
-	} while (0)
-#else	/* !HAVE_OPENSSL follows */
-#define	INIT_SSL()		do {} while (0)
-#endif
-extern	int	keytype_from_text	(const char *,	size_t *);
-extern	const char *keytype_name	(int);
 
 /* strl-obsd.c */
 #ifndef HAVE_STRLCPY		/* + */
@@ -250,5 +199,11 @@ extern bool	trunc_os_clock;		/* sys_tick > measured_tick */
 #define COMPARE_GREATERTHAN	1
 #define COMPARE_EQUAL		0
 #define COMPARE_LESSTHAN	-1
+
+/* hack to ignore GCC Unused Result */
+#define IGNORE(r) do{if(r){}}while(0)
+
+extern bool sandbox(const bool droproot, char *user, const char *group,
+	     const char *chrootdir, bool want_dynamic_interface_tracking);
 
 #endif	/* GUARD_NTP_STDLIB_H */

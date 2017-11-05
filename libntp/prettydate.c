@@ -1,7 +1,7 @@
 /*
  * prettydate - convert a time stamp to something readable
  */
-#include <config.h>
+#include "config.h"
 #include <stdio.h>
 #include <stdbool.h>
 
@@ -13,8 +13,6 @@
 #if NTP_SIZEOF_TIME_T < 4
 # error sizeof(time_t) < 4 -- this will not work!
 #endif
-
-static char *common_prettydate(l_fp *, bool);
 
 /* Helper function to handle possible wraparound of the ntp epoch.
  *
@@ -44,15 +42,14 @@ static char *common_prettydate(l_fp *, bool);
 /*
  * solar cycle in unsigned secs and years, and the cycle limits.
  */
-#define SOLAR_CYCLE_SECS   0x34AADC80UL	/* 7*1461*86400*/
+#define SOLAR_CYCLE_SECS   (time_t)0x34AADC80	/* 7*1461*86400*/
 #define SOLAR_CYCLE_YEARS  28
 #define MINFOLD -3
 #define MAXFOLD	 3
 
 static struct tm *
 get_struct_tm(
-	const	vint64 *stamp,
-	int	local,
+	const	time64_t *stamp,
 	struct	tm *tmbuf)
 {
 	struct tm *tm;
@@ -60,7 +57,7 @@ get_struct_tm(
 	time_t	   ts;
 
 	int64_t tl;
-	ts = tl = vint64s(*stamp);
+	ts = tl = time64s(*stamp);
 
 	/*
 	 * If there is chance of truncation, try to fix it. Let the
@@ -91,8 +88,11 @@ get_struct_tm(
 	 * At least the MSDN says that the (Microsoft) Windoze
 	 * versions of 'gmtime_r()' and 'localtime_r()' will bark on time
 	 * stamps < 0.
+	 *
+	 * ESR, 2017: Using localtime(3) for logging at all is bogus -
+	 * in particular, it is bad for reproducibility.
 	 */
-	while ((tm = (*(local ? localtime_r : gmtime_r))(&ts, tmbuf)) == NULL)
+	while ((tm = gmtime_r(&ts, tmbuf)) == NULL)
 		if (ts < 0) {
 			if (--folds < MINFOLD)
 				return NULL;
@@ -116,8 +116,7 @@ get_struct_tm(
 
 static char *
 common_prettydate(
-	l_fp *ts,
-	bool local
+	const l_fp ts
 	)
 {
 	static const char pfmt[] =
@@ -125,40 +124,39 @@ common_prettydate(
 
 	char	    *bp;
 	struct tm   *tm, tmbuf;
-	u_int	     msec;
+	unsigned int	     msec;
 	uint32_t	     ntps;
-	vint64	     sec;
+	time64_t	     sec;
 
-	LIB_GETBUF(bp);
+	bp = lib_getbuf();
 
 	/* get & fix milliseconds */
-	ntps = ts->l_ui;
-	msec = ts->l_uf / 4294967;	/* fract / (2 ** 32 / 1000) */
+	ntps = lfpuint(ts);
+	msec = lfpfrac(ts) / 4294967;	/* fract / (2 ** 32 / 1000) */
 	if (msec >= 1000u) {
 		msec -= 1000u;
 		ntps++;
 	}
 	sec = ntpcal_ntp_to_time(ntps, NULL);
-	tm  = get_struct_tm(&sec, local, &tmbuf);
+	tm  = get_struct_tm(&sec, &tmbuf);
 	if (!tm) {
 		/*
 		 * get a replacement, but always in UTC, using
 		 * ntpcal_time_to_date()
 		 */
 		struct calendar jd;
-		ntpcal_time_to_date(&jd, &sec);
+		ntpcal_time_to_date(&jd, sec);
 		snprintf(bp, LIB_BUFLENGTH, pfmt,
-			 (u_long)ts->l_ui, (u_long)ts->l_uf,
+			 (unsigned long)lfpuint(ts), (unsigned long)lfpfrac(ts),
 			 jd.year, jd.month, jd.monthday,
 			 jd.hour, jd.minute, jd.second, msec);
 		strncat(bp, "Z",  LIB_BUFLENGTH);
 	} else {
 		snprintf(bp, LIB_BUFLENGTH, pfmt,
-			 (u_long)ts->l_ui, (u_long)ts->l_uf,
+			 (unsigned long)lfpuint(ts), (unsigned long)lfpfrac(ts),
 			 1900 + tm->tm_year, tm->tm_mon+1, tm->tm_mday,
 			 tm->tm_hour, tm->tm_min, tm->tm_sec, msec);
-		if (!local)
-			strncat(bp, "Z", LIB_BUFLENGTH);
+		strncat(bp, "Z", LIB_BUFLENGTH);
 	}
 	return bp;
 }
@@ -166,27 +164,45 @@ common_prettydate(
 
 char *
 prettydate(
-	l_fp *ts
+	const l_fp ts
 	)
 {
-	return common_prettydate(ts, true);
+	return common_prettydate(ts);
 }
 
 
 char *
 rfc3339date(
-	l_fp *ts
+	const l_fp ts
 	)
 {
-	return common_prettydate(ts, false) + 18; /* skip past hex time */
+	return common_prettydate(ts) + 18; /* skip past hex time */
 }
 
 
-char *
-gmprettydate(
-	l_fp *ts
+/*
+ * rfc3339time - prettyprint time stamp - POSIX epoch
+ */
+char * rfc3339time(
+	time_t	posix_stamp
 	)
 {
-	return common_prettydate(ts, false);
+	char *		buf;
+	struct tm tm, *tm2;
+
+	buf = lib_getbuf();
+	tm2 = gmtime_r(&posix_stamp, &tm);
+	if (tm2 == NULL || tm.tm_year > 9999)
+		snprintf(buf, LIB_BUFLENGTH, "rfc3339time: %ld: range error",
+			 (long)posix_stamp);
+	// if (ntpcal_ntp_to_date(&tm, (uint32_t)ntp_stamp, NULL) < 0)
+	//	snprintf(buf, LIB_BUFLENGTH, "ntpcal_ntp_to_date: %ld: range error",
+	//		 (long)ntp_stamp);
+	else
+		snprintf(buf, LIB_BUFLENGTH, "%04d-%02d-%02dT%02d:%02dZ",
+			tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday,
+			tm.tm_hour, tm.tm_min);
+	return buf;
 }
 
+/* end */

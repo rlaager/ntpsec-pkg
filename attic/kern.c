@@ -4,7 +4,7 @@
  * Ultrix and OSF/1 kernels. These segments do not use any licensed code.
  */
 
-#include <config.h>
+#include "config.h"
 
 #include <stdio.h>
 #include <ctype.h>
@@ -13,7 +13,7 @@
 
 #ifdef HAVE_SYS_TIMEX_H
 # include <sys/time.h>	/* prerequisite on NetBSD */
-# include "sys/timex.h"
+# include <sys/timex.h>
 #endif
 
 /*

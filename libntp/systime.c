@@ -4,12 +4,11 @@
  * ATTENTION: Get approval from Dave Mills on all changes to this file!
  *
  */
-#include <config.h>
+#include "config.h"
 
 #include "ntp.h"
 #include "ntp_syslog.h"
 #include "ntp_stdlib.h"
-#include "ntp_random.h"
 #include "timespecops.h"
 #include "ntp_calendar.h"
 
@@ -66,8 +65,8 @@ double	sys_fuzz = 0;		/* min. time to read the clock (s) */
 bool	trunc_os_clock;		/* sys_tick > measured_tick */
 time_stepped_callback	step_callback;
 
-static double	sys_residual = 0;	/* adjustment residue (s) */
-static long	sys_fuzz_nsec = 0;	/* min. time to read the clock (ns) */
+static doubletime_t  sys_residual = 0;	/* adjustment residue (s) */
+static long          sys_fuzz_nsec = 0;	/* minimum time to read clock (ns) */
 
 /* perlinger@ntp.org: As 'get_systime()' does its own check for clock
  * backstepping, this could probably become a local variable in
@@ -75,6 +74,8 @@ static long	sys_fuzz_nsec = 0;	/* min. time to read the clock (ns) */
  * static value could be removed after the v4.2.8 release.
  */
 static bool lamport_violated;	/* clock was stepped back */
+
+static  void	get_ostime	(struct timespec *tsp);
 
 void
 set_sys_fuzz(
@@ -84,11 +85,11 @@ set_sys_fuzz(
 	sys_fuzz = fuzz_val;
 	//INSIST(sys_fuzz >= 0);
 	//INSIST(sys_fuzz <= 1.0);
-	sys_fuzz_nsec = (long)(sys_fuzz * 1e9 + 0.5);
+	sys_fuzz_nsec = (long)(sys_fuzz * NS_PER_S + 0.5);
 }
 
 
-void
+static void
 get_ostime(
 	struct timespec *	tsp
 	)
@@ -99,36 +100,25 @@ get_ostime(
 	rc = clock_gettime(CLOCK_REALTIME, tsp);
 	if (rc < 0) {
 #ifndef __COVERITY__
-		msyslog(LOG_ERR, "read system clock failed: %m (%d)",
+		msyslog(LOG_ERR, "TIME: read system clock failed: %m (%d)",
 			errno);
 #endif /* __COVERITY__ */
 		exit(1);
 	}
 
 	if (trunc_os_clock) {
-		ticks = (long)((tsp->tv_nsec * 1e-9) / sys_tick);
-		tsp->tv_nsec = (long)(ticks * 1e9 * sys_tick);
+		ticks = (long)((tsp->tv_nsec * S_PER_NS) / sys_tick);
+		tsp->tv_nsec = (long)(ticks * NS_PER_S * sys_tick);
 	}
 }
 
 
-/*
- * get_systime - return system time in NTP timestamp format.
- */
-void
-get_systime(
-	l_fp *now		/* system time */
-	)
-{
-	struct timespec ts;	/* seconds and nanoseconds */
-	get_ostime(&ts);
-	normalize_time(ts, sys_fuzz > 0.0 ? ntp_random() : 0, now);
-}
+static	void	normalize_time	(struct timespec, long, l_fp *);
 
-void
+static void
 normalize_time(
 	struct timespec ts,		/* seconds and nanoseconds */
-	long rand,
+	long randd,
 	l_fp *now		/* system time */
 	)
 {
@@ -168,11 +158,10 @@ normalize_time(
 	if (cmp_tspec(ts, ts_min) < 0) {
 		ts_lam = sub_tspec(ts_min, ts);
 		if (ts_lam.tv_sec > 0 && !lamport_violated) {
-			msyslog(LOG_ERR,
-				"get_systime Lamport advance exceeds one second (%.9f)",
-				ts_lam.tv_sec +
-				    1e-9 * ts_lam.tv_nsec);
-			exit(1);
+		    msyslog(LOG_ERR,
+			"CLOCK: get_systime Lamport advance exceeds one second (%.9f)",
+			ts_lam.tv_sec + S_PER_NS * ts_lam.tv_nsec);
+		    exit(1);
 		}
 		if (!lamport_violated)
 			ts = ts_min;
@@ -186,40 +175,52 @@ normalize_time(
 	/*
 	 * Add in the fuzz.
 	 */
-	dfuzz = rand * 2. / FRAC * sys_fuzz;
-	DTOLFP(dfuzz, &lfpfuzz);
-	L_ADD(&result, &lfpfuzz);
+	dfuzz = randd * 2. / FRAC * sys_fuzz;
+	lfpfuzz = dtolfp(dfuzz);
+	result += lfpfuzz;
 
 	/*
 	 * Ensure result is strictly greater than prior result (ignoring
 	 * sys_residual's effect for now) once sys_fuzz has been
 	 * determined.
 	 */
-	if (!L_ISZERO(&lfp_prev) && !lamport_violated) {
-		if (!L_ISGTU(&result, &lfp_prev) &&
+	if (lfp_prev != 0 && !lamport_violated) {
+		if (!L_ISGTU(result, lfp_prev) &&
 		    sys_fuzz > 0.) {
-			msyslog(LOG_ERR, "ts_prev %s ts_min %s",
+			msyslog(LOG_ERR, "CLOCK: ts_prev %s ts_min %s",
 				tspectoa(ts_prev_log),
 				tspectoa(ts_min));
-			msyslog(LOG_ERR, "ts %s", tspectoa(ts));
-			msyslog(LOG_ERR, "sys_fuzz %ld nsec, prior fuzz %.9f",
+			msyslog(LOG_ERR, "CLOCK: ts %s", tspectoa(ts));
+			msyslog(LOG_ERR, "CLOCK: sys_fuzz %ld nsec, prior fuzz %.9f",
 				sys_fuzz_nsec, dfuzz_prev);
-			msyslog(LOG_ERR, "this fuzz %.9f",
+			msyslog(LOG_ERR, "CLOCK: this fuzz %.9f",
 				dfuzz);
 			lfpdelta = lfp_prev;
-			L_SUB(&lfpdelta, &result);
-			LFPTOD(&lfpdelta, ddelta);
+			lfpdelta -= result;
+			ddelta = lfptod(lfpdelta);
 			msyslog(LOG_ERR,
-				"prev get_systime 0x%x.%08x is %.9f later than 0x%x.%08x",
-				lfp_prev.l_ui, lfp_prev.l_uf,
-				ddelta, result.l_ui, result.l_uf);
+				"CLOCK: prev get_systime 0x%x.%08x is %.9f later than 0x%x.%08x",
+				lfpuint(lfp_prev), lfpfrac(lfp_prev),
+				ddelta, lfpuint(result), lfpfrac(result));
 		}
 	}
 	lfp_prev = result;
 	dfuzz_prev = dfuzz;
-	if (lamport_violated)
-		lamport_violated = false;
+	lamport_violated = false;
 	*now = result;
+}
+
+/*
+ * get_systime - return system time in NTP timestamp format.
+ */
+void
+get_systime(
+	l_fp *now		/* system time */
+	)
+{
+	struct timespec ts;	/* seconds and nanoseconds */
+	get_ostime(&ts);
+	normalize_time(ts, sys_fuzz > 0.0 ? ntp_random() : 0, now);
 }
 
 
@@ -235,7 +236,7 @@ adj_systime(
 	struct timeval adjtv;	/* new adjustment */
 	struct timeval oadjtv;	/* residual adjustment */
 	double	quant;		/* quantize to multiples of */
-	double	dtemp;
+	doubletime_t	dtemp;
 	long	ticks;
 	bool	isneg = false;
 
@@ -251,7 +252,7 @@ adj_systime(
 	 * EVNT_NSET adjtime() can be aborted by a tiny adjtime()
 	 * triggered by sys_residual.
 	 */
-	if (0. == now)
+	if ( D_ISZERO_NS(now))
 		return true;
 
 	/*
@@ -270,20 +271,20 @@ adj_systime(
 	if (sys_tick > sys_fuzz)
 		quant = sys_tick;
 	else
-		quant = 1e-6;
+		quant = S_PER_US;
 	ticks = (long)(dtemp / quant + .5);
-	adjtv.tv_usec = (long)(ticks * quant * 1.e6 + .5);
+	adjtv.tv_usec = (long)(ticks * quant * US_PER_S + .5);
 	/* The rounding in the conversions could push us over the
 	 * limits: make sure the result is properly normalised!
 	 * note: sign comes later, all numbers non-negative here.
 	 */
-	if (adjtv.tv_usec >= 1000000) {
+	if (adjtv.tv_usec >= US_PER_S) {
 		adjtv.tv_sec  += 1;
-		adjtv.tv_usec -= 1000000;
+		adjtv.tv_usec -= US_PER_S;
 		dtemp         -= 1.;
 	}
 	/* set the new residual with leftover from correction */
-	sys_residual = dtemp - adjtv.tv_usec * 1.e-6;
+	sys_residual = dtemp - adjtv.tv_usec * S_PER_US;
 
 	/*
 	 * Convert to signed seconds and microseconds for the Unix
@@ -297,7 +298,7 @@ adj_systime(
 	}
 	if (adjtv.tv_sec != 0 || adjtv.tv_usec != 0) {
 		if (ladjtime(&adjtv, &oadjtv) < 0) {
-			msyslog(LOG_ERR, "adj_systime: %m");
+			msyslog(LOG_ERR, "CLOCK: adj_systime: %m");
 			return false;
 		}
 	}
@@ -307,11 +308,14 @@ adj_systime(
 
 /*
  * step_systime - step the system clock.
+ *
+ * if your timespec has a 64 bit time_t then you are 2038 ready.
+ * if your timespec has a 32 bit time_t, be sure to duck in 2038
  */
 
 bool
 step_systime(
-	double step,
+	doubletime_t step,
 	int (*settime)(struct timespec *)
 	)
 {
@@ -344,7 +348,7 @@ step_systime(
 		pivot += ntpcal_date_to_time(&jd);
 	} else {
 		msyslog(LOG_ERR,
-			"step_systime: assume 1970-01-01 as build date");
+			"CLOCK: step_systime: assume 1970-01-01 as build date");
 	}
 #else
 	UNUSED_LOCAL(jd);
@@ -362,9 +366,9 @@ step_systime(
 #endif
 
 	/* get the complete jump distance as l_fp */
-	DTOLFP(sys_residual, &fp_sys);
-	DTOLFP(step,         &fp_ofs);
-	L_ADD(&fp_ofs, &fp_sys);
+	fp_sys = dtolfp(sys_residual);
+	fp_ofs = dtolfp(step);
+	fp_ofs += fp_sys;
 
 	/* ---> time-critical path starts ---> */
 
@@ -372,23 +376,25 @@ step_systime(
 	get_ostime(&timets);
 	fp_sys = tspec_stamp_to_lfp(timets);
 
-	/* only used for utmp/wtmpx time-step recording */
-	tslast.tv_sec = timets.tv_sec;
-	tslast.tv_nsec = timets.tv_nsec;
-
 	/* get the target time as l_fp */
-	L_ADD(&fp_sys, &fp_ofs);
+	fp_sys += fp_ofs;
 
 	/* unfold the new system time */
 	timets = lfp_stamp_to_tspec(fp_sys, &pivot);
 
 	/* now set new system time */
 	if (settime(&timets) != 0) {
-		msyslog(LOG_ERR, "step_systime: %m");
+		msyslog(LOG_ERR, "CLOCK: step_systime: %m");
 		return false;
 	}
 
-	/* <--- time-critical path ended with 'ntp_set_tod()' <--- */
+	/* <--- time-critical path ended with call to the settime hook <--- */
+
+	msyslog(LOG_WARNING, "CLOCK: time stepped by %Lf", step);
+
+	/* only used for utmp/wtmpx time-step recording */
+	tslast.tv_sec = timets.tv_sec;
+	tslast.tv_nsec = timets.tv_nsec;
 
 	sys_residual = 0;
 	lamport_violated = (step < 0);

@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#include <config.h>
+#include "config.h"
 #include "ntp_fp.h"
 #include "timespecops.h"
 #include "ntp_calendar.h"
@@ -106,7 +106,7 @@ static struct rawdcfcode
 	{ 33 }, { 35 }, { 36 }, { 40 }, { 42 }, { 45 }, { 49 }, { 50 }, { 54 }, { 58 }, { 59 }
 };
 
-#define DCF_M	0
+/* #define DCF_M 0      UNUSED */
 #define DCF_R	1
 #define DCF_A1	2
 #define DCF_Z	3
@@ -114,18 +114,18 @@ static struct rawdcfcode
 #define DCF_S	5
 #define DCF_M1	6
 #define DCF_M10	7
-#define DCF_P1	8
+/* #define DCF_P1 8     UNUSED */
 #define DCF_H1	9
 #define DCF_H10	10
-#define DCF_P2	11
+/* #define DCF_P2 11    UNUSED */
 #define DCF_D1	12
 #define DCF_D10	13
-#define DCF_DW	14
+/* #define DCF_DW 14    UNUSED */
 #define DCF_MO	15
 #define DCF_MO0	16
 #define DCF_Y1	17
 #define DCF_Y10	18
-#define DCF_P3	19
+/* #define DCF_P3 19    UNUSED */
 
 static struct partab
 {
@@ -142,14 +142,17 @@ static struct partab
 #define DCF_Z_MET 0x2
 #define DCF_Z_MED 0x1
 
-static unsigned long
+static long ext_bf(unsigned char *, int, const unsigned char *)
+	__attribute__((pure));
+
+static long
 ext_bf(
 	unsigned char *buf,
 	int   idx,
 	const unsigned char *zero
 	)
 {
-	unsigned long sum = 0;
+	long sum = 0;
 	int i, first;
 
 	first = rawdcfcode[idx].offset;
@@ -197,7 +200,7 @@ convert_rawdcf(
 
 	if (size < 57)
 	{
-		msyslog(LOG_ERR, "parse: convert_rawdcf: INCOMPLETE DATA - time code only has %d bits", size);
+		msyslog(LOG_ERR, "ERR: parse: convert_rawdcf: INCOMPLETE DATA - time code only has %d bits", size);
 		return CVT_FAIL|CVT_BADFMT;
 	}
 
@@ -208,7 +211,7 @@ convert_rawdcf(
 			/*
 			 * we only have two types of bytes (ones and zeros)
 			 */
-			msyslog(LOG_ERR, "parse: convert_rawdcf: BAD DATA - no conversion");
+			msyslog(LOG_ERR, "ERR: parse: convert_rawdcf: BAD DATA - no conversion");
 			return CVT_NONE;
 		}
 		if (*b) b++;
@@ -280,7 +283,7 @@ convert_rawdcf(
 		/*
 		 * bad format - not for us
 		 */
-	    msyslog(LOG_ERR, "parse: convert_rawdcf: parity check FAILED for \"%.*s\"", size, buffer);
+	    msyslog(LOG_ERR, "ERR: parse: convert_rawdcf: parity check FAILED for \"%.*s\"", size, buffer);
 		return CVT_FAIL|CVT_BADFMT;
 	}
 }
@@ -364,7 +367,8 @@ cvt_rawdcf(
 		cutoff = 4;	/* doesn't really matter - it'll fail anyway, but gives error output */
 	}
 
-	parseprintf(DD_RAWDCF,("parse: cvt_rawdcf: average bit count: %d\n", cutoff));
+	parseprintf(DD_RAWDCF,("parse: cvt_rawdcf: average bit count: %u\n",
+                    cutoff));
 
 	lowmax = 0;
 	highmax = 0;
@@ -426,7 +430,9 @@ cvt_rawdcf(
 
 	cutoff = (cutoff + span) / 2;
 
-	parseprintf(DD_RAWDCF,("parse: cvt_rawdcf: lower maximum %d, higher maximum %d, cutoff %d\n", lowmax, highmax, cutoff));
+	parseprintf(DD_RAWDCF, ("parse: cvt_rawdcf: "
+                    "lower maximum %u, higher maximum %u, cutoff %u\n",
+                    lowmax, highmax, cutoff));
 
 	s = (unsigned char *)buffer;
 	while (s < e)
@@ -508,12 +514,12 @@ calc_usecdiff(
 	long delta_usec = 0;
 	l_fp delt;
 
-	delt = ref->fp;
-	delt.l_i -= offset;
-	L_SUB(&delt, &base->fp);
-	delta = lfp_stamp_to_tspec(delt, NULL);
+	delt = *ref;
+	bumplfpsint(delt, -offset);
+	delt -= *base;
+	delta = lfp_uintv_to_tspec(delt);
 
-	delta_usec = 1000000 * (int32_t)delta.tv_sec + delta.tv_nsec/1000;
+	delta_usec = US_PER_S * (int32_t)delta.tv_sec + delta.tv_nsec / 1000;
 	return delta_usec;
 }
 
@@ -532,7 +538,18 @@ snt_rawdcf(
 	last_tcode_t  *t = (last_tcode_t *)parseio->parse_pdata;
 	long delta_usec = -1;
 
-	if (t != NULL && t->tminute.tv.tv_sec != 0) {
+	/*
+	 * 2017-01-07: Emergency repair. This guard used to test
+	 * t->tminute.tv.tv_sec, but that cannot have been right as
+	 * that tv_sec field was never set anywhere outside the
+	 * in-kernel Sun module (long discarded) while this code was
+	 * reached in userspace.  It is unknown whether replacing that
+	 * test with the analogous one on an l_fp is correct.  This
+	 * problem was discovered when reducing the timestamp_t union
+	 * - this was one of two references to the UNIX timestamp
+	 * member.
+	 */
+	if (t != NULL && lfpuint(t->tminute) != 0) {
 		delta_usec = calc_usecdiff(ptime, &t->tminute, parseio->parse_index - 1);
 		if (delta_usec < 0)
 			delta_usec = -delta_usec;
@@ -542,11 +559,12 @@ snt_rawdcf(
 			       parseio->parse_index - 1, delta_usec));
 
 	if (((parseio->parse_dtime.parse_status & CVT_MASK) == CVT_OK) &&
-	    (delta_usec < 500000 && delta_usec >= 0)) /* only if minute marker is available */
+           (delta_usec < (NS_PER_S/2000) && delta_usec >= 0))
 	{
+		/* only if minute marker is available */
 		parseio->parse_dtime.parse_stime = *ptime;
 
-		parseio->parse_dtime.parse_time.fp.l_ui++;
+		bumplfpuint(parseio->parse_dtime.parse_time, 1);
 
 		parseprintf(DD_RAWDCF,("parse: snt_rawdcf: time stamp synthesized offset %d seconds\n", parseio->parse_index - 1));
 
@@ -567,9 +585,11 @@ inp_rawdcf(
 	  timestamp_t  *tstamp
 	  )
 {
-	static struct timespec timeout = { 1, 500000000 }; /* 1.5 secongs denote second #60 */
+	/* 1.5 seconds denote second #60 */
+	static struct timespec timeout = { 1, (NS_PER_S/2) };
 
-	parseprintf(DD_PARSE, ("inp_rawdcf(0x%lx, 0x%x, ...)\n", (long)parseio, ch));
+	parseprintf(DD_PARSE, ("inp_rawdcf(0x%lx, 0x%x, ...)\n",
+                    (unsigned long)parseio, (unsigned)ch));
 
 	parseio->parse_dtime.parse_stime = *tstamp; /* collect timestamp */
 
@@ -585,7 +605,18 @@ inp_rawdcf(
 		if (t != NULL)
 		{
 			/* remember minute start sample time if timeouts occur in minute raster */
-			if (t->timeout.tv.tv_sec != 0)
+			/*
+			 * 2017-01-07: Emergency repair.  This used to test
+			 * t->timeout.tv.tv_sec != 0, but that cannot have been
+			 * right as the tv.tv_sec part of (what used to be) the
+			 * timestamp_t union was only set in the long-discarded
+			 * Sun kernel driver, and this could always be called
+			 * from userspace.  Problem discovered while eliminating
+			 * the timestamp_t union; this was one of only two
+			 * referebces to the timrspec member. It is unknown
+			 * whether this change actually corrects the code.
+			 */
+			if (lfpuint(t->timeout) != 0)
 			{
 				delta_usec = calc_usecdiff(tstamp, &t->timeout, 60);
 				if (delta_usec < 0)
@@ -596,7 +627,7 @@ inp_rawdcf(
 				delta_usec = -1;
 			}
 
-			if (delta_usec < 500000 && delta_usec >= 0)
+                       if (delta_usec < (NS_PER_S/2000) && delta_usec >= 0)
 			{
 				parseprintf(DD_RAWDCF, ("inp_rawdcf: timeout time difference %ld usec - minute marker set\n", delta_usec));
 				/* collect minute markers only if spaced by 60 seconds */

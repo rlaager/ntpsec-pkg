@@ -10,12 +10,12 @@ ccroot.USELIB_VARS['fc']=set(['FCFLAGS','DEFINES','INCLUDES','FCPPFLAGS'])
 ccroot.USELIB_VARS['fcprogram_test']=ccroot.USELIB_VARS['fcprogram']=set(['LIB','STLIB','LIBPATH','STLIBPATH','LINKFLAGS','RPATH','LINKDEPS'])
 ccroot.USELIB_VARS['fcshlib']=set(['LIB','STLIB','LIBPATH','STLIBPATH','LINKFLAGS','RPATH','LINKDEPS'])
 ccroot.USELIB_VARS['fcstlib']=set(['ARFLAGS','LINKDEPS'])
-@extension('.f','.f90','.F','.F90','.for','.FOR')
+@extension('.f','.F','.f90','.F90','.for','.FOR','.f95','.F95','.f03','.F03','.f08','.F08')
 def fc_hook(self,node):
 	return self.create_compiled_task('fc',node)
 @conf
 def modfile(conf,name):
-	return{'lower':name.lower()+'.mod','lower.MOD':name.upper()+'.MOD','UPPER.mod':name.upper()+'.mod','UPPER':name.upper()+'.MOD'}[conf.env.FC_MOD_CAPITALIZATION or'lower']
+	return{'lower':name.lower()+'.mod','lower.MOD':name.lower()+'.MOD','UPPER.mod':name.upper()+'.mod','UPPER':name.upper()+'.MOD'}[conf.env.FC_MOD_CAPITALIZATION or'lower']
 def get_fortran_tasks(tsk):
 	bld=tsk.generator.bld
 	tasks=bld.get_tasks_group(bld.get_group_idx(tsk.generator))

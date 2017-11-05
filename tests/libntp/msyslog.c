@@ -15,9 +15,40 @@ TEST_TEAR_DOWN(msyslog) {}
 #include <string.h>
 #include <errno.h>
 
+static int     msnprintf(char *, size_t, const char *, ...) NTP_PRINTF(3, 4);
+
+static int
+msnprintf(
+	char *		buf,
+	size_t		bufsiz,
+	const char *	fmt,
+	...
+	)
+{
+	va_list	ap;
+	int	rc;
+
+	va_start(ap, fmt);
+	rc = mvsnprintf(buf, bufsiz, fmt, ap);
+	va_end(ap);
+
+	return rc;
+}
+
 #ifndef VSNPRINTF_PERCENT_M
 // format_errmsg() is normally private to msyslog.c
 void	format_errmsg	(char *, size_t, const char *, int);
+
+TEST(msyslog, format_errmsgHangingPercent)
+{
+	static char fmt[] = "percent then nul term then non-nul %\0oops!";
+	char act_buf[64];
+
+	ZERO(act_buf);
+	format_errmsg(act_buf, sizeof(act_buf), fmt, ENOENT);
+	TEST_ASSERT_EQUAL_STRING(fmt, act_buf);
+	TEST_ASSERT_EQUAL_STRING("", act_buf + 1 + strlen(act_buf));
+}
 #endif
 
 // msnprintf()
@@ -79,19 +110,6 @@ TEST(msyslog, msnprintfBackslashPercent)
 	TEST_ASSERT_EQUAL(exp_cnt, act_cnt);
 	TEST_ASSERT_EQUAL_STRING(exp_buf, act_buf);
 }
-
-#ifndef VSNPRINTF_PERCENT_M
-TEST(msyslog, format_errmsgHangingPercent)
-{
-	static char fmt[] = "percent then nul term then non-nul %\0oops!";
-	char act_buf[64];
-
-	ZERO(act_buf);
-	format_errmsg(act_buf, sizeof(act_buf), fmt, ENOENT);
-	TEST_ASSERT_EQUAL_STRING(fmt, act_buf);
-	TEST_ASSERT_EQUAL_STRING("", act_buf + 1 + strlen(act_buf));
-}
-#endif
 
 TEST(msyslog, msnprintfNullTarget)
 {

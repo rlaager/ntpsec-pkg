@@ -6,9 +6,9 @@
 == SYNOPSIS ==
 [verse]
 ntpd
-    [-46ghLmnNqx] [-c 'conffile'] [-f 'driftfile'] [-i 'jaildir']
-    [-k 'keyfile'] [-l 'logfile'] [-p 'pidfile'] [-P 'priority']
-    [-s 'statsdir']  [-t  'key']
+    [-46aghLmnNqx] [assert] [-c 'conffile'] [-f 'driftfile']
+    [-i 'jaildir'] [-k 'keyfile'] [-l 'logfile'] [-p 'pidfile']
+    [-P 'priority'] [-s 'statsdir']  [-t  'key']
     [-u 'user'[:'group']] [-U 'interface_update_interval']
     [-v 'variable'] [-V 'variable'] [server...]
 
@@ -36,20 +36,21 @@ The +ntpd+ program normally operates continuously while adjusting the
 system time and frequency, but in some cases this might not be
 practical. With the +-q+ option +ntpd+ operates as in continuous mode,
 but exits just after setting the clock for the first time. Most
-applications will probably want to specify the +iburst+ option with the
-+server+ command. With this option a volley of messages is exchanged to
-groom the data and set the clock in about ten seconds. If nothing is
-heard after a few minutes, the daemon times out and exits without
-setting the clock.
+applications will probably want to specify the +iburst+ option with
+the +server+ command. With this option a volley of messages is
+exchanged to groom the data and set the clock in about ten
+seconds. With -q, if nothing is heard after a few minutes, the daemon
+times out and exits without setting the clock.
 
-If NetInfo support is built into +ntpd+, then +ntpd+ will attempt to
-read its configuration from the NetInfo if the default
-{ntpdconfman} file cannot be read and no file is specified by
-the +-c+ option.
+//If NetInfo support is built into +ntpd+, then +ntpd+ will attempt to
+//read its configuration from the NetInfo if the default
+//{ntpdconfman} file cannot be read and no file is specified by
+//the +-c+ option.
 
 Various internal +ntpd+ variables can be displayed and configuration
 options altered while the +ntpd+ is running using the
-{ntpqman} utility program.
+{ntpqman} utility program.  The state of ntpd can be continuously
+monitored using {ntpmonman}.
 
 When +ntpd+ starts it looks at the value of umask(2), and if
 zero +ntpd+ will set the umask(2) to 022.
@@ -71,6 +72,9 @@ the IPv4 namespace.
 Force DNS resolution of following host names on the command line to
 the IPv6 namespace.
 
++-a+, +--assert+::
+  REQUIRE(false) to test assert handler.
++
 +-c+ _string_, +--configfile+=_string_::
   configuration file name.
 +
@@ -141,7 +145,7 @@ configuration file _interface_ command, which is more versatile.
   path to symmetric keys.
 +
 Specify the name and path of the symmetric key file. +/etc/ntp.keys+
-is the default. This is the same operation as the _keys_
+is a common location. This is the same operation as the _keys_
 configuration file directive.
 
 +-l+ _string_, +--logfile+=_string_::
@@ -213,9 +217,11 @@ Add the specified key number to the trusted key list.
 +-u+ _string_, +--user+=_string_::
   Run as userid (or userid:groupid).
 +
-Specify a user, and optionally a group, to switch to. This option is
-only available if the OS supports adjusting the clock without full
-root privileges. This option is supported under Linux, NetBSD and Solaris.
+Specify a user, and optionally a group, to switch to.  The user and
+group may be specified by name or numeric id.  If no group is specified,
+then the default group for userid is used. This option is only available
+if the OS supports adjusting the clock without full root privileges. This
+option is supported under Linux, NetBSD, Solaris and other OS.
 
 +-U+ _number_, +--updateinterval+=_number_::
   interval in seconds between scans for new or dropped interfaces. This
@@ -254,17 +260,16 @@ option can be used with the +-g+ and +-q+ options. See the _tinker_
 configuration file directive for other options. Note: The kernel time
 discipline is disabled with this option.
 
-+-z+ _nvar_, --var+=_nvar_::
++-z+ _nvar_, +--var+=_nvar_::
   make ARG an ntp variable (RW). This option may appear an unlimited
   number of times.
 
-+-Z+ _nvar_, --dvar+=_ndvar_::
++-Z+ _nvar_, +--dvar+=_ndvar_::
   make ARG an ntp variable (RW|DEF). This option may appear an unlimited
   number of times.
 
 +-V, --version+::
-  Output version of program and exit. -VV gives more detailed version
-  information.
+  Output version of program and exit.
 
 Any arguments given after options are interpreted as server addresses
 or hostnames, with the _iburst_ option implied. Associations with
@@ -324,7 +329,7 @@ rarely strays more than 128 ms even under extreme cases of network path
 congestion and jitter. Sometimes, in particular when +ntpd+ is first
 started without a valid drift file on a system with a large intrinsic
 drift the error might grow to exceed 128 ms, which would cause the clock
-to be set backwards if the local clock time is more than 128 s in the
+to be set backwards if the local clock time is more than 128 ms in the
 future relative to the server. In some applications, this behavior may
 be unacceptable. There are several solutions, however. If the +-x+
 option is included on the command line, the clock will never be stepped
@@ -381,7 +386,7 @@ synchronized and stable.
 
 Finally, if you have processes like _dovecot_ or database servers that
 require monotonically-increasing time, run {ntpwaitman} as
-late as possible in the boot sequence (perhaps with the_+-v+_flag) and
+late as possible in the boot sequence (perhaps with the +-v+ flag) and
 after {ntpwaitman} exits successfully it is as safe as it
 will ever be to start any process that require stable time.
 
@@ -502,17 +507,32 @@ as described in {ntpdconfman}.
 == FILES ==
 
 [options="header"]
-|================================================================
-|File               |Default         |Option      |Option
-|configuration file |+/etc/{ntpconf}+|+-c+        |+conffile+
-|frequency file     |none            |+-f+        |+driftfile+
-|leapseconds file   |none            |            |+leapfile+
-|process ID file    |none            |+-p+        |+pidfile+
-|log file           |system log      |+-l+        |+logfile+
-|include file       |none            |none        |+includefile+
-|statistics path    |+/var/NTP+      |+-s+        |+statsdir+
-|keys path          |+/usr/local/etc+|none        |+keysdir+
-|================================================================
+|===================================================================
+|File                    |Default           |Option      |Option
+|configuration file      |+/etc/{ntpconf}+  |+-c+        |+conffile+
+|configuration directory |+/etc/ntp.d+      |+-c+        |+conffile+
+|frequency file          |none              |+-f+        |+driftfile+
+|leapseconds file        |none              |            |+leapfile+
+|process ID file         |none              |+-p+        |+pidfile+
+|log file                |system log        |+-l+        |+logfile+
+|include file            |none              |none        |+includefile+
+|statistics path         |+/var/NTP+        |+-s+        |+statsdir+
+|keys file               |none              |+-k+        |+keys+
+|===================================================================
+
+Configuration files are parsed according to the following rules:
+
+. The plain config file (normally +/etc/{ntpconf}+ but the path can be
+  overridden by the -c option) is read first if it exists.
+
+. Then the configuration directory, if it exists, is scanned. Normally
+  this directory is /etc/ntp.d, but if the -c option is specified the
+  /etc will be specified by the directory name of the -c argument.
+
+. Each file beneath the configuration directory with the extension
+  ".conf" is interpreted.  Files are interpreted in ASCII sort order
+  of their pathnames.  Files with other extensions or no extensions
+  are ignored.
 
 [[signals]]
 == SIGNALS ==

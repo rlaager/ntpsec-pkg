@@ -1,21 +1,21 @@
 #include <string.h>
 
-#include <config.h>
+#include "config.h"
 
 #include "ntp_machine.h"
 #include "ntpd.h"
 #include "ntp_io.h"
 #include "ntp_stdlib.h"
 
-const int no_argument = 0;
-const int required_argument = 1;
-const int optional_argument = 2;
+#define no_argument 0
+#define required_argument 1
+/* const int optional_argument = 2; UNUSED */
 
 char* ntp_optarg;
-int ntp_optopt;
+static int ntp_optopt;
 /* The variable ntp_optind [...] shall be initialized to 1 by the system. */
 int ntp_optind = 1;
-int ntp_opterr;
+static int ntp_opterr;
 
 /* Implemented based on [1] and [2] for optional arguments.
    ntp_optopt is handled FreeBSD-style, per [3].
@@ -175,7 +175,7 @@ int ntp_getopt_long(int argc, char *const argv[], const char *optstring,
 	/* If longindex is not NULL, it points to a variable which is set to the
 	   index of the long option relative to longopts. */
 	if (longindex)
-	    *longindex = (match - longopts);
+	    *longindex = (int)(match - longopts);
 
 	/* If flag is NULL, then getopt_long() shall return val.
 	   Otherwise, getopt_long() returns 0, and flag shall point to

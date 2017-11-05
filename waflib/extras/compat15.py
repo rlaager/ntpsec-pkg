@@ -241,10 +241,12 @@ def apply_objdeps(self):
 			lst=y.to_list(y.add_objects)
 			lst.reverse()
 			for u in lst:
-				if u in seen:continue
+				if u in seen:
+					continue
 				added=1
 				names=[u]+names
-			if added:continue
+			if added:
+				continue
 		y.post()
 		seen.append(x)
 		for t in getattr(y,'compiled_tasks',[]):
@@ -258,8 +260,10 @@ def process_obj_files(self):
 		self.link_task.inputs.append(node)
 @TaskGen.taskgen_method
 def add_obj_file(self,file):
-	if not hasattr(self,'obj_files'):self.obj_files=[]
-	if not'process_obj_files'in self.meths:self.meths.append('process_obj_files')
+	if not hasattr(self,'obj_files'):
+		self.obj_files=[]
+	if not'process_obj_files'in self.meths:
+		self.meths.append('process_obj_files')
 	self.obj_files.append(file)
 old_define=Configure.ConfigurationContext.__dict__['define']
 @Configure.conf

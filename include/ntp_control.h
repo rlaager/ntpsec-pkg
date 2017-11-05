@@ -6,6 +6,12 @@
 
 #include "ntp_types.h"
 
+/* The attribute after this structure is a gcc/clang extension that forces
+ * the beginning of a structure instance to be 32-bit aligned.  Without this
+ * attempting to compile on a 32-bit host may throw warnings or errors when
+ * a pointer to this tructure is passed to authdecrypt/authencrypt, both of
+ * which expect to be able to treat the structure as an array of uint32_t
+ * elements.  Ideally, we'd get rid of that nasty type punning. */
 struct ntp_control {
 	uint8_t li_vn_mode;		/* leap, version, mode */
 	uint8_t r_m_e_op;		/* response, more, error, opcode */
@@ -15,7 +21,7 @@ struct ntp_control {
 	uint16_t offset;		/* offset of this batch of data */
 	uint16_t count;			/* count of data in this packet */
 	uint8_t data[480 + MAX_MAC_LEN]; /* data + auth */
-};
+} __attribute__((aligned(32)));
 
 /*
  * Length of the control header, in octets
@@ -159,5 +165,14 @@ struct ntp_control {
  */
 #define	IFSTATS_FIELDS	12
 #define	RESLIST_FIELDS	4
+
+/*
+ * To prevent replay attacks, MRU list nonces age out. Time is in seconds.
+ *
+ * Don't change this value casually.  Lengthening it might extend an
+ * attack window for DDoS amplification.  Shortening it might make your
+ * server (or client) incompatible with older versions.
+ */
+#define NONCE_TIMEOUT	16
 
 #endif /* GUARD_NTP_CONTROL_H */

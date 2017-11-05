@@ -4,7 +4,7 @@
  *
  * This program is run to generate ntp_keyword.h
  */
-#include <config.h>
+#include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -16,7 +16,7 @@
 /* Define a structure to hold a (keyword, token) pair */
 struct key_tok {
 	const char * key;	/* Keyword */
-	u_short	token;		/* Associated Token */
+	unsigned short	token;		/* Associated Token */
 	follby	followedby;	/* nonzero indicates the next token(s)
 				   forced to be string(s) */
 };
@@ -24,6 +24,7 @@ struct key_tok {
 struct key_tok ntp_keywords[] = {
 { "...",		T_Ellipsis,		FOLLBY_TOKEN },
 { "allpeers",		T_Allpeers,		FOLLBY_TOKEN },
+{ "bias",		T_Bias,			FOLLBY_TOKEN },
 { "broadcast",		T_Broadcast,		FOLLBY_STRING },
 { "baud",		T_Baud,			FOLLBY_TOKEN },
 { "ctl",		T_Ctl,			FOLLBY_TOKEN },
@@ -65,14 +66,12 @@ struct key_tok ntp_keywords[] = {
 { "unconfig",		T_Unconfig,		FOLLBY_STRING },
 { "unit",		T_Unit,			FOLLBY_TOKEN },
 { "unpeer",		T_Unpeer,		FOLLBY_STRING },
+{ "unrestrict",		T_Unrestrict,		FOLLBY_TOKEN },
 /* authentication_command */
 { "controlkey",		T_ControlKey,		FOLLBY_TOKEN },
 { "requestkey",		T_Requestkey,		FOLLBY_TOKEN }, /* dummy */
-{ "crypto",		T_Crypto,		FOLLBY_TOKEN },
 { "keys",		T_Keys,			FOLLBY_STRING },
-{ "keysdir",		T_Keysdir,		FOLLBY_STRING },
 { "ntpsigndsocket",	T_NtpSignDsocket,	FOLLBY_STRING },
-{ "revoke",		T_Revoke,		FOLLBY_TOKEN },
 { "trustedkey",		T_Trustedkey,		FOLLBY_TOKEN },
 /* IPv4/IPv6 protocol override flag */
 { "-4",			T_Ipv4_flag,		FOLLBY_TOKEN },
@@ -92,15 +91,9 @@ struct key_tok ntp_keywords[] = {
 { "subtype",		T_Subtype,		FOLLBY_TOKEN },
 { "ttl",		T_Ttl,			FOLLBY_TOKEN },
 { "version",		T_Version,		FOLLBY_TOKEN },
-/* crypto_command */
-{ "host",		T_Host,			FOLLBY_STRING },
-{ "pw",			T_Pw,			FOLLBY_STRING },
-{ "randfile",		T_Randfile,		FOLLBY_STRING },
-{ "digest",		T_Digest,		FOLLBY_STRING },
 /*** MONITORING COMMANDS ***/
 /* stat */
 { "clockstats",		T_Clockstats,		FOLLBY_TOKEN },
-{ "cryptostats",	T_Cryptostats,		FOLLBY_TOKEN },
 { "loopstats",		T_Loopstats,		FOLLBY_TOKEN },
 { "peerstats",		T_Peerstats,		FOLLBY_TOKEN },
 { "protostats",		T_Protostats,		FOLLBY_TOKEN },
@@ -128,11 +121,9 @@ struct key_tok ntp_keywords[] = {
 { "minsane",		T_Minsane,		FOLLBY_TOKEN },
 { "floor",		T_Floor,		FOLLBY_TOKEN },
 { "ceiling",		T_Ceiling,		FOLLBY_TOKEN },
-{ "cohort",		T_Cohort,		FOLLBY_TOKEN },
 { "mindist",		T_Mindist,		FOLLBY_TOKEN },
 { "maxdisp",		T_Maxdisp,		FOLLBY_TOKEN },
 { "maxdist",		T_Maxdist,		FOLLBY_TOKEN },
-{ "beacon",		T_Beacon,		FOLLBY_TOKEN },
 { "orphan",		T_Orphan,		FOLLBY_TOKEN },
 { "orphanwait",		T_Orphanwait,		FOLLBY_TOKEN },
 { "nonvolatile",	T_Nonvolatile,		FOLLBY_TOKEN },
@@ -163,8 +154,9 @@ struct key_tok ntp_keywords[] = {
 { "initalloc",		T_Initalloc,		FOLLBY_TOKEN },
 { "initmem",		T_Initmem,		FOLLBY_TOKEN },
 { "mindepth",		T_Mindepth,		FOLLBY_TOKEN },
-{ "maxage",		T_Maxage,		FOLLBY_TOKEN },
 { "maxdepth",		T_Maxdepth,		FOLLBY_TOKEN },
+{ "maxage",		T_Maxage,		FOLLBY_TOKEN },
+{ "minage",		T_Minage,		FOLLBY_TOKEN },
 { "maxmem",		T_Maxmem,		FOLLBY_TOKEN },
 { "mru",		T_Mru,			FOLLBY_TOKEN },
 /* fudge_factor */
@@ -210,11 +202,11 @@ struct key_tok ntp_keywords[] = {
 };
 
 typedef struct big_scan_state_tag {
-	char	ch;		/* Character this state matches on */
-	char	followedby;	/* Forces next token(s) to T_String */
-	u_short	finishes_token;	/* nonzero ID if last keyword char */
-	u_short	match_next_s;	/* next state to check matching ch */
-	u_short	other_next_s;	/* next state to check if not ch */
+	char		ch;		/* Character this state matches on */
+	char		followedby;	/* Forces next token(s) to T_String */
+	unsigned short	finishes_token;	/* nonzero ID if last keyword char */
+	unsigned short	match_next_s;	/* next state to check matching ch */
+	unsigned short	other_next_s;	/* next state to check if not ch */
 } big_scan_state;
 
 /*
@@ -229,23 +221,25 @@ typedef struct big_scan_state_tag {
 #define MAX_TOK_LEN	63
 
 const char *	current_keyword;/* for error reporting */
-big_scan_state	sst[MAXSTATES];	/* scanner FSM state entries */
-u_short		sst_highwater;	/* next entry index to consider */
+static big_scan_state	sst[MAXSTATES];	/* scanner FSM state entries */
+static unsigned short	sst_highwater;	/* next entry index to consider */
 char *		symb[1024];	/* map token ID to symbolic name */
 
 /* for libntp */
 const char *	progname = "keyword-gen";
 
-int		main			(int, char **);
-static void	generate_preamble	(void);
-static void	generate_fsm		(void);
-static void	generate_token_text	(void);
-static u_short	create_keyword_scanner	(void);
-static u_short	create_scan_states	(const char *, u_short, follby, u_short);
-int		compare_key_tok_id	(const void *, const void *);
-int		compare_key_tok_text	(const void *, const void *);
-void		populate_symb		(char *);
-const char *	symbname		(u_short);
+int			main			(int, char **);
+static void		generate_preamble	(void);
+static void		generate_fsm		(void);
+static void		generate_token_text	(void);
+static unsigned short	create_keyword_scanner	(void);
+static unsigned short	create_scan_states	(const char *,
+						 unsigned short, follby,
+						 unsigned short);
+static int		compare_key_tok_id	(const void *, const void *);
+static int		compare_key_tok_text	(const void *, const void *);
+static void		populate_symb		(char *);
+static const char*	symbname		(unsigned short);
 
 
 int main(int argc, char **argv)
@@ -301,11 +295,11 @@ generate_fsm(void)
 	size_t prefix_len;
 	char *p;
 	char *r;
-	u_short initial_state;
-	u_short this_state;
-	u_short state;
-	u_short i;
-	u_short token;
+	unsigned short initial_state;
+	unsigned short this_state;
+	unsigned short state;
+	unsigned short i;
+	unsigned short token;
 
 	/* 
 	 * Sort ntp_keywords in alphabetical keyword order.  This is
@@ -383,7 +377,6 @@ generate_fsm(void)
 		}
 
 		if (sst[i].finishes_token) {
-			/* coverity[leaked_storage] */
 			snprintf(token_id_comment, 
 				 sizeof(token_id_comment), "%5d %-17s",
 				 i, symbname(sst[i].finishes_token));
@@ -462,18 +455,18 @@ generate_fsm(void)
  * recognizing the complete keyword, and any pre-existing state that exists
  * for some other keyword that has the same prefix as the current one.
  */
-static u_short
+static unsigned short
 create_scan_states(
 	const char * text,
-	u_short	token, 
+	unsigned short	token, 
 	follby	followedby,
-	u_short	prev_state
+	unsigned short	prev_state
 	)
 {
-	u_short my_state;
-	u_short return_state;
-	u_short prev_char_s;
-	u_short curr_char_s;
+	unsigned short my_state;
+	unsigned short return_state;
+	unsigned short prev_char_s;
+	unsigned short curr_char_s;
 
 	return_state = prev_state;
 	curr_char_s = prev_state;
@@ -531,11 +524,10 @@ create_scan_states(
 	 * If not, we need to continue scanning
 	 */
 	if ('\0' == text[1]) {
-		sst[my_state].finishes_token = (u_short)token;
+		sst[my_state].finishes_token = (unsigned short)token;
 		sst[my_state].followedby = (char)followedby;
 
-		if (sst[token].finishes_token != (u_short)token) {
-			/* coverity[leaked_storage] */
+		if (sst[token].finishes_token != (unsigned short)token) {
 			fprintf(stderr,
 				"fatal, sst[%d] not reserved for %s.\n",
 				token, symbname(token));
@@ -570,11 +562,11 @@ create_scan_states(
  * creates a keywords scanner out of it.
  */
 
-static u_short
+static unsigned short
 create_keyword_scanner(void)
 {
-	u_short scanner;
-	u_short i;
+	unsigned short scanner;
+	unsigned short i;
 
 	sst_highwater = 1;	/* index 0 invalid, unused */
 	scanner = 0;
@@ -596,11 +588,11 @@ create_keyword_scanner(void)
 static void
 generate_token_text(void)
 {
-	u_short lowest_id;
-	u_short highest_id;
-	u_short id_count;
-	u_short id;
-	u_short i;
+	unsigned short lowest_id;
+	unsigned short highest_id;
+	unsigned short id_count;
+	unsigned short id;
+	unsigned short i;
 
 	/* sort ntp_keywords in token ID order */
 	qsort(ntp_keywords, COUNTOF(ntp_keywords),
@@ -624,7 +616,6 @@ generate_token_text(void)
 		}
 		if (i > 0)
 			printf(",");
-		/* coverity[leaked_storage] */
 		printf("\n\t/* %-5d %5d %20s */\t\"%s\"",
 		       id - lowest_id, id, symbname(id), 
 		       ntp_keywords[i].key);
@@ -636,7 +627,7 @@ generate_token_text(void)
 }
 
 	
-int
+static int
 compare_key_tok_id(
 	const void *a1,
 	const void *a2
@@ -655,7 +646,7 @@ compare_key_tok_id(
 }
 
 
-int
+static int
 compare_key_tok_text(
 	const void *a1,
 	const void *a2
@@ -672,7 +663,7 @@ compare_key_tok_text(
  * populate_symb() - populate symb[] lookup array with symbolic token
  *		     names such that symb[T_Age] == "T_Age", etc.
  */
-void
+static void
 populate_symb(
 	char *header_file
 	)
@@ -706,19 +697,19 @@ populate_symb(
 }
 
 
-const char *
+static const char *
 symbname(
-	u_short token
+	unsigned short token
 	)
 {
-#define BUFLENGTH 20
+	static char buf[20];
 	char *name;
 
 	if (token < COUNTOF(symb) && symb[token] != NULL) {
 		name = symb[token];
 	} else {
-		name = malloc(BUFLENGTH);
-		snprintf(name, BUFLENGTH, "%d", token);
+		snprintf(buf, sizeof(buf), "%d", token);
+		name = buf;
 	}	
 
 	return name;

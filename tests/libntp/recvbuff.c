@@ -19,11 +19,11 @@ TEST(recvbuff, Initialization) {
 	TEST_ASSERT_EQUAL(RECV_INIT, free_recvbuffs());
 	TEST_ASSERT_EQUAL(0, full_recvbuffs());
 	TEST_ASSERT_FALSE(has_full_recv_buffer());
-	TEST_ASSERT_TRUE(get_full_recv_buffer() == NULL);
+	TEST_ASSERT_NULL(get_full_recv_buffer());
 }
 
 TEST(recvbuff, GetAndFree) {
-	int initial = free_recvbuffs();
+	unsigned long initial = free_recvbuffs();
 	recvbuf_t* buf = get_free_recv_buffer();
 
 	TEST_ASSERT_EQUAL(initial-1, free_recvbuffs());
@@ -33,11 +33,13 @@ TEST(recvbuff, GetAndFree) {
 
 TEST(recvbuff, GetAndFill) {
 	recvbuf_t* buf = get_free_recv_buffer();
+	recvbuf_t* buf1;
 
 	add_full_recv_buffer(buf);
 	TEST_ASSERT_EQUAL(1, full_recvbuffs());
 	TEST_ASSERT_TRUE(has_full_recv_buffer());
-	TEST_ASSERT_EQUAL(buf, get_full_recv_buffer());
+	buf1 = get_full_recv_buffer();
+	TEST_ASSERT_POINTERS_EQUAL(buf, buf1);
 }
 
 TEST_GROUP_RUNNER(recvbuff) {

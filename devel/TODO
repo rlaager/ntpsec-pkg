@@ -2,25 +2,20 @@
 
 == Checklist for a quality 1.0 release ==
 
-=== Code ===
+* Package metadata for Ubuntu, Raspbian, Red Hat, Gentoo, and SuSe.
 
-* Clean up the documentation for the removal of broadcast and symmetric modes.
+* Add .tar.xz tarball.
 
-* All the code relating to iteration over interfaces can and should be removed
-  in favor of binding to wildcard addresses. This will abolish several platform
-  dependencies.
+* Fix ntpq retransmissions.
+  Too many cases don't work well enough (may be inherited from ntp classic).
 
 === Testing ===
 
 * We need to live-test various refclocks.  It would be nice
   to test the full matrix of refclock x platform, but that's too
   much work.  We should probably test as many refclocks as we can
-  on at least one platform and test the NMEA, Atom, and SHM drivers
+  on at least one platform and test the NMEA, PPS, and SHM drivers
   on most platforms.
-
-=== Packaging ===
-
-* Package metadata for Debian, Ubuntu, Raspbian, Red Hat, Gentoo, and SuSe.
 
 == After 1.0 release ==
 
@@ -39,63 +34,39 @@ __________
 Also see https://gitlab.com/NTPsec/ntpsec/issues/68 where the dubiousness
 of the current startup logic gets discussed.
 
-== User interface ==
-
-[quote, Gary Miller]
-__________
-'ntpq -p' is user hostile compared to 'chronyc sources'.  chronyc adds
-units to the display, so you do not have to keep referring to the
-manual, and it makes it easy to deal with jitter and delay that
-varies by orders of magnitude.
-
-So, instead of this:
-
-     remote           refid      st t when poll reach   delay   offset  jitter
-==============================================================================
--india.colorado. .NIST.           1 u   33   64  377   79.023  -11.071  10.247
- 140.142.16.34   .INIT.          16 u    -  256    0    0.000    0.000   0.000
-+clepsydra.labs. .GPS.            1 u   28   64  377   26.473   15.307   4.261
-+catbert.rellim. .GPS1.           1 u   31   64  377    0.200   22.061   6.440
--SHM(0)          .GPS.            0 l   45   64  377    0.000  151.500  15.858
-*SHM(1)          .GPS1.           0 l   44   64  377    0.000   20.870   7.680
-+131.107.13.100  .ACTS.           1 u   25   64  337   14.746   18.469   6.634
-
-I see this:
-
-dagwood ~ # chronyc sources
-210 Number of sources = 11
-MS Name/IP address         Stratum Poll Reach LastRx Last sample
-===============================================================================
-#- SHM0                          0   4   377    19   +119ms[ +119ms] +/-  501ms
-#- SHM1                          0   4   377    21   +276us[ +276us] +/-   13us
-#* SOC2                          0   4   377    22   +260us[ +291us] +/-   24us
-#? SOC3                          0   4     0  247d  +7275ms[  +99us] +/-  230ms
-^x catbert.rellim.com            1   8   377     0  -1566us[-1566us] +/- 1564us
-^- spidey.rellim.com             1   6   377    54    +18ms[  +18ms] +/-   27ms
-^- kong.rellim.com               2  10   377   177   -722us[ -735us] +/- 2004us
-^- ha2.smatwebdesign.com         2  10   177   492  -2890us[-2905us] +/-  103ms
-^- soft-sea-01.servers.octos     2  10   377   775  -5897us[-5843us] +/-   83ms
-^- gw-kila-wl0.ipv6.avioc.or     2  10   377   17m   -519us[ -640us] +/-   64ms
-^- 66.241.101.63                 2  10   377   449  +7966us[+7973us] +/-   52ms
-
-Neither is ideal, easy pickings for someone to code on.
-
 === Future plans ===
+
+* Test that the pool code properly replaces a server if it goes dark. (Not
+  clear how to arrange this.)
 
 * ntpd is remarkably bad at standalone Stratum 1 - requires multiple chimers
   (and multiple inbound NTP connections, and a hole in your firewall) even when
   it has a known-good local timesource like a GPS.  This should be fixed.
 
-* The code used for asynchronous DNS lookup is more general, more complex,
-  and more bug-prone than it should be.  Either our version should be
-  rewritten and simplified or (better idea!) it should be replaced by
-  a well-maintained third-party library like c_ares.
+* Full support for NTS, once IETF has the spec ready
+
+* All the code relating to iteration over interfaces can and should be removed
+  in favor of binding to wildcard addresses.  Information on how to do this
+  us here: https://blog.powerdns.com/2012/10/08/on-binding-datagram-udp-sockets-to-the-any-addresses/
+
+* We could open only IPv6 sockets and allow them to handle mapped IPv4 addresses,
+  as described at http://man7.org/linux/man-pages/man7/ipv6.7.html
+
+* A clock driver or auxiliary daemon for PTP.
+
+* Invent a syntax for type/unit pairs: use it in the refclock and unpeer
+  directives. Presently it's only possible to unpeer using the deprecated
+  magic address of the driver.
 
 * Hal says "We need a way to inspect/debug bits on the wire. `ntpdate
   -du' is the traditional approach."  Hal's straw man is a new program
   rather than trying to make ntpdig do this.  Eric's proposed answer:
-  ntpshark, a command interpreter written around the ntp Python module and
-  loosely modeled on wireshark.
+  ntpshark, a command interpreter written around the ntp Python module
+  (or scapy) and loosely modeled on wireshark.
+
+* Measure time from the clock reading to transmission for outbound
+  packets.  Use the measurement to correct for computation time
+  before transmission.  This is more interesting for authenticated packets.
 
 * We might be able to eliminate a lot of the Linux runtime
   droproot code by using file capabilities.
@@ -104,16 +75,92 @@ Neither is ideal, easy pickings for someone to code on.
   codes and use it systematically to make reports more readable.
 
 * Timer events need, as much as possible, to be eliminated - they eat
-  power on laptops and mobile devices, usually unnecessarily.
-
-* Richer signal semantics: HUP for close/reopen of any files (logrotate…),
-  USR1 for re-read of config and maybe USR2 for re-read of an alternate
-  config file (so you can go back pre ante by just sending USR1 if you
-  messed up). Open for discussion.
+  power on laptops and mobile devices, usually unnecessarily. To fix this,
+  go to an event-queue architecture that wakes the daemon up just in time
+  for the next scheduled event (rather than a once-per-second timer tick).
 
 * Take another look at SHM.  Hal thinks we can make a version that is
   read-only and solid.  Maybe write a support package that does all the
   work if you call it with the date/time.
+
+Plug restrict holes:
+  The current code pokes a hole in any restrictions to let servers
+  through if they come from DNS lookups.  We should add something like
+  a nohole flag to prevent this so you can really block pool servers if
+  you know there are some you don't want to use.
+
+
+Solaris maintenance mode
+  There is code in ntp_proto.c that drops into Solaris maintenance mode
+  if the clock offset exceeds the panic threshold.  We should either
+  drop that code or move it to where it can be used on all fatal errors.
+  (Search for HAVE_LIBSCF_H)
+
+Logging cleanup:
+  Most OSes/distros have a cron job that scans log files and mails
+  a summary to the sysadmin.  They look in /var/log/messages or similar
+  rather than in ntpd's private log files.  We should teach ntpd to
+  log "interesting" messages to syslog as well as its log file.
+  We should review the log messages that those utilities can
+  process and update them to process any new messages we consider
+  to be important.
+
+Remove clock fuzzing:
+  ntpd has code to fuzz the clocks.  It's scattered all over the place.
+  That made sense when clocks were updated in big steps on a scheduler
+  interrupt.  But most modern OSes use something like Intel's TSC to
+  implement fine grained clocks.  We should review this area to verify
+  that fuzzing is still useful.
+
+Cleanup use of HAVE_SYS_SOCKIO_H
+  ntpd/ntp_packetstamp.c has:
+#ifdef HAVE_SYS_SOCKIO_H        /* UXPV: SIOC* #defines (Frank Vance <fvance@waii.com>) */
+# include <sys/sockio.h>
+#endif
+  They are not referenced in ntpd/ntp_packetstamp.c but are referenced
+  in ntpd/ntp_io.c and libntp/isc_interfaceiter.c
+
+SIGHUP should do more:
+  reload keys file (easy, it already reloads the leap file)
+  reload ntp.conf (hard, but needed to add new keys,
+    we could kludge a partial reload to add/delete servers)
+
+Endian:
+  Investigate using endian.h rather than libntp/ntp_endian.c
+
+Waf detect need configure:
+  There are problems with people forgetting to run configure or clean
+  after a git pull.  (From email on 23 May 2017)
+
+Version string cleanup:
+  This is tangled up with EPOCH
+  configure has --build-version-tag=
+  configure sets up NTPSEC_VERSION_STRING
+  ntptime is the only useage.
+  The version string should change if I make an edit and rebuild
+    currently it only changes when something in git changes
+  We need to be sure not to break the stable checksum feature.
+
+Pivot cleanup:
+  Currently, ntpd does a pivot deep in step_systime in libntp/systime.c
+  That handles the problem of 32 bits of seconds wraping in 2038.
+  Posix is shifting to a 64 bit time_t, but we only have 32 bits
+  of seconds in l_fp.  We can clean up a lot of code if l_fp is
+  only used for offsets except when used in packets.  That requires
+  pushing the pivot logic down close to the packet processing.
+  
+  There may be interactions with ntpq.
+
+Recvbuff cleanup:
+  ntpd currently has a pool of recv buffers.  That made sense
+  when it was using SIGIO to get time stamps.  Now it is useless
+  and just adds useless cycles moving things to/from the free list.
+
+Receive packet processing cleanup:
+  There is an AM table in the top of ntp_peer that does a table lookup
+  to figure out how to process a received packet.  We can eliminate that.
+  I think it's leftover from peer and broadcast modes.
+
 
 [quote, Hal]
 __________
@@ -139,9 +186,9 @@ __________
 970318: in hourly_stats(?), squawk if the magnitude of the drift is,
 	say, >400.
 
-== Simple tasks for an intern ==
+== Simple tasks for an intern/trainee ==
 
-[quote, ESR 2015-09-30]
+* A conformant SNMP subagent in Python - see RFC 5907.
 
 * In the docs subdirectory, include/command.txt is an HTML passthrough
   in a not entirely successful attempt to emulate the look of the

@@ -2,14 +2,13 @@
  * refclock_spectracom.c - clock driver for Spectracom GPS receivers
  */
 
-#include <config.h>
+#include "config.h"
 #include "ntp.h"
 #include "ntpd.h"
 #include "ntp_io.h"
 #include "ntp_refclock.h"
 #include "ntp_calendar.h"
 #include "ntp_stdlib.h"
-#include "ntp_control.h"	/* for CTL_* clocktypes */
 
 #include <stdio.h>
 #include <ctype.h>
@@ -22,6 +21,9 @@
 /*
  * This driver supports the "Type 2" format emitted by Spectracom time
  * servers including the 9483, 9489, and SecureSync.
+ *
+ * WARNING: This driver depends on the system clock for year disambiguation.
+ * It will thus not be usable for recovery if the system clock is trashed.  
  *
  * In former times this driver supported the Spectracom 9300 (now
  * end-of-lifed) and several models of Spectracom radio clocks that were
@@ -97,7 +99,9 @@
 #define	DEVICE		"/dev/spectracom%d" /* device name and unit */
 #define	SPEED232	B9600		/* uart speed (9600 baud) */
 #define	PRECISION	(-13)		/* precision assumed (about 100 us) */
-#define	PPS_PRECISION	(-13)		/* precision assumed (about 100 us) */
+#ifdef HAVE_PPSAPI
+# define PPS_PRECISION	(-13)		/* precision assumed (about 100 us) */
+#endif
 #define	REFID		"GPS\0"		/* reference ID */
 #define NAME		"SPECTRACOM"	/* shortname */
 #define	DESCRIPTION	"Spectracom GPS Receiver" /* WRU */
@@ -137,7 +141,7 @@ static	void	spectracom_control	(int, const struct refclockstat *,
 				 struct refclockstat *, struct peer *);
 #define		SPECTRACOM_CONTROL	spectracom_control
 #else
-#define		SPECTRACOM_CONTROL	noentry
+#define		SPECTRACOM_CONTROL	NULL
 #endif /* HAVE_PPSAPI */
 
 /*
@@ -149,7 +153,7 @@ struct	refclock refclock_spectracom = {
 	spectracom_shutdown,		/* shut down driver */
 	spectracom_poll,		/* transmit poll message */
 	SPECTRACOM_CONTROL,		/* fudge set/change notification */
-	noentry,		/* initialize driver (not used) */
+	NULL,				/* initialize driver (not used) */
 	spectracom_timer		/* called once per second */
 };
 
@@ -163,7 +167,7 @@ spectracom_start(
 	struct peer *peer
 	)
 {
-	register struct spectracomunit *up;
+	struct spectracomunit *up;
 	struct refclockproc *pp;
 	int fd;
 	char device[20];
@@ -172,8 +176,8 @@ spectracom_start(
 	 * Open serial port. Use CLK line discipline, if available.
 	 */
 	snprintf(device, sizeof(device), DEVICE, unit);
-	fd = refclock_open(peer->path ? peer->path : device,
-			   peer->baud ? peer->baud : SPEED232,
+	fd = refclock_open(peer->cfg.path ? peer->cfg.path : device,
+			   peer->cfg.baud ? peer->cfg.baud : SPEED232,
 			   LDISC_CLK);
 	if (fd <= 0)
 		/* coverity[leaked_handle] */
@@ -282,12 +286,10 @@ spectracom_receive(
 	 */
 	if (temp == 0) {
 		if (up->prev_eol_cr) {
-			DPRINTF(2, ("wwvb: <LF> @ %s\n",
-				    prettydate(&trtmp)));
+			DPRINT(2, ("wwvb: <LF> @ %s\n", prettydate(trtmp)));
 		} else {
 			up->laststamp = trtmp;
-			DPRINTF(2, ("wwvb: <CR> @ %s\n", 
-				    prettydate(&trtmp)));
+			DPRINT(2, ("wwvb: <CR> @ %s\n", prettydate(trtmp)));
 		}
 		up->prev_eol_cr = !up->prev_eol_cr;
 		return;
@@ -296,10 +298,10 @@ spectracom_receive(
 	pp->lastrec = up->laststamp;
 	up->laststamp = trtmp;
 	up->prev_eol_cr = true;
-	DPRINTF(2, ("wwvb: code @ %s\n"
-		    "       using %s minus one char\n",
-		    prettydate(&trtmp), prettydate(&pp->lastrec)));
-	if (L_ISZERO(&pp->lastrec))
+	DPRINT(2, ("wwvb: code @ %s\n"
+		   "       using %s minus one char\n",
+		   prettydate(trtmp), prettydate(pp->lastrec)));
+	if (pp->lastrec == 0)
 		return;
 
 	/*
@@ -424,7 +426,7 @@ spectracom_receive(
 	 */
 #ifdef HAVE_PPSAPI
 	up->tcount++;
-	if (peer->flags & FLAG_PPS)
+	if (peer->cfg.flags & FLAG_PPS)
 		return;
 
 #endif /* HAVE_PPSAPI */
@@ -444,7 +446,7 @@ spectracom_timer(
 {
 	UNUSED_ARG(unit);
 
-	register struct spectracomunit *up;
+	struct spectracomunit *up;
 	struct refclockproc *pp;
 	char	pollchar;	/* character sent to clock */
 #ifdef DEBUG
@@ -468,14 +470,14 @@ spectracom_timer(
 		refclock_report(peer, CEVNT_FAULT);
 #ifdef DEBUG
 	get_systime(&now);
-	if (debug)
-		printf("%c poll at %s\n", pollchar, prettydate(&now));
+	if (debug) /* SPECIAL DEBUG */
+		printf("%c poll at %s\n", pollchar, prettydate(now));
 #endif
 #ifdef HAVE_PPSAPI
 	if (up->ppsapi_lit &&
 	    refclock_catcher(peer, &up->ppsctl, pp->sloppyclockflag) > 0) {
 		up->pcount++,
-		peer->flags |= FLAG_PPS;
+		peer->cfg.flags |= FLAG_PPS;
 		peer->precision = PPS_PRECISION;
 	}
 #endif /* HAVE_PPSAPI */
@@ -491,7 +493,7 @@ spectracom_poll(
 	struct peer *peer
 	)
 {
-	register struct spectracomunit *up;
+	struct spectracomunit *up;
 	struct refclockproc *pp;
 
 	UNUSED_ARG(unit);
@@ -519,7 +521,7 @@ spectracom_poll(
 	 */
 #ifdef HAVE_PPSAPI
 	if (up->pcount == 0) {
-		peer->flags &= ~FLAG_PPS;
+		peer->cfg.flags &= ~FLAG_PPS;
 		peer->precision = PRECISION;
 	}
 	if (up->tcount == 0) {
@@ -536,11 +538,8 @@ spectracom_poll(
 #endif /* HAVE_PPSAPI */
 	refclock_receive(peer);
 	record_clock_stats(peer, pp->a_lastcode);
-#ifdef DEBUG
-	if (debug)
-		printf("wwvb: timecode %d %s\n", pp->lencode,
-		    pp->a_lastcode);
-#endif
+	DPRINT(1, ("wwvb: timecode %d %s\n", pp->lencode,
+		   pp->a_lastcode));
 }
 
 
@@ -556,7 +555,7 @@ spectracom_control(
 	struct peer *peer
 	)
 {
-	register struct spectracomunit *up;
+	struct spectracomunit *up;
 	struct refclockproc *pp;
 	
 	UNUSED_ARG(unit);
@@ -572,7 +571,7 @@ spectracom_control(
 		up->ppsapi_tried = 0;
 		if (!up->ppsapi_lit)
 			return;
-		peer->flags &= ~FLAG_PPS;
+		peer->cfg.flags &= ~FLAG_PPS;
 		peer->precision = PRECISION;
 		time_pps_destroy(up->ppsctl.handle);
 		up->ppsctl.handle = 0;
@@ -591,7 +590,7 @@ spectracom_control(
 		return;
 	}
 
-	msyslog(LOG_WARNING, "%s flag1 1 but PPSAPI fails",
+	msyslog(LOG_WARNING, "REFCLOCK %s flag1 1 but PPSAPI fails",
 		refclock_name(peer));
 }
 #endif	/* HAVE_PPSAPI */

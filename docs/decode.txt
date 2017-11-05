@@ -3,7 +3,7 @@
 [cols="10%,90%",frame="none",grid="none",style="verse"]
 |==============================
 |image:pic/alice47.gif[]|
-http://www.eecis.udel.edu/%7emills/pictures.html[from 'Alice's Adventures in Wonderland', Lewis Carroll]
+{millshome}pictures.html[from 'Alice's Adventures in Wonderland', Lewis Carroll]
 
 Caterpillar knows all the error codes, which is more than most of us do.
 
@@ -246,7 +246,7 @@ It consists of a number of bits coded in hexadecimal as follows:
 |==============================================================================
 
 The "Tag" field is the name the source code uses for the status bit.
-Not all bits are in use, but have been kept for backwards compatibility. 
+Not all bits are in use, but have been kept for backwards compatibility.
 
 [[kiss]]
 == Kiss Codes ==

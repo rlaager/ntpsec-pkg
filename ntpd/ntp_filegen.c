@@ -9,7 +9,7 @@
  * SPDX-License-Identifier: BSD-2-clause
  */
 
-#include <config.h>
+#include "config.h"
 
 #include <stdio.h>
 #include <sys/types.h>
@@ -39,8 +39,9 @@
  */
 #define SUFFIX_SEP '.'
 
-static	void	filegen_open	(FILEGEN *, uint32_t, const time_t*);
-static	int	valid_fileref	(const char *, const char *);
+static	void	filegen_open	(FILEGEN *, const time_t);
+static	int	valid_fileref	(const char *, const char *)
+			         __attribute__((pure));
 static	void	filegen_init	(const char *, const char *, FILEGEN *);
 #ifdef	DEBUG
 static	void	filegen_uninit		(FILEGEN *);
@@ -91,18 +92,16 @@ filegen_uninit(
 static void
 filegen_open(
 	FILEGEN *	gen,
-	uint32_t		stamp,
-	const time_t *	pivot
+	const time_t 	stamp
 	)
 {
 	char *savename;	/* temp store for name collision handling */
 	char *fullname;	/* name with any designation extension */
 	char *filename;	/* name without designation extension */
 	char *suffix;	/* where to print suffix extension */
-	u_int len, suflen;
+	unsigned int len, suflen;
 	FILE *fp;
-	struct calendar cal;
-	struct isodate	iso;
+	struct tm tm;
 
 	/* get basic filename in buffer, leave room for extensions */
 	len = strlen(gen->dir) + strlen(gen->fname) + 65;
@@ -123,7 +122,7 @@ filegen_open(
 
 	default:
 		msyslog(LOG_ERR, 
-			"unsupported file generations type %d for "
+			"LOG: unsupported file generations type %d for "
 			"\"%s\" - reverting to FILEGEN_NONE",
 			gen->type, filename);
 		gen->type = FILEGEN_NONE;
@@ -136,8 +135,8 @@ filegen_open(
 	case FILEGEN_PID:
 		gen->id_lo = getpid();
 		gen->id_hi = 0;
-		snprintf(suffix, suflen, "%c#%ld",
-			 SUFFIX_SEP, gen->id_lo);
+		snprintf(suffix, suflen, "%c#%lld",
+			 SUFFIX_SEP, (long long)gen->id_lo);
 		break;
 
 	case FILEGEN_DAY:
@@ -146,57 +145,55 @@ filegen_open(
 		 * would assume it to be easier for humans to interpret
 		 * dates in a format they are used to in everyday life.
 		 */
-		ntpcal_ntp_to_date(&cal, stamp, pivot);
+		gmtime_r(&stamp, &tm);
 		snprintf(suffix, suflen, "%c%04d%02d%02d",
-			 SUFFIX_SEP, cal.year, cal.month, cal.monthday);
-		cal.hour = cal.minute = cal.second = 0;
-		gen->id_lo = ntpcal_date_to_ntp(&cal); 
-		gen->id_hi = (uint32_t)(gen->id_lo + SECSPERDAY);
+			 SUFFIX_SEP, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday);
+		gen->id_lo = stamp - (stamp % SECSPERDAY);
+		gen->id_hi = gen->id_lo + SECSPERDAY;
 		break;
 
 	case FILEGEN_WEEK:
-		isocal_ntp_to_date(&iso, stamp, pivot);
+		/* week number is day-of-year mod 7 */
+		gmtime_r(&stamp, &tm);
 		snprintf(suffix, suflen, "%c%04dw%02d",
-			 SUFFIX_SEP, iso.year, iso.week);
-		iso.hour = iso.minute = iso.second = 0;
-		iso.weekday = 1;
-		gen->id_lo = isocal_date_to_ntp(&iso);
-		gen->id_hi = (uint32_t)(gen->id_lo + 7 * SECSPERDAY);
+			 SUFFIX_SEP, tm.tm_year+1900, tm.tm_yday % 7);
+		/* See comment below at MONTH */
+		gen->id_lo = stamp - (stamp % SECSPERDAY);
+		gen->id_hi = gen->id_lo + SECSPERDAY;
 		break;
 
 	case FILEGEN_MONTH:
-		ntpcal_ntp_to_date(&cal, stamp, pivot);
+		gmtime_r(&stamp, &tm);
 		snprintf(suffix, suflen, "%c%04d%02d",
-			 SUFFIX_SEP, cal.year, cal.month);
-		cal.hour = cal.minute = cal.second = 0;
-		cal.monthday = 1;
-		gen->id_lo = ntpcal_date_to_ntp(&cal); 
-		cal.month++;
-		gen->id_hi = ntpcal_date_to_ntp(&cal); 
+			 SUFFIX_SEP, tm.tm_year+1900, tm.tm_mon+1);
+		/* If we had a mktime that didn't use the local time zone
+		 * we could setup id_lo and id_hi to bracket the month.
+		 * This will have to recalculate things each day.
+		 */
+		gen->id_lo = stamp - (stamp % SECSPERDAY);
+		gen->id_hi = gen->id_lo + SECSPERDAY;
 		break;
 
 	case FILEGEN_YEAR:
-		ntpcal_ntp_to_date(&cal, stamp, pivot);
+		gmtime_r(&stamp, &tm);
 		snprintf(suffix, suflen, "%c%04d",
-			 SUFFIX_SEP, cal.year);
-		cal.hour = cal.minute = cal.second = 0;
-		cal.month = cal.monthday = 1;
-		gen->id_lo = ntpcal_date_to_ntp(&cal); 
-		cal.year++;
-		gen->id_hi = ntpcal_date_to_ntp(&cal); 
+			 SUFFIX_SEP, tm.tm_year+1900);
+		/* See comment above at MONTH */
+		gen->id_lo = stamp - (stamp % SECSPERDAY);
+		gen->id_hi = gen->id_lo + SECSPERDAY;
 		break;
 
 	case FILEGEN_AGE:
-		gen->id_lo = current_time - (current_time % SECSPERDAY);
-		gen->id_hi = gen->id_lo + SECSPERDAY;
-		snprintf(suffix, suflen, "%ca%08ld",
-			 SUFFIX_SEP, gen->id_lo);
+	    gen->id_lo = (time_t)(current_time - (current_time % SECSPERDAY));
+	    gen->id_hi = gen->id_lo + SECSPERDAY;
+	    snprintf(suffix, suflen, "%ca%08lld",
+		     SUFFIX_SEP, (long long)gen->id_lo);
 	}
   
 	/* check possible truncation */
 	if ('\0' != fullname[len - 1]) {
 		fullname[len - 1] = '\0';
-		msyslog(LOG_ERR, "logfile name truncated: \"%s\"",
+		msyslog(LOG_ERR, "LOG: logfile name truncated: \"%s\"",
 			fullname);
 	}
 
@@ -210,11 +207,12 @@ filegen_open(
 		/*
 		 * try to resolve name collisions
 		 */
-		static u_long conflicts = 0;
+		static unsigned long conflicts = 0;
 
 #ifndef	S_ISREG
 #define	S_ISREG(mode)	(((mode) & S_IFREG) == S_IFREG)
 #endif
+		/* coverity[toctou] */
 		if (stat(filename, &stats) == 0) {
 			/* Hm, file exists... */
 			if (S_ISREG(stats.st_mode)) {
@@ -230,7 +228,7 @@ filegen_open(
 
 					if (rename(filename, savename) != 0)
 						msyslog(LOG_ERR,
-							"couldn't save %s: %m",
+							"LOG: couldn't save %s: %m",
 							filename);
 					free(savename);
 				} else {
@@ -242,7 +240,7 @@ filegen_open(
 					/* coverity[toctou] */
 					if (unlink(filename) != 0)
 						msyslog(LOG_ERR, 
-							"couldn't unlink %s: %m",
+							"LOG: couldn't unlink %s: %m",
 							filename);
 				}
 			} else {
@@ -250,7 +248,7 @@ filegen_open(
 				 * Ehh? Not a regular file ?? strange !!!!
 				 */
 				msyslog(LOG_ERR, 
-					"expected regular file for %s "
+					"LOG: expected regular file for %s "
 					"(found mode 0%lo)",
 					filename,
 					(unsigned long)stats.st_mode);
@@ -261,7 +259,7 @@ filegen_open(
 			 * 'basename' not to exist
 			 */
 			if (ENOENT != errno)
-				msyslog(LOG_ERR, "stat(%s) failed: %m",
+				msyslog(LOG_ERR, "LOG: stat(%s) failed: %m",
 						 filename);
 		}
 	}
@@ -269,8 +267,8 @@ filegen_open(
 	/*
 	 * now, try to open new file generation...
 	 */
-	DPRINTF(4, ("opening filegen (type=%d/stamp=%u) \"%s\"\n",
-		    gen->type, stamp, fullname));
+	DPRINT(4, ("opening filegen (type=%d/stamp=%lld) \"%s\"\n",
+		   gen->type, (long long)stamp, fullname));
 
 	fp = fopen(fullname, "a");
   
@@ -285,7 +283,7 @@ filegen_open(
 		 */
 
 		if (ENOENT != errno)
-			msyslog(LOG_ERR, "can't open %s: %m", fullname);
+			msyslog(LOG_ERR, "LOG: can't open %s: %m", fullname);
 	} else {
 		if (NULL != gen->fp) {
 			fclose(gen->fp);
@@ -307,7 +305,7 @@ filegen_open(
 			if (link(fullname, filename) != 0)
 				if (EEXIST != errno)
 					msyslog(LOG_ERR, 
-						"can't link(%s, %s): %m",
+						"LOG: can't link(%s, %s): %m",
 						fullname, filename);
 		}		/* flags & FGEN_FLAG_LINK */
 	}			/* else fp == NULL */
@@ -320,19 +318,15 @@ filegen_open(
 /*
  * this function sets up gen->fp to point to the correct
  * generation of the file for the time specified by 'now'
- *
- * 'now' usually is interpreted as second part of a l_fp as is in the cal...
- * library routines
  */
 
 void
 filegen_setup(
-	FILEGEN *	gen,
-	uint32_t		now
+	FILEGEN * gen,
+	time_t now
 	)
 {
 	bool	current;
-	time_t	pivot;
 
 	if (!(gen->flag & FGEN_FLAG_ENABLED)) {
 		if (NULL != gen->fp) {
@@ -354,8 +348,8 @@ filegen_setup(
 		break;
 
 	case FILEGEN_AGE:
-		current = (gen->id_lo <= current_time) &&
-			  (gen->id_hi > current_time);
+		current = (gen->id_lo <= (long)current_time) &&
+			  (gen->id_hi > (long)current_time);
 		break;
 
 	case FILEGEN_DAY:
@@ -371,9 +365,8 @@ filegen_setup(
 	 * reopen new file generation file on change of generation id
 	 */
 	if (NULL == gen->fp || !current) {
-		DPRINTF(1, ("filegen  %0x %u\n", gen->type, now));
-		pivot = time(NULL);
-		filegen_open(gen, now, &pivot);
+		DPRINT(1, ("filegen  %0x %lld\n", gen->type, (long long)now));
+		filegen_open(gen, now);
 	}
 }
 
@@ -386,12 +379,11 @@ filegen_config(
 	FILEGEN *	gen,
 	const char *	dir,
 	const char *	fname,
-	u_int		type,
-	u_int		flag
+	unsigned int	type,
+	unsigned int	flag
 	)
 {
 	bool file_existed;
-	l_fp now;
 
 
 	/*
@@ -415,15 +407,15 @@ filegen_config(
 		file_existed = false;
 	}
 
-	DPRINTF(3, ("configuring filegen:\n"
-		    "\tdir:\t%s -> %s\n"
-		    "\tfname:\t%s -> %s\n"
-		    "\ttype:\t%d -> %d\n"
-		    "\tflag: %x -> %x\n",
-		    gen->dir, dir,
-		    gen->fname, fname,
-		    gen->type, type,
-		    gen->flag, flag));
+	DPRINT(3, ("configuring filegen:\n"
+		   "\tdir:\t%s -> %s\n"
+		   "\tfname:\t%s -> %s\n"
+		   "\ttype:\t%d -> %u\n"
+		   "\tflag: %x -> %x\n",
+		   gen->dir, dir,
+		   gen->fname, fname,
+		   gen->type, type,
+		   gen->flag, flag));
 
 	if (strcmp(gen->dir, dir) != 0) {
 		free(gen->dir);
@@ -444,8 +436,7 @@ filegen_config(
 	 * otherwise the new settings will be used anyway at the next open
 	 */
 	if (file_existed) {
-		get_systime(&now);
-		filegen_setup(gen, now.l_ui);
+		filegen_setup(gen, time(NULL));
 	}
 }
 
@@ -514,13 +505,13 @@ filegen_get(
 
 	while (f) {
 		if (f->name == name || strcmp(name, f->name) == 0) {
-			DPRINTF(4, ("filegen_get(%s) = %p\n",
-				    name, f->filegen));
+			DPRINT(4, ("filegen_get(%s) = %p\n",
+				   name, f->filegen));
 			return f->filegen;
 		}
 		f = f->next;
 	}
-	DPRINTF(4, ("filegen_get(%s) = NULL\n", name));
+	DPRINT(4, ("filegen_get(%s) = NULL\n", name));
 	return NULL;
 }
 
@@ -534,7 +525,7 @@ filegen_register(
 {
 	struct filegen_entry **ppfe;
 
-	DPRINTF(4, ("filegen_register(%s, %p)\n", name, filegen));
+	DPRINT(4, ("filegen_register(%s, %p)\n", name, filegen));
 
 	filegen_init(dir, name, filegen);
 
@@ -543,8 +534,8 @@ filegen_register(
 		if ((*ppfe)->name == name 
 		    || !strcmp((*ppfe)->name, name)) {
 
-			DPRINTF(5, ("replacing filegen %p\n",
-				    (*ppfe)->filegen));
+			DPRINT(5, ("replacing filegen %p\n",
+				   (*ppfe)->filegen));
 
 			(*ppfe)->filegen = filegen;
 			return;
@@ -558,7 +549,7 @@ filegen_register(
 	(*ppfe)->name = estrdup(name);
 	(*ppfe)->filegen = filegen;
 
-	DPRINTF(6, ("adding new filegen\n"));
+	DPRINT(6, ("adding new filegen\n"));
 	
 	return;
 }
@@ -592,7 +583,7 @@ filegen_unregister(
 	struct filegen_entry *	pfe;
 	FILEGEN *		fg;
 			
-	DPRINTF(4, ("filegen_unregister(%s)\n", name));
+	DPRINT(4, ("filegen_unregister(%s)\n", name));
 
 	ppfe = &filegen_registry;
 

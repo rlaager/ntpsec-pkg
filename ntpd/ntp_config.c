@@ -11,7 +11,7 @@
  * SPDX-License-Identifier: BSD-2-clause
 */
 
-#include <config.h>
+#include "config.h"
 
 #ifdef HAVE_NETINFO_NI_H
 # include <netinfo/ni.h>
@@ -22,7 +22,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 
-#include <isc/net.h>
+#include "isc_netaddr.h"
 
 #include "ntp.h"
 #include "ntpd.h"
@@ -32,16 +32,18 @@
 #include "ntp_stdlib.h"
 #include "lib_strbuf.h"
 #include "ntp_assert.h"
-#include "ntp_random.h"
+#include "ntp_dns.h"
+
 /*
- * [Bug 467]: Some linux headers collide with CONFIG_PHONE and CONFIG_KEYS
- * so #include these later.
+ * [Classic Bug 467]: Some linux headers collide with CONFIG_PHONE and
+ * CONFIG_KEYS so #include these later.
  */
 #include "ntp_config.h"
 #include "ntp_scanner.h"
 #include "ntp_parser.tab.h"
 
-/* Bug is Bison 2.5 */
+/* Hack to dance around bug in older Bison.  See Classic Issue 287 */
+/* Similar for yydebug below */
 #ifndef yyparse
   int yyparse (void);
 #endif
@@ -50,6 +52,11 @@
 #ifdef HAVE_NETINFO_NI_H
 #define NETINFO_CONFIG_DIR "/config/ntp"
 #endif
+
+/*
+ * Selection algorithm tuning parameters
+ */
+#define MAX_TTL		8	/* max ttl mapping vector size */
 
 /*
  * In the past, we told reference clocks from network peers by giving
@@ -80,13 +87,12 @@
 /* list of servers from command line for config_peers() */
 int	cmdline_server_count = 0;
 char **	cmdline_servers;
-bool	force_synchronous_dns = false;
 
 /*
  * FIXME: ugly globals, only created to avoid wiring in option-parsing cruft.
- * These are symptoms of deeper factoring issues; the things they're controlling,
- * deep down inside that configuration parsing, should not be happening where
- * they are.
+ * These are symptoms of deeper factoring issues; the things they're
+ * controlling, deep down inside that configuration parsing, should
+ * not be happening where they are.
  */
 bool have_interface_option;
 
@@ -131,34 +137,26 @@ static struct masks logcfg_class_items[] = {
 	{ NULL,			0 }
 };
 
-typedef struct peer_resolved_ctx_tag {
-	int		host_mode;	/* T_* token identifier */
-	u_short		family;
-	uint8_t		hmode;		/* MODE_* */
-	struct peer_ctl	ctl;
-} peer_resolved_ctx;
-
 /* Limits */
 #define MAXPHONE	10	/* maximum number of phone strings */
-#define MAXPPS		20	/* maximum length of PPS device string */
+/* #define MAXPPS	20	* maximum length of PPS device string UNUSED */
 
 /*
  * Miscellaneous macros
  */
-#define ISEOL(c)	((c) == '#' || (c) == '\n' || (c) == '\0')
-#define ISSPACE(c)	((c) == ' ' || (c) == '\t')
+#ifdef HAVE_NETINFO_NI_H
+# define ISEOL(c)	((c) == '#' || (c) == '\n' || (c) == '\0')
+# define ISSPACE(c)	((c) == ' ' || (c) == '\t')
+#endif
 
 #define _UC(str)	((char *)(intptr_t)(str))
 
 /*
  * Definitions of things either imported from or exported to outside
  */
-extern int yydebug;			/* ntp_parser.c (.y) */
 config_tree cfgt;			/* Parser output stored here */
-struct config_tree_tag *cfg_tree_history;	/* History of configs */
+static struct config_tree_tag *cfg_tree_history;    /* History of configs */
 char	*sys_phone[MAXPHONE] = {NULL};	/* ACTS phone numbers */
-char	default_keysdir[] = NTP_KEYSDIR;
-char	*keysdir = default_keysdir;	/* crypto keys directory */
 
 static char default_ntp_signd_socket[] =
 #ifdef MSSNTP_PATH
@@ -168,8 +166,8 @@ static char default_ntp_signd_socket[] =
 #endif
 char *ntp_signd_socket = default_ntp_signd_socket;
 #ifdef HAVE_NETINFO_NI_H
-struct netinfo_config_state *config_netinfo = NULL;
-bool check_netinfo = true;
+static struct netinfo_config_state *config_netinfo = NULL;
+static bool check_netinfo = true;
 #endif /* HAVE_NETINFO_NI_H */
 
 #ifdef HAVE_NETINFO_NI_H
@@ -187,15 +185,6 @@ struct netinfo_config_state {
 
 struct REMOTE_CONFIG_INFO remote_config;  /* Remote configuration buffer and
 					     pointer info */
-bool old_config_style = true;	/* A boolean flag, which when set,
-		       		 * indicates that the old configuration
-		   		 * format with a newline at the end of
-		  		 * every command is being used
-			 	 */
-int	cryptosw;		/* crypto command called */
-
-extern char *stats_drift_file;	/* name of the driftfile */
-
 /* FUNCTION PROTOTYPES */
 
 static void init_syntax_tree(config_tree *);
@@ -205,7 +194,7 @@ static void free_auth_node(config_tree *);
 static void free_all_config_trees(void);
 
 static struct peer *peer_config(sockaddr_u *, const char *,
-				 endpt *, uint8_t, struct peer_ctl *);
+				 endpt *, int, struct peer_ctl *);
 
 static void free_config_access(config_tree *);
 static void free_config_auth(config_tree *);
@@ -221,7 +210,6 @@ static void free_config_setvar(config_tree *);
 static void free_config_system_opts(config_tree *);
 static void free_config_tinker(config_tree *);
 static void free_config_tos(config_tree *);
-static void free_config_ttl(config_tree *);
 static void free_config_unpeers(config_tree *);
 static void free_config_vars(config_tree *);
 
@@ -288,22 +276,11 @@ static void config_access(config_tree *);
 static void config_mdnstries(config_tree *);
 static void config_phone(config_tree *);
 static void config_setvar(config_tree *);
-static void config_ttl(config_tree *);
 static void config_fudge(config_tree *);
 static void config_peers(config_tree *);
 static void config_unpeers(config_tree *);
 static void config_nic_rules(config_tree *, bool input_from_file);
 static void config_reset_counters(config_tree *);
-static uint8_t get_correct_host_mode(int token);
-
-#ifdef USE_WORKER
-static void peer_name_resolved(int, int, void *, const char *, const char *,
-			const struct addrinfo *,
-			const struct addrinfo *);
-static void unpeer_name_resolved(int, int, void *, const char *, const char *,
-			  const struct addrinfo *,
-			  const struct addrinfo *);
-#endif
 
 enum gnn_type {
 	t_UNK,		/* Unknown */
@@ -314,8 +291,8 @@ enum gnn_type {
 static uint32_t get_pfxmatch(const char **, struct masks *);
 static uint32_t get_match(const char *, struct masks *);
 static uint32_t get_logmask(const char *);
-static int getnetnum(const char *num, sockaddr_u *addr, int complain,
-		     enum gnn_type a_type);
+static int getnetnum(const char *num, sockaddr_u *addr);
+static void fix_node_cidr(restrict_node *my_node);
 
 
 /* FUNCTIONS FOR INITIALIZATION
@@ -330,11 +307,6 @@ free_auth_node(
 	if (ptree->auth.keys) {
 		free(ptree->auth.keys);
 		ptree->auth.keys = NULL;
-	}
-
-	if (ptree->auth.keysdir) {
-		free(ptree->auth.keysdir);
-		ptree->auth.keysdir = NULL;
 	}
 
 	if (ptree->auth.ntp_signd_socket) {
@@ -388,7 +360,6 @@ free_config_tree(
 	free_config_logconfig(ptree);
 	free_config_phone(ptree);
 	free_config_setvar(ptree);
-	free_config_ttl(ptree);
 	free_config_fudge(ptree);
 	free_config_vars(ptree);
 	free_config_peers(ptree);
@@ -487,8 +458,8 @@ create_attr_ival(
 
 attr_val *
 create_attr_uval(
-	int	attr,
-	u_int	value
+	int		attr,
+	unsigned int	value
 	)
 {
 	attr_val *my_val;
@@ -576,12 +547,12 @@ create_address_node(
 {
 	address_node *my_node;
 
-	NTP_REQUIRE(NULL != addr);
-	NTP_REQUIRE(AF_INET == type ||
+	REQUIRE(NULL != addr);
+	REQUIRE(AF_INET == type ||
 		    AF_INET6 == type || AF_UNSPEC == type);
 	my_node = emalloc_zero(sizeof(*my_node));
 	my_node->address = addr;
-	my_node->type = (u_short)type;
+	my_node->type = (unsigned short)type;
 
 	return my_node;
 }
@@ -594,7 +565,7 @@ destroy_address_node(
 {
 	if (NULL == my_node)
 		return;
-	NTP_REQUIRE(NULL != my_node->address);
+	REQUIRE(NULL != my_node->address);
 
 	free(my_node->address);
 	free(my_node);
@@ -620,6 +591,7 @@ create_peer_node(
 	my_node->ctl.minpoll = NTP_MINDPOLL;
         /* can not set maxpoll default yet, it may be NTP_MAXDPOLL or minpoll */
 	my_node->ctl.maxpoll = NTP_MAXPOLL_UNK;
+	my_node->ctl.bias = 0;
 
 	/* Now set the node to the read values */
 	my_node->host_mode = hmode;
@@ -673,13 +645,13 @@ create_peer_node(
 		case T_Minpoll:
 			if (option->value.i < NTP_MINPOLL ) {
 				msyslog(LOG_INFO,
-					"minpoll: provided value (%d) is too small [%d-%d])",
+					"CONFIG: minpoll: provided value (%d) is too small [%d-%d])",
 					option->value.i, NTP_MINPOLL,
 					NTP_MAXPOLL);
 				my_node->ctl.minpoll = NTP_MINPOLL;
 			} else if (option->value.i > NTP_MAXPOLL) {
 				msyslog(LOG_INFO,
-					"minpoll: provided value (%d) is too large [%d-%d])",
+					"CONFIG: minpoll: provided value (%d) is too large [%d-%d])",
 					option->value.i, NTP_MINPOLL,
 					NTP_MAXPOLL);
 				my_node->ctl.minpoll = NTP_MAXPOLL;
@@ -692,13 +664,13 @@ create_peer_node(
 		case T_Maxpoll:
 			if (option->value.i < NTP_MINPOLL ) {
 			    msyslog(LOG_INFO,
-				"maxpoll: value (%d) is too small [%d-%d])",
+				"CONFIG: maxpoll: value (%d) is too small [%d-%d])",
 				option->value.i, NTP_MINPOLL,
 				NTP_MAXPOLL);
 			    my_node->ctl.maxpoll = NTP_MINPOLL;
 			} else if ( option->value.i > NTP_MAXPOLL) {
 			    msyslog(LOG_INFO,
-				"maxpoll: value (%d) is too large [%d-%d])",
+				"CONFIG: maxpoll: value (%d) is too large [%d-%d])",
 				option->value.i, NTP_MINPOLL,
 				NTP_MAXPOLL);
 			    my_node->ctl.maxpoll = NTP_MAXPOLL;
@@ -710,7 +682,7 @@ create_peer_node(
 
 		case T_Ttl:
 			if (option->value.u >= MAX_TTL) {
-				msyslog(LOG_ERR, "ttl: invalid argument");
+				msyslog(LOG_ERR, "CONFIG: ttl: invalid argument");
 				errflag = true;
 			} else {
 				my_node->ctl.ttl = (uint8_t)option->value.u;
@@ -724,7 +696,7 @@ create_peer_node(
 
 		case T_Key:
 			if (option->value.u >= KEYID_T_MAX) {
-				msyslog(LOG_ERR, "key: invalid argument");
+				msyslog(LOG_ERR, "CONFIG: key: invalid argument");
 				errflag = true;
 			} else {
 				my_node->ctl.peerkey =
@@ -734,7 +706,7 @@ create_peer_node(
 
 		case T_Version:
 			if (option->value.u >= UCHAR_MAX) {
-				msyslog(LOG_ERR, "version: invalid argument");
+				msyslog(LOG_ERR, "CONFIG: version: invalid argument");
 				errflag = true;
 			} else {
 				my_node->ctl.version =
@@ -742,6 +714,11 @@ create_peer_node(
 			}
 			break;
 
+		case T_Bias:
+			my_node->ctl.bias = option->value.d;
+			break;
+
+#ifdef REFCLOCK
 		case T_Path:
 			my_node->ctl.path = estrdup(option->value.s);
 			break;
@@ -750,7 +727,6 @@ create_peer_node(
 			my_node->ctl.ppspath = estrdup(option->value.s);
 			break;
 
-#ifdef REFCLOCK
 		case T_Baud:
 			my_node->ctl.baud = option->value.u;
 			break;
@@ -823,7 +799,7 @@ create_peer_node(
 
 		default:
 			msyslog(LOG_ERR,
-				"Unknown peer/server option token %s",
+				"CONFIG: Unknown peer/server option token %s",
 				token_name(option->attr));
 			errflag = true;
 		}
@@ -846,7 +822,7 @@ create_unpeer_node(
 	)
 {
 	unpeer_node *	my_node;
-	u_int		u;
+	unsigned int	u;
 	char *		pch;
 
 	my_node = emalloc_zero(sizeof(*my_node));
@@ -892,6 +868,7 @@ create_filegen_node(
 
 restrict_node *
 create_restrict_node(
+	const int       mode,
 	address_node *	addr,
 	address_node *	mask,
 	int_fifo *	flags,
@@ -901,6 +878,7 @@ create_restrict_node(
 	restrict_node *my_node;
 
 	my_node = emalloc_zero(sizeof(*my_node));
+	my_node->mode = mode;
 	my_node->addr = addr;
 	my_node->mask = mask;
 	my_node->flags = flags;
@@ -1100,7 +1078,7 @@ create_nic_rule_node(
 {
 	nic_rule_node *my_node;
 
-	NTP_REQUIRE(match_class != 0 || if_name != NULL);
+	REQUIRE(match_class != 0 || if_name != NULL);
 
 	my_node = emalloc_zero(sizeof(*my_node));
 	my_node->match_class = match_class;
@@ -1140,14 +1118,6 @@ config_auth(
 	int		last;
 	int		i;
 	int		count;
-
-	/* Keysdir Command */
-	if (ptree->auth.keysdir) {
-		if (keysdir != default_keysdir)
-			free(keysdir);
-		keysdir = estrdup(ptree->auth.keysdir);
-	}
-
 
 	/* ntp_signd_socket Command */
 	if (ptree->auth.ntp_signd_socket) {
@@ -1193,10 +1163,10 @@ config_auth(
 		if (T_Integer == my_val->type) {
 			first = my_val->value.i;
 			if (first >= 1 && first <= NTP_MAXKEY) {
-				authtrust(first, true);
+				authtrust((keyid_t)first, true);
 			} else {
 				msyslog(LOG_NOTICE,
-					"Ignoring invalid trustedkey %d, min 1 max %d.",
+					"CONFIG: Ignoring invalid trustedkey %d, min 1 max %d.",
 					first, NTP_MAXKEY);
 			}
 		} else {
@@ -1205,11 +1175,11 @@ config_auth(
 			if (first > last || first < 1 ||
 			    last > NTP_MAXKEY) {
 				msyslog(LOG_NOTICE,
-					"Ignoring invalid trustedkey range %d ... %d, min 1 max %d.",
+					"CONFIG: Ignoring invalid trustedkey range %d ... %d, min 1 max %d.",
 					first, last, NTP_MAXKEY);
 			} else {
 				for (i = first; i <= last; i++) {
-					authtrust(i, true);
+					authtrust((keyid_t)i, true);
 				}
 			}
 		}
@@ -1222,8 +1192,6 @@ free_config_auth(
 	config_tree *ptree
 	)
 {
-	destroy_attr_val_fifo(ptree->auth.crypto_cmd_list);
-	ptree->auth.crypto_cmd_list = NULL;
 	destroy_attr_val_fifo(ptree->auth.trusted_key_list);
 	ptree->auth.trusted_key_list = NULL;
 }
@@ -1251,7 +1219,7 @@ config_tos(
 		case T_Ceiling:
 			if (val > STRATUM_UNSPEC - 1) {
 				msyslog(LOG_WARNING,
-					"Using maximum tos ceiling %d, %g requested",
+					"CONFIG: Using maximum tos ceiling %d, %g requested",
 					STRATUM_UNSPEC - 1, val);
 				val = STRATUM_UNSPEC - 1;
 			}
@@ -1260,10 +1228,6 @@ config_tos(
 
 		case T_Floor:
 			item = PROTO_FLOOR;
-			break;
-
-		case T_Cohort:
-			item = PROTO_COHORT;
 			break;
 
 		case T_Orphan:
@@ -1298,9 +1262,6 @@ config_tos(
 			item = PROTO_MINSANE;
 			break;
 
-		case T_Beacon:
-			item = PROTO_BEACON;
-			break;
 		}
 		proto_config(item, 0, val);
 	}
@@ -1354,17 +1315,17 @@ config_monitor(
 		filegen = filegen_get(filegen_string);
 		if (NULL == filegen) {
 			msyslog(LOG_ERR,
-				"stats %s unrecognized",
+				"CONFIG: stats %s unrecognized",
 				filegen_string);
 			continue;
 		}
-		DPRINTF(4, ("enabling filegen for %s statistics '%s%s'\n",
-			    filegen_string, filegen->dir,
-			    filegen->fname));
+		DPRINT(4, ("enabling filegen for %s statistics '%s%s'\n",
+			   filegen_string, filegen->dir,
+			   filegen->fname));
 		filegen_flag = filegen->flag;
 		filegen_flag |= FGEN_FLAG_ENABLED;
 		filegen_config(filegen, statsdir, filegen_string,
-			       filegen->type, filegen_flag);
+			       filegen->type, (unsigned int)filegen_flag);
 	}
 
 	/* Configure the statistics with the options */
@@ -1374,7 +1335,7 @@ config_monitor(
 		filegen = filegen_get(filegen_string);
 		if (NULL == filegen) {
 			msyslog(LOG_ERR,
-				"filegen category '%s' unrecognized",
+				"CONFIG: filegen category '%s' unrecognized",
 				filegen_string);
 			continue;
 		}
@@ -1453,7 +1414,7 @@ config_monitor(
 
 				default:
 					msyslog(LOG_ERR,
-						"Unknown filegen flag token %d",
+						"CONFIG: Unknown filegen flag token %d",
 						my_opts->value.i);
 					exit(1);
 				}
@@ -1461,13 +1422,13 @@ config_monitor(
 
 			default:
 				msyslog(LOG_ERR,
-					"Unknown filegen option token %d",
+					"CONFIG: Unknown filegen option token %d",
 					my_opts->attr);
 				exit(1);
 			}
 		}
 		filegen_config(filegen, statsdir, filegen_file,
-			       filegen_type, filegen_flag);
+			       (unsigned int)filegen_type, (unsigned int)filegen_flag);
 	}
 }
 
@@ -1486,39 +1447,6 @@ free_config_monitor(
 	FREE_FILEGEN_FIFO(ptree->filegen_opts);
 }
 
-bool getaddrinfo_now(char *hname, sockaddr_u *peeraddrp)
-{
-	int a_info;
-	size_t octets;
-	struct addrinfo		hints, *res;
-	ZERO(hints);
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_DGRAM;
-	hints.ai_protocol = IPPROTO_UDP;
-	a_info = getaddrinfo(hname, "ntp", &hints, &res);
-	if (a_info == EAI_NONAME
-#ifdef EAI_NODATA
-	    || a_info == EAI_NODATA
-#endif
-	    ) {
-	    hints.ai_flags = AI_CANONNAME;
-	    hints.ai_flags |= AI_ADDRCONFIG;
-	    a_info = getaddrinfo(hname, "ntp", &hints, &res);
-	}
-	if (a_info != 0) {
-	    msyslog(LOG_ERR,
-		    "hostname %s can not be used (%s), please use IP address.",
-		    hname, gai_strerror(a_info));
-	    return false;
-	} else {
-	    INSIST(res != NULL);
-	    memset(peeraddrp, '\0', sizeof(*peeraddrp));
-	    octets = min(sizeof(*peeraddrp), res->ai_addrlen);
-	    memcpy(peeraddrp, res->ai_addr, octets);
-	    freeaddrinfo(res);
-	    return true;
-	}
-}
 
 static void
 config_access(
@@ -1532,12 +1460,12 @@ config_access(
 	sockaddr_u		addr;
 	sockaddr_u		mask;
 	struct addrinfo		hints;
-	struct addrinfo *	ai_list;
+	struct addrinfo *	ai_list = NULL;
 	struct addrinfo *	pai;
 	int			rc;
 	bool			restrict_default;
-	u_short			flags;
-	u_short			mflags;
+	unsigned short		flags;
+	unsigned short		mflags;
 	bool			range_err;
 	const char *		signd_warning =
 #ifdef ENABLE_MSSNTP
@@ -1595,6 +1523,10 @@ config_access(
 			mru_maxage = my_opt->value.i;
 			break;
 
+		case T_Minage:
+			mru_minage = my_opt->value.i;
+			break;
+
 		case T_Maxdepth:
 			if (0 <= my_opt->value.i)
 				mru_maxdepth = my_opt->value.u;
@@ -1612,13 +1544,13 @@ config_access(
 
 		default:
 			msyslog(LOG_ERR,
-				"Unknown mru option %s (%d)",
+				"CONFIG: Unknown mru option %s (%d)",
 				keyword(my_opt->attr), my_opt->attr);
 			exit(1);
 		}
 		if (range_err)
 			msyslog(LOG_ERR,
-				"mru %s %d out of range, ignored.",
+				"CONFIG: mru %s %d out of range, ignored.",
 				keyword(my_opt->attr), my_opt->value.i);
 	}
 
@@ -1634,7 +1566,7 @@ config_access(
 				ntp_minpoll = (uint8_t)my_opt->value.u;
 			else
 				msyslog(LOG_ERR,
-					"discard average %d out of range, ignored.",
+					"CONFIG: discard average %d out of range, ignored.",
 					my_opt->value.i);
 			break;
 
@@ -1648,7 +1580,7 @@ config_access(
 
 		default:
 			msyslog(LOG_ERR,
-				"Unknown discard option %s (%d)",
+				"CONFIG: Unknown discard option %s (%d)",
 				keyword(my_opt->attr), my_opt->attr);
 			exit(1);
 		}
@@ -1657,6 +1589,11 @@ config_access(
 	/* Configure the restrict options */
 	my_node = HEAD_PFIFO(ptree->restrict_opts);
 	for (; my_node != NULL; my_node = my_node->link) {
+		if (ai_list != NULL) {
+                        /* we do this here, to not need at every continue */
+			freeaddrinfo(ai_list);
+			ai_list = NULL;
+                }
 		/* Parse the flags */
 		flags = 0;
 		mflags = 0;
@@ -1739,7 +1676,7 @@ config_access(
 		if ((RES_MSSNTP & flags) && !warned_signd) {
 			warned_signd = true;
 			fprintf(stderr, "%s\n", signd_warning);
-			msyslog(LOG_WARNING, "%s", signd_warning);
+			msyslog(LOG_WARNING, "CONFIG: %s", signd_warning);
 		}
 
 		/* It would be swell if we could identify the line number */
@@ -1752,7 +1689,7 @@ config_access(
 			const char *kod_warn = "KOD does nothing without LIMITED.";
 
 			fprintf(stderr, "restrict %s: %s\n", kod_where, kod_warn);
-			msyslog(LOG_WARNING, "restrict %s: %s", kod_where, kod_warn);
+			msyslog(LOG_WARNING, "CONFIG: restrict %s: %s", kod_where, kod_warn);
 		}
 
 		if (RES_NOTRAP & flags) {
@@ -1762,11 +1699,10 @@ config_access(
 					    ? "source"
 					    : "default";
 
-			msyslog(LOG_WARNING, "restrict %s: notrap keyword is ignored.", notrap_where);
+			msyslog(LOG_WARNING, "CONFIG: restrict %s: notrap keyword is ignored.", notrap_where);
 		}
 
 		ZERO_SOCK(&addr);
-		ai_list = NULL;
 		pai = NULL;
 		restrict_default = false;
 
@@ -1781,18 +1717,23 @@ config_access(
 				restrict_default = true;
 			} else {
 				/* apply "restrict source ..." */
-				DPRINTF(1, ("restrict source template mflags %x flags %x\n",
-					mflags, flags));
+				DPRINT(1, ("restrict source template mflags %x flags %x\n",
+					   mflags, flags));
 				hack_restrict(RESTRICT_FLAGS, NULL,
 					      NULL, mflags, flags, 0);
 				continue;
 			}
 		} else {
+
 			/* Resolve the specified address */
-			AF(&addr) = (u_short)my_node->addr->type;
+                        /* CIDR notation? */
+                        /* will overwrite my_node->mask-> address with CIDR */
+                        fix_node_cidr(my_node);
+                        /* type is always zero, AF_INET */
+			AF(&addr) = (unsigned short)my_node->addr->type;
 
 			if (getnetnum(my_node->addr->address,
-				      &addr, 1, t_UNK) != 1) {
+				      &addr) != 1) {
 				/*
 				 * Attempt a blocking lookup.  This
 				 * is in violation of the nonblocking
@@ -1806,7 +1747,6 @@ config_access(
 				 * protocol machinery until after all
 				 * restrict hosts have been resolved.
 				 */
-				ai_list = NULL;
 				ZERO(hints);
 				hints.ai_protocol = IPPROTO_UDP;
 				hints.ai_socktype = SOCK_DGRAM;
@@ -1816,7 +1756,7 @@ config_access(
 						 &ai_list);
 				if (rc) {
 					msyslog(LOG_ERR,
-						"restrict: ignoring line %d, address/host '%s' unusable.",
+						"CONFIG: restrict: ignoring line %d, address/host '%s' unusable.",
 						my_node->line_no,
 						my_node->addr->address);
 					continue;
@@ -1839,9 +1779,9 @@ config_access(
 				ZERO_SOCK(&mask);
 				AF(&mask) = my_node->mask->type;
 				if (getnetnum(my_node->mask->address,
-					      &mask, 1, t_MSK) != 1) {
+					      &mask) != 1) {
 					msyslog(LOG_ERR,
-						"restrict: ignoring line %d, mask '%s' unusable.",
+						"CONFIG: restrict: ignoring line %d, mask '%s' unusable.",
 						my_node->line_no,
 						my_node->mask->address);
 					continue;
@@ -1860,7 +1800,17 @@ config_access(
 		}
 
 		do {
-			hack_restrict(RESTRICT_FLAGS, &addr,
+			int op;
+			if (my_node->mode == T_Restrict)
+				op = RESTRICT_FLAGS;
+			else if (my_node->mode == T_Unrestrict
+					&& flags == 0 && mflags == 0)
+				op = RESTRICT_REMOVE;
+			else if (my_node->mode == T_Unrestrict)
+				op = RESTRICT_UNFLAG;
+			else
+				continue;	/* should never happen */
+			hack_restrict(op, &addr,
 				      &mask, mflags, flags, 0);
 			if (pai != NULL &&
 			    NULL != (pai = pai->ai_next)) {
@@ -1876,8 +1826,11 @@ config_access(
 			}
 		} while (pai != NULL);
 
-		if (ai_list != NULL)
-			freeaddrinfo(ai_list);
+	}
+	if (ai_list != NULL) {
+                /* coverity thinks this can happen, so just in case */
+		freeaddrinfo(ai_list);
+		ai_list = NULL;
 	}
 	/* coverity[leaked_storage] */
 }
@@ -1921,7 +1874,7 @@ config_rlimit(
 				   "4k");
 #else
 			/* STDERR as well would be fine... */
-			msyslog(LOG_WARNING, "'rlimit stacksize' specified but is not available on this system.");
+			msyslog(LOG_WARNING, "CONFIG: 'rlimit stacksize' specified but is not available on this system.");
 #endif /* RLIMIT_STACK */
 			break;
 
@@ -1933,7 +1886,7 @@ config_rlimit(
 				  "");
 #else
 			/* STDERR as well would be fine... */
-			msyslog(LOG_WARNING, "'rlimit filenum' specified but is not available on this system.");
+			msyslog(LOG_WARNING, "CONFIG: 'rlimit filenum' specified but is not available on this system.");
 #endif /* RLIMIT_NOFILE */
 			break;
 
@@ -2043,7 +1996,7 @@ config_nic_rules(
 
 	if (curr_node != NULL && have_interface_option) {
 		msyslog(LOG_ERR,
-			"interface/nic rules are not allowed with --interface (-I) or --novirtualips (-L)%s",
+			"CONFIG: interface/nic rules are not allowed with --interface (-I) or --novirtualips (-L)%s",
 			(input_from_file) ? ", exiting" : "");
 		if (input_from_file)
 			exit(1);
@@ -2182,32 +2135,28 @@ apply_enable_disable(
 
 		default:
 			msyslog(LOG_ERR,
-				"can not apply enable/disable token %d, unknown",
+				"CONFIG: can not apply enable/disable token %d, unknown",
 				option);
 			break;
 
-		case T_Auth:
-			proto_config(PROTO_AUTHENTICATE, enable, 0.);
-			break;
-
 		case T_Calibrate:
-			proto_config(PROTO_CAL, enable, 0.);
+			proto_config(PROTO_CAL, (unsigned long)enable, 0.);
 			break;
 
 		case T_Kernel:
-			proto_config(PROTO_KERNEL, enable, 0.);
+			proto_config(PROTO_KERNEL, (unsigned long)enable, 0.);
 			break;
 
 		case T_Monitor:
-			proto_config(PROTO_MONITOR, enable, 0.);
+			proto_config(PROTO_MONITOR, (unsigned long)enable, 0.);
 			break;
 
 		case T_Ntp:
-			proto_config(PROTO_NTP, enable, 0.);
+			proto_config(PROTO_NTP, (unsigned long)enable, 0.);
 			break;
 
 		case T_Stats:
-			proto_config(PROTO_FILEGEN, enable, 0.);
+			proto_config(PROTO_FILEGEN, (unsigned long)enable, 0.);
 			break;
 
 		}
@@ -2291,7 +2240,7 @@ config_phone(
 			sys_phone[i] = NULL;
 		} else {
 			msyslog(LOG_INFO,
-				"phone: Number of phone entries exceeds %zu. Ignoring phone %s...",
+				"CONFIG: Number of phone entries exceeds %zu. Ignoring phone %s...",
 				(COUNTOF(sys_phone) - 1), sn->s);
 		}
 	}
@@ -2303,7 +2252,6 @@ config_mdnstries(
 	)
 {
 #if defined(HAVE_DNS_SD_H) && defined(ENABLE_MDNS_REGISTRATION)
-	extern int mdnstries;
 	mdnstries = ptree->mdnstries;
 #else
 	UNUSED_ARG(ptree);
@@ -2356,36 +2304,6 @@ free_config_setvar(
 
 
 static void
-config_ttl(
-	config_tree *ptree
-	)
-{
-	size_t i = 0;
-	int_node *curr_ttl;
-
-	curr_ttl = HEAD_PFIFO(ptree->ttl);
-	for (; curr_ttl != NULL; curr_ttl = curr_ttl->link) {
-		if (i < COUNTOF(sys_ttl))
-			sys_ttl[i++] = (uint8_t)curr_ttl->i;
-		else
-			msyslog(LOG_INFO,
-				"ttl: Number of TTL entries exceeds %zu. Ignoring TTL %d...",
-				COUNTOF(sys_ttl), curr_ttl->i);
-	}
-	sys_ttlmax = i - 1;
-}
-
-
-static void
-free_config_ttl(
-	config_tree *ptree
-	)
-{
-	FREE_INT_FIFO(ptree->ttl);
-}
-
-
-static void
 config_fudge(
 	config_tree *ptree
 	)
@@ -2407,18 +2325,18 @@ config_fudge(
 		 */
 		addr_node = curr_fudge->addr;
 		ZERO_SOCK(&addr_sock);
-		if (getnetnum(addr_node->address, &addr_sock, 1, t_REF)
+		if (getnetnum(addr_node->address, &addr_sock)
 		    != 1) {
 			err_flag = true;
 			msyslog(LOG_ERR,
-				"unrecognized fudge reference clock address %s, line ignored",
+				"CONFIG: unrecognized fudge reference clock address %s, line ignored",
 				socktoa(&addr_sock));
 		}
 
 		if (!ISREFCLOCKADR(&addr_sock)) {
 			err_flag = true;
 			msyslog(LOG_ERR,
-				"inappropriate address %s for the fudge command, line ignored",
+				"CONFIG: inappropriate address %s for the fudge command, line ignored",
 				socktoa(&addr_sock));
 		}
 
@@ -2485,7 +2403,7 @@ config_fudge(
 
 			default:
 				msyslog(LOG_ERR,
-					"Unexpected fudge flag %s (%d) for %s",
+					"CONFIG: Unexpected fudge flag %s (%d) for %s",
 					token_name(curr_opt->attr),
 					curr_opt->attr, socktoa(&addr_sock));
 				exit(curr_opt->attr ? curr_opt->attr : 1);
@@ -2497,7 +2415,7 @@ config_fudge(
 # else
 	curr_fudge = HEAD_PFIFO(ptree->fudge);
 	if (curr_fudge != NULL)
-		msyslog(LOG_ERR, "Fudge commands not supported: built without refclocks");
+		msyslog(LOG_ERR, "CONFIG: Fudge commands not supported: built without refclocks");
 # endif
 }
 
@@ -2527,7 +2445,7 @@ config_logfile(
 		case T_Logfile:
 			if (-1 == change_logfile(curr_var->value.s, true))
 				msyslog(LOG_ERR,
-					"Cannot open logfile %s: %m",
+					"CONFIG: Cannot open logfile %s: %m",
 					curr_var->value.s);
 			break;
 
@@ -2557,7 +2475,7 @@ config_vars(
 		case T_Driftfile:
 			if ('\0' == curr_var->value.s[0]) {
 				stats_drift_file = 0;
-				msyslog(LOG_INFO, "config: driftfile disabled");
+				msyslog(LOG_INFO, "CONFIG: driftfile disabled");
 			} else
 				stats_config(STATS_FREQ_FILE, curr_var->value.s);
 			break;
@@ -2578,8 +2496,11 @@ config_vars(
 
 #ifdef ENABLE_LEAP_SMEAR
 		case T_Leapsmearinterval:
-			leap_smear_intv = curr_var->value.i;
-			msyslog(LOG_INFO, "config: leap smear interval %i s", leap_smear_intv);
+			if (curr_var->value.i < 0)
+				msyslog(LOG_ERR, "CONFIG: negative leap smear interval ignored: %i", curr_var->value.i);
+				break;
+			leap_smear_intv = curr_var->value.u;
+			msyslog(LOG_INFO, "CONFIG: leap smear interval %u sec", leap_smear_intv);
 			break;
 #endif
 
@@ -2593,7 +2514,7 @@ config_vars(
 
 		default:
 			msyslog(LOG_ERR,
-				"config_vars(): unexpected token %d",
+				"CONFIG: config_vars(): unexpected token %d",
 				curr_var->attr);
 		}
 	}
@@ -2620,7 +2541,7 @@ is_sane_resolved_address(
 {
 	if (!ISREFCLOCKADR(peeraddr) && ISBADADR(peeraddr)) {
 		msyslog(LOG_ERR,
-			"attempt to configure invalid address %s",
+			"CONFIG: attempt to configure invalid address %s",
 			socktoa(peeraddr));
 		return false;
 	}
@@ -2631,7 +2552,7 @@ is_sane_resolved_address(
 	if ((T_Server == hmode || T_Peer == hmode || T_Pool == hmode)
 	    && IS_MCAST(peeraddr)) {
 		msyslog(LOG_ERR,
-			"attempt to configure invalid address %s",
+			"CONFIG: attempt to configure invalid address %s",
 			socktoa(peeraddr));
 		return false;
 	}
@@ -2646,36 +2567,60 @@ is_sane_resolved_address(
 
 /*
  * peer_config - configure a new association
+ *
+ * RETURN: a pointer to the new peer structure
+ *         NULL if this would duplicate an existing peer
  */
 struct peer *
 peer_config(
 	sockaddr_u *	srcadr,
 	const char *	hostname,
 	endpt *		dstadr,
-	uint8_t		hmode,
+	int		htype,
 	struct peer_ctl  *ctl)
 {
 	uint8_t cast_flags;
+	uint8_t hmode;
+
+#ifndef ENABLE_DNS_LOOKUP
+	if (NULL != hostname) {
+		msyslog(LOG_ERR, "CONFIG: hostnames need DNS lookup: %s", hostname);
+		return NULL;
+	}
+#endif
 
 	/*
 	 * We do a dirty little jig to figure the cast flags. This is
 	 * probably not the best place to do this, at least until the
 	 * configure code is rebuilt. Note only one flag can be set.
 	 */
-	switch (hmode) {
-	case MODE_BROADCAST:
+	switch (htype) {
+	case T_Broadcast:
 		cast_flags = MDF_BCAST;
+		hmode = MODE_BROADCAST;
 		break;
 
-	case MODE_CLIENT:
-		if (hostname != NULL && SOCK_UNSPEC(srcadr))
-			cast_flags = MDF_POOL;
-		else
-			cast_flags = MDF_UCAST;
+	case T_Pool:
+		cast_flags = MDF_POOL;
+		hmode = MODE_CLIENT;
+		ctl->flags &= ~FLAG_PREEMPT;
+		break;
+
+	case T_Peer:
+		msyslog(LOG_ERR, "CONFIG: peer deprecated, treated as server: %s",
+			NULL != hostname? hostname : socktoa(srcadr) );
+		FALLTHRU
+	case T_Server:
+		cast_flags = MDF_UCAST;
+		hmode = MODE_CLIENT;
+		if (NULL != hostname)
+			ctl->flags |= FLAG_DNS;
 		break;
 
 	default:
+		msyslog(LOG_ERR, "CONFIG: peer_config, strange htype: %d", htype);
 		cast_flags = MDF_UCAST;
+		hmode = MODE_CLIENT;
 	}
 
 	/*
@@ -2688,307 +2633,156 @@ peer_config(
 	ctl->flags |= FLAG_CONFIG;
 	if (mode_ntpdate)
 		ctl->flags |= FLAG_IBURST;
-	if (MDF_POOL & cast_flags)
-		ctl->flags &= ~FLAG_PREEMPT;
-	return newpeer(srcadr, hostname, dstadr, hmode, ctl->version,
-		       ctl->minpoll, ctl->maxpoll, ctl->flags,
-		       cast_flags, ctl->ttl, ctl->peerkey, true);
+	return newpeer(srcadr, hostname, dstadr, hmode,
+		       ctl, cast_flags, true);
 }
 
-static uint8_t
-get_correct_host_mode(
-	int token
-	)
-{
-	switch (token) {
-
-	case T_Server:
-	case T_Pool:
-	case T_Peer:
-		return MODE_CLIENT;
-
-	case T_Broadcast:
-		return MODE_BROADCAST;
-
-	default:
-		return 0;
-	}
-}
 
 static void
 config_peers(
 	config_tree *ptree
 	)
 {
-	sockaddr_u		peeraddr;
-	struct addrinfo		hints;
-	peer_node *		curr_peer;
-	peer_resolved_ctx *	ctx;
-	uint8_t			hmode;
+    sockaddr_u		peeraddr;
+    peer_node *		curr_peer;
 
-	/* add servers named on the command line with iburst implied */
-	for (;
-	    cmdline_server_count > 0;
-	    cmdline_server_count--, cmdline_servers++) {
-		struct peer_ctl client_ctl = {
-		    .version = NTP_VERSION,
-		    .minpoll = NTP_MINDPOLL,
-		    .maxpoll = NTP_MAXPOLL_UNK,
-		    .flags = FLAG_IBURST,
-		    .ttl = 0,
-		    .peerkey = 0,
-		};
+    /* add servers named on the command line with iburst implied */
+    for ( ; cmdline_server_count > 0;
+	cmdline_server_count--, cmdline_servers++) {
+	     struct peer_ctl client_ctl;
+	     /* so any new members we introduce will be zeroed */
+	     memset(&client_ctl, '\0', sizeof(struct peer_ctl));
+	     client_ctl.version = NTP_VERSION;
+	     client_ctl.minpoll = NTP_MINDPOLL;
+	     client_ctl.maxpoll = NTP_MAXPOLL_UNK;
+	     client_ctl.flags = FLAG_IBURST;
+	     client_ctl.ttl = 0;
+	     client_ctl.peerkey = 0;
+	     client_ctl.bias = 0;
 
-		ZERO_SOCK(&peeraddr);
-		/*
-		 * If we have a numeric address, we can safely
-		 * proceed in the mainline with it.  Otherwise, hand
-		 * the hostname off to the blocking child.
-		 */
-		if (is_ip_address(*cmdline_servers, AF_UNSPEC,
-				  &peeraddr)) {
-
-			SET_PORT(&peeraddr, NTP_PORT);
-			if (is_sane_resolved_address(&peeraddr,
-						     T_Server))
-				peer_config(
-					&peeraddr,
-					NULL,
-					NULL,
-					MODE_CLIENT,
-					&client_ctl);
-		} else if (force_synchronous_dns) {
-			if (getaddrinfo_now(*cmdline_servers, &peeraddr)) {
-				peer_config(
-					&peeraddr,
-					NULL,
-					NULL,
-					MODE_CLIENT,
-					&client_ctl);
-			}
-		} else {
-			/* we have a hostname to resolve */
-# ifdef USE_WORKER
-			ctx = emalloc_zero(sizeof(*ctx));
-			ctx->family = AF_UNSPEC;
-			ctx->host_mode = T_Server;
-			ctx->hmode = MODE_CLIENT;
-			ctx->ctl.flags   = FLAG_IBURST;
-			ctx->ctl.maxpoll = NTP_MAXPOLL_UNK;
-			ctx->ctl.minpoll = NTP_MINDPOLL;
-			ctx->ctl.peerkey = 0;
-			ctx->ctl.ttl     = 0;
-			ctx->ctl.version = NTP_VERSION;
-
-			ZERO(hints);
-			hints.ai_family = (u_short)ctx->family;
-			hints.ai_socktype = SOCK_DGRAM;
-			hints.ai_protocol = IPPROTO_UDP;
-
-			getaddrinfo_sometime(*cmdline_servers,
-					     "ntp", &hints,
-					     INITIAL_DNS_RETRY,
-					     &peer_name_resolved,
-					     (void *)ctx);
-# else	/* !USE_WORKER follows */
-			msyslog(LOG_ERR,
-				"hostname %s can not be used (%s), please use IP address instead.",
-				curr_peer->addr->address, gai_strerror(a_info));
-# endif
-		}
-	}
-
-	/* add associations from the configuration file */
-	curr_peer = HEAD_PFIFO(ptree->peers);
-	for (; curr_peer != NULL; curr_peer = curr_peer->link) {
-		ZERO_SOCK(&peeraddr);
-		/* Find the correct host-mode */
-		hmode = get_correct_host_mode(curr_peer->host_mode);
-		INSIST(hmode != 0);
-
-		if (T_Pool == curr_peer->host_mode) {
-			AF(&peeraddr) = curr_peer->addr->type;
-			peer_config(
-				&peeraddr,
-				curr_peer->addr->address,
-				NULL,
-				hmode,
-				&curr_peer->ctl);
-		/*
-		 * If we have a numeric address, we can safely
-		 * proceed in the mainline with it.
-		 */
-		} else if (is_ip_address(curr_peer->addr->address,
-				  curr_peer->addr->type, &peeraddr)) {
-
-			SET_PORT(&peeraddr, NTP_PORT);
-			if (is_sane_resolved_address(&peeraddr,
-						     curr_peer->host_mode)) {
-#ifdef REFCLOCK
-				/* save maxpoll from config line
-				 * newpeer smashes it
-				 */
-				uint8_t maxpoll = curr_peer->ctl.maxpoll;
-#endif
-				struct peer *peer = peer_config(
-					&peeraddr,
-					NULL,
-					NULL,
-					hmode,
-					&curr_peer->ctl);
-				if (ISREFCLOCKADR(&peeraddr))
-				{
-#ifdef REFCLOCK
-					uint8_t clktype;
-					int unit;
-					/*
-					 * We let the reference clock
-					 * support do clock dependent
-					 * initialization.  This
-					 * includes setting the peer
-					 * timer, since the clock may
-					 * have requirements for this.
-					 */
-					if (NTP_MAXPOLL_UNK == maxpoll)
-						/* default maxpoll for
-						 * refclocks is minpoll
-						 */
-						peer->maxpoll = peer->minpoll;
-					clktype = (uint8_t)REFCLOCKTYPE(&peer->srcadr);
-					unit = REFCLOCKUNIT(&peer->srcadr);
-
-					peer->path = curr_peer->ctl.path;
-					peer->ppspath = curr_peer->ctl.ppspath;
-					peer->baud = curr_peer->ctl.baud;
-					if (refclock_newpeer(clktype,
-							      unit,
-							      peer))
-						refclock_control(&peeraddr,
-								 &curr_peer->clock_stat,
-								 NULL);
-					else
-						/*
-						 * Dump it, something screwed up
-						 */
-						unpeer(peer);
-#else /* REFCLOCK */
-					msyslog(LOG_ERR, "ntpd was compiled without refclock support.");
-					unpeer(peer);
-#endif /* REFCLOCK */
-				}
-
-			}
-		/*
-		 * synchronous lookup may be forced.
-		 */
-		} else if (force_synchronous_dns) {
-			if (getaddrinfo_now(curr_peer->addr->address, &peeraddr)) {
-				peer_config(
-					&peeraddr,
-					NULL,
-					NULL,
-					hmode,
-					&curr_peer->ctl);
-			}
-		} else {
-			/* hand the hostname off to the blocking child */
-# ifdef USE_WORKER
-			ctx = emalloc_zero(sizeof(*ctx));
-			ctx->family = curr_peer->addr->type;
-			ctx->host_mode = curr_peer->host_mode;
-			ctx->hmode = hmode;
-			ctx->ctl = curr_peer->ctl;
-
-			ZERO(hints);
-			hints.ai_family = ctx->family;
-			hints.ai_socktype = SOCK_DGRAM;
-			hints.ai_protocol = IPPROTO_UDP;
-
-			getaddrinfo_sometime(curr_peer->addr->address,
-					     "ntp", &hints,
-					     INITIAL_DNS_RETRY,
-					     &peer_name_resolved, ctx);
-# else	/* !USE_WORKER follows */
-			msyslog(LOG_ERR,
-				"hostname %s can not be used, please use IP address instead.",
-				curr_peer->addr->address);
-# endif
-		}
-	}
-}
-
-/*
- * peer_name_resolved()
- *
- * Callback invoked when config_peers()'s DNS lookup completes.
- */
-#ifdef USE_WORKER
-static void
-peer_name_resolved(
-	int			rescode,
-	int			gai_errno,
-	void *			context,
-	const char *		name,
-	const char *		service,
-	const struct addrinfo *	hints,
-	const struct addrinfo *	res
-	)
-{
-	sockaddr_u		peeraddr;
-	peer_resolved_ctx *	ctx;
-	u_short			af;
-	const char *		fam_spec;
-
-	(void)gai_errno;
-	(void)service;
-	(void)hints;
-	ctx = context;
-
-	DPRINTF(1, ("peer_name_resolved(%s) rescode %d\n", name, rescode));
-
-	if (rescode) {
-#ifndef ENABLE_DNS_RETRY
-		free(ctx);
-		msyslog(LOG_ERR,
-			"giving up resolving host %s: %s (%d)",
-			name, gai_strerror(rescode), rescode);
-#else	/* ENABLE_DNS_RETRY follows */
-		getaddrinfo_sometime(name, service, hints,
-				     INITIAL_DNS_RETRY,
-				     &peer_name_resolved, context);
-#endif
-		return;
-	}
-
-	/* Loop to configure a single association */
-	for (; res != NULL; res = res->ai_next) {
-		memcpy(&peeraddr, res->ai_addr, res->ai_addrlen);
+	    ZERO_SOCK(&peeraddr);
+	    /*
+	     * If we have a numeric address, we can safely
+	     * proceed in the mainline with it.  Otherwise, hand
+	     * the hostname off to the blocking child.
+	     */
+	    if (is_ip_address(*cmdline_servers, AF_UNSPEC, &peeraddr)) {
+		SET_PORT(&peeraddr, NTP_PORT);
 		if (is_sane_resolved_address(&peeraddr,
-					     ctx->host_mode)) {
-			NLOG(NLOG_SYSINFO) {
-				af = ctx->family;
-				fam_spec = (AF_INET6 == af)
-					       ? "(AAAA) "
-					       : (AF_INET == af)
-						     ? "(A) "
-						     : "";
-				msyslog(LOG_INFO, "DNS %s %s-> %s",
-					name, fam_spec,
-					socktoa(&peeraddr));
-			}
+					     T_Server))
 			peer_config(
 				&peeraddr,
 				NULL,
 				NULL,
-				ctx->hmode,
-				&ctx->ctl);
-			break;
-		}
-	}
-	free(ctx);
-}
-#endif	/* USE_WORKER */
+				T_Server,
+				&client_ctl);
+	    } else {
+		/* we have a hostname to resolve */
+		peer_config(
+			&peeraddr,
+			*cmdline_servers,
+			NULL,
+			T_Server,
+			&client_ctl);
+	    }
+    }
 
+    /* add associations from the configuration file */
+    curr_peer = HEAD_PFIFO(ptree->peers);
+    for (; curr_peer != NULL; curr_peer = curr_peer->link) {
+	ZERO_SOCK(&peeraddr);
+
+	if (T_Pool == curr_peer->host_mode) {
+	    AF(&peeraddr) = curr_peer->addr->type;
+	    peer_config(
+		    &peeraddr,
+		    curr_peer->addr->address,
+		    NULL,
+		    curr_peer->host_mode,
+		    &curr_peer->ctl);
+	/*
+	 * If we have a numeric address, we can safely
+	 * proceed in the mainline with it.
+	 */
+	} else if (is_ip_address(curr_peer->addr->address,
+			  curr_peer->addr->type, &peeraddr)) {
+
+	    SET_PORT(&peeraddr, NTP_PORT);
+	    if (is_sane_resolved_address(&peeraddr, curr_peer->host_mode)) {
+#ifdef REFCLOCK
+		/* save maxpoll from config line
+		 * newpeer smashes it
+		 */
+		uint8_t maxpoll = curr_peer->ctl.maxpoll;
+#endif
+		struct peer *peer = peer_config(
+			&peeraddr,
+			NULL,
+			NULL,
+			curr_peer->host_mode,
+			&curr_peer->ctl);
+		if ( NULL == peer )
+		{
+		    /* duplicate peer !?, ignore */
+		    msyslog(LOG_INFO, "CONFIG: configpeers: Ignoring duplicate '%s'",
+			socktoa(&peeraddr));
+		    continue;
+		}
+		if (ISREFCLOCKADR(&peeraddr))
+		{
+#ifdef REFCLOCK
+		    uint8_t clktype;
+		    int unit;
+		    /*
+		     * We let the reference clock
+		     * support do clock dependent
+		     * initialization.  This
+		     * includes setting the peer
+		     * timer, since the clock may
+		     * have requirements for this.
+		     */
+		    if (NTP_MAXPOLL_UNK == maxpoll)
+			    /* default maxpoll for
+			     * refclocks is minpoll
+			     */
+			    peer->cfg.maxpoll = peer->cfg.minpoll;
+		    clktype = (uint8_t)REFCLOCKTYPE(&peer->srcadr);
+		    unit = REFCLOCKUNIT(&peer->srcadr);
+
+		    peer->cfg.path = curr_peer->ctl.path;
+		    peer->cfg.ppspath = curr_peer->ctl.ppspath;
+		    peer->cfg.baud = curr_peer->ctl.baud;
+		    if (refclock_newpeer(clktype,
+					  unit,
+					  peer))
+			    refclock_control(&peeraddr,
+					     &curr_peer->clock_stat,
+					     NULL);
+		    else
+			    /*
+			     * Dump it, something screwed up
+			     */
+			    unpeer(peer);
+#else /* REFCLOCK */
+		    msyslog(LOG_ERR,
+			 "INIT: ntpd was compiled without refclock support.");
+		    unpeer(peer);
+#endif /* REFCLOCK */
+		}
+
+	    }
+	/* DNS lookup */
+	} else {
+	    AF(&peeraddr) = curr_peer->addr->type;
+	    peer_config(
+		&peeraddr,
+		curr_peer->addr->address,
+		NULL,
+		curr_peer->host_mode,
+		&curr_peer->ctl);
+	}
+    }
+}
 
 static void
 free_config_peers(
@@ -3017,7 +2811,6 @@ config_unpeers(
 	)
 {
 	sockaddr_u		peeraddr;
-	struct addrinfo		hints;
 	unpeer_node *		curr_unpeer;
 	struct peer *		p;
 	const char *		name;
@@ -3032,7 +2825,7 @@ config_unpeers(
 		if (curr_unpeer->assocID) {
 			p = findpeerbyassoc(curr_unpeer->assocID);
 			if (p != NULL) {
-				msyslog(LOG_NOTICE, "unpeered %s",
+				msyslog(LOG_NOTICE, "CONFIG: unpeered %s",
 					socktoa(&p->srcadr));
 				peer_clear(p, "GONE", true);
 				unpeer(p);
@@ -3041,17 +2834,22 @@ config_unpeers(
 			continue;
 		}
 
+		if (curr_unpeer->addr == NULL) {
+			msyslog(LOG_ERR, "CONFIG: invalid address in unpeer command");
+			continue;
+		}
+
 		ZERO(peeraddr);
 		AF(&peeraddr) = curr_unpeer->addr->type;
 		name = curr_unpeer->addr->address;
-		rc = getnetnum(name, &peeraddr, 0, t_UNK);
+		rc = getnetnum(name, &peeraddr);
 		/* Do we have a numeric address? */
 		if (rc > 0) {
-			DPRINTF(1, ("unpeer: searching for %s\n",
-				    socktoa(&peeraddr)));
-			p = findexistingpeer(&peeraddr, NULL, NULL, -1, 0);
+			DPRINT(1, ("unpeer: searching for %s\n",
+				   socktoa(&peeraddr)));
+			p = findexistingpeer(&peeraddr, NULL, NULL, -1);
 			if (p != NULL) {
-				msyslog(LOG_NOTICE, "unpeered %s",
+				msyslog(LOG_NOTICE, "CONFIG: unpeered %s",
 					socktoa(&peeraddr));
 				peer_clear(p, "GONE", true);
 				unpeer(p);
@@ -3059,94 +2857,18 @@ config_unpeers(
 
 			continue;
 		}
-		/*
-		 * It's not a numeric IP address, it's a hostname.
-		 * Check for associations with a matching hostname.
-		 */
-		for (p = peer_list; p != NULL; p = p->p_link)
-			if (p->hostname != NULL)
-				if (!strcasecmp(p->hostname, name))
-					break;
+
+		/* It's not a numeric IP address... */
+
+		/* It's a hostname. */
+		p = findexistingpeer(NULL, name, NULL, -1);
 		if (p != NULL) {
-			msyslog(LOG_NOTICE, "unpeered %s", name);
+			msyslog(LOG_NOTICE, "CONFIG: unpeered %s", name);
 			peer_clear(p, "GONE", true);
 			unpeer(p);
 		}
-		/* Resolve the hostname to address(es). */
-# ifdef USE_WORKER
-		ZERO(hints);
-		hints.ai_family = curr_unpeer->addr->type;
-		hints.ai_socktype = SOCK_DGRAM;
-		hints.ai_protocol = IPPROTO_UDP;
-		getaddrinfo_sometime(name, "ntp", &hints,
-				     INITIAL_DNS_RETRY,
-				     &unpeer_name_resolved, NULL);
-# else	/* !USE_WORKER follows */
-		msyslog(LOG_ERR,
-			"hostname %s can not be used, please use IP address instead.",
-			name);
-# endif
 	}
 }
-
-
-/*
- * unpeer_name_resolved()
- *
- * Callback invoked when config_unpeers()'s DNS lookup completes.
- */
-#ifdef USE_WORKER
-static void
-unpeer_name_resolved(
-	int			rescode,
-	int			gai_errno,
-	void *			context,
-	const char *		name,
-	const char *		service,
-	const struct addrinfo *	hints,
-	const struct addrinfo *	res
-	)
-{
-	sockaddr_u	peeraddr;
-	struct peer *	peer;
-	u_short		af;
-	const char *	fam_spec;
-
-	(void)gai_errno;
-	(void)context;
-	(void)service;
-	(void)hints;
-	DPRINTF(1, ("unpeer_name_resolved(%s) rescode %d\n", name, rescode));
-
-	if (rescode) {
-		msyslog(LOG_ERR, "giving up resolving unpeer %s: %s (%d)",
-			name, gai_strerror(rescode), rescode);
-		return;
-	}
-	/*
-	 * Loop through the addresses found
-	 */
-	for (; res != NULL; res = res->ai_next) {
-		INSIST(res->ai_addrlen <= sizeof(peeraddr));
-		memcpy(&peeraddr, res->ai_addr, res->ai_addrlen);
-		DPRINTF(1, ("unpeer: searching for peer %s\n",
-			    socktoa(&peeraddr)));
-		peer = findexistingpeer(&peeraddr, NULL, NULL, -1, 0);
-		if (peer != NULL) {
-			af = AF(&peeraddr);
-			fam_spec = (AF_INET6 == af)
-				       ? "(AAAA) "
-				       : (AF_INET == af)
-					     ? "(A) "
-					     : "";
-			msyslog(LOG_NOTICE, "unpeered %s %s-> %s", name,
-				fam_spec, socktoa(&peeraddr));
-			peer_clear(peer, "GONE", true);
-			unpeer(peer);
-		}
-	}
-}
-#endif	/* USE_WORKER */
 
 
 static void
@@ -3181,8 +2903,8 @@ config_reset_counters(
 	     counter_set = counter_set->link) {
 		switch (counter_set->i) {
 		default:
-			DPRINTF(1, ("config_reset_counters %s (%d) invalid\n",
-				    keyword(counter_set->i), counter_set->i));
+			DPRINT(1, ("config_reset_counters %s (%d) invalid\n",
+				   keyword(counter_set->i), counter_set->i));
 			break;
 
 		case T_Allpeers:
@@ -3249,7 +2971,6 @@ config_ntpd(
 	config_phone(ptree);
 	config_mdnstries(ptree);
 	config_setvar(ptree);
-	config_ttl(ptree);
 	config_vars(ptree);
 
 	io_open_sockets();
@@ -3282,7 +3003,7 @@ config_remotely(
 	cfgt.timestamp = time(NULL);
 	cfgt.source.value.s = estrdup(socktoa(remote_addr));
 
-	DPRINTF(1, ("Finished Parsing!!\n"));
+	DPRINT(1, ("Finished Parsing!!\n"));
 
 	save_and_apply_config_tree(false);
 }
@@ -3314,40 +3035,57 @@ getconfig(const char *explicit_config)
 void readconfig(const char *config_file)
 {
 	char	line[256];
+	char	dirpath[PATH_MAX];
+	int	srccount;
 	/*
 	 * install a non default variable with this daemon version
 	 */
-	snprintf(line, sizeof(line),
-		"daemon_version=\"ntpd %s\"", Version);
+	snprintf(line, sizeof(line), "daemon_version=\"%s\"", ntpd_version());
 	set_sys_var(line, strlen(line) + 1, RO);
-
-	init_syntax_tree(&cfgt);
-	if (
-		!lex_init_stack(config_file, "r")
-#ifdef HAVE_NETINFO_NI_H
-		/* If there is no config_file, try NetInfo. */
-		&& check_netinfo && !(config_netinfo = get_netinfo_config())
-#endif /* HAVE_NETINFO_NI_H */
-		) {
-		msyslog(LOG_INFO, "getconfig: Couldn't open <%s>: %m", config_file);
-		io_open_sockets();
-
-		return;
-	} else
-		cfgt.source.value.s = estrdup(config_file);
 
 	atexit(free_all_config_trees);
 
-	/*** BULK OF THE PARSER ***/
 #ifdef DEBUG
+#ifndef yydebug
+	/* See comment above for yyparse */
+	extern int yydebug;
+#endif
 	yydebug = !!(debug >= 5);
 #endif
-	yyparse();
+
+	init_syntax_tree(&cfgt);
+	srccount = 0;
+	
+	/* parse the plain config file if it exists */
+	if (lex_init_stack(config_file, "r")) {
+		msyslog(LOG_INFO, "CONFIG: readconfig: parsing file: %s", config_file);
+	 	yyparse();
+		++srccount;
+		//cfgt.source.value.s = estrdup(config_file);
+	}
+	
+	/* parse configs in parallel subdirectory if that exists */
+	reparent(dirpath, sizeof(dirpath), config_file, CONFIG_DIR);
+	if (is_directory(dirpath) && lex_push_file(dirpath)) {
+		msyslog(LOG_INFO, "CONFIG: readconfig: parsing directory: %s", config_file);
+	    yyparse();
+	    ++srccount;
+	}
+
+	if (srccount == 0) {
+#ifdef HAVE_NETINFO_NI_H
+		/* If there is no config_file, try NetInfo. */
+	    if (check_netinfo)
+		config_netinfo = get_netinfo_config();
+#endif /* HAVE_NETINFO_NI_H */
+	    io_open_sockets();
+	}
+	    
 	lex_drop_stack();
 
-	DPRINTF(1, ("Finished Parsing!!\n"));
+	DPRINT(1, ("Finished Parsing!!\n"));
 
-	cfgt.source.attr = CONF_SOURCE_FILE;
+	//cfgt.source.attr = CONF_SOURCE_FILE;
 	cfgt.timestamp = time(NULL);
 
 	save_and_apply_config_tree(true);
@@ -3457,7 +3195,7 @@ get_logmask(
 	if (mask)
 		return mask << offset;
 	else
-		msyslog(LOG_ERR, "logconfig: '%s' not recognized - ignored",
+		msyslog(LOG_ERR, "CONFIG: logconfig: '%s' not recognized - ignored",
 			str);
 
 	return 0;
@@ -3592,7 +3330,7 @@ gettokens_netinfo (
 		int quoted = 0;
 		char *tokens = val_list[val_index];
 
-		msyslog(LOG_INFO, "%s %s", keywords[prop_index].text, val_list[val_index]);
+		msyslog(LOG_INFO, "CONFIG: %s %s", keywords[prop_index].text, val_list[val_index]);
 
 		(const char*)tokenlist[0] = keywords[prop_index].text;
 		for (ntok = 1; ntok < MAXTOKENS; ntok++) {
@@ -3615,7 +3353,7 @@ gettokens_netinfo (
 		if (ntok == MAXTOKENS) {
 			/* HMS: chomp it to lose the EOL? */
 			msyslog(LOG_ERR,
-				"gettokens_netinfo: too many tokens.  Ignoring: %s",
+				"CONFIG: gettokens_netinfo: too many tokens.  Ignoring: %s",
 				tokens);
 		} else {
 			*ntokens = ntok + 1;
@@ -3640,6 +3378,93 @@ gettokens_netinfo (
 }
 #endif /* HAVE_NETINFO_NI_H */
 
+/*
+ * check my_node->addr for CIDR notation
+ * if so, convert to old addr/mask notation and override mask
+ */
+static void
+fix_node_cidr(
+    restrict_node *my_node)
+{
+    address_node *addr;
+    char mask_s[40], *mask_p;
+    char *cidr_p;
+    char *colon_p;
+    char *endptr;
+    long cidr_len;
+    int i;
+    unsigned a[8];
+
+    REQUIRE(my_node);
+    addr = my_node->addr;
+    REQUIRE(addr);
+
+    cidr_p = strrchr(addr->address, '/');
+    if (!cidr_p) {
+        /* not CIDR, leave silently */
+        return;
+    }
+    *cidr_p++ = '\0'; /* remove the '/' and beyond from address */
+    /* get CIDR as int */
+    errno = 0;
+    cidr_len = strtol(cidr_p, &endptr, 10);
+    if ( errno || (endptr == cidr_p) ) {
+        /* conversion fail, leave silently */
+        return;
+    }
+    if ( 0 >= cidr_len ) {
+        /* negative or zero?  leave silently */
+	/* exiting on 0 avoids a bad shift warning from Coverity */
+        return;
+    }
+    /* sadly, addr->type not previously set, look for colon */
+    colon_p = strrchr(addr->address, ':');
+    if (colon_p) {
+        /* IPv6 */
+        uint64_t mask_top = 0xFFFFFFFFFFFFFFFFU;
+        uint64_t mask_bot = 0xFFFFFFFFFFFFFFFFU;
+
+	if ( 128 < cidr_len ) {
+	    /* out of range, leave silently */
+	    return;
+	}
+        if ( 64 >= cidr_len ) {
+	    mask_bot = 0;
+	    mask_top <<= 64 - cidr_len ;
+        } else {
+	    mask_bot <<= 128 - cidr_len ;
+        }
+        for (i = 0; i < 4; i++)
+                a[i] = mask_top >> (16 * (3 - i)) & 0xffffU;
+        for (i = 0; i < 4; i++)
+                a[i + 4] = mask_bot >> (16 * (3 - i)) & 0xffffU;
+
+        snprintf(mask_s, sizeof(mask_s), "%x:%x:%x:%x:%x:%x:%x:%x",
+                 a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
+    } else {
+        /* must be IPv4 */
+        uint32_t mask_n = 0xFFFFFFFFU;
+
+	if ( 32 < cidr_len ) {
+	    /* out of range, leave silently */
+	    return;
+	}
+
+        mask_n <<= 32 - cidr_len ;
+        for (i = 0; i < 4; i++)
+                a[i] = mask_n >> (8 * (3 - i)) & 0xff;
+
+        snprintf(mask_s, sizeof(mask_s), "%u.%u.%u.%u",
+                 a[0], a[1], a[2], a[3]);
+    }
+
+    /* lose old mask */
+    destroy_address_node(my_node->mask);
+
+    /* create mask node, yes AF_UNSPEC is weird... */
+    mask_p = estrdup(mask_s);
+    my_node->mask = create_address_node(mask_p, AF_UNSPEC);
+}
 
 /*
  * getnetnum - return a net number (this is crude, but careful)
@@ -3650,15 +3475,11 @@ gettokens_netinfo (
 static int
 getnetnum(
 	const char *num,
-	sockaddr_u *addr,
-	int complain,
-	enum gnn_type a_type	/* ignored */
+	sockaddr_u *addr
 	)
 {
-	UNUSED_ARG(complain);
-	UNUSED_ARG(a_type);
 
-	NTP_REQUIRE(AF_UNSPEC == AF(addr) ||
+	REQUIRE(AF_UNSPEC == AF(addr) ||
 		    AF_INET == AF(addr) ||
 		    AF_INET6 == AF(addr));
 
@@ -3673,7 +3494,7 @@ getnetnum(
 # endif
 	SET_PORT(addr, NTP_PORT);
 
-	DPRINTF(2, ("getnetnum given %s, got %s\n", num, socktoa(addr)));
+	DPRINT(2, ("getnetnum given %s, got %s\n", num, socktoa(addr)));
 
 	return 1;
 }
@@ -3694,21 +3515,23 @@ ntp_rlimit(
 #endif
 
 	switch (rl_what) {
+#ifdef RLIMIT_MEMLOCK
 	    case RLIMIT_MEMLOCK:
 		/* ignore - for backward compatibility only */
 		break;
+#endif /* RLIMIT_MEMLOCK */
 
 #ifdef RLIMIT_NOFILE
 	    case RLIMIT_NOFILE:
 		/*
 		 * For large systems the default file descriptor limit may
-		 * not be enough. 
+		 * not be enough.
 		 */
-		DPRINTF(2, ("ntp_rlimit: NOFILE: %d %s\n",
-			(int)(rl_value / rl_scale), rl_sstr));
+		DPRINT(2, ("ntp_rlimit: NOFILE: %d %s\n",
+			   (int)rl_value / rl_scale, rl_sstr));
 		rl.rlim_cur = rl.rlim_max = rl_value;
 		if (setrlimit(RLIMIT_NOFILE, &rl) == -1)
-			msyslog(LOG_ERR, "Cannot set RLIMIT_NOFILE: %m");
+			msyslog(LOG_ERR, "CONFIG: Cannot set RLIMIT_NOFILE: %m");
 		break;
 #endif /* RLIMIT_NOFILE */
 
@@ -3719,22 +3542,22 @@ ntp_rlimit(
 		 * smaller, so that we don't lock a lot of unused
 		 * stack memory.
 		 */
-		DPRINTF(2, ("ntp_rlimit: STACK: %d %s pages\n",
-			    (int)(rl_value / rl_scale), rl_sstr));
+		DPRINT(2, ("ntp_rlimit: STACK: %d %s pages\n",
+			   (int)rl_value / rl_scale, rl_sstr));
 		if (-1 == getrlimit(RLIMIT_STACK, &rl)) {
-			msyslog(LOG_ERR, "getrlimit(RLIMIT_STACK) failed: %m");
+			msyslog(LOG_ERR, "CONFIG: getrlimit(RLIMIT_STACK) failed: %m");
 		} else {
 			if (rl_value > rl.rlim_max) {
 				msyslog(LOG_WARNING,
-					"ntp_rlimit: using maximum allowed stack limit %lu instead of %lu.",
-					(u_long)rl.rlim_max,
-					(u_long)rl_value);
+					"CONFIG: ntp_rlimit: using maximum allowed stack limit %lu instead of %lu.",
+					(unsigned long)rl.rlim_max,
+					(unsigned long)rl_value);
 				rl_value = rl.rlim_max;
 			}
 			rl.rlim_cur = rl_value;
 			if (-1 == setrlimit(RLIMIT_STACK, &rl)) {
 				msyslog(LOG_ERR,
-					"ntp_rlimit: Cannot set RLIMIT_STACK: %m");
+					"CONFIG: ntp_rlimit: Cannot set RLIMIT_STACK: %m");
 			}
 		}
 		break;

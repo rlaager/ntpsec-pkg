@@ -5,6 +5,7 @@
 import traceback,sys
 class WafError(Exception):
 	def __init__(self,msg='',ex=None):
+		Exception.__init__(self)
 		self.msg=msg
 		assert not isinstance(msg,Exception)
 		self.stack=[]
@@ -27,7 +28,8 @@ class BuildError(WafError):
 		lst=['Build failed']
 		for tsk in self.tasks:
 			txt=tsk.format_error()
-			if txt:lst.append(txt)
+			if txt:
+				lst.append(txt)
 		return'\n'.join(lst)
 class ConfigurationError(WafError):
 	pass

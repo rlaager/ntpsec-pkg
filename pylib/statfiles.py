@@ -1,14 +1,22 @@
+# -*- coding: utf-8 -*-
+
 """
 statfiles.py - class for digesting and plotting NTP logfiles
 
-Requires GNUPLOT and liberation fonts installed.
+Requires gnuplot and liberation fonts installed.
 
 """
-#SPDX-License-Identifier: BSD-2-Clause
+# SPDX-License-Identifier: BSD-2-Clause
 from __future__ import print_function, division
 
 import calendar
-import glob, gzip, os, socket, sys, time
+import glob
+import gzip
+import os
+import socket
+import sys
+import time
+
 
 class NTPStats:
     "Gather statistics for a specified NTP site"
@@ -38,7 +46,7 @@ class NTPStats:
 
             # warning: 32 bit overflows
             time = NTPStats.SecondsInDay * mjd + second - 3506716800
-            if starttime  <= time <= endtime:
+            if starttime <= time <= endtime:
                 # time as integer number milli seconds
                 split[0] = int(time * 1000)
                 # time as string
@@ -50,6 +58,53 @@ class NTPStats:
     def timestamp(line):
         "get Unix time from converted line."
         return float(line.split()[0])
+
+    @staticmethod
+    def percentiles(percents, values):
+        "Return given percentiles of a given row in a given set of entries."
+        "assuming values are already split and sorted"
+        ret = {}
+        length = len(values)
+        if 1 >= length:
+            # uh, oh...
+            if 1 == length:
+                # just one data value, set all to that one value
+                v = values[0]
+            else:
+                # no data, set all to zero
+                v = 0
+            for perc in percents:
+                ret["p" + str(perc)] = v
+        else:
+            for perc in percents:
+                if perc == 100:
+                    ret["p100"] = values[length - 1]
+                else:
+                    ret["p" + str(perc)] = values[int(length * (perc/100))]
+        return ret
+
+    @staticmethod
+    def ip_label(key):
+        "Produce appropriate label for an IP address."
+        # If it's a new-style NTPsep clock label, pass it through,
+        # Otherwise we expect it to be an IP address and the next guard fires
+        if key[0].isdigit():
+            # TO BE REMOVED SOMEDAY
+            # Clock address - only possible if we're looking at a logfile made
+            # by NTP Classic or an NTPsec version configured with
+            # --enable-classic-mode.  Nasty that we have to emit a numeric
+            # driver type here.
+            if key.startswith("127.127."):
+                (_, _, t, u) = key.split(".")
+                return "REFCLOCK(type=%s,unit=%s)" % (t, u)
+            # Ordinary IP address - replace with primary hostname.
+            # Punt if the lookup fails.
+            try:
+                (hostname, _, _) = socket.gethostbyaddr(key)
+                return hostname
+            except socket.herror:
+                pass
+        return key      # Someday, be smarter than this.
 
     def __init__(self, statsdir, sitename=None,
                  period=None, starttime=None, endtime=None):
@@ -75,70 +130,81 @@ class NTPStats:
             self.sitename = socket.getfqdn()
 
         if not os.path.isdir(statsdir):
-            sys.stderr.write("ntpviz: ERROR: %s is not a directory\n" \
-                 % statsdir)
+            sys.stderr.write("ntpviz: ERROR: %s is not a directory\n"
+                             % statsdir)
             raise SystemExit(1)
 
-        for stem in ("clockstats", "peerstats", "loopstats", "rawstats", \
-                 "temps", "gpsd"):
-            lines = []
-            try:
-                for logpart in glob.glob(os.path.join(statsdir, stem) + "*"):
-                    # skip files older than starttime
-                    if starttime > os.path.getmtime(logpart):
-                        continue
-                    if logpart.endswith("gz"):
-                        lines += gzip.open(logpart, 'rb').readlines()
-                    else:
-                        lines += open(logpart, 'rb').readlines()
-            except IOError:
-                sys.stderr.write("ntpviz: WARNING: could not read %s\n" \
-                     % logpart)
-                pass
+        self.clockstats = []
+        self.peerstats = []
+        self.loopstats = []
+        self.rawstats = []
+        self.temps = []
+        self.gpsd = []
 
-            lines1 = []
-            if stem == "temps" or stem == "gpsd":
-                # temps and gpsd are already in UNIX time
-                for line in lines:
-                    split = line.split()
-                    try:
-                        t = float(split[0])
-                    except:
-                        # ignore comment lines, lines with no time
-                        continue
+        for stem in ("clockstats", "peerstats", "loopstats",
+                     "rawstats", "temps", "gpsd"):
+            lines = self.__load_stem(statsdir, stem)
+            processed = self.__process_stem(stem, lines)
+            setattr(self, stem, processed)
 
-                    if starttime <= t <= endtime:
-                        # prefix with int milli sec.
-                        split.insert(0, int(t * 1000))
-                        lines1.append( split)
-            else:
-                # Morph first fields into Unix time with fractional seconds
-                # ut into nice dictionary of dictionary rows
-                lines1 = NTPStats.unixize(lines, starttime, endtime)
+    def __load_stem(self, statsdir, stem):
+        lines = []
+        try:
+            pattern = os.path.join(statsdir, stem)
+            if stem != "temps" and stem != "gpsd":
+                pattern += "."
+            for logpart in glob.glob(pattern + "*"):
+                # skip files older than starttime
+                if self.starttime > os.path.getmtime(logpart):
+                    continue
+                if logpart.endswith("gz"):
+                    lines += gzip.open(logpart, 'rt').readlines()
+                else:
+                    lines += open(logpart, 'r').readlines()
+        except IOError:
+            sys.stderr.write("ntpviz: WARNING: could not read %s\n"
+                             % logpart)
+            pass
 
-            # Sort by datestamp
-            # by default, a tuple sort()s on the 1st item, which is a nice
-            # integer of milli seconds.  This is faster than using
-            # cmp= or key=
-            lines1.sort()
-            setattr(self, stem, lines1)
+        return lines
 
-    def percentiles(self, percents, values):
-        "Return given percentiles of a given row in a given set of entries."
-        "assuming values are already split and sorted"
-        ret = {}
-        length = len(values)
-        for perc in percents:
-            if perc == 100:
-                ret["p100"] = values[length - 1]
-            else:
-                ret[ "p" + str(perc)] = values[int(length * (perc/100))]
-        return ret
+    def __process_stem(self, stem, lines):
+        lines1 = []
+        if stem == "temps" or stem == "gpsd":
+            # temps and gpsd are already in UNIX time
+            for line in lines:
+                split = line.split()
+                if 3 > len(split):
+                    # skip short lines
+                    continue
+
+                try:
+                    t = float(split[0])
+                except:
+                    # ignore comment lines, lines with no time
+                    continue
+
+                if self.starttime <= t <= self.endtime:
+                    # prefix with int milli sec.
+                    split.insert(0, int(t * 1000))
+                    lines1.append(split)
+        else:
+            # Morph first fields into Unix time with fractional seconds
+            # ut into nice dictionary of dictionary rows
+            lines1 = NTPStats.unixize(lines, self.starttime, self.endtime)
+            
+        # Sort by datestamp
+        # by default, a tuple sort()s on the 1st item, which is a nice
+        # integer of milli seconds.  This is faster than using
+        # cmp= or key=
+        lines1.sort()
+        return lines1
+
 
     def peersplit(self):
         "Return a dictionary mapping peerstats IPs to entry subsets."
         "This is very expensive, so cache the result"
-        if len( self.peermap):
+        if len(self.peermap):
             return self.peermap
 
         for row in self.peerstats:
@@ -180,27 +246,6 @@ class NTPStats:
                 pass
         return tempsmap
 
-    def ip_label(self, key):
-        "Produce appropriate label for an IP address."
-        # If it's a new-style NTPsep clock label, pass it through,
-        # Otherwise we expect it to be an IP address and the next guard fires
-        if key[0].isdigit():
-            # TO BE REMOVED SOMEDAY
-            # Clock address - only possible if we're looking at a logfile made
-            # by NTP Classic or an NTPsec version configured with
-            # --enable-classic-mode.  Nasty that we have to emit a numeric
-            # driver type here.
-            if key.startswith("127.127."):
-                (_, _, t, u) = key.split(".")
-                return "REFCLOCK(type=%s,unit=%s)" % (t, u)
-            # Ordinary IP address - replace with primary hostname.
-            # Punt if the lookup fails.
-            try:
-                (hostname, _, _) = socket.gethostbyaddr(key)
-                return hostname
-            except socket.herror:
-                pass
-        return key      # Someday, be smarter than this.
 
 def iso_to_posix(s):
     "Accept timestamps in ISO 8661 format or numeric POSIX time. UTC only."
@@ -210,6 +255,7 @@ def iso_to_posix(s):
         t = time.strptime(s, "%Y-%m-%dT%H:%M:%S")
         # don't use time.mktime() as that is local tz
         return calendar.timegm(t)
+
 
 def posix_to_iso(t):
     "ISO 8601 string in UTC from Unix time."

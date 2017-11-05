@@ -21,7 +21,8 @@ class rc_parser(c_preproc.c_parser):
 	def filter_comments(self,node):
 		code=node.read()
 		if c_preproc.use_trigraphs:
-			for(a,b)in c_preproc.trig_def:code=code.split(a).join(b)
+			for(a,b)in c_preproc.trig_def:
+				code=code.split(a).join(b)
 		code=c_preproc.re_nl.sub('',code)
 		code=c_preproc.re_cpp.sub(c_preproc.repl,code)
 		ret=[]
@@ -40,8 +41,6 @@ class winrc(Task.Task):
 		return(tmp.nodes,tmp.names)
 def configure(conf):
 	v=conf.env
-	v.WINRC_TGT_F='-o'
-	v.WINRC_SRC_F='-i'
 	if not v.WINRC:
 		if v.CC_NAME=='msvc':
 			conf.find_program('RC',var='WINRC',path_list=v.PATH)
@@ -49,5 +48,5 @@ def configure(conf):
 			v.WINRC_SRC_F=''
 		else:
 			conf.find_program('windres',var='WINRC',path_list=v.PATH)
-	if not v.WINRC:
-		conf.fatal('winrc was not found!')
+			v.WINRC_TGT_F='-o'
+			v.WINRC_SRC_F='-i'

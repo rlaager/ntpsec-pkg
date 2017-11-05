@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-# coding: utf-8
+# -*- coding: utf-8 -*-
 """\
 ntpviz - logfile visualizer for NTP log files
 
 ntpviz [-d LOGDIR] [-g] [-n name] [-p DAYS]
          [-s starttime] [-e endtime]
          [-o OUTDIR]
-         [ -c | --clip ]
-         [ -w SIZE | --width SIZE]
+         [-c | --clip]
+         [-w SIZE | --width SIZE]
          [--all-peer-jitters |
           --all-peer-offsets |
           --local-error |
@@ -23,32 +23,94 @@ ntpviz [-d LOGDIR] [-g] [-n name] [-p DAYS]
           --peer-offsets=hosts |
          ]
          [-D DLVL | --debug DLVL]
+         [-N | --nice]
          [-V | --version]
          [@OPTIONFILE]
 
 See the manual page for details.
 
-Python by ESR, concept and GNUPLOT code by Dan Drown.
+Python by ESR, concept and gnuplot code by Dan Drown.
 """
-#SPDX-License-Identifier: BSD-2-Clause
+# SPDX-License-Identifier: BSD-2-Clause
 from __future__ import print_function, division
 
-import argparse
+import atexit
+import binascii
+import collections
 import csv
 import datetime
+import math
 import re
-import atexit, binascii, collections, os, socket, sys
+import os
+import socket
+import sys
 import subprocess
-import time
 import tempfile
+try:
+    import argparse
+except ImportError:
+    sys.stderr.write("""
+ntpviz: can't find the Python argparse module
+        If your Python version is < 2.7, then manual installation is needed:
+        # pip install argparse
+""")
+    sys.exit(1)
+
+# believe it or not, Python has no way to make a simple constant!
+MS_PER_S = 1e3          # milliseconds per second
+NS_PER_S = 1e9          # nanoseconds per second
+US_PER_S = 1e6          # microseconds per second
+S_PER_MS = 1.0e-3       # seconds per millisecond
+S_PER_NS = 1.0e-9       # seconds per nanosecond
+S_PER_US = 1.0e-6       # seconds per microsecond
+
+# table to translate refclock names
+refclock_name = {'127.127.20.0': 'NMEA(0)',
+                 '127.127.20.1': 'NMEA(1)',
+                 '127.127.20.2': 'NMEA(2)',
+                 '127.127.20.3': 'NMEA(3)',
+                 '127.127.22.0': 'PPS(0)',
+                 '127.127.22.1': 'PPS(1)',
+                 '127.127.22.2': 'PPS(2)',
+                 '127.127.22.3': 'PPS(3)',
+                 '127.127.28.0': 'SHM(0)',
+                 '127.127.28.1': 'SHM(1)',
+                 '127.127.28.2': 'SHM(2)',
+                 '127.127.28.3': 'SHM(3)',
+                 '127.127.46.0': 'GPS(0)',
+                 '127.127.46.1': 'GPS(1)',
+                 '127.127.46.2': 'GPS(2)',
+                 '127.127.46.3': 'GPS(3)'}
+
+
+# Gack, python before 3.2 has no defined tzinfo for utc...
+# define our own
+class UTC(datetime.tzinfo):
+    """UTC"""
+
+    def utcoffset(self, dt):
+        return datetime.timedelta(0)
+
+    def tzname(self, dt):
+        return "UTC"
+
+    def dst(self, dt):
+        return datetime.timedelta(0)
 
 try:
     import ntp.statfiles
     import ntp.util
 except ImportError as e:
-    sys.stderr.write("ntpviz: can't find Python NTP library -- check PYTHONPATH.\n")
+    sys.stderr.write("ntpviz: can't find Python NTP modules.\n")
     sys.stderr.write("%s\n" % e)
     sys.exit(1)
+
+# check Python version
+Python26 = False
+if ((3 > sys.version_info[0]) and (7 > sys.version_info[1])):
+    # running under Python version before 2.7
+    Python26 = True
+
 
 # overload ArgumentParser
 class MyArgumentParser(argparse.ArgumentParser):
@@ -74,59 +136,76 @@ def print_profile():
     pr.print_stats('tottime')
     pr.print_stats('cumtime')
 
-# standard deviation functions
+
+# standard deviation class
 # use this until we can guarantee Python 3.4 and the statistics module
 # http://stackoverflow.com/questions/15389768/standard-deviation-of-a-list#21505523
 
-def mean(data):
-    """Return the sample arithmetic mean of data."""
-    n = len(data)
-    if n < 1:
-        raise ValueError('mean requires at least one data point')
-    return sum(data)/n # in Python 2 use sum(data)/float(n)
+# class to calc:
+#   Mean, Variance, Standard Deviation, Skewness and Kurtosis
 
-def _ss(data, mu=None):
-    """Return sum of square deviations of sequence data."""
-    if mu is None:
-        c = mean(data)
-    else:
-        c = mu
-    ss = sum((x-c)**2 for x in data)
-    return ss
+class RunningStats:
+    "Calculate mean, variance, sigma, skewness and kurtosis"
 
-# fixme, need to handle mu=mean
-def pstdev(data, mu=None):
-    """Calculates the population standard deviation."""
-    n = len(data)
-    if n < 2:
-        # variance requires at least two data points
-        return 0
-    ss = _ss(data, mu)
-    pvar = ss/n # the population variance
-    return pvar**0.5
+    def __init__(self, values):
+        self.num = len(values)     # number of samples
+        self.mu = 0.0              # simple arithmetic mean
+        self.variance = 0.0        # variance
+        self.sigma = 0.0           # aka standard deviation
+        self.skewness = 0.0
+        self.kurtosis = 3.0
 
-# end standard deviation functions
+        if 0 >= self.num:
+            # no data??
+            return
+
+        self.mu = sum(values) / self.num
+        self.variance = sum(pow((v-self.mu), 2) for v in values) / self.num
+        self.sigma = math.sqrt(self.variance)
+
+        if math.isnan(self.sigma) or 1e-12 >= abs(self.sigma):
+            # punt
+            self.skewness = float('nan')
+            self.kurtosis = float('nan')
+            return
+
+        m3 = 0
+        m4 = 0
+        for val in values:
+            m3 += pow(val - self.sigma, 3)
+            m4 += pow(val - self.sigma, 4)
+
+        self.skewness = m3 / (self.num * pow(self.sigma, 3))
+        self.kurtosis = m4 / (self.num * pow(self.sigma, 4))
+
+# end standard deviation class
+
 
 # class for calced values
 class VizStats(ntp.statfiles.NTPStats):
-    percs       = {}          # dictionary of percentages
-    title       = ''          # title
-    unit        = 's'         # display units: s, ppm, etc.
-    multiplier  = 1
+    percs = {}          # dictionary of percentages
+    title = ''          # title
+    unit = 's'          # display units: s, ppm, etc.
+    skip_summary = False
+    clipped = False
+    multiplier = 1
 
     # observe RFC 4180, end lines with CRLF
-    csv_head =  [
-            "Name", "Min", "1%", "5%", "50%", "95%", "99%", "Max", "",
-            "90% Range", "98% Range", "StdDev", "", "Mean", "Units"]
+    csv_head = ["Name", "Min", "1%", "5%", "50%", "95%", "99%", "Max", "",
+                "90% Range", "98% Range", "StdDev", "", "Mean", "Units",
+                "Skewness", "Kurtosis"]
 
-    table_head =  """\
-<table style="text-align:right;">
+    table_head = """\
+<br>
+<table style="text-align:right;width:1300px;">
 <thead>
   <tr style="font-weight:bold;text-align:left;">
-    <td ></td>
+    <td style="width:300px;"></td>
     <td colspan=8> Percentiles......</td>
     <td colspan=3> Ranges......</td>
-    <td colspan=2></td>
+    <td colspan=3></td>
+    <td style="text-align:right;">Skew-</td>
+    <td style="text-align:right;">Kurt-</td>
     <td ></td>
   </tr>
   <tr style="font-weight:bold;text-align:right;">
@@ -135,16 +214,18 @@ class VizStats(ntp.statfiles.NTPStats):
     <td>99%</td><td>Max</td> <td style="width:10px;">&nbsp;</td>
     <td>90%</td><td>95%</td><td>StdDev</td>
     <td style="width:10px;">&nbsp;</td><td>Mean</td><td>Units</td>
+    <td>ness</td><td>osis</td>
   </tr>
 </thead>
 """
+    table_tail = """\
+</table>
+"""
 
-    stats_html  = ''
-
-    def __init__( self, values, title, freq=0 ):
+    def __init__(self, values, title, freq=0, units=''):
 
         values.sort()
-        self.percs = self.percentiles( (100, 99, 95, 50, 5, 1, 0), values)
+        self.percs = self.percentiles((100, 99, 95, 50, 5, 1, 0), values)
 
         # find the target for autoranging
         if args.clip:
@@ -157,7 +238,12 @@ class VizStats(ntp.statfiles.NTPStats):
             target = max(self.percs["p99"], -self.percs["p1"],
                          self.percs["p100"]/5, -self.percs["p0"]/5)
 
-        if 1 <= target:
+        if len(units):
+            # fixed scale
+            self.multiplier = 1
+            self.unit = units
+
+        elif 1 <= target:
             self.multiplier = 1
             if freq:
                 # go to ppm
@@ -166,8 +252,8 @@ class VizStats(ntp.statfiles.NTPStats):
                 # go to seconds
                 self.unit = "s"
 
-        elif 1e-3 <= target:
-            self.multiplier = 1e3
+        elif S_PER_MS <= target:
+            self.multiplier = MS_PER_S
             if freq:
                 # go to ppb
                 self.unit = "ppb"
@@ -175,8 +261,8 @@ class VizStats(ntp.statfiles.NTPStats):
                 # go to millisec
                 self.unit = "ms"
 
-        elif 1e-6 <= target:
-            self.multiplier = 1e6
+        elif S_PER_US <= target:
+            self.multiplier = US_PER_S
             if freq:
                 self.unit = "10e-12"
             else:
@@ -184,21 +270,18 @@ class VizStats(ntp.statfiles.NTPStats):
                 self.unit = "µs"
 
         else:
-            self.multiplier = 1e9
+            self.multiplier = NS_PER_S
             if freq:
                 self.unit = "10e-15"
             else:
                 # go to nanosec
                 self.unit = "ns"
 
-        self.percs["mu"]      = mean( values )
-        self.percs["pstd"]    = pstdev( values, mu=self.percs["mu"] )
+        sts = RunningStats(values)
+        self.percs["mu"] = sts.mu
+        self.percs["pstd"] = sts.sigma
 
-        # range the data
-        self.percs.update({k: v * self.multiplier
-                     for k, v in list(self.percs.items())})
-
-        self.title       = title
+        self.title = title
 
         # calculate ranges
         self.percs["r90"] = self.percs["p95"] - self.percs["p5"]
@@ -211,56 +294,53 @@ class VizStats(ntp.statfiles.NTPStats):
         # pretty print the values
         self.percs_f = {}
         for k, v in self.percs.items():
-            self.percs[k]   = round(v, 3)
-            self.percs_f[k] = format(v, ",.3f")
+            # range the data
+            v *= self.multiplier
+            self.percs[k] = round(v, 4)
+            if 'ppm' == self.unit and 0.020 > abs(self.percs[k]):
+                fmt = ".4f"
+            else:
+                fmt = ".3f"
+            if not Python26:
+                # Python 2.6 does not undertand the comma format option
+                fmt = "," + fmt
+            self.percs_f[k] = format(v, fmt)
 
-        # Python is stupid about nested objects, so add in some other stuff
-        self.percs_f["multiplier"] = self.percs["multiplier"] = self.multiplier
-        self.percs_f["title"]      = self.percs["title"]      = self.title
-        self.percs_f["unit"]       = self.percs["unit"]       = self.unit
+        # don't scale skewness and kurtosis
+        self.percs["skew"] = sts.skewness
+        self.percs["kurt"] = sts.kurtosis
+        if '°C' == units:
+            # skip for temperatures.
+            self.percs_f["skew"] = ''
+            self.percs_f["kurt"] = ''
+        else:
+            self.percs_f["skew"] = format(self.percs["skew"], "6.4g")
+            self.percs_f["kurt"] = format(self.percs["kurt"], "6.4g")
 
         if args.clip:
             self.percs["min_y"] = self.percs["p1"]
             self.percs["max_y"] = self.percs["p99"]
             self.percs["clipped"] = " (clipped)"
         else:
-            self.percs["min_y"] = self.percs["max_y"] = '*'
+            self.percs["min_y"] = self.percs["p0"]
+            self.percs["max_y"] = self.percs["p100"]
             self.percs["clipped"] = ""
 
-        self.stats_html =  """\
-<br>
-<table style="margin-left:20px;border-spacing: 10px 0;">
-  <tr style="text-align:left;font-weight:bold;">
-    <td colspan=8> Percentiles......</td>
-    <td colspan=3> Ranges......</td>
-    <td colspan=2></td>
-    <td ></td>
-  </tr>
-  <tr style="font-weight:bold;font-weight:bold;text-align:right;">
-    <td style="min-width:55px;">Min</td><td style="min-width:55px;">1%%</td>
-    <td style="min-width:55px;">5%%</td><td style="min-width:55px;">50%%</td>
-    <td style="min-width:55px;">95%%</td><td style="min-width:55px;">99%%</td>
-    <td style="min-width:55px;">Max</td><td>&nbsp;</td>
-    <td style="min-width:55px;">90%%</td><td style="min-width:55px;">98%%</td>
-    <td style="min-width:55px;">StdDev</td>
-    <td>&nbsp;</td><td style="min-width:55px;">Mean</td><td>Units</td>
-  </tr>
-  <tr style="text-align:right;">
-    <td>%(p0)s</td><td>%(p1)s</td><td>%(p5)s</td><td>%(p50)s</td>
-    <td>%(p95)s</td><td>%(p95)s</td><td>%(p100)s</td><td>&nbsp;</td>
-    <td>%(r90)s</td><td>%(r98)s</td><td>%(pstd)s</td><td>&nbsp;</td>
-    <td>%(mu)s</td><td>%(unit)s</td>
-  </tr>
-</table>
-""" % self.percs_f
+        self.fmt = gnuplot_fmt(self.percs["min_y"], self.percs["max_y"])
 
-        s =  ["%(title)s", "%(p0)s", "%(p1)s", "%(p5)s", "%(p50)s", "%(p95)s",
-              " %(p99)s", "%(p100)s", "", "%(r90)s", "%(r98)s", "%(pstd)s",
-              "", "%(mu)s", "%(unit)s"]
+        # Python is stupid about nested objects, so add in some other stuff
+        self.percs_f["fmt"] = self.percs["fmt"] = self.fmt
+        self.percs_f["multiplier"] = self.percs["multiplier"] = self.multiplier
+        self.percs_f["title"] = self.percs["title"] = self.title
+        self.percs_f["unit"] = self.percs["unit"] = self.unit
+
+        s = ["%(title)s", "%(p0)s", "%(p1)s", "%(p5)s", "%(p50)s", "%(p95)s",
+             " %(p99)s", "%(p100)s", "", "%(r90)s", "%(r98)s", "%(pstd)s",
+             "", "%(mu)s", "%(unit)s", "%(skew)s", "%(kurt)s", ]
 
         # csv is raw, html table is autoranged
-        self.csv   =  [ x % self.percs for x in s]
-        self.table =  [ x % self.percs_f for x in s]
+        self.csv = [x % self.percs for x in s]
+        self.table = [x % self.percs_f for x in s]
         self.table = "</td><td>".join(self.table)
 
         self.table = '''\
@@ -272,14 +352,28 @@ class VizStats(ntp.statfiles.NTPStats):
         return
 
 
+def gnuplot_fmt(min, max):
+    "return optimal gnuplot format"
+    span = max - min
+    if 6 <= span:
+        fmt = '%.0f'
+    elif 0.6 <= span:
+        fmt = '%.1f'
+    elif 0.1 <= span:
+        fmt = '%.2f'
+    else:
+        fmt = '%.3f'
+    return fmt
+
+
 # end calc things now
 
-# RMS frequency jitter - Deviation from a root-mean-square linear approximation?
+# RMS frequency jitter - Deviation from root-mean-square linear approximation?
 # Investigate.
 
 def gnuplot(template, outfile=None):
-    "Run a specified GNUPLOT program."
-    if not len( template ):
+    "Run a specified gnuplot program."
+    if not len(template):
         # silently ignore empty plots
         return ''
     if outfile is None:
@@ -290,14 +384,15 @@ def gnuplot(template, outfile=None):
 
     # can be 30% faster to write to a tmp file than to pipe to gnuplot
     # bonus, we can keep the plot file for debug.
-    tmp_file, tmp_filename = tempfile.mkstemp( suffix='.plt')
+    tmp_file = tempfile.NamedTemporaryFile(mode='w',
+                                           suffix='.plt', delete=False)
     # note that tmp_file is a file handle, it is not a file object
-    os.write( tmp_file, template)
-    os.close(tmp_file)
+    tmp_file.write(template)
+    tmp_file.close()
 
     # shell=True is a security hazard, do not use
     try:
-        rcode = subprocess.call( ['gnuplot', tmp_filename], stdout=out)
+        rcode = subprocess.call(['gnuplot', tmp_file.name], stdout=out)
     except OSError as e:
         if e.errno == os.errno.ENOENT:
             # gnuplot not found
@@ -309,14 +404,15 @@ def gnuplot(template, outfile=None):
 
     if 0 != rcode:
         sys.stderr.write("ntpviz: WARNING: plot returned %s\n" % rcode)
-        sys.stderr.write("ntpviz: WARNING: plot file %s\n" % tmp_filename)
+        sys.stderr.write("ntpviz: WARNING: plot file %s\n" % tmp_file.name)
     elif 2 <= args.debug_level:
-        sys.stderr.write("ntpviz: INFO: plot file %s\n" % tmp_filename)
+        sys.stderr.write("ntpviz: INFO: plot file %s\n" % tmp_file.name)
     else:
         # remove tmp file
-        os.remove(tmp_filename)
+        os.remove(tmp_file.name)
 
     return rcode
+
 
 class NTPViz(ntp.statfiles.NTPStats):
     "Class for visualizing statistics from a single server."
@@ -327,9 +423,8 @@ set grid
 set autoscale xfixmin
 set autoscale xfixmax
 set xdata time
-set xtic rotate by -35 scale 0
-set xlabel "Time (DDMM hh:mm UTC)"
-set format x "%d%b %H:%M"
+set xlabel "Time UTC"
+set xtics format "%d %b\\n%H:%MZ"
 set timefmt "%s"
 set lmargin 10
 set rmargin 10
@@ -338,30 +433,39 @@ set rmargin 10
     def __init__(self, statsdir,
                  sitename=None, period=None, starttime=None, endtime=None):
         ntp.statfiles.NTPStats.__init__(self, statsdir=statsdir,
-                    sitename=sitename, period=period, starttime=starttime,
-                    endtime=endtime)
+                                        sitename=sitename,
+                                        period=period,
+                                        starttime=starttime,
+                                        endtime=endtime)
 
-    def plot_slice( self, rows, item1, item2=None):
+    def plot_slice(self, rows, item1, item2=None):
         "slice 0,item1, maybe item2, from rows, ready for gnuplot"
         # speed up by only sending gnuplot the data it will actually use
         # WARNING: this is hot code, only modify if you profile
+        # since we are looping the data, get the values too
         plot_data = ''
         last_time = 0
+        values1 = []
+        values2 = []
         if item2:
             for row in rows:
                 try:
+                    values1.append(float(row[item1]))
+                    values2.append(float(row[item2]))
                     if 2200000 < row[0] - last_time:
                         # more than 2,200 seconds between points
                         # data loss, add a break in the plot line
                         plot_data += '\n'
-                    # fields: time, fld, and rtt
-                    plot_data += row[1] + ' ' + row[item1] + ' ' + row[item2] + '\n'
+                    # fields: time, fld1, and fld2
+                    plot_data += row[1] + ' ' + row[item1] + ' ' \
+                        + row[item2] + '\n'
                     last_time = row[0]
                 except IndexError:
                     pass
         else:
             for row in rows:
                 try:
+                    values1.append(float(row[item1]))
                     if 2200000 < row[0] - last_time:
                         # more than 2,200 seconds between points
                         # data loss, add a break in the plot line
@@ -371,34 +475,38 @@ set rmargin 10
                     last_time = row[0]
                 except IndexError:
                     pass
+
         # I know you want to replace the plot_data string concat with
         # or more join()s, do not do it, it is slower
         # next you'll want to try %-substitution.  it too is slower
         plot_data += "e\n"
-        return plot_data
+        if item2:
+            return (plot_data, values1, values2)
+
+        return (plot_data, values1)
 
     def local_offset_gnuplot(self):
-        "Generate GNUPLOT code graphing local clock loop statistics"
-        if not len( self.loopstats):
+        "Generate gnuplot code graphing local clock loop statistics"
+        if not len(self.loopstats):
             sys.stderr.write("ntpviz: WARNING: no loopstats to graph\n")
             return ''
 
         # speed up by only sending gnuplot the data it will actually use
         # fields: time, time offset, freq offset
-        plot_data = self.plot_slice( self.loopstats, 2, 3)
+        (plot_data, values, values_f) = self.plot_slice(self.loopstats, 2, 3)
 
         # compute clock offset
-        values = [float(line[2]) for line in self.loopstats]
-        stats = VizStats( values, "Local Clock Time Offset")
+        stats = VizStats(values, "Local Clock Time Offset")
 
         # compute frequency offset
-        values_f = [float(line[3]) for line in self.loopstats]
         stats_f = VizStats(values_f, "Local Clock Frequency Offset", freq=1)
 
         out = stats.percs
+        out["fmt"] = stats.percs["fmt"]
         out["min_y2"] = stats_f.percs["min_y"]
         out["max_y2"] = stats_f.percs["max_y"]
         out["unit_f"] = stats_f.percs["unit"]
+        out["fmt_f"] = stats_f.percs["fmt"]
         out["multiplier_f"] = stats_f.percs["multiplier"]
         out["sitename"] = self.sitename
         out['size'] = args.png_size
@@ -406,16 +514,18 @@ set rmargin 10
         plot_template = NTPViz.Common + """\
 set terminal png size %(size)s
 set title "%(sitename)s: Local Clock Time/Frequency Offsets%(clipped)s"
-set ytics format "%%1.1f %(unit)s" nomirror textcolor rgb '#0060ad'
+set ytics format "%(fmt)s %(unit)s" nomirror textcolor rgb '#0060ad'
 set yrange [%(min_y)s:%(max_y)s]
-set y2tics format "%%2.1f %(unit_f)s" nomirror textcolor rgb '#dd181f'
+set y2tics format "%(fmt_f)s %(unit_f)s" nomirror textcolor rgb '#dd181f'
 set y2range [%(min_y2)s:%(max_y2)s]
-set key bottom right box
+set key top right
 set style line 1 lc rgb '#0060ad' lt 1 lw 1 pt 7 ps 0   # --- blue
 set style line 2 lc rgb '#dd181f' lt 1 lw 1 pt 5 ps 0   # --- red
 plot \
- "-" using 1:($2*%(multiplier)s) title "clock offset %(unit)s" with linespoints ls 1, \
- "-" using 1:($3*%(multiplier_f)s) title "frequency offset %(unit_f)s" with linespoints ls 2 axis x1y2
+ "-" using 1:($2*%(multiplier)s) title "clock offset %(unit)s" \
+     with linespoints ls 1, \
+ "-" using 1:($3*%(multiplier_f)s) title "frequency offset %(unit_f)s" \
+     with linespoints ls 2 axis x1y2
 """ % out
 
         exp = """\
@@ -430,74 +540,84 @@ file.</p>
 
 """
 
-        ret = {}
-        ret['html'] = stats.stats_html + stats_f.stats_html + exp
-        ret['stats'] = [stats, stats_f]
-        ret['title'] = "Local Clock Time/Frequency Offsets"
-        ret['plot'] = plot_template + plot_data + plot_data
+        ret = {'html': VizStats.table_head + stats.table +
+               stats_f.table + VizStats.table_tail + exp,
+               'plot': plot_template + plot_data + plot_data,
+               'stats': [stats, stats_f],
+               'title': "Local Clock Time/Frequency Offsets"}
         return ret
 
     def local_freq_temps_plot(self):
-        "Generate GNUPLOT code graphing local frequency and temps"
-        if not len( self.loopstats):
+        "Generate gnuplot code graphing local frequency and temps"
+        if not len(self.loopstats):
             sys.stderr.write("ntpviz: WARNING: no loopstats to graph\n")
             return ''
 
         tempsmap = self.tempssplit()
-        tempslist = tempsmap.keys()
+        tempslist = list(tempsmap.keys())
         tempslist.sort()
-        if not len( tempsmap) or not len( tempslist):
+        if not len(tempsmap) or not len(tempslist):
             sys.stderr.write("ntpviz: WARNING: no temps to graph\n")
             return ''
 
         # speed up by only sending gnuplot the data it will actually use
         # fields: time, freq offset
-        plot_data = self.plot_slice( self.loopstats, 3)
+        (plot_data, values_f) = self.plot_slice(self.loopstats, 3)
 
         # compute frequency offset
-        values_f = [float(line[3]) for line in self.loopstats]
         stats_f = VizStats(values_f, "Local Clock Frequency Offset", freq=1)
 
-        stats = []
-        temps_data = ()
+        stats = [stats_f]
+        table = ''
         plot_data_t = ''
+        max_temp = -300
+        min_temp = 1000
         for key in tempslist:
             # speed up by only sending gnuplot the data it will actually use
             # fields: time, temp
-            plot_data_t += self.plot_slice( tempsmap[key], 3)
+            (p, v) = self.plot_slice(tempsmap[key], 3)
+            plot_data_t += p
+            s = VizStats(v, 'Temp %s' % key, units='°C')
+            max_temp = max(s.percs["max_y"], max_temp)
+            min_temp = min(s.percs["min_y"], min_temp)
+            table += s.table
+            stats.append(s)
 
-        #out = stats.percs
+        # out = stats.percs
         out = {}
-        out["min_y2"] = stats_f.percs["min_y"]
-        out["max_y2"] = stats_f.percs["max_y"]
-        out["unit_f"] = stats_f.percs["unit"]
-        out["unit"] = 'C'
-        out["multiplier_f"] = stats_f.percs["multiplier"]
-        out["sitename"] = self.sitename
-        out['size'] = args.png_size
         if args.clip:
             out["clipped"] = " (clipped)"
         else:
             out["clipped"] = ""
+        out['fmt'] = gnuplot_fmt(min_temp, max_temp)
+        out["fmt_f"] = stats_f.percs["fmt"]
+        out["max_y2"] = stats_f.percs["max_y"]
+        out["min_y2"] = stats_f.percs["min_y"]
+        out["multiplier_f"] = stats_f.percs["multiplier"]
+        out["sitename"] = self.sitename
+        out['size'] = args.png_size
+        out["unit"] = '°C'
+        out["unit_f"] = stats_f.percs["unit"]
 
         # let temp autoscale
         # set yrange [%(min_y)s:%(max_y)s]
         plot_template = NTPViz.Common + """\
 set terminal png size %(size)s
 set title "%(sitename)s: Local Frequency Offset/Temps%(clipped)s"
-set ytics format "%%1.1f %(unit)s" nomirror textcolor rgb '#0060ad'
-set y2tics format "%%2.1f %(unit_f)s" nomirror textcolor rgb '#dd181f'
+set ytics format "%(fmt)s %(unit)s" nomirror textcolor rgb '#0060ad'
+set y2tics format "%(fmt_f)s %(unit_f)s" nomirror textcolor rgb '#dd181f'
 set y2range [%(min_y2)s:%(max_y2)s]
-set key bottom right box
+set key top right
 set style line 1 lc rgb '#dd181f' lt 1 lw 1 pt 5 ps 0   # --- red
 plot \
- "-" using 1:($2*%(multiplier_f)s) title "frequency offset %(unit_f)s" with linespoints ls 1 axis x1y2, \
+ "-" using 1:($2*%(multiplier_f)s) title "frequency offset %(unit_f)s" \
+     with linespoints ls 1 axis x1y2, \
 """ % out
 
         for key in tempslist:
             out['key'] = key
             plot_template += "'-' using 1:2 title '%(key)s' with line, \\\n" \
-                 % out
+                             % out
 
         # strip trailing ", \n"
         plot_template = plot_template[:-4] + "\n"
@@ -512,150 +632,189 @@ file, and field 3 from the temp log .</p>
 
 """
 
-        ret = {}
-        # ret['html'] = stats.stats_html + stats_f.stats_html + exp
-        ret['html'] = stats_f.stats_html + exp
-        ret['stats'] = [stats, stats_f]
-        ret['stats'] = [stats_f]
-        ret['title'] = "Local Frequency/Temp"
-        ret['plot'] = plot_template + plot_data + plot_data_t
+        ret = {'html': VizStats.table_head + stats_f.table +
+               table + VizStats.table_tail + exp,
+               'plot': plot_template + plot_data + plot_data_t,
+               'stats': stats,
+               'title': "Local Frequency/Temp"}
         return ret
 
     def local_temps_gnuplot(self):
-        "Generate GNUPLOT code graphing local temperature statistics"
+        "Generate gnuplot code graphing local temperature statistics"
         sitename = self.sitename
         tempsmap = self.tempssplit()
-        tempslist = tempsmap.keys()
+        tempslist = list(tempsmap.keys())
         tempslist.sort()
 
-        if not len( tempsmap) or not len( tempslist):
+        if not len(tempsmap) or not len(tempslist):
             sys.stderr.write("ntpviz: WARNING: no temps to graph\n")
             return ''
 
         stats = []
-        temps_data = ()
         plot_data = ''
+        max_temp = -300
+        min_temp = 1000
         for key in tempslist:
             # speed up by only sending gnuplot the data it will actually use
             # fields: time, temp
-            plot_data += self.plot_slice( tempsmap[key], 3)
+            (p, v) = self.plot_slice(tempsmap[key], 3)
+            s = VizStats(v, 'Temp %s' % key, units='°C')
+            max_temp = max(s.percs["max_y"], max_temp)
+            min_temp = min(s.percs["min_y"], min_temp)
+            plot_data += p
 
         out = {}
+        out['fmt'] = gnuplot_fmt(min_temp, max_temp)
         out['sitename'] = sitename
         out['size'] = args.png_size
 
         plot_template = NTPViz.Common + """\
 set terminal png size %(size)s
-set title "%(sitename)s: Local Temparatures"
-set ytics format "%%1.1f °C" nomirror textcolor rgb '#0060ad'
+set title "%(sitename)s: Local Temperatures"
+set ytics format "%(fmt)s °C" nomirror textcolor rgb '#0060ad'
 set style line 1 lc rgb '#0060ad' lt 1 lw 1 pt 7 ps 0   # --- blue
+set key top right
 plot \\
 """ % out
 
         for key in tempslist:
             out['key'] = key
             plot_template += "'-' using 1:2 title '%(key)s' with line, \\\n" \
-                 % out
+                             % out
 
         # strip the trailing ", \n"
         plot_template = plot_template[:-4] + "\n"
         exp = """\
 <p>Local temperatures.  These will be site specific depending on what
-temperature sensors you have and collect data from.  Temperature
-changes change the local clock crystal frequency and stability.  Crystals
-oscillate faster when warmer. This the single most important
+temperature sensors you have and collect data from.
+Temperature changes affect the local clock crystal frequency and
+stability.  The math of how temperature changes frequency is
+complex, and also depends on crystal aging.  So there is no easy
+way to correct for it in software.  This the single most important
 component of frequency drift.</p>
 <p>The Local Termperatures are from field 3 from the tempstats log file.</p>
 """
-        ret = {'html' : exp, 'stats' : stats }
+
+        ret = {'html': exp, 'stats': stats}
         ret['title'] = "Local Temperatures"
         ret['plot'] = plot_template + plot_data
         return ret
 
     def local_gps_gnuplot(self):
-        "Generate GNUPLOT code graphing local gps statistics"
+        "Generate gnuplot code graphing local GPS statistics"
         sitename = self.sitename
         gpsmap = self.gpssplit()
-        gpslist = gpsmap.keys()
+        gpslist = list(gpsmap.keys())
         gpslist.sort()
 
-        if not len( gpsmap) or not len( gpslist):
+        if not len(gpsmap) or not len(gpslist):
             if 1 <= args.debug_level:
-                sys.stderr.write("ntpviz: INFO: no gps data to graph\n")
+                sys.stderr.write("ntpviz: INFO: no GPS data to graph\n")
             return ''
 
-        stats = []
+        # build the output dictionary, because Python can not format
+        # complex objects.
         gps_data = ()
+        values_nsat = []
+        values_tdop = []
         plot_data = ""
         for key in gpslist:
-            # fields: time, tdop, nSats
-            plot_data += self.plot_slice( gpsmap[key], 3, 4)
+            # fields: time, TDOP, nSats
+            (ps, values_tdop, values_nsat) = self.plot_slice(gpsmap[key], 3, 4)
+            plot_data += ps
 
-        out = {}
+        stats = VizStats(values_nsat, "nSats", units='nSat')
+        stats_tdop = VizStats(values_tdop, "TDOP", units=' ')
+
+        out = stats_tdop.percs
         out['sitename'] = sitename
         out['size'] = args.png_size
+        if out['min_y'] == out['max_y']:
+            # some GPS always output the same TDOP
+            if 0 == out['min_y']:
+                # scale 0:1
+                out['max_y'] = 1
+            else:
+                # scale +/- 20%
+                out['min_y'] = out['max_y'] * 0.8
+                out['max_y'] = out['max_y'] * 1.2
+        elif 2 > out['min_y']:
+                # scale 0:max_x
+                out['min_y'] = 0
+
+        # recalc fmt
+        out['fmt'] = gnuplot_fmt(out["min_y"], out["max_y"])
 
         plot_template = NTPViz.Common + """\
 set terminal png size %(size)s
-set title "%(sitename)s: Local GPS
-set ytics format "%%1.1f tdop" nomirror textcolor rgb '#0060ad'
+set title "%(sitename)s: Local GPS%(clipped)s
+set ytics format "%(fmt)s TDOP" nomirror textcolor rgb '#0060ad'
+set yrange [%(min_y)s:%(max_y)s]
 set y2tics format "%%2.0f nSat"  nomirror textcolor rgb '#dd181f'
 set style line 1 lc rgb '#0060ad' lt 1 lw 1 pt 7 ps 0   # --- blue
 set style line 2 lc rgb '#dd181f' lt 1 lw 1 pt 5 ps 0   # --- red
+set key top right
 plot \\
 """ % out
 
         for key in gpslist:
             plot_template += """\
-'-' using 1:2 title '%(key)s tdop' with line ls 1, \\
+'-' using 1:2 title '%(key)s TDOP' with line ls 1, \\
 '-' using 1:3 title '%(key)s nSat' with line ls 2 axis x1y2, \\
 """ % locals()
 
         # strip the trailing ", \\n"
         plot_template = plot_template[:-4] + "\n"
         exp = """\
-<p>Local GPS.  The Time Dilution of Precision (tdop) is plotted in blue.
+<p>Local GPS.  The Time Dilution of Precision (TDOP) is plotted in blue.
 The number of visible satellites (nSat) is plotted in red.</p>
-<p>tdop is field 3, and nSats is field 4, from the gpsd log file.  The
-gpsd log file is created by the gps-log.py program.</p>
+<p>TDOP is field 3, and nSats is field 4, from the gpsd log file.  The
+gpsd log file is created by the ntploggps program.</p>
+<p>TDOP is a dimensionless error factor.  TDOP ranges from 1 to greater
+than 20.  1 denotes the highest possible confidence level.  2 to 5 is good.
+Greater than 20 means there will be significant inaccuracy and error.</p>
 """
-        ret = {'html' : exp, 'stats' : stats }
-        ret['title'] = "Local GPS"
-        ret['plot'] = plot_template + plot_data + plot_data
+
+        ret = {'html': VizStats.table_head + stats.table +
+               stats_tdop.table + VizStats.table_tail + exp,
+               'stats': [stats, stats_tdop],
+               'title': "Local GPS",
+               'plot': plot_template + plot_data + plot_data}
         return ret
 
     def local_error_gnuplot(self):
         "Plot the local clock frequency error."
-        if not len( self.loopstats):
+        if not len(self.loopstats):
             sys.stderr.write("ntpviz: WARNING: no loopstats to graph\n")
             return ''
 
         # grab and sort the values, no need for the timestamp, etc.
 
-        # compute freqency offset
-        values = [float(line[2]) for line in self.loopstats]
-        stats = VizStats( values, "Local Clock Frequency Offset", freq=1, )
+        # speed up by only sending gnuplot the data it will actually use
+        # fields: time, freq error
+        (plot_data, values) = self.plot_slice(self.loopstats, 3)
+
+        # compute frequency offset
+        stats = VizStats(values, "Local Clock Frequency Offset", freq=1,)
 
         # build the output dictionary, because Python can not format
         # complex objects.
         out = stats.percs
+        out["fmt"] = stats.percs["fmt"]
         out["sitename"] = self.sitename
         out['size'] = args.png_size
-
-        # speed up by only sending gnuplot the data it will actually use
-        # fields: time, freq error
-        plot_data = self.plot_slice( self.loopstats, 3)
 
         plot_template = NTPViz.Common + """\
 set terminal png size %(size)s
 set title "%(sitename)s: Local Clock Frequency Offset%(clipped)s"
-set ytics format "%%1.1f %(unit)s" nomirror
+set ytics format "%(fmt)s %(unit)s" nomirror
 set yrange [%(min_y)s:%(max_y)s]
-set key bottom right box
+set key bottom right
 set style line 1 lc rgb '#0060ad' lt 1 lw 1 pt 7 ps 0   # --- blue
 set style line 2 lc rgb '#dd181f' lt 1 lw 1 pt 5 ps 0   # --- red
 plot \
- "-" using 1:($2 * %(multiplier)s) title "local clock error" with linespoints ls 2, \
+ "-" using 1:($2 * %(multiplier)s) title "local clock error" \
+     with linespoints ls 2, \
  %(p99)s title "99th percentile", \
  %(p95)s title "95th percentile", \
  %(p5)s title "5th percentile", \
@@ -674,39 +833,41 @@ line at 0ppm.  Expected values of 99%-1% percentiles: 0.4ppm</p>
 
 <p>The Frequency Offset comes from field 4 of the loopstats log file.</p>
 """
-        ret = {'html' : stats.stats_html + exp, 'stats' : [stats] }
-        ret['title'] = "Local Clock Frequency Offset"
-        ret['plot'] = plot_template + plot_data
+        ret = {'html': VizStats.table_head + stats.table +
+               VizStats.table_tail + exp,
+               'plot': plot_template + plot_data,
+               'stats': [stats],
+               'title': "Local Clock Frequency Offset"}
         return ret
 
     def loopstats_gnuplot(self, fld, title, legend, freq):
-        "Generate GNUPLOT code of a given loopstats field"
-        if not len( self.loopstats):
+        "Generate gnuplot code of a given loopstats field"
+        if not len(self.loopstats):
             sys.stderr.write("ntpviz: WARNING: no loopstats to graph\n")
             return ''
 
         # speed up by only sending gnuplot the data it will actually use
         # fields: time, fld
-        plot_data = self.plot_slice( self.loopstats, fld)
+        (plot_data, values) = self.plot_slice(self.loopstats, fld)
 
-        # grab and process the values
-        values = [float(line[fld]) for line in self.loopstats]
-        stats = VizStats( values, title, freq=freq )
+        # process the values
+        stats = VizStats(values, title, freq=freq)
 
         # build the output dictionary, because Python can not format
         # complex objects.
         out = stats.percs
-        out["sitename"] = self.sitename
-        out["fld"]      = fld
-        out["legend"]   = legend
+        out["fld"] = fld
+        out["fmt"] = stats.percs["fmt"]
+        out["legend"] = legend
         out["min_y"] = '0'
+        out["sitename"] = self.sitename
         out['size'] = args.png_size
 
         if freq:
             exp = """\
 <p>This shows the RMS Frequency Jitter (aka wander) of the local
 clock's frequency.  In other words, how fast the local clock changes
-freqency.</p>
+frequency.</p>
 
 <p>Lower is better.  An ideal clock would be a horizontal line at
 0ppm.</p>
@@ -726,9 +887,9 @@ how fast the local clock offset is changing.</p>
         plot_template = NTPViz.Common + """\
 set terminal png size %(size)s
 set title "%(sitename)s: %(title)s%(clipped)s"
-set ytics format "%%1.1f %(unit)s" nomirror
+set ytics format "%(fmt)s %(unit)s" nomirror
 set yrange [%(min_y)s:%(max_y)s]
-set key top right box
+set key top right
 set style line 1 lc rgb '#0060ad' lt 1 lw 1 pt 7 ps 0   # --- blue
 set style line 2 lc rgb '#dd181f' lt 1 lw 1 pt 5 ps 0   # --- red
 plot \
@@ -739,17 +900,19 @@ plot \
  %(p1)s title "1st percentile"
 """ % out
 
-        ret = {'html' : stats.stats_html + exp, 'stats' : [stats],
-               'title' : title }
-        ret['plot'] = plot_template + plot_data
+        ret = {'html': VizStats.table_head + stats.table +
+               VizStats.table_tail + exp,
+               'plot': plot_template + plot_data,
+               'stats': [stats],
+               'title': title}
         return ret
 
     def local_offset_jitter_gnuplot(self):
-        "Generate GNUPLOT code of local clock loop standard deviation"
+        "Generate gnuplot code of local clock loop standard deviation"
         return self.loopstats_gnuplot(4, "Local RMS Time Jitter", "Jitter", 0)
 
     def local_offset_stability_gnuplot(self):
-        "Generate GNUPLOT code graphing local clock stability"
+        "Generate gnuplot code graphing local clock stability"
         return self.loopstats_gnuplot(5, "Local RMS Frequency Jitter",
                                       "Stability", 1)
 
@@ -758,12 +921,12 @@ plot \
 
         peerdict = self.peersplit()
         if not peerlist:
-            peerlist = peerdict.keys()
-        if not len( peerlist):
+            peerlist = list(peerdict.keys())
+        if not len(peerlist):
             sys.stderr.write("ntpviz: WARNING: no peer data to graph\n")
             return ''
-        peerlist.sort() # For stability of output
-        namelist = []   # peer names
+        peerlist.sort()  # For stability of output
+        namelist = []    # peer names
 
         ip_todo = []
         for key in peerlist:
@@ -805,7 +968,7 @@ useful to see how the measured offset is behaving.</p>
 
 <p>Closer to 0s is better.  An ideal system would be a horizontal line
 at 0s. Typical 90%% ranges may be: local serial GPS 200 ms; local PPS
-20µs</p>
+20µs.</p>
 
 <p>Clock Offset is field 5 in the peerstats log file.</p>
 """
@@ -855,44 +1018,27 @@ at 0s.</p>
 <p>RMS Jitter is field 8 in the peerstats log file.</p>
 """
 
-            # grab and sort the values, no need for the timestamp, etc.
-            values = [float(line[fld]) for line in peerdict[ip]]
-
-            stats = VizStats( values, title)
-
             if len(namelist[0]) and peerlist[0] != namelist[0]:
                 # append hostname, if we have it
                 # after stats to keep summary short
                 title += " (%s)" % namelist[0]
 
-
-            percentages = " %(p50)s title '50th percentile', " \
-                           % stats.percs
-
-            exp = stats.stats_html + exp
-
-
         else:
             # many peers
             title += "s"
-            # grab and sort the values, no need for the timestamp, etc.
-            values = [float(line[fld]) for line in self.peerstats]
 
-            stats = VizStats( values, title )
-
-            exp = stats.stats_html
             if "offset" == type:
                 title = "Peer Offsets"
-                exp += """\
-<p>This shows the offset of all refclocks, peers and servers in
-%(unit)s.  This can be useful to see if offset changes are happening in
+                exp = """\
+<p>This shows the offset of all refclocks, peers and servers.
+This can be useful to see if offset changes are happening in
 a single clock or all clocks together.</p>
 
 <p>Clock Offset is field 5 in the peerstats log file.</p>
-""" % stats.percs
+"""
             else:
                 title = "Peer Jitters"
-                exp += """\
+                exp = """\
 <p>This shows the RMS Jitter of all refclocks, peers and servers.
 Jitter is the current estimated dispersion; the variation in offset
 between samples.</p>
@@ -903,24 +1049,42 @@ at 0s.</p>
 <p>RMS Jitter is field 8 in the peerstats log file.</p>
 """
 
+        if len(peerlist) == 1:
+            if peerlist[0] in refclock_name:
+                title += ' ' + refclock_name[peerlist[0]]
+
         plot_data = ""
         for ip in ip_todo:
             # 20% speed up by only sending gnuplot the data it will
             # actually use
             if rtt:
                 # fields: time, fld, and rtt
-                plot_data += self.plot_slice( peerdict[ip], fld, 5)
+                (p, v1, v2) = self.plot_slice(peerdict[ip], fld, 5)
+                plot_data += p
             else:
                 # fields: time, fld
-                plot_data += self.plot_slice( peerdict[ip], fld)
+                (p, v1) = self.plot_slice(peerdict[ip], fld)
+                plot_data += p
+
+        stats = VizStats(v1, title)
+        if len(peerlist) == 1:
+            percentages = " %(p50)s title '50th percentile', " % stats.percs
+        else:
+            # skip stats on peers/offsets plots
+            stats.skip_summary = True
+            stats.table = ''
 
         out = stats.percs
         out['sitename'] = self.sitename
-        out['title'] = title
         out['size'] = args.png_size
+        out['title'] = title
+        out["fmt"] = stats.percs["fmt"]
 
         if 6 >= len(peerlist):
-            out['set_key'] = "set key top right box"
+            out['set_key'] = "set key top right"
+        elif 12 >= len(peerlist):
+            # getting crowded
+            out['set_key'] = "set key bmargin"
         else:
             # too many keys to show
             out['set_key'] = "set key off"
@@ -929,7 +1093,7 @@ at 0s.</p>
 set terminal png size %(size)s
 set title "%(sitename)s: %(title)s%(clipped)s"
 set ylabel ""
-set ytics format "%%1.1f %(unit)s" nomirror
+set ytics format "%(fmt)s %(unit)s" nomirror
 set yrange [%(min_y)s:%(max_y)s]
 %(set_key)s
 plot \
@@ -938,8 +1102,8 @@ plot \
         plot_template += percentages
         for key in peerlist:
             out['label'] = self.ip_label(key)
-            plot_template += "'-' using 1:($2*%(multiplier)s) title '%(label)s' with line, \\\n" \
-                 % out
+            plot_template += "'-' using 1:($2*%(multiplier)s) " \
+                             " title '%(label)s' with line, \\\n" % out
 
         if 1 == rtt:
             plot_template += """\
@@ -952,19 +1116,30 @@ plot \
             # strip the trailing ", \n"
             plot_template = plot_template[:-4] + "\n"
 
-        ret = {'html' : exp, 'stats' : [stats], 'title' : title }
-        ret['plot'] = plot_template + plot_data
+        if len(peerlist) == 1:
+            # skip stats for multiplots
+            html = VizStats.table_head + stats.table \
+                + VizStats.table_tail + exp,
+        else:
+            html = exp
+
+        ret = {'html': html,
+               'plot': plot_template + plot_data,
+               'stats': [stats],
+               'title': title}
         return ret
 
     def peer_offsets_gnuplot(self, peerlist=None):
-        return self.peerstats_gnuplot(peerlist, 4, "Peer Clock Offset", "offset")
+        return self.peerstats_gnuplot(peerlist, 4, "Peer Clock Offset",
+                                      "offset")
 
     def peer_jitters_gnuplot(self, peerlist=None):
-        return self.peerstats_gnuplot(peerlist, 7, "Peer Clock Jitter", "jitter")
+        return self.peerstats_gnuplot(peerlist, 7, "Peer Clock Jitter",
+                                      "jitter")
 
     def local_offset_histogram_gnuplot(self):
         "Plot a histogram of clock offset values from loopstats."
-        if not len( self.loopstats):
+        if not len(self.loopstats):
             sys.stderr.write("ntpviz: WARNING: no loopstats to graph\n")
             return ''
 
@@ -972,26 +1147,29 @@ plot \
 
         # grab and sort the values, no need for the timestamp, etc.
         values = [float(row[2]) for row in self.loopstats]
-        stats = VizStats( values, 'Local Clock Offset' )
+        stats = VizStats(values, 'Local Clock Offset')
         out = stats.percs
+        out["fmt_x"] = stats.percs["fmt"]
         out['sitename'] = self.sitename
         # flip the axis
-        out['min_x']    = out['min_y']
-        out['max_x']    = out['max_y']
+        out['min_x'] = out['min_y']
+        out['max_x'] = out['max_y']
 
         rnd1 = 7        # round to 100 ns boxes
         out['boxwidth'] = 1e-7
 
-        if 1e-6 > stats.percs["p99"] and -1e-6 < stats.percs["p1"]:
+        # between -10us and 10us
+        if 1e-5 > stats.percs["p99"] and -1e-5 < stats.percs["p1"]:
             # go to nanosec
             rnd1 = 9        # round to 1 ns boxes
-            out['boxwidth'] = 1e-9
+            out['boxwidth'] = S_PER_NS
 
-        cnt = collections.Counter()
+        # Python 2.6  has no collections.Counter(), so fake it.
+        cnt = collections.defaultdict(int)
         for value in values:
             # put into buckets
             # for a +/- 50 microSec range that is 1,000 buckets to plot
-            cnt[ round( value, rnd1)] += 1
+            cnt[round(value, rnd1)] += 1
 
         sigma = True
         if args.clip:
@@ -1005,11 +1183,13 @@ plot \
             # plus/minus of one sigma range
             out['sigma'] = """\
 set style arrow 1 nohead
-set arrow from %(m1sigma)s,graph 0 to %(m1sigma)s,graph 0.90 as 1
-set style arrow 2 nohead
-set arrow from %(p1sigma)s,graph 0 to %(p1sigma)s,graph 0.90 as 2
-set label 1 "-1σ" at %(m1sigma)s, graph 0.96  left front offset -1,-1
-set label 2 "+1σ" at %(p1sigma)s, graph 0.96  left front offset -1,-1
+set linestyle 1 linecolor rgb "#009900"
+set arrow from %(m1sigma)s,graph 0 to %(m1sigma)s,graph 0.90 as 1 ls 1
+set arrow from %(p1sigma)s,graph 0 to %(p1sigma)s,graph 0.90 as 1 ls 1
+set label 1 "-1σ" at %(m1sigma)s, graph 0.96 left front offset -1,-1 \
+    textcolor rgb "#009900"
+set label 2 "+1σ" at %(p1sigma)s, graph 0.96 left front offset -1,-1 \
+    textcolor rgb "#009900"
 """ % out
 
         out['size'] = args.png_size
@@ -1021,8 +1201,7 @@ set terminal png size %(size)s
 set title "%(sitename)s: Local Clock Time Offset Histogram%(clipped)s"
 set grid
 set boxwidth %(boxwidth)s
-set xtic rotate by -35 scale 0
-set xtics format "%%1.1f %(unit)s" nomirror
+set xtics format "%(fmt_x)s %(unit)s" nomirror
 set xrange [%(min_x)s:%(max_x)s]
 set yrange [0:*]
 set style arrow 3 nohead
@@ -1046,7 +1225,7 @@ plot \
  "-" using ($1 * %(multiplier)s):2 title "histogram" with boxes
 ''' % out
 
-        histogram_data = ["%s %s\n" % (k, v) for k,v in cnt.items() ]
+        histogram_data = ["%s %s\n" % (k, v) for k, v in cnt.items()]
 
         exp = """\
 <p>This shows the clock offsets of the local clock as a histogram.</p>
@@ -1054,13 +1233,16 @@ plot \
 <p>The Local Clock Offset is field 3 from the loopstats log file.</p>
 """
         # don't return stats, it's just a dupe
-        ret = {'html' : stats.stats_html + exp, 'stats' : []}
-        ret['title'] = "Local Clock Time Offset Histogram"
-        ret['plot'] = plot_template + "".join(histogram_data) + "e\n"
+        ret = {'html': VizStats.table_head + stats.table +
+               VizStats.table_tail + exp,
+               'plot': plot_template + "".join(histogram_data) + "e\n",
+               'stats': [],
+               'title': "Local Clock Time Offset Histogram"}
         return ret
 
 # Multiplotting can't live inside NTPViz because it consumes a list
 # of such objects, not a single one.
+
 
 def local_offset_multiplot(statlist):
     "Plot comparative local offsets for a list of NTPViz objects."
@@ -1075,19 +1257,21 @@ set ytics format "%1.2f μs" nomirror textcolor rgb "#0060ad"
 set key bottom right box
 plot \\
 ''' % out
-    # FIXME: We probably need to be more flexible about computing the plot label
+    # FIXME: probably need to be more flexible about computing the plot label
     sitenames = [os.path.basename(os.path.dirname(d)) for d in args.statsdirs]
     for (i, stats) in enumerate(statlist):
-        plot += '"-" using 1:($2*1000000) title "%s clock offset μs" with linespoints, \\\n' % (sitenames[i])
+        plot += '"-" using 1:($2*1000000) title "%s clock offset μs"  ' \
+                'with linespoints, \\\n' % (sitenames[i])
     plot = plot[:-4] + "\n"
 
     plot_data = ''
     for stats in statlist:
         # speed up by only sending gnuplot the data it will actually use
         # fields: time, offset
-        plot_data += self.plot_slice( stats.loopstats, 2)
+        (p, v) = NTPViz.plot_slice(stats.loopstats, 2)
+        plot_data += p
 
-    ret = {'html' : '', 'stats' : [] }
+    ret = {'html': '', 'stats': []}
     ret['title'] = "Multiplot"
     ret['plot'] = plot + plot_data
     return ret
@@ -1155,145 +1339,139 @@ AADRxQAAxBEAAA==
 if __name__ == '__main__':
 
     parser = MyArgumentParser(description="ntpd stats visualizer",
-                fromfile_prefix_chars='@',
-                epilog = """
+                              fromfile_prefix_chars='@',
+                              epilog="""
 You can place command line options in a file, one per line.
 
 See the manual page for details.
 
-Python by ESR, concept and GNUPLOT code by Dan Drown.
+Python by ESR, concept and gnuplot code by Dan Drown.
 """)
     group = parser.add_mutually_exclusive_group()
 
     parser.add_argument('-c', '--clip',
-                action="store_true",
-                default = None,
-                dest='clip',
-                help="Clip plots at 1%% and 99%%")
+                        action="store_true",
+                        dest='clip',
+                        help="Clip plots at 1%% and 99%%")
     parser.add_argument('-d', '--datadir',
-                default = "/var/log/ntpstats",
-                dest='statsdirs',
-                help="one or more logfile directories to read",
-                type=str)
+                        default="/var/log/ntpstats",
+                        dest='statsdirs',
+                        help="one or more logfile directories to read",
+                        type=str)
     parser.add_argument('-e', '--endtime',
-                default=None,
-                dest='endtime',
-                help="End time in POSIX (seconds) or ISO 8601",
-                type=str)
+                        dest='endtime',
+                        help="End time in POSIX (seconds) or ISO 8601",
+                        type=str)
     parser.add_argument('-g', '--generate',
-                action="store_true",
-                default=False,
-                dest='generate',
-                help="Run plot through gnuplot to make png")
+                        action="store_true",
+                        dest='generate',
+                        help="Run plot through gnuplot to make png")
     parser.add_argument('-n', '--name',
-                default=socket.getfqdn(),
-                dest='sitename',
-                help="sitename (title)",
-                type=str)
+                        default=socket.getfqdn(),
+                        dest='sitename',
+                        help="sitename (title)",
+                        type=str)
     parser.add_argument('-o', '--outdir',
-                default = "ntpgraphs",
-                dest='outdir',
-                help="output directory",
-                type=str)
+                        default="ntpgraphs",
+                        dest='outdir',
+                        help="output directory",
+                        type=str)
     parser.add_argument('-p', '--period',
-                default = 7,    # default to 7 days
-                dest='period',
-                help="period in days to graph (float)",
-                type=float)
+                        default=7,    # default to 7 days
+                        dest='period',
+                        help="period in days to graph (float)",
+                        type=float)
     parser.add_argument('-s', '--starttime',
-                default=None,
-                dest='starttime',
-                help="Start time in POSIX (seconds) or ISO 8601",
-                type=str)
+                        dest='starttime',
+                        help="Start time in POSIX (seconds) or ISO 8601",
+                        type=str)
     parser.add_argument('-w', '--width',
-                choices=['s', 'm', 'l'],
-                default='m',
-                dest='width',
-                help="PNG width: s, m, or l",
-                type=str)
-    group.add_argument( '--all-peer-jitters',
-                default = False,
-                action="store_true",
-                dest='show_peer_jitters',
-                help="Plot all peer jitters")
-    group.add_argument( '--peer-jitters',
-                default = '',
-                dest='peer_jitters',
-                help="Plot peer jitters.  Comma separated host list.",
-                type=str)
-    group.add_argument( '--all-peer-offsets',
-                default = False,
-                action="store_true",
-                dest='show_peer_offsets',
-                help="Plot all peer offsets")
-    group.add_argument( '--peer-offsets',
-                default = '',
-                dest='peer_offsets',
-                help="Plot peer offsets.  Comma separated host list.",
-                type=str)
-    group.add_argument( '--local-error',
-                default=False,
-                action="store_true",
-                dest='show_local_error',
-                help="Plot local clock frequency offsets")
-    group.add_argument( '--local-freq-temps',
-                default = False,
-                action="store_true",
-                dest='show_freq_temps',
-                help="Plot local frequency vs temperature data")
-    group.add_argument( '--local-gps',
-                default = False,
-                action="store_true",
-                dest='show_gps',
-                help="Plot gpsd tdop and nSats")
-    group.add_argument( '--local-jitter',
-                default=False,
-                action="store_true",
-                dest='show_local_jitter',
-                help="Plot clock time jitter")
-    group.add_argument( '--local-offset',
-                default=False,
-                action="store_true",
-                dest='show_local_offset',
-                help="Plot Clock frequency offset")
-    group.add_argument( '--local-offset-histogram',
-                default=False,
-                action="store_true",
-                dest='show_local_offset_histogram',
-                help="Plot histogram of loopstats time offsets")
-    group.add_argument( '--local-offset-multiplot',
-                default = False,
-                action="store_true",
-                dest='show_local_offset_multiplot',
-                help="Plot comparative local offsets for multiple directories")
-    group.add_argument( '--local-stability',
-                default=False,
-                action="store_true",
-                dest='show_local_stability',
-                help="Plot RMS frequency-jitter")
-    group.add_argument( '--local-temps',
-                default = False,
-                action="store_true",
-                dest='show_temps',
-                help="Plot local temperature data")
+                        choices=['s', 'm', 'l'],
+                        default='m',
+                        dest='width',
+                        help="PNG width: s, m, or l",
+                        type=str)
+    group.add_argument('--all-peer-jitters',
+                       action="store_true",
+                       dest='show_peer_jitters',
+                       help="Plot all peer jitters")
+    group.add_argument('--peer-jitters',
+                       default='',
+                       dest='peer_jitters',
+                       help="Plot peer jitters.  Comma separated host list.",
+                       type=str)
+    group.add_argument('--all-peer-offsets',
+                       action="store_true",
+                       dest='show_peer_offsets',
+                       help="Plot all peer offsets")
+    group.add_argument('--peer-offsets',
+                       default='',
+                       dest='peer_offsets',
+                       help="Plot peer offsets.  Comma separated host list.",
+                       type=str)
+    group.add_argument('--local-error',
+                       action="store_true",
+                       dest='show_local_error',
+                       help="Plot local clock frequency offsets")
+    group.add_argument('--local-freq-temps',
+                       action="store_true",
+                       dest='show_freq_temps',
+                       help="Plot local frequency vs temperature data")
+    group.add_argument('--local-gps',
+                       action="store_true",
+                       dest='show_gps',
+                       help="Plot gpsd TDOP and nSats")
+    group.add_argument('--local-jitter',
+                       action="store_true",
+                       dest='show_local_jitter',
+                       help="Plot clock time jitter")
+    group.add_argument('--local-offset',
+                       action="store_true",
+                       dest='show_local_offset',
+                       help="Plot Clock frequency offset")
+    group.add_argument('--local-offset-histogram',
+                       action="store_true",
+                       dest='show_local_offset_histogram',
+                       help="Plot histogram of loopstats time offsets")
+    group.add_argument('--local-offset-multiplot',
+                       action="store_true",
+                       dest='show_local_offset_multiplot',
+                       help="Plot comparative local offsets for "
+                            "multiple directories")
+    group.add_argument('--local-stability',
+                       action="store_true",
+                       dest='show_local_stability',
+                       help="Plot RMS frequency-jitter")
+    group.add_argument('--local-temps',
+                       action="store_true",
+                       dest='show_temps',
+                       help="Plot local temperature data")
     parser.add_argument('-D', '--debug',
-                default=0,
-                dest='debug_level',
-                help="debug level, 0 (none) to 9 (most)",
-                type=int)
+                        default=0,
+                        dest='debug_level',
+                        help="debug level, 0 (none) to 9 (most)",
+                        type=int)
+    # some OS do not support os.nice()
+    try:
+        os.nice(0)
+        parser.add_argument('-N', '--nice',
+                            action="store_true",
+                            dest='nice',
+                            help="Run as lowest priority")
+    except:
+        pass
+
     parser.add_argument('-V', '--version',
-                action="store_true",
-                default=False,
-                dest='version',
-                help="Print version and exit")
+                        action="version",
+                        version="ntpviz %s" % ntp.util.stdversion())
 
     args = parser.parse_args()
 
-    version = ntp.util.stdversion()
-
-    if args.version:
-        print(version)
-        raise SystemExit(1)
+    if args.nice:
+        # run at lowest possible priority
+        nice = os.nice(19)
+        if args.debug_level:
+            sys.stderr.write("ntpviz: INFO: Now running at nice %s\n" % nice)
 
     if 's' == args.width:
         # fit in 1024x768 browser
@@ -1307,23 +1485,23 @@ Python by ESR, concept and GNUPLOT code by Dan Drown.
         # in 2016 this is 42% of all browsers
         args.png_size = '1340,720'
 
-    args.period = int( float(args.period) * ntp.statfiles.NTPStats.SecondsInDay)
+    args.period = int(float(args.period) * ntp.statfiles.NTPStats.SecondsInDay)
     if args.endtime is not None:
-        args.endtime = iso_to_posix(args.endtime)
+        args.endtime = ntp.statfiles.iso_to_posix(args.endtime)
     if args.starttime is not None:
-        args.starttime = iso_to_posix(args.starttime)
+        args.starttime = ntp.statfiles.iso_to_posix(args.starttime)
 
     args.statsdirs = [os.path.expanduser(path)
-                     for path in args.statsdirs.split(",")]
+                      for path in args.statsdirs.split(",")]
 
-    if True == args.show_peer_offsets:
+    if args.show_peer_offsets is True:
         args.show_peer_offsets = []
     elif 0 < len(args.peer_offsets):
         args.show_peer_offsets = args.peer_offsets.split(",")
     else:
         args.show_peer_offsets = None
 
-    if True == args.show_peer_jitters:
+    if args.show_peer_jitters is True:
         args.show_peer_jitters = []
     elif 0 < len(args.peer_jitters):
         args.show_peer_jitters = args.peer_jitters.split(",")
@@ -1331,19 +1509,19 @@ Python by ESR, concept and GNUPLOT code by Dan Drown.
         args.show_peer_jitters = None
 
     if 0 < args.debug_level:
-        sys.stderr.write("ntpviz: INFO: now running at debug: %s\n" % \
-            args.debug_level)
-        sys.stderr.write("ntpviz: INFO: Version: %s\n" % version)
+        sys.stderr.write("ntpviz: INFO: now running at debug: %s\n" %
+                         args.debug_level)
+        sys.stderr.write("ntpviz: INFO: Version: %s\n" % ntp.util.stdversion())
         sys.stderr.write("ntpviz: INFO: Parsed Options %s\n" % args)
 
         if 9 == args.debug_level:
             # crazy debug, also profile
-            import cProfile, pstats
+            import cProfile
             pr = cProfile.Profile()
             pr.enable()
 
             # register to dump debug on all normal exits
-            atexit.register( print_profile )
+            atexit.register(print_profile)
 
     nice = 19       # always run nicely
     if 0 != nice:
@@ -1359,10 +1537,9 @@ Python by ESR, concept and GNUPLOT code by Dan Drown.
             pass
 
         # set nice()
-        nice = os.nice( nice )
+        nice = os.nice(nice)
         if 2 < args.debug_level:
-            sys.stderr.write("ntpviz: INFO: now running at nice: %s\n" % \
-                nice)
+            sys.stderr.write("ntpviz: INFO: now running at nice: %s\n" % nice)
 
     for fontpath in ("/usr/share/fonts/liberation",
                      "/usr/share/fonts/liberation-fonts",
@@ -1372,20 +1549,21 @@ Python by ESR, concept and GNUPLOT code by Dan Drown.
             os.environ["GDFONTPATH"] = fontpath
             break
     else:
-        sys.stderr.write("ntpviz: WARNING: liberation truetype fonts not found\n")
+        sys.stderr.write(
+            "ntpviz: WARNING: liberation truetype fonts not found\n")
     os.environ["GNUPLOT_DEFAULT_GDFONT"] = "LiberationSans-Regular"
 
     plot = None
 
     if 1 == len(args.statsdirs):
         statlist = [NTPViz(statsdir=args.statsdirs[0], sitename=args.sitename,
-                        period=args.period, starttime=args.starttime,
-                        endtime=args.endtime)]
+                           period=args.period, starttime=args.starttime,
+                           endtime=args.endtime)]
     else:
         statlist = [NTPViz(statsdir=d, sitename=d,
-                        period=args.period, starttime=args.starttime,
-                        endtime=args.endtime)
-                for d in args.statsdirs]
+                           period=args.period, starttime=args.starttime,
+                           endtime=args.endtime)
+                    for d in args.statsdirs]
 
     if len(statlist) == 1:
         stats = statlist[0]
@@ -1395,7 +1573,7 @@ Python by ESR, concept and GNUPLOT code by Dan Drown.
            args.show_local_jitter or \
            args.show_local_stability or \
            args.show_local_offset_histogram:
-            if not len( stats.loopstats ):
+            if not len(stats.loopstats):
                 sys.stderr.write("ntpviz: ERROR: missing loopstats data\n")
                 raise SystemExit(1)
 
@@ -1410,30 +1588,30 @@ Python by ESR, concept and GNUPLOT code by Dan Drown.
             elif args.show_local_offset_histogram:
                 plot = stats.local_offset_histogram_gnuplot()
 
-        if None != args.show_peer_offsets or \
-           None != args.show_peer_jitters:
-            if not len( stats.peerstats ):
+        if args.show_peer_offsets is not None or \
+           args.show_peer_jitters is not None:
+            if not len(stats.peerstats):
                 sys.stderr.write("ntpviz: ERROR:  missing peerstats data\n")
                 raise SystemExit(1)
-            if None != args.show_peer_offsets:
+            if args.show_peer_offsets is not None:
                 plot = stats.peer_offsets_gnuplot(args.show_peer_offsets)
-            if None != args.show_peer_jitters:
+            if args.show_peer_jitters is not None:
                 plot = stats.peer_jitters_gnuplot(args.show_peer_jitters)
 
         if args.show_freq_temps:
-            if not len( stats.temps):
+            if not len(stats.temps):
                 sys.stderr.write("ntpviz: ERROR: missing temps data\n")
                 raise SystemExit(1)
             plot = stats.local_freq_temps_plot()
 
         if args.show_temps:
-            if not len( stats.temps):
+            if not len(stats.temps):
                 sys.stderr.write("ntpviz: ERROR: missing temps data\n")
                 raise SystemExit(1)
             plot = stats.local_temps_gnuplot()
 
         if args.show_gps:
-            if not len( stats.gpsd):
+            if not len(stats.gpsd):
                 sys.stderr.write("ntpviz: ERROR: missing gps data\n")
                 raise SystemExit(1)
             plot = stats.local_gps_gnuplot()
@@ -1441,7 +1619,7 @@ Python by ESR, concept and GNUPLOT code by Dan Drown.
     if args.show_local_offset_multiplot:
         plot = local_offset_multiplot(statlist)
 
-    if None != plot:
+    if plot is not None:
         # finish up the plot, and exit
         if args.generate:
             gnuplot(plot['plot'])
@@ -1454,24 +1632,25 @@ Python by ESR, concept and GNUPLOT code by Dan Drown.
         try:
             os.mkdir(args.outdir)
         except SystemError:
-            sys.stderr.write("ntpviz: ERROR: %s can't be created.\n" \
-                 % args.outdir)
+            sys.stderr.write("ntpviz: ERROR: %s can't be created.\n"
+                             % args.outdir)
             raise SystemExit(1)
 
     # if no ntpsec favicon.ico, write one.
     ico_filename = os.path.join(args.outdir, "favicon.ico")
-    if not os.path.lexists( ico_filename ):
-        with open( ico_filename, "w" ) as wp:
+    if not os.path.lexists(ico_filename):
+        with open(ico_filename, "wb") as wp:
             wp.write(binascii.a2b_base64(ntpsec_ico))
 
     # if no ntpsec logo, write one.
     logo_filename = os.path.join(args.outdir, "ntpsec-logo.png")
-    if not os.path.lexists( logo_filename ):
-        with open( logo_filename, "w" ) as wp:
+    if not os.path.lexists(logo_filename):
+        with open(logo_filename, "wb") as wp:
             wp.write(binascii.a2b_base64(ntpsec_logo))
 
-    report_time = datetime.datetime.utcnow() # the time now is...
-    report_time = report_time.strftime("%c") # format it nicely
+    # report_time = datetime.datetime.utcnow() # the time now is...
+    report_time = datetime.datetime.now(UTC())   # the time now is...
+    report_time = report_time.strftime("%c %Z")  # format it nicely
 
     title = args.sitename
 
@@ -1493,6 +1672,13 @@ dd {
     margin-top: 4px;
     margin-bottom: 10px;
 }
+.section {
+    color: #000000;
+    text-decoration: none;
+    .site-title:visited {
+        color: #000000; }
+        text-decoration: none;
+}
 </style>
 </head>
 <body>
@@ -1502,22 +1688,22 @@ dd {
 </a>
 <div>
 <h1 style="margin-bottom:10px;">%(title)s</h1>
-<b>Report generated:</b> %(report_time)s UTC <br>
+<b>Report generated:</b> %(report_time)s <br>
 ''' % locals()
 
     # Ugh.  Not clear what to do in the multiplot case
     if len(statlist) == 1:
-        start_time = datetime.datetime.utcfromtimestamp( stats.starttime
-                         ).strftime('%c')
-        end_time = datetime.datetime.utcfromtimestamp( stats.endtime
-                         ).strftime('%c')
+        start_time = datetime.datetime.utcfromtimestamp(
+            stats.starttime).strftime('%c')
+        end_time = datetime.datetime.utcfromtimestamp(
+            stats.endtime).strftime('%c')
 
         index_header += '<b>Start Time:</b> %s UTC<br>\n' \
                         '<b>End Time:</b> %s UTC<br>\n' \
-                 % (start_time, end_time)
+            % (start_time, end_time)
         index_header += '<b>Report Period:</b> %1.1f days <br>\n' \
-                 % (float(stats.period) / \
-                     float(ntp.statfiles.NTPStats.SecondsInDay))
+            % (float(stats.period) /
+                float(ntp.statfiles.NTPStats.SecondsInDay))
 
     if args.clip:
         index_header += """\
@@ -1535,34 +1721,47 @@ dd {
 system clock frequency (usually in parts per million, ppm)</dd>
 
 <dt>jitter, dispersion:</dt>
-<dd>The short term change in a value</dd>
+<dd>The short term change in a value.  NTP measures Local Time Jitter,
+Refclock Jitter, and Peer Jitter in seconds.  Local Frequency Jitter is
+in ppm or ppb.
+</dd>
+
+<dt>kurtosis, Kurt:</dt>
+<dd>The kurtosis of a random variable X is the fourth standardized
+moment and is a dimension-less ratio. ntpviz uses the Pearson's moment
+coefficient of kurtosis.  A normal distribution has a kurtosis of three.
+NIST describes a kurtosis over three as "heavy tailed" and one under
+three as "light tailed".</dd>
 
 <dt>ms, millisecond:</dt>
-<dd>One thousandth of a second = 0.001s</dd>
+<dd>One thousandth of a second = 0.001 seconds, 1e-3 seconds</dd>
 
 <dt>mu, mean:</dt>
 <dd>The arithmetic mean: the sum of all the values divided by the
-number of values.</dd>
+number of values.
+The formula for mu is: "mu = (∑x<sub>i</sub>) / N".
+Where x<sub>i</sub> denotes the data points and N is the number of data
+points.</dd>
 
 <dt>ns, nanosecond:</dt>
 <dd>One billionth of a second, also one thousandth of a microsecond,
-0.000000001s.</dd>
+0.000000001 seconds and 1e-9 seconds.</dd>
 
 <dt>percentile:</dt>
 <dd>The value below which a given percentage of values fall.</dd>
 
 <dt>ppb, parts per billion:</dt>
 <dd>Ratio between two values. These following are all the same:
-    1 ppb, one in one billion, 1/1,000,000,000, 0.000,000,001, and
+    1 ppb, one in one billion, 1/1,000,000,000, 0.000,000,001, 1e-9 and
     0.000,000,1%</dd>
 
 <dt>ppm, parts per million:</dt>
 <dd>Ratio between two values. These following are all the same:
     1 ppm, one in one million, 1/1,000,000, 0.000,001, and 0.000,1%</dd>
 
-<dt>ppt, parts per thousand:</dt>
+<dt>‰, parts per thousand:</dt>
 <dd>Ratio between two values. These following are all the same:
-    1 ppt, one in one thousand, 1/1,000, 0.001, and 0.1%</dd>
+    1 ‰. one in one thousand, 1/1,000, 0.001, and 0.1%</dd>
 
 <dt>refclock:</dt>
 <dd>Reference clock, a local GPS module or other local source of time.</dd>
@@ -1573,27 +1772,38 @@ or server.</dd>
 
 <dt>time offset:</dt>
 <dd>The difference between the ntpd calculated time and the local system
- clock's time.  (Also can be called phase offset)</dd>
-
-<dt>upstream clock:</dt>
-<dd>Any remote clock or reference clock used as a source of time.</dd>
+ clock's time.  Also called phase offset.</dd>
 
 <dt>σ, sigma:</dt>
 <dd>Sigma denotes the standard deviation (SD) and is centered on the
 arithmetic mean of the data set. The SD is simply the square root of
 the variance of the data set.  Two sigma is simply twice the standard
-deviation.  Three sigma is three times sigma.  Smaller is better.</dd>
+deviation.  Three sigma is three times sigma.  Smaller is better.<br>
+The formula for sigma is: "σ = √[ ∑(x<sub>i</sub>-mu)^2 / N ]".
+Where x<sub>i</sub> denotes the data points and N is the number of data
+points.</dd>
+
+<dt>skewness, Skew:</dt>
+<dd>The skewness of a random variable X is the third standardized
+moment and is a dimension-less ratio. ntpviz uses the Pearson's moment
+coefficient of skewness.  Wikipedia describes it best: "The qualitative
+interpretation of the skew is complicated and unintuitive."<br> A normal
+distribution has a skewness of zero. </dd>
+
+<dt>upstream clock:</dt>
+<dd>Any remote clock or reference clock used as a source of time.</dd>
 
 <dt>µs, us, microsecond:</dt>
 <dd>One millionth of a second, also one thousandth of a millisecond,
-0.000,001s.</dd>
+0.000,001 seconds, and 1e-6 seconds.</dd>
 </dl>
 
 <br>
 <br>
 <br>
 <div style="float:left">
-This page autogenerated by <a href="https://docs.ntpsec.org/latest/ntpviz.html">
+This page autogenerated by
+<a href="https://docs.ntpsec.org/latest/ntpviz.html">
 ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
 </div>
 <div style="float:left;margin-left:350px;">
@@ -1622,7 +1832,7 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
     header = os.path.join(args.outdir, "header")
     if os.path.isfile(header):
         try:
-            header_file = open( header, 'r')
+            header_file = open(header, 'r')
             header_txt = header_file.read()
             index_buffer += '<br>\n' + header_txt + '\n'
         except IOError:
@@ -1635,7 +1845,7 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
         imagepairs = [
             ("local-offset", stats.local_offset_gnuplot()),
             # skipa next one, redundant to one above
-            #("local-error", stats.local_error_gnuplot()),
+            # ("local-error", stats.local_error_gnuplot()),
             ("local-jitter", stats.local_offset_jitter_gnuplot()),
             ("local-stability", stats.local_offset_stability_gnuplot()),
             ("local-offset-histogram", stats.local_offset_histogram_gnuplot()),
@@ -1645,18 +1855,18 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
             ("peer-offsets", stats.peer_offsets_gnuplot()),
         ]
 
-        peerlist = stats.peersplit().keys()
+        peerlist = list(stats.peersplit().keys())
         # sort for output order stability
         peerlist.sort()
         for key in peerlist:
             imagepairs.append(("peer-offset-" + key,
-                           stats.peer_offsets_gnuplot([key])))
+                               stats.peer_offsets_gnuplot([key])))
 
         imagepairs.append(("peer-jitters",
                            stats.peer_jitters_gnuplot()))
         for key in peerlist:
             imagepairs.append(("peer-jitter-" + key,
-                           stats.peer_jitters_gnuplot([key])))
+                               stats.peer_jitters_gnuplot([key])))
 
         stats = []
         for (imagename, image) in imagepairs:
@@ -1664,40 +1874,51 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
                 continue
             if 1 <= args.debug_level:
                 sys.stderr.write("ntpviz: plotting %s\n" % image['title'])
-            stats.append( image['stats'] )
+            stats.append(image['stats'])
             # give each H2 an unique ID.
             id = image['title'].lower()
             id = id.replace(' ', '_').replace(':', '_')
             index_buffer += """\
-<div>\n<h2 id="%s">%s:</h2>
-""" % (id, image['title'])
+<div id="%s">\n<h2><a class="section" href="#%s">%s</a></h2>
+""" % (id, id, image['title'])
 
             div_name = imagename.replace('-', ' ')
             index_buffer += imagewrapper % \
-                             (imagename.replace(':', '%3A'), div_name)
+                (imagename.replace(':', '%3A'), div_name)
             if image['html']:
                 index_buffer += "<div>\n%s</div>\n" % image['html']
             index_buffer += "<br><br>\n"
-            gnuplot(image['plot'], os.path.join(args.outdir, imagename + ".png"))
+            gnuplot(image['plot'], os.path.join(args.outdir,
+                    imagename + ".png"))
             index_buffer += "</div>\n"
 
     # dump stats
     csvs = []
     if True:
-        index_buffer += '<div id="Summary"><h2>Summary</h2>\n'
-        index_buffer += VizStats.table_head
+        stats_to_output = {}
         for stat in stats:
             if [] == stat:
                 continue
             for sta in stat:
-                index_buffer += str( sta.table )
-                csvs.append(sta.csv)
-        # RFC 4180 specifies the mime-type of a csv
+                if sta.skip_summary:
+                    continue
+                # This removes duplicates
+                stats_to_output[sta.title] = sta
+
+        index_buffer += '<div id="Summary">\n' \
+            '<h2><a class="section" href="#Summary">Summary</a></h2>\n'
+        index_buffer += VizStats.table_head
+
+        for key in sorted(stats_to_output.keys()):
+            index_buffer += str(stats_to_output[key].table)
+            csvs.append(stats_to_output[key].csv)
+
+        # RFC 4180 specifies the mime-type of a csv: text/csv
         # your webserver should be programmed the same
+        index_buffer += VizStats.table_tail
         index_buffer += """\
-</table>
 <a href="summary.csv" target="_blank"
-  type="text/csv;charset=UTF-8;header=present;">Summary as CSV file</a><br>
+  type="text/csv;charset=UTF-8;header=present">Summary as CSV file</a><br>
 </div>
 """
 
@@ -1705,7 +1926,7 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
     footer = os.path.join(args.outdir, "footer")
     if os.path.isfile(footer):
         try:
-            footer_file = open( footer, 'r')
+            footer_file = open(footer, 'r')
             footer_txt = footer_file.read()
             index_buffer += '<br>\n' + footer_txt + '\n'
         except IOError:
@@ -1714,12 +1935,12 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
 
     # and send the file buffer
     index_filename = os.path.join(args.outdir, "index.html")
-    with open(index_filename + ".tmp", "wb") as ifile:
+    with open(index_filename + ".tmp", "w") as ifile:
         ifile.write(index_buffer)
 
     # create csv file, as a tmp file
     csv_filename = os.path.join(args.outdir, "summary.csv")
-    with open( csv_filename + ".tmp", "wb" ) as csv_file:
+    with open(csv_filename + ".tmp", "w") as csv_file:
         csv_ob = csv.writer(csv_file)
         csv_ob.writerow(VizStats.csv_head)
         for row in csvs:
@@ -1729,12 +1950,12 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
     # windows python 2.7, 3.6 has no working rename, so delete and move
     try:
         os.remove(csv_filename)
-        os.remove( index_filename)
+        os.remove(index_filename)
     except:
         pass
 
-    os.rename( csv_filename + ".tmp", csv_filename)
-    os.rename( index_filename + ".tmp", index_filename)
+    os.rename(csv_filename + ".tmp", csv_filename)
+    os.rename(index_filename + ".tmp", index_filename)
 
 
 # end

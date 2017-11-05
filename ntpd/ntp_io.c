@@ -2,7 +2,7 @@
  * ntp_io.c - input/output routines for ntpd.
  */
 
-#include <config.h>
+#include "config.h"
 
 #include <stdio.h>
 #include <signal.h>
@@ -18,14 +18,12 @@
 #include "ntp_lists.h"
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
-#include "ntp_worker.h"
 #include "ntp_assert.h"
+#include "ntp_dns.h"
 #include "timespecops.h"
 
-#include <isc/mem.h>
-#include <isc/interfaceiter.h>
-#include <isc/netaddr.h>
-#include <isc/sockaddr.h>
+#include "isc_interfaceiter.h"
+#include "isc_netaddr.h"
 
 #ifdef HAVE_NET_ROUTE_H
 # define USE_ROUTING_SOCKET
@@ -43,26 +41,19 @@
 /*
  * setsockopt does not always have the same arg declaration
  * across all platforms. If it's not defined we make it empty
+ * UNUSED
+ *
+ * #ifndef SETSOCKOPT_ARG_CAST
+ * #define SETSOCKOPT_ARG_CAST
+ * #endif
  */
 
-#ifndef SETSOCKOPT_ARG_CAST
-#define SETSOCKOPT_ARG_CAST
-#endif
-
-extern int listen_to_virtual_ips;
 
 #ifndef IPTOS_DSCP_EF
 #define IPTOS_DSCP_EF 0xb8
 #endif
 int qos = IPTOS_DSCP_EF;	/* QoS RFC 3246 */
 
-#ifdef ENABLE_LEAP_SMEAR
-/* TODO burnicki: This should be moved to ntp_timer.c, but if we do so
- * we get a linker error. Since we're running out of time before the leap
- * second occurs, we let it here where it just works.
- */
-int leap_smear_intv;
-#endif
 
 /*
  * NIC rule entry
@@ -82,7 +73,7 @@ struct nic_rule_tag {
  * NIC rule listhead.  Entries are added at the head so that the first
  * match in the list is the last matching rule specified.
  */
-nic_rule *nic_rule_list;
+static nic_rule *nic_rule_list;
 
 /*
  * This code is a remnant from when ntpd did asynchronous input using
@@ -106,15 +97,15 @@ nic_rule *nic_rule_list;
 /*
  * Other statistics of possible interest
  */
-u_long packets_dropped;		/* total # of packets dropped on reception */
-u_long packets_ignored;		/* packets received on wild card interface */
-u_long packets_received;	/* total # of packets received */
-u_long packets_sent;		/* total # of packets sent */
-u_long packets_notsent;		/* total # of packets which couldn't be sent */
+unsigned long packets_dropped;	/* total # of packets dropped on reception */
+unsigned long packets_ignored;	/* packets received on wild card interface */
+unsigned long packets_received;	/* total # of packets received */
+unsigned long packets_sent;	/* total # of packets sent */
+unsigned long packets_notsent;	/* total # of packets which couldn't be sent */
 
-volatile u_long handler_calls;	/* number of calls to interrupt handler */
-volatile u_long handler_pkts;	/* number of pkts received by handler */
-u_long io_timereset;		/* time counters were reset */
+volatile unsigned long handler_calls;	/* # of calls to interrupt handler */
+volatile unsigned long handler_pkts;	/* number of pkts received by handler */
+unsigned long io_timereset;		/* time counters were reset */
 
 /*
  * Interface stuff
@@ -123,10 +114,29 @@ endpt *	any_interface;		/* wildcard ipv4 interface */
 endpt *	any6_interface;		/* wildcard ipv6 interface */
 endpt *	loopback_interface;	/* loopback ipv4 interface */
 
-u_int sys_ifnum;			/* next .ifnum to assign */
-int ninterfaces;			/* total # of interfaces */
+unsigned int sys_ifnum;			/* next .ifnum to assign */
+static int ninterfaces;			/* total # of interfaces */
 
 bool disable_dynamic_updates;	/* if true, scan interfaces once only */
+
+static bool
+netaddr_eqprefix(const isc_netaddr_t *, const isc_netaddr_t *,
+                    unsigned int) __attribute__((pure));
+
+/* Socket Address */
+typedef struct isc_sockaddr {
+	union {
+		struct sockaddr		sa;
+		struct sockaddr_in	sin;
+		struct sockaddr_in6	sin6;
+	}				type;
+	unsigned int			length;		/* XXXRTH beginning? */
+        struct { struct isc_sockaddr *prev, *next; } link;
+} isc_sockaddr_t;
+
+static void
+netaddr_fromsockaddr(isc_netaddr_t *netaddr, const isc_sockaddr_t *source);
+
 
 #ifdef REFCLOCK
 /*
@@ -146,14 +156,13 @@ static int maxactivefd;
 /*
  * bit alternating value to detect verified interfaces during an update cycle
  */
-static  u_short		sys_interphase = 0;
+static unsigned short		sys_interphase = 0;
 
-static endpt *	new_interface(endpt *);
 static void	add_interface(endpt *);
-static bool	update_interfaces(u_short, interface_receiver_t,
+static bool	update_interfaces(unsigned short, interface_receiver_t,
 				  void *);
 static void	remove_interface(endpt *);
-static endpt *	create_interface(u_short, endpt *);
+static endpt *	create_interface(unsigned short, endpt *);
 
 static bool	is_wildcard_addr	(const sockaddr_u *);
 
@@ -181,7 +190,7 @@ struct vsock {
 	enum desc_type	type;
 };
 
-vsock_t	*fd_list;
+static vsock_t	*fd_list;
 
 #if defined(USE_ROUTING_SOCKET)
 /*
@@ -198,7 +207,7 @@ struct asyncio_reader {
 	void (*receiver)(struct asyncio_reader *);  /* input handler */
 };
 
-struct asyncio_reader *asyncio_reader_list;
+static struct asyncio_reader *asyncio_reader_list;
 
 static void delete_asyncio_reader (struct asyncio_reader *);
 static struct asyncio_reader *new_asyncio_reader (void);
@@ -211,7 +220,7 @@ static void init_async_notifications (void);
 
 static	bool	addr_eqprefix	(const sockaddr_u *, const sockaddr_u *,
 				 int);
-static	int	create_sockets	(u_short);
+static	int	create_sockets	(unsigned short);
 static	void	set_reuseaddr	(int);
 static	bool	socket_broadcast_enable	 (endpt *, SOCKET, sockaddr_u *);
 #ifdef  OS_MISSES_SPECIFIC_ROUTE_UPDATES
@@ -226,42 +235,44 @@ struct remaddr {
 	endpt *			ep;
 };
 
-remaddr_t *	remoteaddr_list;
+static remaddr_t * remoteaddr_list;
 endpt *		ep_list;	/* complete endpt list */
 
 static endpt *	wildipv4;
 static endpt *	wildipv6;
 
-const int accept_wildcard_if_for_winnt = false;
+static const int accept_wildcard_if_for_winnt = false;
 
 static void	add_fd_to_list		(SOCKET, enum desc_type);
 static endpt *	find_addr_in_list	(sockaddr_u *);
 static void	delete_interface_from_list(endpt *);
 static void	close_and_delete_fd_from_list(SOCKET);
 static void	add_addr_to_list	(sockaddr_u *, endpt *);
-static void	create_wildcards	(u_short);
+static void	create_wildcards	(unsigned short);
 static endpt *	findlocalinterface	(sockaddr_u *, int, int);
 static endpt *	findclosestinterface	(sockaddr_u *, int);
+static endpt *	findbcastinter		(sockaddr_u *);
+
 #ifdef DEBUG
 static const char *	action_text	(nic_rule_action);
 #endif
 static nic_rule_action	interface_action(char *, sockaddr_u *, uint32_t);
 static void		convert_isc_if	(isc_interface_t *,
-					 endpt *, u_short);
+					 endpt *, unsigned short);
 static void		calc_addr_distance(sockaddr_u *,
 					   const sockaddr_u *,
 					   const sockaddr_u *);
 static int		cmp_addr_distance(const sockaddr_u *,
 					  const sockaddr_u *);
+static void		maintain_activefds(int fd, bool closing);
 
 /*
  * Routines to read the ntp packets
  */
-static inline int	read_network_packet	(SOCKET, endpt *, l_fp);
-static void ntpd_addremove_io_fd (int, int, int);
+static int	read_network_packet	(SOCKET, endpt *, l_fp);
 static void input_handler (fd_set *, l_fp *);
 #ifdef REFCLOCK
-static inline int	read_refclock_packet	(SOCKET, struct refclockio *, l_fp);
+static int	read_refclock_packet	(SOCKET, struct refclockio *, l_fp);
 #endif
 
 /*
@@ -269,20 +280,25 @@ static inline int	read_refclock_packet	(SOCKET, struct refclockio *, l_fp);
  */
 volatile bool sawALRM = false;
 volatile bool sawHUP = false;
+#ifdef ENABLE_DNS_LOOKUP
+volatile bool sawDNS = false;
+#else
+# define sawDNS false
+#endif
 volatile bool sawQuit = false;  /* SIGQUIT, SIGINT, SIGTERM */
-sigset_t blockMask;
+static sigset_t blockMask;
 
 void
 maintain_activefds(
 	int fd,
-	int closing
+	bool closing
 	)
 {
 	int i;
 
 	if (fd < 0 || fd >= (int)FD_SETSIZE) {
 		msyslog(LOG_ERR,
-			"Too many sockets in use, FD_SETSIZE %d exceeded by fd %d",
+			"IO: Too many sockets in use, FD_SETSIZE %d exceeded by fd %d",
 			FD_SETSIZE, fd);
 		exit(1);
 	}
@@ -298,7 +314,7 @@ maintain_activefds(
 					maxactivefd = i;
 					break;
 				}
-			NTP_INSIST(fd != maxactivefd);
+			INSIST(fd != maxactivefd);
 		}
 	}
 }
@@ -309,11 +325,11 @@ maintain_activefds(
  * collect timing information for various processing
  * paths. currently we only pass them on to the file
  * for later processing. this could also do histogram
- * based analysis in other to reduce the load (and skew)
- * dur to the file output
+ * based analysis in order to reduce the load (and skew)
+ * due to the file output
  */
 void
-collect_timing(struct recvbuf *rb, const char *tag, int count, l_fp *dts)
+collect_timing(struct recvbuf *rb, const char *tag, int count, l_fp dts)
 {
 	char buf[256];
 
@@ -381,23 +397,6 @@ init_io(void)
 	sigaddset(&blockMask, SIGTERM);
 	sigaddset(&blockMask, SIGHUP);
 
-
-#ifdef USE_WORK_PIPE
-	addremove_io_fd = &ntpd_addremove_io_fd;
-#endif
-}
-
-
-static void
-ntpd_addremove_io_fd(
-	int	fd,
-	int	is_pipe,
-	int	remove_it
-	)
-{
-	UNUSED_ARG(is_pipe);
-
-	maintain_activefds(fd, remove_it);
 }
 
 
@@ -421,7 +420,7 @@ io_open_sockets(void)
 
 	init_async_notifications();
 
-	DPRINTF(3, ("io_open_sockets: maxactivefd %d\n", maxactivefd));
+	DPRINT(3, ("io_open_sockets: maxactivefd %d\n", maxactivefd));
 }
 
 
@@ -444,9 +443,7 @@ interface_dump(const endpt *itf)
 	sockaddr_dump(&itf->mask);
 	printf("name = %s\n", itf->name);
 	printf("flags = 0x%08x\n", itf->flags);
-	printf("last_ttl = %d\n", itf->last_ttl);
 	printf("addr_refid = %08x\n", itf->addr_refid);
-	printf("num_mcast = %d\n", itf->num_mcast);
 	printf("received = %ld\n", itf->received);
 	printf("sent = %ld\n", itf->sent);
 	printf("notsent = %ld\n", itf->notsent);
@@ -483,7 +480,8 @@ sockaddr_dump(const sockaddr_u *psau)
 static void
 print_interface(const endpt *iface, const char *pfx, const char *sfx)
 {
-	printf("%sinterface #%d: fd=%d, bfd=%d, name=%s, flags=0x%x, ifindex=%u, sin=%s",
+	printf("%sinterface #%u: fd=%d, bfd=%d, name=%s, "
+               "flags=0x%x, ifindex=%u, sin=%s",
 	       pfx,
 	       iface->ifnum,
 	       iface->fd,
@@ -502,7 +500,7 @@ print_interface(const endpt *iface, const char *pfx, const char *sfx)
 		   ? "Disabled"
 		   : "Enabled",
 	       sfx);
-	if (debug > 4)	/* in-depth debugging only */
+	if (debug > 4)	/* in-depth debugging only */ /* SPECIAL DEBUG */
 		interface_dump(iface);
 }
 #endif
@@ -565,6 +563,82 @@ remove_asyncio_reader(
 }
 #endif /* defined(USE_ROUTING_SOCKET) */
 
+static void
+netaddr_fromsockaddr(isc_netaddr_t *t, const isc_sockaddr_t *s) {
+	int family = s->type.sa.sa_family;
+	t->family = (unsigned int)family;
+	switch (family) {
+	case AF_INET:
+		t->type.in = s->type.sin.sin_addr;
+		t->zone = 0;
+		break;
+	case AF_INET6:
+		memcpy(&t->type.in6, &s->type.sin6.sin6_addr, 16);
+		t->zone = s->type.sin6.sin6_scope_id;
+		break;
+	default:
+		INSIST(0);
+	}
+}
+
+static bool
+netaddr_eqprefix(const isc_netaddr_t *a, const isc_netaddr_t *b,
+		     unsigned int prefixlen)
+{
+	const unsigned char *pa = NULL, *pb = NULL;
+	unsigned int ipabytes = 0; /* Length of whole IP address in bytes */
+	unsigned int nbytes;       /* Number of significant whole bytes */
+	unsigned int nbits;        /* Number of significant leftover bits */
+
+	REQUIRE(a != NULL && b != NULL);
+
+	if (a->family != b->family)
+		return (false);
+
+	if (a->zone != b->zone && b->zone != 0)
+		return (false);
+
+	switch (a->family) {
+	case AF_INET:
+		pa = (const unsigned char *) &a->type.in;
+		pb = (const unsigned char *) &b->type.in;
+		ipabytes = 4;
+		break;
+	case AF_INET6:
+		pa = (const unsigned char *) &a->type.in6;
+		pb = (const unsigned char *) &b->type.in6;
+		ipabytes = 16;
+		break;
+	default:
+		return (false);
+	}
+
+	/*
+	 * Don't crash if we get a pattern like 10.0.0.1/9999999.
+	 */
+	if (prefixlen > ipabytes * 8)
+		prefixlen = ipabytes * 8;
+
+	nbytes = prefixlen / 8;
+	nbits = prefixlen % 8;
+
+	if (nbytes > 0) {
+		if (memcmp(pa, pb, nbytes) != 0)
+			return (false);
+	}
+	if (nbits > 0) {
+		unsigned int bytea, byteb, mask;
+		INSIST(nbytes < ipabytes);
+		INSIST(nbits < 8);
+		bytea = pa[nbytes];
+		byteb = pb[nbytes];
+		mask = (0xFF << (8-nbits)) & 0xFF;
+		if ((bytea & mask) != (byteb & mask))
+			return (false);
+	}
+	return (true);
+}
+
 
 /* compare two sockaddr prefixes */
 static bool
@@ -580,14 +654,14 @@ addr_eqprefix(
 
 	ZERO(isc_sa);
 	memcpy(&isc_sa.type, a, min(sizeof(isc_sa.type), sizeof(*a)));
-	isc_netaddr_fromsockaddr(&isc_a, &isc_sa);
+	netaddr_fromsockaddr(&isc_a, &isc_sa);
 
 	ZERO(isc_sa);
 	memcpy(&isc_sa.type, b, min(sizeof(isc_sa.type), sizeof(*b)));
-	isc_netaddr_fromsockaddr(&isc_b, &isc_sa);
+	netaddr_fromsockaddr(&isc_b, &isc_sa);
 
-	return isc_netaddr_eqprefix(&isc_a, &isc_b,
-					 (u_int)prefixlen);
+	return netaddr_eqprefix(&isc_a, &isc_b,
+					 (unsigned int)prefixlen);
 }
 
 
@@ -600,7 +674,7 @@ addr_eqprefix(
 bool
 is_ip_address(
 	const char *	host,
-	u_short		af,
+	unsigned short	af,
 	sockaddr_u *	addr
 	)
 {
@@ -611,8 +685,8 @@ is_ip_address(
 	char tmpbuf[128];
 	char *pch;
 
-	NTP_REQUIRE(host != NULL);
-	NTP_REQUIRE(addr != NULL);
+	REQUIRE(host != NULL);
+	REQUIRE(addr != NULL);
 
 	ZERO_SOCK(addr);
 
@@ -662,22 +736,6 @@ is_ip_address(
 	return false;
 }
 
-
-/*
- * interface list enumerator - visitor pattern
- */
-void
-interface_enumerate(
-	interface_receiver_t	receiver,
-	void *			data
-	)
-{
-	interface_info_t ifi;
-
-	ifi.action = IFS_EXISTS;
-	for (ifi.ep = ep_list; ifi.ep != NULL; ifi.ep = ifi.ep->elink)
-		(*receiver)(data, &ifi);
-}
 
 /*
  * do standard initialization of interface structure
@@ -766,7 +824,9 @@ remove_interface(
 
 	if (ep->fd != INVALID_SOCKET) {
 		msyslog(LOG_INFO,
-			"Deleting interface #%d %s, %s#%d, interface stats: received=%ld, sent=%ld, dropped=%ld, active_time=%ld secs",
+			"IO: Deleting interface #%u %s, %s#%d, interface stats: "
+                        "received=%ld, sent=%ld, dropped=%ld, "
+                        "active_time=%lu secs",
 			ep->ifnum,
 			ep->name,
 			socktoa(&ep->sin),
@@ -781,7 +841,8 @@ remove_interface(
 
 	if (ep->bfd != INVALID_SOCKET) {
 		msyslog(LOG_INFO,
-			"stop listening for broadcasts to %s on interface #%d %s",
+			"IO: stop listening for broadcasts to %s "
+                        "on interface #%u %s",
 			socktoa(&ep->bcast), ep->ifnum, ep->name);
 		close_and_delete_fd_from_list(ep->bfd);
 		ep->bfd = INVALID_SOCKET;
@@ -803,7 +864,7 @@ log_listen_address(
 	endpt *	ep
 	)
 {
-	msyslog(LOG_INFO, "%s on %d %s %s",
+	msyslog(LOG_INFO, "IO: %s on %u %s %s",
 			(ep->ignore_packets)
 			    ? "Listen and drop"
 			    : "Listen normally",
@@ -815,7 +876,7 @@ log_listen_address(
 
 static void
 create_wildcards(
-	u_short	port
+	unsigned short	port
 	)
 {
 	bool			v4wild;
@@ -871,7 +932,7 @@ create_wildcards(
 			log_listen_address(wildif);
 		} else {
 			msyslog(LOG_ERR,
-				"unable to bind to wildcard address %s - another process may be running: %m; EXITING",
+				"IO: unable to bind to wildcard address %s - another process may be running: %m; EXITING",
 				socktoa(&wildif->sin));
 			exit(1);
 		}
@@ -914,7 +975,7 @@ create_wildcards(
 			log_listen_address(wildif);
 		} else {
 			msyslog(LOG_ERR,
-				"unable to bind to wildcard address %s - another process may be running: %m; EXITING",
+				"IO: unable to bind to wildcard address %s - another process may be running: %m; EXITING",
 				socktoa(&wildif->sin));
 			exit(1);
 		}
@@ -943,15 +1004,15 @@ add_nic_rule(
 	rule->action = action;
 
 	if (MATCH_IFNAME == match_type) {
-		NTP_REQUIRE(NULL != if_name);
+		REQUIRE(NULL != if_name);
 		rule->if_name = estrdup(if_name);
 	} else if (MATCH_IFADDR == match_type) {
-		NTP_REQUIRE(NULL != if_name);
+		REQUIRE(NULL != if_name);
 		/* set rule->addr */
 		is_ip = is_ip_address(if_name, AF_UNSPEC, &rule->addr);
-		NTP_REQUIRE(is_ip);
+		REQUIRE(is_ip);
 	} else
-		NTP_REQUIRE(NULL == if_name);
+		REQUIRE(NULL == if_name);
 
 	LINK_SLIST(nic_rule_list, rule, next);
 }
@@ -969,9 +1030,9 @@ action_text(
 
 	default:
 		t = "ERROR";	/* quiet uninit warning */
-		DPRINTF(1, ("fatal: unknown nic_rule_action %d\n",
-			    action));
-		NTP_ENSURE(0);
+		DPRINT(1, ("fatal: unknown nic_rule_action %u\n",
+			   action));
+		ENSURE(0);
 		break;
 
 	case ACTION_LISTEN:
@@ -1003,8 +1064,8 @@ interface_action(
 	int		isloopback;
 	int		iswildcard;
 
-	DPRINTF(4, ("interface_action: interface %s ",
-		    (if_name != NULL) ? if_name : "wildcard"));
+	DPRINT(4, ("interface_action: interface %s ",
+		   (if_name != NULL) ? if_name : "wildcard"));
 
 	iswildcard = is_wildcard_addr(if_addr);
 	isloopback = !!(INT_LOOPBACK & if_flags);
@@ -1016,35 +1077,36 @@ interface_action(
 	for (rule = nic_rule_list; rule != NULL; rule = rule->next) {
 
 		switch (rule->match_type) {
-
+                default:
+                        /* huh? */
 		case MATCH_ALL:
 			/* loopback and wildcard excluded from "all" */
 			if (isloopback || iswildcard)
 				break;
-			DPRINTF(4, ("nic all %s\n",
-			    action_text(rule->action)));
+			DPRINT(4, ("nic all %s\n",
+				   action_text(rule->action)));
 			return rule->action;
 
 		case MATCH_IPV4:
 			if (IS_IPV4(if_addr)) {
-				DPRINTF(4, ("nic ipv4 %s\n",
-				    action_text(rule->action)));
+				DPRINT(4, ("nic ipv4 %s\n",
+					   action_text(rule->action)));
 				return rule->action;
 			}
 			break;
 
 		case MATCH_IPV6:
 			if (IS_IPV6(if_addr)) {
-				DPRINTF(4, ("nic ipv6 %s\n",
-				    action_text(rule->action)));
+				DPRINT(4, ("nic ipv6 %s\n",
+					   action_text(rule->action)));
 				return rule->action;
 			}
 			break;
 
 		case MATCH_WILDCARD:
 			if (iswildcard) {
-				DPRINTF(4, ("nic wildcard %s\n",
-				    action_text(rule->action)));
+				DPRINT(4, ("nic wildcard %s\n",
+					   action_text(rule->action)));
 				return rule->action;
 			}
 			break;
@@ -1054,15 +1116,15 @@ interface_action(
 				if (addr_eqprefix(if_addr, &rule->addr,
 						  rule->prefixlen)) {
 
-					DPRINTF(4, ("subnet address match - %s\n",
-					    action_text(rule->action)));
+					DPRINT(4, ("subnet address match - %s\n",
+						   action_text(rule->action)));
 					return rule->action;
 				}
 			} else
 				if (SOCK_EQ(if_addr, &rule->addr)) {
 
-					DPRINTF(4, ("address match - %s\n",
-					    action_text(rule->action)));
+					DPRINT(4, ("address match - %s\n",
+						   action_text(rule->action)));
 					return rule->action;
 				}
 			break;
@@ -1076,8 +1138,8 @@ interface_action(
 #endif
 			    ) {
 
-				DPRINTF(4, ("interface name match - %s\n",
-				    action_text(rule->action)));
+				DPRINT(4, ("interface name match - %s\n",
+					   action_text(rule->action)));
 				return rule->action;
 			}
 			break;
@@ -1091,7 +1153,7 @@ interface_action(
 	 * 127.0.0.1, it's useful to default to listening on both.
 	 */
 	if (isloopback) {
-		DPRINTF(4, ("default loopback listen\n"));
+		DPRINT(4, ("default loopback listen\n"));
 		return ACTION_LISTEN;
 	}
 
@@ -1101,7 +1163,7 @@ interface_action(
 	 * default to drop.
 	 */
 	if (iswildcard) {
-		DPRINTF(4, ("default wildcard drop\n"));
+		DPRINT(4, ("default wildcard drop\n"));
 		return ACTION_DROP;
 	}
 
@@ -1113,7 +1175,7 @@ interface_action(
 	if (!listen_to_virtual_ips && if_name != NULL
 	    && (strchr(if_name, ':') != NULL)) {
 
-		DPRINTF(4, ("virtual ip - ignore\n"));
+		DPRINT(4, ("virtual ip - ignore\n"));
 		return ACTION_IGNORE;
 	}
 
@@ -1127,11 +1189,11 @@ interface_action(
 	 * listen on any other addresses.
 	 */
 	if (NULL == nic_rule_list) {
-		DPRINTF(4, ("default listen\n"));
+		DPRINT(4, ("default listen\n"));
 		return ACTION_LISTEN;
 	}
 
-	DPRINTF(4, ("implicit ignore\n"));
+	DPRINT(4, ("implicit ignore\n"));
 	return ACTION_IGNORE;
 }
 
@@ -1140,7 +1202,7 @@ static void
 convert_isc_if(
 	isc_interface_t *isc_if,
 	endpt *itf,
-	u_short port
+	unsigned short port
 	)
 {
 	const uint8_t v6loop[16] = {0, 0, 0, 0, 0, 0, 0, 0,
@@ -1148,10 +1210,10 @@ convert_isc_if(
 
 	strlcpy(itf->name, isc_if->name, sizeof(itf->name));
 	itf->ifindex = isc_if->ifindex;
-	itf->family = (u_short)isc_if->af;
-	AF(&itf->sin) = itf->family;
-	AF(&itf->mask) = itf->family;
-	AF(&itf->bcast) = itf->family;
+	itf->family = (unsigned short)isc_if->af;
+	AF(&itf->sin) = (sa_family_t)itf->family;
+	AF(&itf->mask) = (sa_family_t)itf->family;
+	AF(&itf->bcast) = (sa_family_t)itf->family;
 	SET_PORT(&itf->sin, port);
 	SET_PORT(&itf->mask, port);
 	SET_PORT(&itf->bcast, port);
@@ -1235,7 +1297,6 @@ refresh_interface(
 		  * reset TTL indication so TTL is is set again
 		  * next time around
 		  */
-		interface->last_ttl = 0;
 		return (interface->fd != INVALID_SOCKET);
 	} else
 		return false;	/* invalid sockets are not refreshable */
@@ -1263,36 +1324,8 @@ interface_update(
 		return;
 
 #ifdef DEBUG
-	msyslog(LOG_DEBUG, "new interface(s) found: waking up resolver");
+	msyslog(LOG_DEBUG, "IO: new interface(s) found: waking up resolver");
 #endif
-	interrupt_worker_sleep();
-}
-
-
-/*
- * sau_from_netaddr() - convert network address on-wire formats.
- * Convert from libisc's isc_netaddr_t to NTP's sockaddr_u
- */
-void
-sau_from_netaddr(
-	sockaddr_u *psau,
-	const isc_netaddr_t *pna
-	)
-{
-	ZERO_SOCK(psau);
-	AF(psau) = (u_short)pna->family;
-	switch (pna->family) {
-
-	case AF_INET:
-		memcpy(&psau->sa4.sin_addr, &pna->type.in,
-		       sizeof(psau->sa4.sin_addr));
-		break;
-
-	case AF_INET6:
-		memcpy(&psau->sa6.sin6_addr, &pna->type.in6,
-		       sizeof(psau->sa6.sin6_addr));
-		break;
-	}
 }
 
 
@@ -1317,7 +1350,7 @@ is_wildcard_addr(
  */
 static void
 set_wildcard_reuse(
-	u_short	family,
+	unsigned short	family,
 	int	on
 	)
 {
@@ -1332,12 +1365,12 @@ set_wildcard_reuse(
 		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
 			       (char *)&on, sizeof(on)))
 			msyslog(LOG_ERR,
-				"set_wildcard_reuse: setsockopt(SO_REUSEADDR, %s) failed: %m",
+				"IO: set_wildcard_reuse: setsockopt(SO_REUSEADDR, %s) failed: %m",
 				on ? "on" : "off");
 
-		DPRINTF(4, ("set SO_REUSEADDR to %s on %s\n",
-			    on ? "on" : "off",
-			    socktoa(&any->sin)));
+		DPRINT(4, ("set SO_REUSEADDR to %s on %s\n",
+			   on ? "on" : "off",
+			   socktoa(&any->sin)));
 	}
 }
 #endif /* NEED_REUSEADDR_FOR_IFADDRBIND */
@@ -1354,7 +1387,7 @@ check_flags6(
 	struct in6_ifreq ifr6;
 	int fd;
 
-	if (psau->sa.sa_family != AF_INET6)
+	if (AF(psau) != AF_INET6)
 		return false;
 	if ((fd = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
 		return false;
@@ -1439,7 +1472,7 @@ is_valid(
 
 static bool
 update_interfaces(
-	u_short			port,
+	unsigned short		port,
 	interface_receiver_t	receiver,
 	void *			data
 	)
@@ -1455,7 +1488,7 @@ update_interfaces(
 	endpt *			ep;
 	endpt *			next_ep;
 
-	DPRINTF(3, ("update_interfaces(%d)\n", port));
+	DPRINT(3, ("update_interfaces(%d)\n", port));
 
 	/*
 	 * phase one - scan interfaces
@@ -1507,28 +1540,29 @@ update_interfaces(
 		switch (interface_action(enumep.name, &enumep.sin,
 					 enumep.flags)) {
 
+                default:
 		case ACTION_IGNORE:
-			DPRINTF(4, ("ignoring interface %s (%s) - by nic rules\n",
-				    enumep.name, socktoa(&enumep.sin)));
+			DPRINT(4, ("ignoring interface %s (%s) - by nic rules\n",
+				   enumep.name, socktoa(&enumep.sin)));
 			continue;
 
 		case ACTION_LISTEN:
-			DPRINTF(4, ("listen interface %s (%s) - by nic rules\n",
-				    enumep.name, socktoa(&enumep.sin)));
+			DPRINT(4, ("listen interface %s (%s) - by nic rules\n",
+				   enumep.name, socktoa(&enumep.sin)));
 			enumep.ignore_packets = false;
 			break;
 
 		case ACTION_DROP:
-			DPRINTF(4, ("drop on interface %s (%s) - by nic rules\n",
-				    enumep.name, socktoa(&enumep.sin)));
+			DPRINT(4, ("drop on interface %s (%s) - by nic rules\n",
+				   enumep.name, socktoa(&enumep.sin)));
 			enumep.ignore_packets = true;
 			break;
 		}
 
 		 /* interfaces must be UP to be usable */
 		if (!(enumep.flags & INT_UP)) {
-			DPRINTF(4, ("skipping interface %s (%s) - DOWN\n",
-				    enumep.name, socktoa(&enumep.sin)));
+			DPRINT(4, ("skipping interface %s (%s) - DOWN\n",
+				   enumep.name, socktoa(&enumep.sin)));
 			continue;
 		}
 
@@ -1608,7 +1642,7 @@ update_interfaces(
 				 * occurs.
 				 */
 				msyslog(LOG_ERR,
-					"WARNING: conflicting enable configuration for interfaces %s and %s for address %s - unsupported configuration - address DISABLED",
+					"CONFIG: WARNING: conflicting enable configuration for interfaces %s and %s for address %s - unsupported configuration - address DISABLED",
 					enumep.name, ep->name,
 					socktoa(&enumep.sin));
 
@@ -1648,7 +1682,7 @@ update_interfaces(
 					 " new - creation FAILED"));
 
 				msyslog(LOG_INFO,
-					"failed to init interface for address %s",
+					"IO: failed to init interface for address %s",
 					socktoa(&enumep.sin));
 				continue;
 			}
@@ -1714,13 +1748,13 @@ update_interfaces(
  */
 static int
 create_sockets(
-	u_short port
+	unsigned short port
 	)
 {
 	maxactivefd = 0;
 	FD_ZERO(&activefds);
 
-	DPRINTF(2, ("create_sockets(%d)\n", port));
+	DPRINT(2, ("create_sockets(%d)\n", port));
 
 	create_wildcards(port);
 
@@ -1732,7 +1766,7 @@ create_sockets(
 	 */
 	set_reuseaddr(0);
 
-	DPRINTF(2, ("create_sockets: Total interfaces = %d\n", ninterfaces));
+	DPRINT(2, ("create_sockets: Total interfaces = %d\n", ninterfaces));
 
 	return ninterfaces;
 }
@@ -1743,13 +1777,13 @@ create_sockets(
  */
 static endpt *
 create_interface(
-	u_short			port,
+	unsigned short		port,
 	endpt *	protot
 	)
 {
 	sockaddr_u	resmask;
 	endpt *		iface;
-	DPRINTF(2, ("create_interface(%s#%d)\n", socktoa(&protot->sin),
+	DPRINT(2, ("create_interface(%s#%d)\n", socktoa(&protot->sin),
 		    port));
 
 	/* build an interface */
@@ -1765,12 +1799,12 @@ create_interface(
 
 	if ((INT_BROADCAST & iface->flags)
 	    && iface->bfd != INVALID_SOCKET)
-		msyslog(LOG_INFO, "Listening on broadcast address %s#%d",
+		msyslog(LOG_INFO, "IO: Listening on broadcast address %s#%d",
 			socktoa((&iface->bcast)), port);
 
 	if (INVALID_SOCKET == iface->fd
 	    && INVALID_SOCKET == iface->bfd) {
-		msyslog(LOG_ERR, "unable to create socket on %s (%d) for %s#%d",
+		msyslog(LOG_ERR, "IO: unable to create socket on %s (%u) for %s#%d",
 			iface->name,
 			iface->ifnum,
 			socktoa((&iface->sin)),
@@ -1821,7 +1855,7 @@ set_excladdruse(
 		return;
 
 	msyslog(LOG_ERR,
-		"setsockopt(%d, SO_EXCLUSIVEADDRUSE, on): %m",
+		"IO: setsockopt(%d, SO_EXCLUSIVEADDRUSE, on): %m",
 		(int)fd);
 }
 #endif  /* SO_EXCLUSIVEADDRUSE */
@@ -1848,14 +1882,14 @@ set_reuseaddr(
 		 * if ep->fd  is INVALID_SOCKET, we might have a adapter
 		 * configured but not present
 		 */
-		DPRINTF(4, ("setting SO_REUSEADDR on %.16s@%s to %s\n",
-			    ep->name, socktoa(&ep->sin),
-			    flag ? "on" : "off"));
+		DPRINT(4, ("setting SO_REUSEADDR on %.16s@%s to %s\n",
+			   ep->name, socktoa(&ep->sin),
+			   flag ? "on" : "off"));
 
 		if (ep->fd != INVALID_SOCKET) {
 			if (setsockopt(ep->fd, SOL_SOCKET, SO_REUSEADDR,
 				       (char *)&flag, sizeof(flag))) {
-				msyslog(LOG_ERR, "set_reuseaddr: setsockopt(%s, SO_REUSEADDR, %s) failed: %m",
+				msyslog(LOG_ERR, "IO: set_reuseaddr: setsockopt(%s, SO_REUSEADDR, %s) failed: %m",
 					socktoa(&ep->sin), flag ? "on" : "off");
 			}
 		}
@@ -1899,11 +1933,11 @@ socket_broadcast_enable(
 		if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST,
 			       (char *)&on, sizeof(on)))
 			msyslog(LOG_ERR,
-				"setsockopt(SO_BROADCAST) enable failure on address %s: %m",
+				"IO: setsockopt(SO_BROADCAST) enable failure on address %s: %m",
 				socktoa(baddr));
 		else
-			DPRINTF(2, ("Broadcast enabled on socket %d for address %s\n",
-				    fd, socktoa(baddr)));
+			DPRINT(2, ("Broadcast enabled on socket %d for address %s\n",
+				   fd, socktoa(baddr)));
 	}
 	iface->flags |= INT_BCASTXMIT;
 	return true;
@@ -1930,7 +1964,7 @@ socket_broadcast_disable(
 	if (IS_IPV4(baddr) && setsockopt(iface->fd, SOL_SOCKET,
 	    SO_BROADCAST, (char *)&off, sizeof(off)))
 		msyslog(LOG_ERR,
-			"setsockopt(SO_BROADCAST) disable failure on address %s: %m",
+			"IO: setsockopt(SO_BROADCAST) disable failure on address %s: %m",
 			socktoa(baddr));
 
 	iface->flags &= ~INT_BCASTXMIT;
@@ -1972,7 +2006,7 @@ open_socket(
 	if (INVALID_SOCKET == fd) {
 		errval = errno;
 		msyslog(LOG_ERR,
-			"socket(AF_INET%s, SOCK_DGRAM, 0) failed on address %s: %m",
+			"IO: socket(AF_INET%s, SOCK_DGRAM, 0) failed on address %s: %m",
 			IS_IPV6(addr) ? "6" : "", socktoa(addr));
 
 		if (errval == EPROTONOSUPPORT ||
@@ -1983,7 +2017,7 @@ open_socket(
 		errno = errval;
 #ifndef __COVERITY__
 		msyslog(LOG_ERR,
-			"unexpected socket() error %m code %d (not EPROTONOSUPPORT nor EAFNOSUPPORT nor EPFNOSUPPORT) - exiting",
+			"IO: unexpected socket() error %m code %d (not EPROTONOSUPPORT nor EAFNOSUPPORT nor EPFNOSUPPORT) - exiting",
 			errno);
 		exit(1);
 #endif /* __COVERITY__ */
@@ -2000,13 +2034,13 @@ open_socket(
 	 * number on each interface according to turn_off_reuse.
 	 */
 	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
-		       (char *)((turn_off_reuse)
+		       (const void *)((turn_off_reuse)
 				    ? &off
 				    : &on),
 		       sizeof(on))) {
 
 		msyslog(LOG_ERR,
-			"setsockopt SO_REUSEADDR %s fails for address %s: %m",
+			"IO: setsockopt SO_REUSEADDR %s fails for address %s: %m",
 			(turn_off_reuse)
 			    ? "off"
 			    : "on",
@@ -2030,8 +2064,9 @@ open_socket(
 		if (setsockopt(fd, IPPROTO_IP, IP_TOS, (char*)&qos,
 			       sizeof(qos)))
 			msyslog(LOG_ERR,
-				"setsockopt IP_TOS (%02x) fails on address %s: %m",
-				qos, socktoa(addr));
+				"IO: setsockopt IP_TOS (%02x) fails on "
+                                "address %s: %m",
+				(unsigned)qos, socktoa(addr));
 		if (bcast)
 			socket_broadcast_enable(interf, fd, addr);
 	}
@@ -2043,15 +2078,15 @@ open_socket(
 #ifdef IPV6_TCLASS
 		if (setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, (char*)&qos,
 			       sizeof(qos)))
-			msyslog(LOG_ERR,
-				"setsockopt IPV6_TCLASS (%02x) fails on address %s: %m",
-				qos, socktoa(addr));
+			msyslog(LOG_ERR, "IO: setsockopt IPV6_TCLASS (%02x) "
+                                         "fails on address %s: %m",
+				         (unsigned)qos, socktoa(addr));
 #endif /* IPV6_TCLASS */
 		if (isc_net_probe_ipv6only_bool()
 		    && setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY,
-		    (char*)&on, sizeof(on)))
+		    (const void *)&on, sizeof(on)))
 			msyslog(LOG_ERR,
-				"setsockopt IPV6_V6ONLY on fails on address %s: %m",
+				"IO: setsockopt IPV6_V6ONLY on fails on address %s: %m",
 				socktoa(addr));
 	}
 
@@ -2081,11 +2116,11 @@ open_socket(
 		 */
 		if (turn_off_reuse == 0
 #ifdef DEBUG
-		    || debug > 1
+		    || debug > 1 /* SPECIAL DEBUG */
 #endif
 		    ) {
 			msyslog(LOG_ERR,
-				"bind(%d) AF_INET%s %s#%d flags 0x%x failed: %m",
+				"IO: bind(%d) AF_INET%s %s#%d flags 0x%x failed: %m",
 				fd, IS_IPV6(addr) ? "6" : "",
 				socktoa(addr), SRCPORT(addr),
 				interf->flags);
@@ -2096,11 +2131,9 @@ open_socket(
 		return INVALID_SOCKET;
 	}
 
-#ifdef USE_PACKET_TIMESTAMP
-	enable_packetstamps(fd);
-#endif /* USE_PACKET_TIMESTAMP */
+	enable_packetstamps(fd, addr);
 	
-	DPRINTF(4, ("bind(%d) AF_INET%s, addr %s%%%d#%d, flags 0x%x\n",
+	DPRINT(4, ("bind(%d) AF_INET%s, addr %s%%%u#%d, flags 0x%x\n",
 		   fd, IS_IPV6(addr) ? "6" : "", socktoa(addr),
 		   SCOPE(addr), SRCPORT(addr), interf->flags));
 
@@ -2110,14 +2143,14 @@ open_socket(
 
 #ifdef F_GETFL
 	/* F_GETFL may not be defined if the underlying OS isn't really Unix */
-	DPRINTF(4, ("flags for fd %d: 0x%x\n", fd, fcntl(fd, F_GETFL, 0)));
+	DPRINT(4, ("flags for fd %d: 0x%x\n", fd,
+		   (unsigned)fcntl(fd, F_GETFL, 0)));
 #endif
 
 	return fd;
 }
 
 
-/* XXX ELIMINATE sendpkt similar in ntpq.c, ntp_io.c, ntptrace.c */
 /*
  * sendpkt - send a packet to the specified destination. Maintain a
  * send error cache so that only the first consecutive error for a
@@ -2127,13 +2160,12 @@ void
 sendpkt(
 	sockaddr_u *		dest,
 	endpt *	ep,
-	int			ttl,
 	void *			pkt,
 	int			len
 	)
 {
 	endpt *	src;
-	int	cc;
+	ssize_t	cc;
 
 	src = ep;
 	if (NULL == src) {
@@ -2141,15 +2173,15 @@ sendpkt(
 		 * unbound peer - drop request and wait for better
 		 * network conditions
 		 */
-		DPRINTF(2, ("sendpkt(dst=%s, ttl=%d, len=%d): no interface - IGNORED\n",
-			    socktoa(dest), ttl, len));
+		DPRINT(2, ("sendpkt(dst=%s, len=%d): no interface - IGNORED\n",
+			   socktoa(dest), len));
 		return;
 	}
 
-	DPRINTF(2, ("sendpkt(%d, dst=%s, src=%s, ttl=%d, len=%d)\n",
-		    src->fd, socktoa(dest), socktoa(&src->sin), ttl, len));
+	DPRINT(2, ("sendpkt(%d, dst=%s, src=%s, len=%d)\n",
+		   src->fd, socktoa(dest), socktoa(&src->sin), len));
 
-	cc = sendto(src->fd, pkt, (u_int)len, 0,
+	cc = sendto(src->fd, pkt, (unsigned int)len, 0,
 		    &dest->sa, SOCKLEN(dest));
 	if (cc == -1) {
 		src->notsent++;
@@ -2167,8 +2199,10 @@ sendpkt(
  * Routine to read the refclock packets for a specific interface
  * Return the number of bytes read. That way we know if we should
  * read it again or go on to the next one if no bytes returned
+ *
+ * Note: too big to inline
  */
-static inline int
+static int
 read_refclock_packet(
 	SOCKET			fd,
 	struct refclockio *	rp,
@@ -2206,14 +2240,14 @@ read_refclock_packet(
 		saved_errno = errno;
 		freerecvbuf(rb);
 		errno = saved_errno;
-		return buflen;
+		return (int)buflen;
 	}
 
 	/*
 	 * Got one. Mark how and when it got here,
 	 * put it on the full list and do bookkeeping.
 	 */
-	rb->recv_length = buflen;
+	rb->recv_length = (size_t)buflen;
 	rb->recv_peer = rp->srcclock;
 	rb->dstadr = 0;
 	rb->cast_flags = 0;
@@ -2228,7 +2262,7 @@ read_refclock_packet(
 		packets_received++;
 	}
 
-	return buflen;
+	return (int)buflen;
 }
 #endif	/* REFCLOCK */
 
@@ -2237,21 +2271,19 @@ read_refclock_packet(
  * Return the number of bytes read. That way we know if we should
  * read it again or go on to the next one if no bytes returned
  */
-static inline int
+static int
 read_network_packet(
 	SOCKET			fd,
 	endpt *	itf,
 	l_fp			ts
 	)
 {
-	GETSOCKNAME_SOCKLEN_TYPE fromlen;
-	int buflen;
-	register struct recvbuf *rb;
-#ifdef USE_PACKET_TIMESTAMP
+	socklen_t fromlen;
+	ssize_t buflen;
+	struct recvbuf *rb;
 	struct msghdr msghdr;
 	struct iovec iovec;
-	char control[CMSG_BUFSIZE];
-#endif
+	char control[100];   /* FIXME: Need space for time stamp plus overhead */
 
 	/*
 	 * Get a buffer and read the frame.  If we
@@ -2270,8 +2302,8 @@ read_network_packet(
 
 		fromlen = sizeof(from);
 		buflen = recvfrom(fd, buf, sizeof(buf), 0,
-				  &from.sa, &fromlen);
-		DPRINTF(4, ("%s on (%lu) fd=%d from %s\n",
+				       &from.sa, &fromlen);
+		DPRINT(4, ("%s on (%lu) fd=%d from %s\n",
 			(itf->ignore_packets)
 			    ? "ignore"
 			    : "drop",
@@ -2285,13 +2317,9 @@ read_network_packet(
 
 	fromlen = sizeof(rb->recv_srcadr);
 
-#ifndef USE_PACKET_TIMESTAMP
-	rb->recv_length = recvfrom(fd, (char *)&rb->recv_space,
-				   sizeof(rb->recv_space), 0,
-				   &rb->recv_srcadr.sa, &fromlen);
-#else
 	iovec.iov_base        = &rb->recv_space;
 	iovec.iov_len         = sizeof(rb->recv_space);
+	memset(&msghdr, '\0', sizeof(msghdr));
 	msghdr.msg_name       = &rb->recv_srcadr;
 	msghdr.msg_namelen    = fromlen;
 	msghdr.msg_iov        = &iovec;
@@ -2299,30 +2327,29 @@ read_network_packet(
 	msghdr.msg_flags      = 0;
 	msghdr.msg_control    = (void *)&control;
 	msghdr.msg_controllen = sizeof(control);
-	rb->recv_length       = recvmsg(fd, &msghdr, 0);
-#endif
+	buflen                = recvmsg(fd, &msghdr, 0);
 
-	buflen = rb->recv_length;
+	rb->recv_length = (size_t)buflen;
 
 	if (buflen == 0 || (buflen == -1 &&
-	    (EWOULDBLOCK == errno
+			    ((EWOULDBLOCK == errno)
 #ifdef EAGAIN
-	     || EAGAIN == errno
+			     || (EAGAIN == errno)
 #endif
 	     ))) {
 		freerecvbuf(rb);
 		return (buflen);
 	} else if (buflen < 0) {
-		msyslog(LOG_ERR, "recvfrom(%s) fd=%d: %m",
+		msyslog(LOG_ERR, "IO: recvfrom(%s) fd=%d: %m",
 			socktoa(&rb->recv_srcadr), fd);
-		DPRINTF(5, ("read_network_packet: fd=%d dropped (bad recvfrom)\n",
-			    fd));
+		DPRINT(5, ("read_network_packet: fd=%d dropped (bad recvfrom)\n",
+			   fd));
 		freerecvbuf(rb);
 		return (buflen);
 	}
 
-	DPRINTF(3, ("read_network_packet: fd=%d length %d from %s\n",
-		    fd, buflen, socktoa(&rb->recv_srcadr)));
+	DPRINT(3, ("read_network_packet: fd=%d length %d from %s\n",
+		   fd, (int)buflen, socktoa(&rb->recv_srcadr)));
 
 	/*
 	 * We used to drop network packets with addresses matching the magic
@@ -2331,26 +2358,26 @@ read_network_packet(
 	 */
 
 	/*
-	** Bug 2672: Some OSes (MacOSX and Linux) don't block spoofed ::1
+	** Classic Bug 2672: Some OSes (MacOSX, Linux) don't block spoofed ::1
 	*/
 
 	if (AF_INET6 == itf->family) {
-		DPRINTF(2, ("Got an IPv6 packet, from <%s> (%d) to <%s> (%d)\n",
-			socktoa(&rb->recv_srcadr),
-			IN6_IS_ADDR_LOOPBACK(PSOCK_ADDR6(&rb->recv_srcadr)),
-			socktoa(&itf->sin),
-			!IN6_IS_ADDR_LOOPBACK(PSOCK_ADDR6(&itf->sin))
-			));
+		DPRINT(2, ("Got an IPv6 packet, from <%s> (%d) to <%s> (%d)\n",
+			   socktoa(&rb->recv_srcadr),
+			   IN6_IS_ADDR_LOOPBACK(PSOCK_ADDR6(&rb->recv_srcadr)),
+			   socktoa(&itf->sin),
+			   !IN6_IS_ADDR_LOOPBACK(PSOCK_ADDR6(&itf->sin))
+			   ));
 
 		if (   IN6_IS_ADDR_LOOPBACK(PSOCK_ADDR6(&rb->recv_srcadr))
 		    && !IN6_IS_ADDR_LOOPBACK(PSOCK_ADDR6(&itf->sin))
 		   ) {
 			packets_dropped++;
-			DPRINTF(2, ("DROPPING that packet\n"));
+			DPRINT(2, ("DROPPING that packet\n"));
 			freerecvbuf(rb);
 			return buflen;
 		}
-		DPRINTF(2, ("processing that packet\n"));
+		DPRINT(2, ("processing that packet\n"));
 	}
 
 	/*
@@ -2360,10 +2387,7 @@ read_network_packet(
 	rb->dstadr = itf;
 	rb->cast_flags = (uint8_t)(rb->fd == rb->dstadr->bfd ? MDF_BCAST : MDF_UCAST);
 	rb->fd = fd;
-#ifdef USE_PACKET_TIMESTAMP
-	/* pick up a network time stamp if possible */
 	ts = fetch_packetstamp(rb, &msghdr, ts);
-#endif
 	rb->recv_time = ts;
 	rb->receiver = receive;
 #ifdef REFCLOCK
@@ -2394,7 +2418,7 @@ io_handler(void)
 	 * reception of input.
 	 */
 	pthread_sigmask(SIG_BLOCK, &blockMask, &runMask);
-	flag = sawALRM || sawQuit || sawHUP;
+	flag = sawALRM || sawQuit || sawHUP || sawDNS;
 	if (!flag) {
 	  rdfdes = activefds;
 	  nfound = pselect(maxactivefd+1, &rdfdes, NULL, NULL, NULL, &runMask);
@@ -2407,22 +2431,17 @@ io_handler(void)
 	if (nfound > 0) {
 		l_fp ts;
 
-		/*
-		 * Doesn't need to be intercepted, because the time
-		 * algorithms don't use it.  It's strictly internal
-		 * to the I/O handling.
-		 */
 		get_systime(&ts);
 
 		input_handler(&rdfdes, &ts);
 	} else if (nfound == -1 && errno != EINTR) {
-		msyslog(LOG_ERR, "select() error: %m");
+		msyslog(LOG_ERR, "IO: select() error: %m");
 	}
 #   ifdef DEBUG
-	else if (debug > 4) {
-		msyslog(LOG_DEBUG, "select(): nfound=%d, error: %m", nfound);
+	else if (debug > 4) { /* SPECIAL DEBUG */
+		msyslog(LOG_DEBUG, "IO: select(): nfound=%d, error: %m", nfound);
 	} else {
-		DPRINTF(1, ("select() returned %d: %m\n", nfound));
+		DPRINT(1, ("select() returned %d: %m\n", nfound));
 	}
 #   endif /* DEBUG */
 }
@@ -2437,7 +2456,6 @@ input_handler(
 	)
 {
 	int		buflen;
-	u_int		idx;
 	int		doing;
 	SOCKET		fd;
 	l_fp		ts;	/* Timestamp at BOselect() gob */
@@ -2493,11 +2511,11 @@ input_handler(
 				saved_errno = errno;
 				clk = refclock_name(rp->srcclock);
 				errno = saved_errno;
-				msyslog(LOG_ERR, "%s read: %m", clk);
+				msyslog(LOG_ERR, "IO: %s read: %m", clk);
 				maintain_activefds(fd, true);
 			} else if (0 == buflen) {
 				clk = refclock_name(rp->srcclock);
-				msyslog(LOG_ERR, "%s read EOF", clk);
+				msyslog(LOG_ERR, "IO: %s read EOF", clk);
 				maintain_activefds(fd, true);
 			} else {
 				/* drain any remaining refclock input */
@@ -2551,27 +2569,14 @@ input_handler(
 #endif /* USE_ROUTING_SOCKET */
 
 	/*
-	 * Check for a response from a blocking child
-	 */
-	for (idx = 0; idx < blocking_children_alloc; idx++) {
-		blocking_child *c = blocking_children[idx];
-		if (NULL == c || -1 == c->resp_read_pipe)
-			continue;
-		if (FD_ISSET(c->resp_read_pipe, fds)) {
-			select_count++;
-			process_blocking_resp(c);
-		}
-	}
-
-	/*
 	 * Done everything from that select.
 	 * If nothing to do, just return.
 	 * If an error occurred, complain and return.
 	 */
 	if (select_count == 0) { /* We really had nothing to do */
 #ifdef DEBUG
-		if (debug)
-			msyslog(LOG_DEBUG, "input_handler: select() returned 0");
+		if (debug) /* SPECIAL DEBUG */
+			msyslog(LOG_DEBUG, "IO: input_handler: select() returned 0");
 #endif /* DEBUG */
 		return;
 	}
@@ -2582,12 +2587,12 @@ input_handler(
 	 * (ts_e - ts) is the amount of time we spent processing this
 	 * gob of file descriptors.  Log it.
 	 */
-	L_SUB(&ts_e, &ts);
-	collect_timing(NULL, "input handler", 1, &ts_e);
-	if (debug > 3)
+	ts_e -= ts;
+	collect_timing(NULL, "input handler", 1, ts_e);
+	if (debug > 3) /* SPECIAL DEBUG */
 		msyslog(LOG_DEBUG,
-			"input_handler: Processed a gob of fd's in %s msec",
-			lfptoms(&ts_e, 6));
+			"IO: input_handler: Processed a gob of fd's in %s msec",
+			lfptoms(ts_e, 6));
 #endif /* ENABLE_DEBUG_TIMING */
 	/* We're done... */
 	return;
@@ -2622,11 +2627,11 @@ select_peerinterface(
 	} else if (peer->cast_flags & MDF_BCAST) {
 		ep = findbcastinter(srcadr);
 		if (ep != NULL)
-			DPRINTF(4, ("Found *-cast interface %s for address %s\n",
-				socktoa(&ep->sin), socktoa(srcadr)));
+			DPRINT(4, ("Found *-cast interface %s for address %s\n",
+				   socktoa(&ep->sin), socktoa(srcadr)));
 		else
-			DPRINTF(4, ("No *-cast local address found for address %s\n",
-				socktoa(srcadr)));
+			DPRINT(4, ("No *-cast local address found for address %s\n",
+				   socktoa(srcadr)));
 	} else {
 		ep = dstadr;
 		if (NULL == ep)
@@ -2664,13 +2669,13 @@ findinterface(
 	iface = findlocalinterface(addr, INT_WILDCARD, 0);
 
 	if (NULL == iface) {
-		DPRINTF(4, ("Found no interface for address %s - returning wildcard\n",
-			    socktoa(addr)));
+		DPRINT(4, ("Found no interface for address %s - returning wildcard\n",
+			   socktoa(addr)));
 
 		iface = ANY_INTERFACE_CHOOSE(addr);
 	} else
-		DPRINTF(4, ("Found interface #%d %s for address %s\n",
-			    iface->ifnum, iface->name, socktoa(addr)));
+		DPRINT(4, ("Found interface #%u %s for address %s\n",
+			   iface->ifnum, iface->name, socktoa(addr)));
 
 	return iface;
 }
@@ -2697,15 +2702,15 @@ findlocalinterface(
 	int		bcast
 	)
 {
-	GETSOCKNAME_SOCKLEN_TYPE	sockaddrlen;
-	endpt *				iface;
-	sockaddr_u			saddr;
-	SOCKET				s;
-	int				rtn;
-	int				on;
+	socklen_t	sockaddrlen;
+	endpt *		iface;
+	sockaddr_u	saddr;
+	SOCKET		s;
+	int		rtn;
+	int		on;
 
-	DPRINTF(4, ("Finding interface for addr %s in list of addresses\n",
-		    socktoa(addr)));
+	DPRINT(4, ("Finding interface for addr %s in list of addresses\n",
+		   socktoa(addr)));
 
 	s = socket(AF(addr), SOCK_DGRAM, 0);
 	if (INVALID_SOCKET == s)
@@ -2738,10 +2743,10 @@ findlocalinterface(
 	if (SOCKET_ERROR == rtn)
 		return NULL;
 
-	DPRINTF(4, ("findlocalinterface: kernel maps %s to %s\n",
-		    socktoa(addr), socktoa(&saddr)));
+	DPRINT(4, ("findlocalinterface: kernel maps %s to %s\n",
+		   socktoa(addr), socktoa(&saddr)));
 
-	iface = getinterface(&saddr, flags);
+	iface = getinterface(&saddr, (uint32_t)flags);
 
 	/*
 	 * if we didn't find an exact match on saddr, find the closest
@@ -2753,7 +2758,7 @@ findlocalinterface(
 	 */
 	if (NULL == iface || iface->ignore_packets)
 		iface = findclosestinterface(&saddr,
-					     flags | INT_LOOPBACK);
+					     (int)(flags | (int)INT_LOOPBACK));
 
 	/* Don't use an interface which will ignore replies */
 	if (iface != NULL && iface->ignore_packets)
@@ -2774,9 +2779,9 @@ findlocalinterface(
  *
  * Find the numerically closest local address to the one connect()
  * suggested.  This matches an address on the same subnet first, as
- * needed by Bug 1184, and provides a consistent choice if there are
- * multiple feasible local addresses, regardless of the order ntpd
- * enumerated them.
+ * needed by Classic Bug 1184, and provides a consistent choice if
+ * there are multiple feasible local addresses, regardless of the
+ * order ntpd enumerated them.
  */
 endpt *
 findclosestinterface(
@@ -2795,7 +2800,7 @@ findclosestinterface(
 	for (ep = ep_list; ep != NULL; ep = ep->elink) {
 		if (ep->ignore_packets ||
 		    AF(addr) != ep->family ||
-		    flags & ep->flags)
+		    (unsigned int)flags & ep->flags)
 			continue;
 
 		calc_addr_distance(&addr_dist, addr, &ep->sin);
@@ -2806,11 +2811,11 @@ findclosestinterface(
 		}
 	}
 	if (NULL == winner)
-		DPRINTF(4, ("findclosestinterface(%s) failed\n",
-			    socktoa(addr)));
+		DPRINT(4, ("findclosestinterface(%s) failed\n",
+			   socktoa(addr)));
 	else
-		DPRINTF(4, ("findclosestinterface(%s) -> %s\n",
-			    socktoa(addr), socktoa(&winner->sin)));
+		DPRINT(4, ("findclosestinterface(%s) -> %s\n",
+			   socktoa(addr), socktoa(&winner->sin)));
 
 	return winner;
 }
@@ -2835,7 +2840,7 @@ calc_addr_distance(
 	bool	a1_greater;
 	int	i;
 
-	NTP_REQUIRE(AF(a1) == AF(a2));
+	REQUIRE(AF(a1) == AF(a2));
 
 	ZERO_SOCK(dist);
 	AF(dist) = AF(a1);
@@ -2886,7 +2891,7 @@ cmp_addr_distance(
 {
 	int	i;
 
-	NTP_REQUIRE(AF(d1) == AF(d2));
+	REQUIRE(AF(d1) == AF(d2));
 
 	if (IS_IPV4(d1)) {
 		if (SRCADR(d1) < SRCADR(d2))
@@ -2934,7 +2939,7 @@ getinterface(
 /*
  * findbcastinter - find broadcast interface corresponding to address
  */
-endpt *
+static endpt *
 findbcastinter(
 	sockaddr_u *addr
 	)
@@ -2943,14 +2948,14 @@ findbcastinter(
 
 	iface = NULL;
 #if defined(SIOCGIFCONF)
-	DPRINTF(4, ("Finding broadcast interface for addr %s in list of addresses\n",
-		    socktoa(addr)));
+	DPRINT(4, ("Finding broadcast interface for addr %s in list of addresses\n",
+		   socktoa(addr)));
 
 	iface = findlocalinterface(addr, INT_LOOPBACK | INT_WILDCARD,
 				   1);
 	if (iface != NULL) {
-		DPRINTF(4, ("Easily found bcast-/mcast- interface index #%d %s\n",
-			    iface->ifnum, iface->name));
+		DPRINT(4, ("Easily found bcast-/mcast- interface index #%d %s\n",
+			   iface->ifnum, iface->name));
 		return iface;
 	}
 
@@ -2994,18 +2999,18 @@ findbcastinter(
 			if (SOCK_EQ(&iface->bcast, addr))
 				break;
 
-			if (SOCK_EQ(netof(&iface->sin), netof(addr)))
+			if (SOCK_EQ(netof6(&iface->sin), netof6(addr)))
 				break;
 		}
 	}
 #endif /* SIOCGIFCONF */
 	if (NULL == iface) {
-		DPRINTF(4, ("No bcast interface found for %s\n",
-			    socktoa(addr)));
+		DPRINT(4, ("No bcast interface found for %s\n",
+			   socktoa(addr)));
 		iface = ANY_INTERFACE_CHOOSE(addr);
 	} else {
-		DPRINTF(4, ("Found bcast-/mcast- interface index #%d %s\n",
-			    iface->ifnum, iface->name));
+		DPRINT(4, ("Found bcast-/mcast- interface index #%u %s\n",
+			   iface->ifnum, iface->name));
 	}
 
 	return iface;
@@ -3087,24 +3092,6 @@ io_closeclock(
 #endif	/* REFCLOCK */
 
 
-void
-kill_asyncio(
-	int	startfd
-	)
-{
-	UNUSED_ARG(startfd);
-
-	/*
-	 * In the child process we do not maintain activefds and
-	 * maxactivefd.  Zeroing maxactivefd disables code which
-	 * maintains it in close_and_delete_fd_from_list().
-	 */
-	maxactivefd = 0;
-
-	while (fd_list != NULL)
-		close_and_delete_fd_from_list(fd_list->fd);
-}
-
 /*
  * Add and delete functions for the list of open sockets
  */
@@ -3120,7 +3107,7 @@ add_fd_to_list(
 	lsock->type = type;
 
 	LINK_SLIST(fd_list, lsock, link);
-	maintain_activefds(fd, 0);
+	maintain_activefds(fd, false);
 }
 
 
@@ -3149,7 +3136,7 @@ close_and_delete_fd_from_list(
 
 	default:
 		msyslog(LOG_ERR,
-			"internal error - illegal descriptor type %d - EXITING",
+			"IO: internal error - illegal descriptor type %d - EXITING",
 			(int)lsock->type);
 		exit(1);
 	}
@@ -3158,7 +3145,7 @@ close_and_delete_fd_from_list(
 	/*
 	 * remove from activefds
 	 */
-	maintain_activefds(fd, 1);
+	maintain_activefds(fd, true);
 }
 
 
@@ -3180,12 +3167,12 @@ add_addr_to_list(
 
 		LINK_SLIST(remoteaddr_list, laddr, link);
 
-		DPRINTF(4, ("Added addr %s to list of addresses\n",
-			    socktoa(addr)));
+		DPRINT(4, ("Added addr %s to list of addresses\n",
+			   socktoa(addr)));
 #ifdef DEBUG
 	} else
-		DPRINTF(4, ("WARNING: Attempt to add duplicate addr %s to address list\n",
-			    socktoa(addr)));
+		DPRINT(4, ("WARNING: Attempt to add duplicate addr %s to address list\n",
+			   socktoa(addr)));
 #endif
 }
 
@@ -3204,9 +3191,10 @@ delete_interface_from_list(
 
 		if (unlinked == NULL)
 			break;
-		DPRINTF(4, ("Deleted addr %s for interface #%d %s from list of addresses\n",
-			    socktoa(&unlinked->addr), iface->ifnum,
-			    iface->name));
+		DPRINT(4, ("Deleted addr %s for interface #%u %s "
+			   "from list of addresses\n",
+			   socktoa(&unlinked->addr), iface->ifnum,
+			   iface->name));
 		free(unlinked);
 	}
 }
@@ -3219,23 +3207,23 @@ find_addr_in_list(
 {
 	remaddr_t *entry;
 
-	DPRINTF(4, ("Searching for addr %s in list of addresses - ",
-		    socktoa(addr)));
+	DPRINT(4, ("Searching for addr %s in list of addresses - ",
+		   socktoa(addr)));
 
 	for (entry = remoteaddr_list;
 	     entry != NULL;
 	     entry = entry->link)
 		if (SOCK_EQ(&entry->addr, addr)) {
-			DPRINTF(4, ("FOUND\n"));
+			DPRINT(4, ("FOUND\n"));
 			return entry->ep;
 		}
 
-	DPRINTF(4, ("NOT FOUND\n"));
+	DPRINT(4, ("NOT FOUND\n"));
 	return NULL;
 }
 
 const char *
-localaddrtoa(
+latoa(
 	endpt *la
 	)
 {
@@ -3254,7 +3242,8 @@ static void
 process_routing_msgs(struct asyncio_reader *reader)
 {
 	char buffer[5120];
-	int cnt, msg_type;
+	ssize_t cnt;
+        int msg_type;
 #ifdef HAVE_LINUX_RTNETLINK_H
 	struct nlmsghdr *nh;
 #else
@@ -3277,10 +3266,10 @@ process_routing_msgs(struct asyncio_reader *reader)
 	if (cnt < 0) {
 		if (errno == ENOBUFS) {
 			msyslog(LOG_ERR,
-				"routing socket reports: %m");
+				"IO: routing socket reports: %m");
 		} else {
 			msyslog(LOG_ERR,
-				"routing socket reports: %m - disabling");
+				"IO: routing socket reports: %m - disabling");
 			remove_asyncio_reader(reader);
 			delete_asyncio_reader(reader);
 		}
@@ -3292,7 +3281,7 @@ process_routing_msgs(struct asyncio_reader *reader)
 	 */
 #ifdef HAVE_LINUX_RTNETLINK_H
 	for (nh = (struct nlmsghdr *)buffer;
-	     NLMSG_OK(nh, cnt);
+	     NLMSG_OK(nh, (unsigned) cnt);
 	     nh = NLMSG_NEXT(nh, cnt)) {
 		msg_type = nh->nlmsg_type;
 #else
@@ -3302,7 +3291,7 @@ process_routing_msgs(struct asyncio_reader *reader)
 		memcpy(&rtm, p, sizeof(rtm));
 		if (rtm.rtm_version != RTM_VERSION) {
 			msyslog(LOG_ERR,
-				"version mismatch (got %d - expected %d) on routing socket - disabling",
+				"IO: version mismatch (got %d - expected %d) on routing socket - disabling",
 				rtm.rtm_version, RTM_VERSION);
 
 			remove_asyncio_reader(reader);
@@ -3356,8 +3345,8 @@ process_routing_msgs(struct asyncio_reader *reader)
 			 * if an interface goes up and down or routing
 			 * changes
 			 */
-			DPRINTF(3, ("routing message op = %d: scheduling interface update\n",
-				    msg_type));
+			DPRINT(3, ("routing message op = %d: scheduling interface update\n",
+				   msg_type));
 			timer_interfacetimeout(current_time + UPDATE_GRACE);
 			break;
 #ifdef HAVE_LINUX_RTNETLINK_H
@@ -3369,8 +3358,8 @@ process_routing_msgs(struct asyncio_reader *reader)
 			/*
 			 * the rest doesn't bother us.
 			 */
-			DPRINTF(4, ("routing message op = %d: ignored\n",
-				    msg_type));
+			DPRINT(4, ("routing message op = %d: ignored\n",
+				   msg_type));
 			break;
 		}
 	}
@@ -3391,7 +3380,7 @@ init_async_notifications()
 #endif
 	if (fd < 0) {
 		msyslog(LOG_ERR,
-			"unable to open routing socket (%m) - using polled interface update");
+			"IO: unable to open routing socket (%m) - using polled interface update");
 		return;
 	}
 
@@ -3405,7 +3394,7 @@ init_async_notifications()
 		       | RTMGRP_IPV6_MROUTE;
 	if (bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
 		msyslog(LOG_ERR,
-			"bind failed on routing socket (%m) - using polled interface update");
+			"IO: bind failed on routing socket (%m) - using polled interface update");
 		return;
 	}
 #endif
@@ -3418,7 +3407,7 @@ init_async_notifications()
 
 	add_asyncio_reader(reader, FD_TYPE_SOCKET);
 	msyslog(LOG_INFO,
-		"Listening on routing socket on fd #%d for interface updates",
+		"IO: Listening on routing socket on fd #%d for interface updates",
 		fd);
 }
 #else

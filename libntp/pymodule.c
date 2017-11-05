@@ -6,27 +6,25 @@
  */
 #include <Python.h>
 
-#include <config.h>
+#include "config.h"
 
 #include "ntp_machine.h"
 #include "ntpd.h"
 #include "ntp_io.h"
 #include "ntp_fp.h"
 #include "ntp_stdlib.h"
-#include "ntp_random.h"
 #include "ntp_syslog.h"
 #include "timespecops.h"
 
 #include "ntp_config.h"
 #include "ntp_assert.h"
-#include "isc/error.h"
-#include "isc/formatcheck.h"
+#include "isc_error.h"
 
 #include "ntp_control.h"
 
 #include "python_compatibility.h"
 
-char *progname = "libntpc";
+const char *progname = "libntpc";
 
 /*
  * Client utility functions
@@ -44,7 +42,7 @@ ntpc_setprogname(PyObject *self, PyObject *args)
     /*
      * This function is only called from clients.  Therefore
      * log to stderr rather than syslog, and suppress logfile
-     * impedimenta.  If we ever want finer-grained control, that
+     * impediments.  If we ever want finer-grained control, that
      * will be easily implemented with additional arguments.
      */
     syslogit = false;	/* don't log messages to syslog */
@@ -78,7 +76,7 @@ ntpc_prettydate(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "s", &s))
 	return NULL;
     if (hextolfp(s+2, &ts))
-	return Py_BuildValue("s", prettydate(&ts));
+	return Py_BuildValue("s", prettydate(ts));
     else {
 	PyErr_SetString(PyExc_ValueError, "ill-formed hex date");
 	return NULL;
@@ -100,7 +98,7 @@ ntpc_lfptofloat(PyObject *self, PyObject *args)
 	return NULL;
     }
     tt = lfp_stamp_to_tspec(ts, NULL);
-    return Py_BuildValue("d", tt.tv_sec + tt.tv_nsec * 1e-9);
+    return Py_BuildValue("d", tt.tv_sec + tt.tv_nsec * S_PER_NS);
 }
 
 static PyObject *
@@ -122,21 +120,29 @@ ntpc_adj_systime(PyObject *self, PyObject *args)
     UNUSED_ARG(self);
     if (!PyArg_ParseTuple(args, "d", &adjustment))
 	return NULL;
-    return Py_BuildValue("d", adj_systime(adjustment, adjtime));
+    return Py_BuildValue("d", adj_systime(adjustment, adjtime) ? 1 : 0);
 }
 
 static PyObject *
 ntpc_step_systime(PyObject *self, PyObject *args)
 {
     double adjustment;
+    doubletime_t full_adjustment;
 
     UNUSED_ARG(self);
+    /*
+     * What we really want is for Python to parse a long double.
+     * As this is, it's a potential source of problems in the Python
+     * utilties if and when the time difference between the Unix epoch
+     * and now exceeds the range of a double.
+     */
     if (!PyArg_ParseTuple(args, "d", &adjustment))
 	return NULL;
-    return Py_BuildValue("d", step_systime(adjustment, ntp_set_tod));
+    full_adjustment = adjustment;
+    return Py_BuildValue("d", step_systime(full_adjustment, ntp_set_tod));
 }
 
-long ntp_random(void)
+int32_t ntp_random(void)
 /* stub random function for get_systime() */
 {
     return 0;
@@ -166,8 +172,9 @@ PyDoc_STRVAR(module_doc,
 "Python wrapper for selected libntp C library routines.\n\
 ");
 
-/* banishes a pointless compiler warning */
+/* banishes pointless compiler warnings on various Python versions */
 extern PyMODINIT_FUNC initntpc(void);
+extern PyMODINIT_FUNC PyInit_ntpc(void);
 
 // cppcheck-suppress unusedFunction
 NTPSEC_PY_MODULE_INIT(ntpc)

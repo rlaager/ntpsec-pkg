@@ -1,7 +1,7 @@
 /*
  * ntp_refclock - processing support for reference clocks
  */
-#include <config.h>
+#include "config.h"
 
 #include "ntpd.h"
 #include "ntp_io.h"
@@ -11,6 +11,7 @@
 #include "ntp_assert.h"
 #include "lib_strbuf.h"
 #include "ntp_calendar.h"
+#include "timespecops.h"
 
 #include <stdio.h>
 
@@ -24,6 +25,14 @@
 #include "ppsapi_timepps.h"
 #include "refclock_pps.h"
 #endif /* HAVE_PPSAPI */
+
+
+#define SAMPLE(x)	pp->coderecv = (pp->coderecv + 1) % MAXSTAGE; \
+			pp->filter[pp->coderecv] = (x); \
+			if (pp->coderecv == pp->codeproc) \
+				pp->codeproc = (pp->codeproc + 1) % MAXSTAGE;
+
+#define TTY	struct termios
 
 /*
  * Reference clock support is provided here by maintaining the fiction
@@ -53,7 +62,7 @@
  * identified as a refclock by having a non-NULL procptr member. 
  */
 #define FUDGEFAC	.1	/* fudge correction factor */
-#define LF		0x0a	/* ASCII LF */
+/* #define LF		0x0a	* ASCII LF UNUSED */
 
 bool	cal_enable;		/* enable refclock calibrate */
 
@@ -62,6 +71,7 @@ bool	cal_enable;		/* enable refclock calibrate */
  */
 static int refclock_cmpl_fp (const void *, const void *);
 static int refclock_sample (struct refclockproc *);
+static bool refclock_setup (int, unsigned int, unsigned int);
 
 
 /*
@@ -120,7 +130,7 @@ refclock_name(
 {
 	char *buf;
 
-	LIB_GETBUF(buf);
+	buf = lib_getbuf();
 
 	snprintf(buf, LIB_BUFLENGTH, "%s(%d)",
 			 peer->procptr->clockname, peer->refclkunit);
@@ -142,7 +152,7 @@ init_refclock(void)
 	int i;
 
 	for (i = 0; i < (int)num_refclock_conf; i++)
-		if (refclock_conf[i]->clock_init != noentry)
+		if (refclock_conf[i]->clock_init)
 			(refclock_conf[i]->clock_init)();
 }
 
@@ -168,9 +178,9 @@ refclock_newpeer(
 	struct refclockproc *pp;
 
 	if (clktype >= num_refclock_conf ||
-		refclock_conf[clktype]->clock_start == noentry) {
+	    !refclock_conf[clktype]->clock_start) {
 		msyslog(LOG_ERR,
-			"refclock_newpeer: clock type %d invalid\n",
+			"REFCLOCK: refclock_newpeer: clock type %d invalid\n",
 			clktype);
 		return false;
 	}
@@ -185,10 +195,10 @@ refclock_newpeer(
 	 * Initialize structures
 	 */
 	peer->refclkunit = (uint8_t)unit;
-	peer->flags |= FLAG_REFCLOCK;
+	peer->cfg.flags |= FLAG_REFCLOCK;
 	peer->leap = LEAP_NOTINSYNC;
 	peer->stratum = STRATUM_REFCLOCK;
-	peer->ppoll = peer->maxpoll;
+	peer->ppoll = peer->cfg.maxpoll;
 	pp->conf = refclock_conf[clktype];
 	pp->timestarted = current_time;
 	pp->io.fd = -1;
@@ -237,7 +247,7 @@ refclock_unpeer(
 		return;
 
 	unit = peer->refclkunit;
-	if (peer->procptr->conf->clock_shutdown != noentry)
+	if (peer->procptr->conf->clock_shutdown)
 		(peer->procptr->conf->clock_shutdown)(unit, peer);
 	free(peer->procptr);
 	peer->procptr = NULL;
@@ -257,7 +267,7 @@ refclock_timer(
 
 	unit = p->refclkunit;
 	pp = p->procptr;
-	if (pp->conf->clock_timer != noentry)
+	if (pp->conf->clock_timer)
 		(*pp->conf->clock_timer)(unit, p);
 	if (pp->action != NULL && pp->nextaction <= current_time)
 		(*pp->action)(p);
@@ -290,11 +300,8 @@ refclock_transmit(
 	 */
 	if (peer->burst == 0) {
 		uint8_t oreach;
-#ifdef DEBUG
-		if (debug)
-			printf("refclock_transmit: at %ld %s\n",
-			    current_time, socktoa(&(peer->srcadr)));
-#endif
+		DPRINT(1, ("refclock_transmit: at %lu %s\n",
+			   current_time, socktoa(&(peer->srcadr))));
 
 		/*
 		 * Update reachability and poll variables like the
@@ -311,13 +318,13 @@ refclock_transmit(
 				peer->timereachable = current_time;
 			}
 		} else {
-			if (peer->flags & FLAG_BURST)
+			if (peer->cfg.flags & FLAG_BURST)
 				peer->burst = NSTAGE;
 		}
 	} else {
 		peer->burst--;
 	}
-	if (peer->procptr->conf->clock_poll != noentry)
+	if (peer->procptr->conf->clock_poll)
 		(peer->procptr->conf->clock_poll)(unit, peer);
 	poll_update(peer, peer->hpoll);
 }
@@ -363,8 +370,8 @@ refclock_process_offset(
 
 	pp->lastrec = lastrec;
 	lftemp = lasttim;
-	L_SUB(&lftemp, &lastrec);
-	LFPTOD(&lftemp, doffset);
+	lftemp -= lastrec;
+	doffset = lfptod(lftemp);
 	SAMPLE(doffset + fudge);
 }
 
@@ -391,23 +398,25 @@ refclock_process_f(
 	double fudge
 	)
 {
-	l_fp offset, ltemp;
+	l_fp offset = 0, ltemp = 0;
+	uint32_t sec;
 
 	/*
 	 * Compute the timecode timestamp from the days, hours, minutes,
 	 * seconds and milliseconds/microseconds of the timecode. Use
 	 * clocktime() for the aggregate seconds and the msec/usec for
-	 * the fraction, when present. Note that this code relies on the
-	 * filesystem time for the years and does not use the years of
-	 * the timecode.
+	 * the fraction, when present. Note that this code will fall back
+	 * to deducing the year from the receipt time of the sample if
+	 * it finds only a 2-digit year in the timecode.
 	 */
-	if (!clocktime(pp->day, pp->hour, pp->minute, pp->second, GMT,
-		pp->lastrec.l_ui, &pp->yearstart, &offset.l_ui))
+	if (!clocktime(pp->year, pp->day, pp->hour, pp->minute, pp->second, GMT,
+		       lfpuint(pp->lastrec), &pp->yearstart, &sec))
 		return false;
 
-	offset.l_uf = 0;
-	DTOLFP(pp->nsec / 1e9, &ltemp);
-	L_ADD(&offset, &ltemp);
+	setlfpuint(offset, sec);
+	setlfpfrac(offset, 0);
+	ltemp = dtolfp(pp->nsec * S_PER_NS);
+	offset += ltemp;
 	refclock_process_offset(pp, offset, pp->lastrec, fudge);
 	return true;
 }
@@ -483,12 +492,8 @@ refclock_sample(
 	}
 	pp->offset /= m;
 	pp->jitter = SQRT(pp->jitter / m);
-#ifdef DEBUG
-	if (debug)
-		printf(
-		    "refclock_sample: n %d offset %.6f disp %.6f jitter %.6f\n",
-		    (int)n, pp->offset, pp->disp, pp->jitter);
-#endif
+	DPRINT(1, ("refclock_sample: n %d offset %.6f disp %.6f jitter %.6f\n",
+		   (int)n, pp->offset, pp->disp, pp->jitter));
 	return (int)n;
 }
 
@@ -509,11 +514,8 @@ refclock_receive(
 {
 	struct refclockproc *pp;
 
-#ifdef DEBUG
-	if (debug)
-		printf("refclock_receive: at %lu %s\n",
-		    current_time, socktoa(&peer->srcadr));
-#endif
+	DPRINT(1, ("refclock_receive: at %lu %s\n",
+		   current_time, socktoa(&peer->srcadr)));
 
 	/*
 	 * Do a little sanity dance and update the peer structure. Groom
@@ -593,11 +595,11 @@ refclock_gtlin(
 	if (dlen)
 	    *dp  = '\0';
 	*tsptr = rbufp->recv_time;
-	DPRINTF(2, ("refclock_gtlin: fd %d time %s timecode %d %s\n",
-		    rbufp->fd, ulfptoa(&rbufp->recv_time, 6), dlen,
-		    (dlen != 0)
-			? lineptr
-			: ""));
+	DPRINT(2, ("refclock_gtlin: fd %d time %s timecode %d %s\n",
+		   rbufp->fd, ulfptoa(rbufp->recv_time, 6), dlen,
+		   (dlen != 0)
+		   ? lineptr
+		   : ""));
 	return (dlen);
 }
 
@@ -634,9 +636,9 @@ refclock_gtraw(
 	lineptr[bmax] = '\0';
 
 	*tsptr = rbufp->recv_time;
-	DPRINTF(2, ("refclock_gtraw: fd %d time %s timecode %zd %s\n",
-		    rbufp->fd, ulfptoa(&rbufp->recv_time, 6), bmax,
-		    lineptr));
+	DPRINT(2, ("refclock_gtraw: fd %d time %s timecode %zu %s\n",
+		   rbufp->fd, ulfptoa(rbufp->recv_time, 6), bmax,
+		   lineptr));
 	return (bmax);
 }
 
@@ -675,14 +677,6 @@ indicate_refclock_packet(
 
 
 /*
- * process_refclock_packet()
- *
- * Used for deferred processing of 'io_input' on systems where threading
- * is used. This is acting as a trampoline to make the
- * real calls to the refclock functions.
- */
-
-/*
  * refclock_open - open serial port for reference clock
  *
  * This routine opens a serial port for I/O and sets default options. It
@@ -691,9 +685,9 @@ indicate_refclock_packet(
  */
 int
 refclock_open(
-	char	*dev,		/* device name pointer */
-	u_int	speed,		/* serial port speed (code) */
-	u_int	lflags		/* line discipline flags */
+	char		*dev,		/* device name pointer */
+	unsigned int	speed,		/* serial port speed (code) */
+	unsigned int	lflags		/* line discipline flags */
 	)
 {
 	int	fd;
@@ -720,7 +714,7 @@ refclock_open(
 		close(0);
 	}
 	if (fd < 0) {
-		msyslog(LOG_ERR, "refclock_open %s: %m", dev);
+		msyslog(LOG_ERR, "REFCLOCK: refclock_open %s: %m", dev);
 		return -1;
 	}
 	if (!refclock_setup(fd, speed, lflags)) {
@@ -744,11 +738,11 @@ refclock_open(
 /*
  * refclock_setup - initialize terminal interface structure
  */
-bool
+static bool
 refclock_setup(
-	int	fd,		/* file descriptor */
-	u_int	speed,		/* serial port speed (code) */
-	u_int	lflags		/* line discipline flags */
+	int		fd,		/* file descriptor */
+	unsigned int	speed,		/* serial port speed (code) */
+	unsigned int	lflags		/* line discipline flags */
 	)
 {
 	int	i;
@@ -768,7 +762,8 @@ refclock_setup(
 	 * POSIX serial line parameters (termios interface)
 	 */
 	if (tcgetattr(fd, ttyp) < 0) {
-		msyslog(LOG_ERR, "refclock_setup fd %d tcgetattr: %m", fd);
+		msyslog(LOG_ERR,
+			"REFCLOCK: refclock_setup fd %d tcgetattr: %m", fd);
 		return false;
 	}
 
@@ -777,7 +772,7 @@ refclock_setup(
 	 * 8 bits and no parity; map CR to NL; ignore break.
 	 */
 	if (speed) {
-		u_int	ltemp = 0;
+		unsigned int	ltemp = 0;
 
 		ttyp->c_iflag = IGNBRK | IGNPAR | ICRNL;
 		ttyp->c_oflag = 0;
@@ -799,14 +794,11 @@ refclock_setup(
 		 */
 		if (ioctl(fd, TIOCMGET, (char *)&ltemp) < 0)
 			msyslog(LOG_ERR,
-			    "refclock_setup fd %d TIOCMGET: %m", fd);
-#ifdef DEBUG
-		if (debug)
-			printf("refclock_setup fd %d modem status: 0x%x\n",
-			    fd, ltemp);
-#endif
+			    "REFCLOCK: refclock_setup fd %d TIOCMGET: %m", fd);
+		DPRINT(1, ("REFCLOCK: refclock_setup fd %d modem status: 0x%x\n",
+			   fd, ltemp));
 		if (ltemp & TIOCM_DSR && lflags & LDISC_REMOTE)
-			ttyp->c_cflag &= ~CLOCAL;
+			ttyp->c_cflag &= (unsigned int)~CLOCAL;
 #endif /* TIOCMGET */
 	}
 
@@ -820,7 +812,7 @@ refclock_setup(
 		ttyp->c_cc[VMIN] = 1;
 	}
 	if (tcsetattr(fd, TCSANOW, ttyp) < 0) {
-		msyslog(LOG_ERR, "refclock_setup fd %d TCSANOW: %m", fd);
+		msyslog(LOG_ERR, "REFCLOCK: refclock_setup fd %d TCSANOW: %m", fd);
 		return false;
 	}
 
@@ -830,7 +822,7 @@ refclock_setup(
 	 * is logged, but we keep our fingers crossed otherwise.
 	 */
 	if (tcflush(fd, TCIOFLUSH) < 0)
-		msyslog(LOG_ERR, "refclock_setup fd %d tcflush(): %m",
+		msyslog(LOG_ERR, "REFCLOCK: refclock_setup fd %d tcflush(): %m",
 			fd);
 	return true;
 }
@@ -859,7 +851,7 @@ refclock_control(
 	/*
 	 * Check for valid address and running peer
 	 */
-	peer = findexistingpeer(srcadr, NULL, NULL, -1, 0);
+	peer = findexistingpeer(srcadr, NULL, NULL, -1);
 
 	if (NULL == peer)
 		return;
@@ -908,10 +900,10 @@ refclock_control(
 		out->fudgeval2 = pp->refid;
 		out->haveflags = CLK_HAVEVAL1 | CLK_HAVEVAL2;
 		out->fudgetime1 = pp->fudgetime1;
-		if (0.0 != out->fudgetime1)
+		if (!D_ISZERO_NS(out->fudgetime1))
 			out->haveflags |= CLK_HAVETIME1;
 		out->fudgetime2 = pp->fudgetime2;
-		if (0.0 != out->fudgetime2)
+		if (!D_ISZERO_NS(out->fudgetime2))
 			out->haveflags |= CLK_HAVETIME2;
 		out->flags = (uint8_t) pp->sloppyclockflag;
 		if (CLK_FLAG1 & out->flags)
@@ -933,14 +925,14 @@ refclock_control(
 		out->currentstatus = pp->currentstatus;
 		out->clockname = pp->clockname;
 		out->clockdesc = pp->clockdesc;
-		out->lencode = (u_short)pp->lencode;
+		out->lencode = (unsigned short)pp->lencode;
 		out->p_lastcode = pp->a_lastcode;
 	}
 
 	/*
 	 * Give the stuff to the clock
 	 */
-	if (peer->procptr->conf->clock_control != noentry)
+	if (peer->procptr->conf->clock_control)
 		(peer->procptr->conf->clock_control)(unit, in, out, peer);
 }
 
@@ -961,7 +953,7 @@ refclock_ppsapi(
 	if (ap->handle == 0) {
 		if (time_pps_create(fddev, &ap->handle) < 0) {
 			msyslog(LOG_ERR,
-			    "refclock_ppsapi: time_pps_create: %m");
+			    "REFCLOCK: refclock_ppsapi: time_pps_create: %m");
 			return false;
 		}
 	}
@@ -995,7 +987,7 @@ refclock_params(
 		ap->pps_params.mode = PPS_TSFMT_TSPEC | PPS_CAPTUREASSERT;
 	if (time_pps_setparams(ap->handle, &ap->pps_params) < 0) {
 		msyslog(LOG_ERR,
-		    "refclock_params: time_pps_setparams: %m");
+		    "REFCLOCK: refclock_params: time_pps_setparams: %m");
 		return false;
 	}
 
@@ -1008,10 +1000,10 @@ refclock_params(
 		    PPS_TSFMT_TSPEC) < 0) {
 			if (errno == EOPNOTSUPP)
 			    msyslog(LOG_ERR,
-				"refclock_params: kernel PLL (hardpps, RFC 1589) not implemented");
+				"REFCLOCK: refclock_params: kernel PLL (hardpps, RFC 1589) not implemented");
 			else
 			    msyslog(LOG_ERR,
-				"refclock_params: time_pps_kcbind: %m");
+				"REFCLOCK: refclock_params: time_pps_kcbind: %m");
 			return false;
 		}
 		hardpps_enable = true;
@@ -1084,17 +1076,14 @@ refclock_catcher(
 	/*
 	 * Convert to signed fraction offset and stuff in median filter.
 	 */
-	pp->lastrec.l_ui = (uint32_t)ap->ts.tv_sec + JAN_1970;
-	dtemp = ap->ts.tv_nsec / 1e9;
-	pp->lastrec.l_uf = (uint32_t)(dtemp * FRAC);
+	setlfpuint(pp->lastrec, (uint32_t)ap->ts.tv_sec + JAN_1970);
+	dtemp = ap->ts.tv_nsec * S_PER_NS;
+	setlfpfrac(pp->lastrec, (uint32_t)(dtemp * FRAC));
 	if (dtemp > .5)
 		dtemp -= 1.;
 	SAMPLE(-dtemp + pp->fudgetime1);
-#ifdef DEBUG
-	if (debug > 1)
-		printf("refclock_pps: %lu %f %f\n", current_time,
-		    dtemp, pp->fudgetime1);
-#endif
+	DPRINT(2, ("refclock_pps: %lu %f %f\n", current_time,
+		   dtemp, pp->fudgetime1));
 	return PPS_OK;
 }
 #endif /* HAVE_PPSAPI */

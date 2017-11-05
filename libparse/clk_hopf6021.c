@@ -16,7 +16,7 @@
  *
  */
 
-#include <config.h>
+#include "config.h"
 #include "ntp_fp.h"
 #include "ntp_calendar.h"
 #include "ascii.h"
@@ -86,7 +86,7 @@
 #define  HOPF_RADIOHP	0x0C	/* high precision radio clock */
 
 #define HOPF_UTC	0x08	/* time code in UTC */
-#define HOPF_WMASK	0x07	/* mask for weekday code */
+/* #define HOPF_WMASK	0x07	* mask for weekday code UNUSED */
 
 static struct format hopf6021_fmt =
 {
@@ -219,7 +219,8 @@ inp_hopf6021(
 {
 	unsigned int rtc;
 
-	parseprintf(DD_PARSE, ("inp_hopf6021(0x%lx, 0x%x, ...)\n", (long)parseio, ch));
+	parseprintf(DD_PARSE, ("inp_hopf6021(0x%lx, 0x%x, ...)\n",
+                    (unsigned long)parseio, (unsigned)ch));
 
 	switch (ch)
 	{

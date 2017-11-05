@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#include <config.h>
+#include "config.h"
 #include "ntp_fp.h"
 #include "ntp_calendar.h"
 
@@ -122,7 +122,8 @@ inp_dcf7000(
 {
 	unsigned int rtc;
 
-	parseprintf(DD_PARSE, ("inp_dcf7000(0x%lx, 0x%x, ...)\n", (long)parseio, ch));
+	parseprintf(DD_PARSE, ("inp_dcf7000(0x%lx, 0x%x, ...)\n",
+                    (unsigned long)parseio, (unsigned)ch));
 
 	switch (ch)
 	{

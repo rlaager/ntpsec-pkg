@@ -4,7 +4,7 @@
 
 == Synopsis ==
 
-+ntpq+ [+-46dhinpw+] [+-c+ 'command'] ['host'] [...]
++ntpq+ [+-46adhinpkwWu+] [+-c+ 'command'] ['host'] [...]
 
 == Description ==
 
@@ -18,7 +18,7 @@ page is for the NTPv4 variables.
 The program can be run either in interactive mode or controlled using
 command line arguments. Requests to read and write arbitrary variables
 can be assembled, with raw and pretty-printed output options being
-available. The +ntpq+ can also obtain and print a list of peers in a
+available. It can also obtain and print a list of peers in a
 common format by sending multiple queries to the server.
 
 If one or more request options is included on the command line when
@@ -49,10 +49,10 @@ For a simpler near-real-time monitor, see {ntpmonman}.
 
 == Options ==
 
-Command line options are described following. Specifying a command line
-option other than +-i+ or +-n+ will cause the specified query (queries)
-to be sent to the indicated host(s) immediately. Otherwise, +ntpq+ will
-attempt to read interactive format commands from the standard input.
+Command line options are described following. Specifying the command line
+options +-c+ or +-p+ will cause the specified query (queries) to be sent
+to the indicated host(s) immediately. Otherwise, +ntpq+ will attempt to
+read interactive format commands from the standard input.
 
 +-4+, +--ipv4+::
   Force DNS resolution of following host names on the command line to
@@ -60,6 +60,8 @@ attempt to read interactive format commands from the standard input.
 +-6+, +--ipv6+::
   Force DNS resolution of following host names on the command line to
   the IPv6 namespace.
++-a+ num, +--authentication+=num::
+  Enable authentication with the numbered key.
 +-c+ cmd, +--command+=cmd::
   The following argument is interpreted as an interactive format command
   and is added to the list of commands to be executed on the specified
@@ -68,23 +70,32 @@ attempt to read interactive format commands from the standard input.
   Increase debugging level by 1.
 +-D+ num, +--set-debug-level+=num::
   The debug level is set to the following integer argument.
++-l+ filename, +--logfile+=filename::
+  Log debugging output to the specified file.
 +-h+, +--help+::
   Print a usage message summarizing options end exit.
-+-i+, +--interactive+::
-  Force +ntpq+ to operate in interactive mode. Prompts will be written
-  to the standard output and commands read from the standard input.
 +-n+, +--numeric+::
   Output all host addresses in numeric format rather than
-  converting to the canonical host names.
+  converting to the canonical host names.  You may get hostnames
+  anyway for peers in initialization phase, before DNS has resolved
+  the peer name.
 +-p+, +--peers+::
   Print a list of the peers known to the server as well as a summary of
   their state. This is equivalent to the +peers+ interactive command.
++-k+ filename, +--keyfile+=filename::
+  Specify a keyfile. ntpq will look in this file for the key specified
+  with -a.
 +-V+, +--version+::
   Print the version string and exit.
 +-w+, +--wide+::
   Wide mode: if the host name or IP Address doesn't fit, write the
   full name/address and indent the next line so columns line up.
   The default truncates the name or address.
++-W+ num, +--width+=num::
+  Force the terminal width.  Only relevant for composition of the
+  peers display.
++-u+, +--units+::
+  Display timing information with units.
 
 == Internal Commands ==
 
@@ -131,6 +142,10 @@ following.
 +debug more | less | off+::
   Turns internal query program debugging on and off.
 
++logfile <stderr> | filename+::
+  Displays or sets the file for debug logging. <stderr> will send logs
+  to standard error.
+
 +delay+ 'milliseconds'::
   Specify a time interval to be added to timestamps included in requests
   which require authentication. This is used to enable (unreliable)
@@ -160,8 +175,7 @@ following.
   Specify the digest algorithm to use for authenticated requests, with
   default +MD5+. If the OpenSSL library is installed, digest can be
   any message digest algorithm supported by the library. The current
-  selections are: +MD2+, +MD4+, +MD5+, +MDC2+, +RIPEMD160+, +SHA+ and
-  +SHA1+.
+  selections are: +MD2+, +MD4+, +MD5+, +MDC2+, +RIPEMD160+ and +SHA1+.
 
 +ntpversion 1 | 2 | 3 | 4+::
   Sets the NTP version number which +ntpq+ claims in packets. Defaults
@@ -178,7 +192,7 @@ following.
 
 +raw+::
   Display server messages as received and without reformatting.
-  The only formating/interpretation done on the data is
+  The only formatting/interpretation done on the data is
   to transform nonascii data into a printable (but barely
   understandable) form.
 
@@ -187,6 +201,9 @@ following.
   is about 5000 milliseconds. Note that since +ntpq+ retries each query
   once after a timeout, the total waiting time for a timeout will be
   twice the timeout value set.
+
++units+::
+  Toggle whether times in the peers display are shown with units.
 
 +version+::
   Print the version of the +ntpq+ program.
@@ -271,10 +288,17 @@ ind assid status conf reach auth condition last_event cnt
 +monstats+::
   Display monitor facility statistics.
 
++direct+::
+  Normally, the mrulist command retrieves an entire MRUreport (possibly
+  consisting of more than one MRU span), sorts it, and presents the
+  result. But attempting to fetch an entire MRU report may fail on a
+  server so loaded that none of its MRU entries age out before they
+  are shipped. With this option, each segment is reported as it arrives.
+
 +mrulist+ [+limited+ | +kod+ | +mincount=+'count' | +laddr=+'localaddr' | +sort=+'sortorder' | +resany=+'hexmask' | +resall=+'hexmask']::
   Obtain and print traffic counts collected and maintained by the
-  monitor facility. This is useful for tracking who _uses_ your
-  server.
+  monitor facility. This is useful for tracking who _uses_ or
+  _abuses_ your server.
 +
 With the exception of +sort=+'sortorder', the options
 filter the list returned by +ntpd+. The +limited+ and +kod+ options
@@ -290,31 +314,7 @@ The _sortorder_ defaults to +lstint+ and may be any of +addr+,
 +count+, +avgint+, +lstint+, or any of those preceded by a minus sign
 (hyphen) to reverse the sort order. The output columns are:
 +
-[width="100%",cols="<20%,<80%"]
-|=======================================================================
-|Column          |Description
-|+lstint+        |
-Interval in s between the receipt of the most recent packet from this
-address and the completion of the retrieval of the MRU list by +ntpq+.
-|+avgint+        |
-Average interval in s between packets from this address.
-|+rstr+          |
-Restriction flags associated with this address. Most are copied
-unchanged from the matching +restrict+ command, however 0x400 (kod)
-and 0x20 (limited) flags are cleared unless the last packet from this
-address triggered a rate control response.
-|+r+             |
-Rate control indicator, either a period, +L+ or +K+ for no rate
-control response, rate limiting by discarding, or rate limiting with a
-KoD response, respectively.
-|+m+             |Packet mode.
-|+v+             |Packet version number.
-|+count+         |Packets received from this address.
-|+rport+         |Source port of last packet from this address.
-|+remote address+|
-DNS name, numeric address, or address followed by claimed DNS name
-which could not be verified in parentheses.
-|=======================================================================
+include::mrufmt.txt[]
 
 +mreadvar+ 'assocID' 'assocID' [ 'variable_name' [ = 'value'[ ... ]::
 +mrv+ 'assocID' 'assocID' [ 'variable_name' [ = 'value'[ ... ]::
@@ -335,27 +335,9 @@ which could not be verified in parentheses.
 +peers+::
   Display a list of peers in the form
 +
-+[tally]remote refid st t when pool reach delay offset jitter+
++tally remote refid st t when pool reach delay offset jitter+
 +
-[cols="<20%,<80%"]
-|=======================================================================
-|Variable        |Description
-|[+tally+]         |
-single-character code indicating current value of the +select+ field
-of the link:decode.html#peer[peer status word]
-|+remote+        |host name (or IP number) of peer
-|+refid+         |association ID or link:decode.html#kiss[kiss code]
-|+st+            |stratum
-|+t+             |
-+u+: unicast or manycast client,
-+l+: local (reference clock), +s+: symmetric (peer), server, +B+: broadcast server,
-|+when+          |sec/min/hr since last received packet
-|+poll+          |poll interval (log~2~ s)
-|+reach+         |reach shift register (octal)
-|+delay+         |roundtrip delay
-|+offset+        |offset of server relative to this host
-|+jitter+        |jitter
-|=======================================================================
+include::peerfmt.txt[]
 
 +apeers+::
   Display a list of peers in the form:
@@ -411,7 +393,7 @@ displayed.
 == Authentication ==
 
 Four commands require authentication to the server: config-from-file,
-:config, ifstats, and reslist.  An authkey file must be in place and
+config, ifstats, and reslist.  An authkey file must be in place and
 a control key declared in ntp.conf for these commands to work.
 
 If you are running as root or otherwise have read access to the
@@ -567,8 +549,22 @@ In older versions, the 'type' variable associated with a
 reference clock was a numeric driver type index. It has been replaced
 by 'name', a shortname for the driver type.
 
+In older versions, no count of control packets was listed under sysstats.
+
 The -O (--old-rv) option of legacy versions has been retired.
 
-The command ":config" is no longer accepted; use "config" instead.
+== Known Limitations ==
+
+It is possible for a ":config unpeer" command to fail silently, yielding
+"Config Succeeded", if it is given a peer identifier that looks like
+a driver type name or a hostname not present in the peer list. The
+error will however be reported in the system log.
+
+The config command cannot be used to change a server's default restrictions.
+
+include::mrufail.txt[]
+
+You may be able to retrieve partial data in very high-traffic
+conditions by using the 'direct' option.
 
 // end

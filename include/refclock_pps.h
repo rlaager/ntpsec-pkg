@@ -18,5 +18,4 @@ typedef enum {
 
 extern	bool	refclock_ppsapi(int, struct refclock_ppsctl *);
 extern	bool	refclock_params(int, struct refclock_ppsctl *);
-extern  pps_status refclock_catcher(struct peer *, struct refclock_ppsctl *, int);
-
+extern pps_status refclock_catcher(struct peer *, struct refclock_ppsctl *, int);

@@ -6,7 +6,7 @@
 ["verse",subs="normal"]
 Name: gpsd
 Reference ID: GPSD
-Serial Port: /dev/gps__u__ 
+Serial Port: /dev/gps__u__
 
 == Description ==
 
@@ -20,7 +20,7 @@ http://www.catb.org/gpsd/[the _GPSD_ project page].
 *It is important to understand that this driver works best using a GPS
 device with PPS support.*
 
-The GPSD-NG protocol is text based, using JSON notation to transfer
+The GPSD protocol is text based, using JSON notation to transfer
 records in the form of JSON objects. The driver uses a TCP/IP connection to
 +localhost:gpsd+ to connect to the daemon and then requests the GPS
 device +/dev/gpsu+ to be watched. (Different clock units use different
@@ -73,7 +73,6 @@ devices that are hot-plugged. This would require to attach the PPS line
 discipline to the character special file, which is not possible when
 running with root privileges already dropped. This is not likely to
 change in the future.
-
 
 == The \'mode' word ==
 
@@ -138,6 +137,9 @@ from _GPSD_ and needs the corresponding master unit to
 work^link:#fn1[1]^. [[fn1bl]]Use the 'noselect' keyword on the primary unit if
 you are not interested in its data.
 
+The way to use a secondary clock unit is to pair it with a primary in
+"tandem mode": see the configuration examples below.
+
 The secondary unit employs the usual precautions before feeding clock
 samples:
 
@@ -192,6 +194,9 @@ since the last poll.
 
 == Driver Options ==
 
++unit+ 'number'::
+  The driver unit number, defaulting to 0. Used as a distinguishing
+  suffix in the driver device name. 
 +time1+ 'time'::
   Specifies the PPS time offset calibration factor, in seconds and
   fraction, with default 0.0.
@@ -220,10 +225,8 @@ since the last poll.
   _[Primary Unit]_ If set, write a clock stats line on every poll cycle.
 +mode+::
   Control IBT and strict operating modes.
-+mode+::
-  Synonym for subtype, retained for backward compatibility.
 +path+ 'filename'::
-  Not used by this driver.
+  Overrides the default device path.
 +ppspath+ 'filename'::
   Not used by this driver.
 +baud+ 'number'::
@@ -247,10 +250,36 @@ control loop. You do not want to use sloppy data for that.
 == Configuration Example ==
 
 ----------------------------------------------------------------------------
-refclock gpsd mode 2
+# Conentional mode 2 on unit 0, IBD only, experimental automatic mode
+refclock gpsd mode 2 path /dev/tty.usbserial
+
+# Tandem mode, IBD and PPS from unit 0
+server gpsd unit 0 minpoll 4 maxpoll 4 time1 0.142
+server gpsd unit 128 minpoll 4 maxpoll 4 time1 0.001500
 ----------------------------------------------------------------------------
 
-This is configured for the experimental automatic mode.
+== Known bugs ==
+
+If your GPS has firmware made more than 1024 weeks (19 years and 36
+weeks) in the past, its internal date counter may well wrap around
+and generate spurious timestamps.  Some newer GPSes may have a
+longer wraparound (8192 weeks, or 157 years and 28 weeks) but
+this is almost never documented and not safe to bet on. GPSD
+cannot tell what the device's wraparound time is, nor what
+any base-date assumption in its firmware might be.
+
+This problem is fundamental and cannot be compensated for in code
+without relying on the accuracy of the local system clock, which is
+what GPSD (primarily designed for geospatial location) does.  This
+choice creates a risk of perverse GIGO failure modes (especially at
+startup time). The only remedy is (a) not to use ancient GPS hardware,
+and (b) not to rely on GPSD to manage a time source if there is
+any serious risk that your NTP host might boot with a system clock time
+that is wildly off.
+
+Even with these constraints there is some risk of flaky failures
+in a time window around GPS defined by your host system's worst-case
+clock skew from UTC at boot time.
 
 '''''
 

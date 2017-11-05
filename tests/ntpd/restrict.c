@@ -13,10 +13,10 @@ create_sockaddr_u(unsigned short sin_port, const char* ip_addr)
 {
 	sockaddr_u sockaddr;
 
-	sockaddr.sa4.sin_family = AF_INET;
-	sockaddr.sa4.sin_port = htons(sin_port);
-	memset(sockaddr.sa4.sin_zero, 0, 8);
-	sockaddr.sa4.sin_addr.s_addr = inet_addr(ip_addr);
+	memset(&sockaddr, 0, sizeof(sockaddr));
+	SET_AF(&sockaddr, AF_INET);
+	NSRCPORT(&sockaddr) = htons(sin_port);
+	PSOCK_ADDR4(&sockaddr)->s_addr = inet_addr(ip_addr);
 
 	return sockaddr;
 }
@@ -27,7 +27,7 @@ TEST_SETUP(hackrestrict) {
 	init_restrict();
 }
 
-u_long	current_time;	/* not used - restruct code needs it */
+unsigned long	current_time;	/* not used - restruct code needs it */
 
 TEST_TEAR_DOWN(hackrestrict) {
 	restrict_u *empty_restrict = malloc(sizeof(restrict_u));
@@ -63,14 +63,14 @@ TEST(hackrestrict, RestrictionsAreEmptyAfterInit) {
 	memset(rl4, 0, sizeof(restrict_u));
 	memset(rl6, 0, sizeof(restrict_u));
 
-	TEST_ASSERT_EQUAL(rl4->count, restrictlist4->count);
+	TEST_ASSERT_EQUAL(rl4->hitcount, restrictlist4->hitcount);
 	TEST_ASSERT_EQUAL(rl4->flags, restrictlist4->flags);
 	TEST_ASSERT_EQUAL(rl4->mflags, restrictlist4->mflags);
 	TEST_ASSERT_EQUAL(rl4->expire, restrictlist4->expire);
 	TEST_ASSERT_EQUAL(rl4->u.v4.addr, restrictlist4->u.v4.addr);
 	TEST_ASSERT_EQUAL(rl4->u.v4.mask, restrictlist4->u.v4.mask);
 
-	TEST_ASSERT_EQUAL(rl6->count, restrictlist6->count);
+	TEST_ASSERT_EQUAL(rl6->hitcount, restrictlist6->hitcount);
 	TEST_ASSERT_EQUAL(rl6->flags, restrictlist6->flags);
 	TEST_ASSERT_EQUAL(rl6->mflags, restrictlist6->mflags);
 	TEST_ASSERT_EQUAL(rl6->expire, restrictlist6->expire);
@@ -83,7 +83,7 @@ TEST(hackrestrict, RestrictionsAreEmptyAfterInit) {
 TEST(hackrestrict, ReturnsCorrectDefaultRestrictions) {
 	sockaddr_u sockaddr = create_sockaddr_u(54321, "63.161.169.137");
 
-	u_short retval = restrictions(&sockaddr);
+	unsigned short retval = restrictions(&sockaddr);
 
 	TEST_ASSERT_EQUAL(0, retval);
 }
@@ -94,7 +94,7 @@ TEST(hackrestrict, HackingDefaultRestriction) {
 	*	We change the flag of the default restriction,
 	*	and check if restriction() returns that flag
 	*/
-	const u_short flags = 42;
+	const unsigned short flags = 42;
 
 	sockaddr_u resaddr = create_sockaddr_u(54321, "0.0.0.0");
 	sockaddr_u resmask = create_sockaddr_u(54321, "0.0.0.0");
@@ -121,7 +121,7 @@ TEST(hackrestrict, AddingNewRestriction) {
 	sockaddr_u resaddr = create_sockaddr_u(54321, "11.22.33.44");
 	sockaddr_u resmask = create_sockaddr_u(54321, "128.0.0.0");
 
-	const u_short flags = 42;
+	const unsigned short flags = 42;
 
 	hack_restrict(RESTRICT_FLAGS, &resaddr, &resmask, 0, flags, 0);
 

@@ -19,8 +19,10 @@ def ensure_localedir(self):
 @before_method('process_source')
 @feature('intltool_in')
 def apply_intltool_in_f(self):
-	try:self.meths.remove('process_source')
-	except ValueError:pass
+	try:
+		self.meths.remove('process_source')
+	except ValueError:
+		pass
 	self.ensure_localedir()
 	podir=getattr(self,'podir','.')
 	podirnode=self.path.find_dir(podir)
@@ -48,8 +50,10 @@ def apply_intltool_in_f(self):
 			self.add_install_files(install_to=inst,install_from=task.outputs)
 @feature('intltool_po')
 def apply_intltool_po(self):
-	try:self.meths.remove('process_source')
-	except ValueError:pass
+	try:
+		self.meths.remove('process_source')
+	except ValueError:
+		pass
 	self.ensure_localedir()
 	appname=getattr(self,'appname',getattr(Context.g_module,Context.APPNAME,'set_your_app_name'))
 	podir=getattr(self,'podir','.')

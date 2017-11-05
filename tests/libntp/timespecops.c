@@ -3,6 +3,7 @@
 #include "ntp_types.h"
 #include "ntp_fp.h"
 #include "timespecops.h"
+#include "ntp_calendar.h"
 
 #include "unity.h"
 #include "unity_fixture.h"
@@ -18,8 +19,8 @@
 
 
 #define TEST_ASSERT_EQUAL_l_fp(a, b) {					\
-    TEST_ASSERT_EQUAL_MESSAGE(a.l_i, b.l_i, "Field l_i");		\
-    TEST_ASSERT_EQUAL_UINT_MESSAGE(a.l_uf, b.l_uf, "Field l_uf");	\
+    TEST_ASSERT_EQUAL_MESSAGE(lfpsint(a), lfpsint(b), "Integral part"); \
+    TEST_ASSERT_EQUAL_UINT_MESSAGE(lfpfrac(a), lfpfrac(b), "Fractional part"); \
 }
 
 
@@ -34,7 +35,7 @@ struct lfpfracdata {
 
 TEST_GROUP(timespecops);
 
-TEST_SETUP(timespecops) {init_lib();}
+TEST_SETUP(timespecops) {}
 
 TEST_TEAR_DOWN(timespecops) {}
 
@@ -57,33 +58,14 @@ static struct timespec timespec_init(time_t hi, long lo)
 }
 
 
-static l_fp l_fp_init(int32_t i, uint32_t f)
-{
-	l_fp temp;
-
-	temp.l_i  = i;
-	temp.l_uf = f;
-
-	return temp;
-}
-
-
 static bool AssertFpClose(const l_fp m, const l_fp n, const l_fp limit)
 {
-	l_fp diff;
-
-	if (L_ISGEQ(&m, &n)) {
-		diff = m;
-		L_SUB(&diff, &n);
-	} else {
-		diff = n;
-		L_SUB(&diff, &m);
-	}
-	if (L_ISGEQ(&limit, &diff)) {
+	int64_t diff = (int64_t)(m - n);
+	if ((l_fp)llabs(diff) <= limit)
 		return true;
-	}
 	else {
-		printf("m_expr which is %s \nand\nn_expr which is %s\nare not close; diff=%susec\n", lfptoa(&m, 10), lfptoa(&n, 10), lfptoa(&diff, 10)); 
+		printf("m_expr which is %s \nand\nn_expr which is %s\nare not close; diff=%susec\n",
+                       lfptoa(m, 10), lfptoa(n, 10), lfptoa((l_fp)diff, 10));
 		return false;
 	}
 }
@@ -339,7 +321,7 @@ TEST(timespecops, AddNsecOflow1) {
 		struct timespec E = timespec_init(i + 1, 100);
 		struct timespec c;
 
-		c = add_tspec_ns(a, NANOSECONDS - 100);
+		c = add_tspec_ns(a, NS_PER_S - 100);
 		TEST_ASSERT_EQUAL_timespec(E, c);
 	}
 
@@ -410,7 +392,7 @@ TEST(timespecops, SubNsecOflow) {
 		struct timespec E = timespec_init(i-1, 200);
 		struct timespec c;
 
-		c = sub_tspec_ns(a, NANOSECONDS - 100);
+		c = sub_tspec_ns(a, NS_PER_S - 100);
 		TEST_ASSERT_EQUAL_timespec(E, c);
 	}
 
@@ -506,12 +488,12 @@ TEST(timespecops, test_Helpers2) {
 //----------------------------------------------------------------------
 
 TEST(timespecops, test_ToLFPbittest) {
-	l_fp lfpClose =  l_fp_init(0, 1);
+	l_fp lfpClose =  lfpinit(0, 1);
 	uint32_t i;
 
 	for (i = 0; i < 1000000000; i+=1000) {
-		struct timespec a = timespec_init(1, i);
-		l_fp E= l_fp_init(1, my_tick_to_tsf(i));
+		struct timespec a = timespec_init(1, (long)i);
+		l_fp E= lfpinit(1, my_tick_to_tsf(i));
 		l_fp r;
 
 		r = tspec_intv_to_lfp(a);
@@ -527,7 +509,7 @@ TEST(timespecops, test_ToLFPrelPos) {
 
 	for (i = 0; i < (int)COUNTOF(fdata); ++i) {
 		struct timespec a = timespec_init(1, fdata[i].nsec);
-		l_fp E = l_fp_init(1, fdata[i].frac);
+		l_fp E = lfpinit(1, fdata[i].frac);
 		l_fp r;
 
 		r = tspec_intv_to_lfp(a);
@@ -543,7 +525,7 @@ TEST(timespecops, test_ToLFPrelNeg) {
 
 	for (i = 0; i < (int)COUNTOF(fdata); ++i) {
 		struct timespec a = timespec_init(-1, fdata[i].nsec);
-		l_fp E = l_fp_init(~0, fdata[i].frac);
+		l_fp E = lfpinit(~0, fdata[i].frac);
 		l_fp r;
 
 		r = tspec_intv_to_lfp(a);
@@ -559,7 +541,7 @@ TEST(timespecops, test_ToLFPabs) {
 
 	for (i = 0; i < (int)COUNTOF(fdata); ++i) {
 		struct timespec a = timespec_init(1, fdata[i].nsec);
-		l_fp E = l_fp_init(1 + JAN_1970, fdata[i].frac);
+		l_fp E = lfpinit((int)(1 + JAN_1970), fdata[i].frac);
 		l_fp r;
 
 		r = tspec_stamp_to_lfp(a);
@@ -581,8 +563,8 @@ TEST(timespecops, test_FromLFPbittest) {
 	// every 1000 fractional units.
 	uint32_t tsf;
 	for (tsf = 0; tsf < ~((uint32_t)(1000)); tsf += 1000) {
-		struct timespec E = timespec_init(1, my_tsf_to_tick(tsf));
-		l_fp a = l_fp_init(1, tsf);
+		struct timespec E = timespec_init(1, (long)my_tsf_to_tick(tsf));
+		l_fp a = lfpinit(1, tsf);
 		struct timespec r;
 
 		r = lfp_intv_to_tspec(a);
@@ -600,7 +582,7 @@ TEST(timespecops, test_FromLFPrelPos) {
 	int i;
 
 	for (i = 0; i < (int)COUNTOF(fdata); ++i) {
-		l_fp a = l_fp_init(1, fdata[i].frac);
+		l_fp a = lfpinit(1, fdata[i].frac);
 		struct timespec E = timespec_init(1, fdata[i].nsec);
 		struct timespec r;
 
@@ -617,7 +599,7 @@ TEST(timespecops, test_FromLFPrelNeg) {
 	int i;
 
 	for (i = 0; i < (int)COUNTOF(fdata); ++i) {
-		l_fp a = l_fp_init(~0, fdata[i].frac);
+		l_fp a = lfpinit(~0, fdata[i].frac);
 		struct timespec E = timespec_init(-1, fdata[i].nsec);
 		struct timespec r;
 
@@ -636,7 +618,7 @@ TEST(timespecops, test_LFProundtrip) {
 
 	for (t = -1; t < 2; ++t)
 		for (i = 4999; i < 1000000000; i += 10007) {
-			struct timespec E = timespec_init(t, i);
+			struct timespec E = timespec_init(t, (long)i);
 			l_fp a;
 			struct timespec r;
 

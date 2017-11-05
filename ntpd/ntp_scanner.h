@@ -44,7 +44,6 @@ typedef enum {
 	FOLLBY_NON_ACCEPTING
 } follby;
 
-#define MAXLINE		1024	/* maximum length of line */
 #define MAXINCLUDELEVEL	5	/* maximum include file levels */
 
 /* STRUCTURES
@@ -79,9 +78,9 @@ typedef enum {
 )
 
 #define SS_CH(ss)	((char)(uint8_t)((ss) & 0xff))
-#define SS_FB(ss)	(((u_int)(ss) >>  8) & 0x3)
-#define SS_MATCH_N(ss)	(((u_int)(ss) >> 10) & 0x7ff)
-#define SS_OTHER_N(ss)	(((u_int)(ss) >> 21) & 0x7ff)
+#define SS_FB(ss)	(((unsigned int)(ss) >>  8) & 0x3)
+#define SS_MATCH_N(ss)	(((unsigned int)(ss) >> 10) & 0x7ff)
+#define SS_OTHER_N(ss)	(((unsigned int)(ss) >> 21) & 0x7ff)
 
 typedef uint32_t scan_state;
 
@@ -115,11 +114,6 @@ struct FILE_INFO {
  */
 extern config_tree cfgt;	  /* Parser output stored here */
 
-/* VARIOUS EXTERNAL DECLARATIONS
- * -----------------------------
- */
-extern bool old_config_style;
-
 /* VARIOUS SUBROUTINE DECLARATIONS
  * -------------------------------
  */
@@ -132,13 +126,18 @@ extern bool lex_init_stack(const char * path, const char * mode);
 extern void        lex_drop_stack(void);
 extern bool lex_flush_stack(void);
 
+/* path management for config directories */
+extern void reparent(char *, size_t, const char *, const char *);
+extern bool is_directory(const char *);
+
 /* add/remove a nested input source */
-extern bool lex_push_file(const char * path, const char * mode);
+extern bool lex_push_file(const char * path);
 extern bool lex_pop_file(void);
 
 /* input stack state query functions */
 extern size_t      lex_level(void);
 extern bool lex_from_file(void);
 extern struct FILE_INFO * lex_current(void);
+extern const char * const keyword_text[];
 
 #endif	/* GUARD_NTP_SCANNER_H */

@@ -10,23 +10,23 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <config.h>
+#include "config.h"
 
 #include <stdio.h>
 #include <sys/time.h>
 #include <stdlib.h>
-#include <stdbool.h>
 
 #include "ntpfrob.h"
 
 #include "ntp_fp.h"
 #include "ntp_calendar.h"
+#include "timespecops.h"
 
 #define NBUF	800002
 #define NSAMPLES 10
 
-static double sys_residual;
-static double average;
+static doubletime_t sys_residual;
+static doubletime_t average;
 
 /*
  * get_clocktime - return system time in NTP timestamp format.
@@ -36,7 +36,7 @@ get_clocktime(
 	l_fp *now		/* system time */
 	)
 {
-	double dtemp;
+	doubletime_t dtemp;
 
 	struct timespec ts;	/* seconds and nanoseconds */
 
@@ -44,8 +44,8 @@ get_clocktime(
 	 * Convert Unix clock from seconds and nanoseconds to seconds.
 	 */
 	clock_gettime(CLOCK_REALTIME, &ts);
-	now->l_i = ts.tv_sec + JAN_1970;
-	dtemp = ts.tv_nsec / 1e9;
+	*now = lfptouint(ts.tv_sec + (long)JAN_1970);  /* no fraction, yet */
+	dtemp = ts.tv_nsec * S_PER_NS;
 
 	/*
 	 * Renormalize to seconds past 1900 and fraction.
@@ -53,18 +53,18 @@ get_clocktime(
 	dtemp += sys_residual;
 	if (dtemp >= 1) {
 		dtemp -= 1;
-		now->l_i++;
+		bumplfpsint(*now, 1);
 	} else if (dtemp < -1) {
 		dtemp += 1;
-		now->l_i--;
+		bumplfpsint(*now, -1);
 	}
 	dtemp *= FRAC;
-	now->l_uf = (uint32_t)dtemp;
+	setlfpfrac(*now, (uint32_t)dtemp);
 }
 
 static int doublecmp(const void *a, const void *b)
 {
-    return (int)(*((double *)a) - *((double *)b));
+    return (int)(*((const double *)a) - *((const double *)b));
 }
 
 void jitter(const iomode mode)
@@ -84,7 +84,7 @@ void jitter(const iomode mode)
 	 */
 	for (i = 0; i < NBUF; i ++) {
 		get_clocktime(&tr);
-		LFPTOD(&tr, gtod[i]);
+		gtod[i] = lfptod(tr);
 	}
 
 	/*
@@ -107,7 +107,7 @@ void jitter(const iomode mode)
 	qsort(gtod, NBUF, sizeof(gtod[0]), doublecmp);
 	average = average / (NBUF - 2);
 	if (mode == json) {
-		fprintf(stdout, "{\"Average\":%13.9f,", average);
+		fprintf(stdout, "{\"Average\":%13.9Lf,", average);
 		fprintf(stdout, "\"First rank\":[");
 		for (i = 0; i < NSAMPLES; i++) {
 		    fprintf(stdout, "%13.9f", gtod[i]);
@@ -125,7 +125,7 @@ void jitter(const iomode mode)
 	}
 	else if (mode != raw)
 	{
-		fprintf(stdout, "Average %13.9f\n", average);
+		fprintf(stdout, "Average %13.9Lf\n", average);
 		fprintf(stdout, "First rank\n");
 		for (i = 0; i < NSAMPLES; i++)
 		    fprintf(stdout, "%2d %13.9f\n", i, gtod[i]);
@@ -135,6 +135,7 @@ void jitter(const iomode mode)
 	}
 
 	exit(0);
+        /* never returns */
 }
 
 /* end */

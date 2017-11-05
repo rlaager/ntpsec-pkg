@@ -2,7 +2,7 @@
  * ntp_monitor - monitor ntpd statistics
  */
 
-#include <config.h>
+#include "config.h"
 
 #include "ntpd.h"
 #include "ntp_io.h"
@@ -52,18 +52,18 @@ uint8_t	mon_hash_bits;
  */
 mon_entry **	mon_hash;	/* MRU hash table */
 mon_entry	mon_mru_list;	/* mru listhead */
+unsigned int	mru_entries;	/* mru list count */
 
-/*
- * List of free structures structures, and counters of in-use and total
+/*1
+ * List of free structures, and counters of in-use and total
  * structures. The free structures are linked with the hash_next field.
  */
 static  mon_entry *mon_free;		/* free list or null if none */
-	u_int mru_alloc;		/* mru list + free list count */
-	u_int mru_entries;		/* mru list count */
-	u_int mru_peakentries;		/* highest mru_entries seen */
-	u_int mru_initalloc = INIT_MONLIST;/* entries to preallocate */
-	u_int mru_incalloc = INC_MONLIST;/* allocation batch factor */
-static	u_int mon_mem_increments;	/* times called malloc() */
+static	unsigned int mru_alloc;		/* mru list + free list count */
+	unsigned int mru_peakentries;		/* highest mru_entries seen */
+	unsigned int mru_initalloc = INIT_MONLIST;/* entries to preallocate */
+	unsigned int mru_incalloc = INC_MONLIST;/* allocation batch factor */
+static	unsigned int mon_mem_increments;	/* times called malloc() */
 
 /*
  * Parameters of the RES_LIMITED restriction option. We define headway
@@ -78,16 +78,24 @@ uint8_t	ntp_minpoll = NTP_MINPOLL;	/* increment (log 2 s) */
  * Initialization state.  We may be monitoring, we may not.  If
  * we aren't, we may not even have allocated any memory yet.
  */
-u_int	mon_enabled;			/* enable switch */
-u_int	mru_mindepth = 600;		/* preempt above this */
-int	mru_maxage = 64;		/* for entries older than */
-u_int	mru_maxdepth = MRU_MAXDEPTH_DEF;	/* MRU count hard limit */
-int	mon_age = 3000;			/* preemption limit */
+unsigned int	mon_enabled;		/* enable switch */
+unsigned int	mru_mindepth = 600;	/* preempt above this */
+int		mru_maxage = 3600;	/* recycle if older than this */
+int		mru_minage = 64;	/* recycle if full and older than this */
+unsigned int	mru_maxdepth = MRU_MAXDEPTH_DEF;	/* MRU count hard limit */
+int	mon_age = 3000;		/* preemption limit */
 
 static	void		mon_getmoremem(void);
 static	void		remove_from_hash(mon_entry *);
 static	inline void	mon_free_entry(mon_entry *);
 static	inline void	mon_reclaim_entry(mon_entry *);
+
+/* MRU counters */
+unsigned long mru_exists = 0;		/* slot already exists */
+unsigned long mru_new = 0;		/* allocate a new slot (2 cases) */
+unsigned long mru_recycleold = 0;	/* recycle slot: age > mru_maxage */
+unsigned long mru_recyclefull = 0;	/* recycle slot: full and age > mru_minage */
+unsigned long mru_none = 0;		/* couldn't get one */
 
 
 /*
@@ -114,14 +122,14 @@ remove_from_hash(
 	mon_entry *mon
 	)
 {
-	u_int hash;
+	unsigned int hash;
 	mon_entry *punlinked;
 
 	mru_entries--;
 	hash = MON_HASH(&mon->rmtadr);
 	UNLINK_SLIST(punlinked, mon_hash[hash], mon, hash_next,
 		     mon_entry);
-	NTP_ENSURE(punlinked == mon);
+	ENSURE(punlinked == mon);
 }
 
 
@@ -149,7 +157,7 @@ mon_reclaim_entry(
 	mon_entry *m
 	)
 {
-	DEBUG_INSIST(NULL != m);
+	INSIST(NULL != m);
 
 	UNLINK_DLIST(m, mru);
 	remove_from_hash(m);
@@ -164,7 +172,7 @@ static void
 mon_getmoremem(void)
 {
 	mon_entry *chunk;
-	u_int entries;
+	unsigned int entries;
 
 	entries = (0 == mon_mem_increments)
 		      ? mru_initalloc
@@ -178,6 +186,7 @@ mon_getmoremem(void)
 
 		mon_mem_increments++;
 	}
+        /* chunk not free()ed, chunk added to free list */
 	/* coverity[leaked_storage] */
 }
 
@@ -191,12 +200,12 @@ mon_start(
 	)
 {
 	size_t octets;
-	u_int min_hash_slots;
+	unsigned int min_hash_slots;
 
 	if (MON_OFF == mode)		/* MON_OFF is 0 */
 		return;
 	if (mon_enabled) {
-		mon_enabled |= mode;
+		mon_enabled |= (unsigned int)mode;
 		return;
 	}
 	if (0 == mon_mem_increments)
@@ -215,7 +224,7 @@ mon_start(
 	octets = sizeof(*mon_hash) * MON_HASH_SIZE;
 	mon_hash = erealloc_zero(mon_hash, octets, 0);
 
-	mon_enabled = mode;
+	mon_enabled = (unsigned int)mode;
 }
 
 
@@ -231,10 +240,10 @@ mon_stop(
 
 	if (MON_OFF == mon_enabled)
 		return;
-	if ((mon_enabled & mode) == 0 || mode == MON_OFF)
+	if ((mon_enabled & (unsigned int)mode) == 0 || mode == MON_OFF)
 		return;
 
-	mon_enabled &= ~mode;
+	mon_enabled &= (unsigned int)~mode;
 	if (mon_enabled != MON_OFF)
 		return;
 	
@@ -250,7 +259,7 @@ mon_stop(
 	/* empty the MRU list and hash table. */
 	mru_entries = 0;
 	INIT_DLIST(mon_mru_list, mru);
-	zero_mem(mon_hash, sizeof(*mon_hash) * MON_HASH_SIZE);
+	memset(mon_hash, '\0', sizeof(*mon_hash) * MON_HASH_SIZE);
 }
 
 
@@ -278,7 +287,17 @@ mon_clearinterface(
 	ITER_DLIST_END()
 }
 
-
+int mon_get_oldest_age(l_fp now)
+{
+    mon_entry *	oldest;
+    if (mru_entries == 0)
+	return 0;
+    oldest = TAIL_DLIST(mon_mru_list, mru);
+    now -= oldest->last;
+    /* add one-half second to round up */
+    now += 0x80000000;
+    return lfpsint(now);
+}
 /*
  * ntp_monitor - record stats about this packet
  *
@@ -294,10 +313,10 @@ mon_clearinterface(
  * or RES_KOD is lit for a particular address before ntp_monitor()'s
  * typical dousing.
  */
-u_short
+unsigned short
 ntp_monitor(
 	struct recvbuf *rbufp,
-	u_short	flags
+	unsigned short	flags
 	)
 {
 	l_fp		interval_fp;
@@ -305,8 +324,8 @@ ntp_monitor(
 	mon_entry *	mon;
 	mon_entry *	oldest;
 	int		oldest_age;
-	u_int		hash;
-	u_short		restrict_mask;
+	unsigned int	hash;
+	unsigned short	restrict_mask;
 	uint8_t		mode;
 	uint8_t		version;
 	int		interval;
@@ -333,11 +352,12 @@ ntp_monitor(
 			break;
 
 	if (mon != NULL) {
+		mru_exists++;
 		interval_fp = rbufp->recv_time;
-		L_SUB(&interval_fp, &mon->last);
+		interval_fp -= mon->last;
 		/* add one-half second to round up */
-		L_ADDUF(&interval_fp, 0x80000000);
-		interval = interval_fp.l_i;
+		interval_fp += 0x80000000;
+		interval = lfpsint(interval_fp);
 		mon->last = rbufp->recv_time;
 		NSRCPORT(&mon->rmtadr) = NSRCPORT(&rbufp->recv_srcadr);
 		mon->count++;
@@ -359,8 +379,8 @@ ntp_monitor(
 		leak = mon->leak + head;
 		limit = NTP_SHIFT * head;
 
-		DPRINTF(2, ("MRU: interval %d headway %d limit %d\n",
-			    interval, leak, limit));
+		DPRINT(2, ("MRU: interval %d headway %d limit %d\n",
+			   interval, leak, limit));
 
 		/*
 		 * If the minimum and average thresholds are not
@@ -402,7 +422,7 @@ ntp_monitor(
 	 *   limit on the total number of entries.
 	 * - mru_maxage ("mru maxage") is a ceiling on the age in
 	 *   seconds of entries.  Entries older than this are
-	 *   reclaimed once mon_mindepth is exceeded.  64s default.
+	 *   reclaimed once mon_mindepth is exceeded.  3600s default.
 	 *   Note that entries older than this can easily survive
 	 *   as they are reclaimed only as needed.
 	 * - mru_maxdepth ("mru maxdepth") is a hard limit on the
@@ -423,33 +443,27 @@ ntp_monitor(
 	 * initmem", and for "mru incalloc" and "mru incmem".
 	 */
 	if (mru_entries < mru_mindepth) {
+		mru_new++;
 		if (NULL == mon_free)
 			mon_getmoremem();
 		UNLINK_HEAD_SLIST(mon, mon_free, hash_next);
 	} else {
 		oldest = TAIL_DLIST(mon_mru_list, mru);
-		oldest_age = 0;		/* silence uninit warning */
-		if (oldest != NULL) {
-			interval_fp = rbufp->recv_time;
-			L_SUB(&interval_fp, &oldest->last);
-			/* add one-half second to round up */
-			L_ADDUF(&interval_fp, 0x80000000);
-			oldest_age = interval_fp.l_i;
-		}
-		/* note -1 is legal for mru_maxage (disables) */
-		if (oldest != NULL && mru_maxage < oldest_age) {
+		oldest_age = mon_get_oldest_age(rbufp->recv_time);
+		if (mru_maxage < oldest_age) {
+			mru_recycleold++;
 			mon_reclaim_entry(oldest);
 			mon = oldest;
-		} else if (mon_free != NULL || mru_alloc <
-			   mru_maxdepth) {
+		} else if (mon_free != NULL || mru_alloc < mru_maxdepth) {
+			mru_new++;
 			if (NULL == mon_free)
 				mon_getmoremem();
 			UNLINK_HEAD_SLIST(mon, mon_free, hash_next);
-		/* preempt from the MRU list if old enough. */
-		} else if (ntp_random() / (2.0 * FRAC) >
-			   (double)oldest_age / mon_age) {
+		} else if (oldest_age < mru_minage) {
+			mru_none++;
 			return ~(RES_LIMITED | RES_KOD) & flags;
 		} else {
+			mru_recyclefull++;
 			/* coverity[var_deref_model] */
 			mon_reclaim_entry(oldest);
 			mon = oldest;
@@ -459,6 +473,7 @@ ntp_monitor(
 	/*
 	 * Got one, initialize it
 	 */
+	REQUIRE(mon != NULL);
 	mru_entries++;
 	mru_peakentries = max(mru_peakentries, mru_entries);
 	mon->last = rbufp->recv_time;

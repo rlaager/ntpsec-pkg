@@ -10,7 +10,8 @@ from waflib.TaskGen import extension,feature,before_method
 @feature('perlext')
 def init_perlext(self):
 	self.uselib=self.to_list(getattr(self,'uselib',[]))
-	if not'PERLEXT'in self.uselib:self.uselib.append('PERLEXT')
+	if not'PERLEXT'in self.uselib:
+		self.uselib.append('PERLEXT')
 	self.env.cshlib_PATTERN=self.env.cxxshlib_PATTERN=self.env.perlext_PATTERN
 @extension('.xs')
 def xsubpp_file(self,node):

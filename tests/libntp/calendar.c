@@ -1,5 +1,7 @@
 #include "config.h"
+#include "ntp.h"
 #include "ntp_stdlib.h"
+#include "parse.h"
 
 #include "unity.h"
 #include "unity_fixture.h"
@@ -17,86 +19,27 @@ TEST_TEAR_DOWN(calendar) {}
 
 #define TEST_ASSERT_GREATER_THAN(a, b) TEST_ASSERT_TRUE(a > b)
 
-int leapdays(int year) {
-	if (year % 400 == 0)
-		return 1;
-	if (year % 100 == 0)
-		return 0;
-	if (year % 4 == 0)
-		return 1;
-	return 0;
-}
+static const char *DateToString(char *, const struct calendar *);
 
-
-bool IsEqualCA(const struct calendar *expected, const struct calendar *actual) {
-	if (expected->year == actual->year &&
-	    (!expected->yearday || expected->yearday == actual->yearday) &&
-	    expected->month == actual->month &&
-	    expected->monthday == actual->monthday &&
-	    expected->hour == actual->hour &&
-	    expected->minute == actual->minute &&
-	    expected->second == actual->second) {
-		return true;
-	} else {
-		/* coverity[leaked_storage] */
-		printf("Expected: %s but was %s\n", CalendarToString(expected), CalendarToString(actual));
-		return false;
-	}
-}
-
-
-bool IsEqualISO(const struct isodate *expected, const struct isodate *actual) {
-	if (expected->year == actual->year &&
-	    expected->week == actual->week &&
-	    expected->weekday == actual->weekday &&
-	    expected->hour == actual->hour &&
-	    expected->minute == actual->minute &&
-	    expected->second == actual->second) {
-		return true;
-	} else {
-		/* coverity[leaked_storage] */
-		printf("Expected: %s but was %s\n", CalendarToStringISO(expected), CalendarToStringISO(actual));
-		return false;
-	}
-}
-
-
-const char *DateToString(const struct calendar *cal) {
-	char *str = malloc(255);
-	snprintf(str, 255, "%hu-%u-%u(%u)\n", cal->year, (u_int)cal->month, (u_int)cal->monthday, cal->yearday);
+static const char *DateToString(char *str, const struct calendar *cal) {
+	snprintf(str, 255, "%hu-%u-%u(%u)\n", cal->year, (unsigned int)cal->month, (unsigned int)cal->monthday, cal->yearday);
 	return str;
 }
 
 
-const char *DateToStringISO(const struct isodate *iso) {
-	char *str = malloc(255);
-	snprintf(str, 255, "%hu-%u-%u\n", iso->year, (u_int)iso->week, (u_int)iso->weekday);
-	return str;
-
-}
-
-bool IsEqualDate(const struct calendar *expected, const struct calendar *actual) {
+static bool IsEqualDate(const struct calendar *expected,
+                        const struct calendar *actual) {
+	char str[255];
+	char str1[255];
 	if (expected->year == actual->year &&
 	    (!expected->yearday || expected->yearday == actual->yearday) &&
 	    expected->month == actual->month &&
 	    expected->monthday == actual->monthday) {
 			return true;
 	} else {
-		/* coverity[leaked_storage] */
-		printf("Expected: %s but was %s\n", DateToString(expected), DateToString(actual));
-		return false;
-	}
-}
-
-
-bool IsEqualDateISO(const struct isodate *expected, const struct isodate *actual) {
-	if (expected->year == actual->year &&
-	    expected->week == actual->week &&
-	    expected->weekday == actual->weekday) {
-		return true;
-	} else {
-		/* coverity[leaked_storage] */
-		printf("Expected: %s but was %s\n", DateToStringISO(expected), DateToStringISO(actual));
+		printf("Expected: %s but was %s\n",
+                       DateToString(str, expected),
+                       DateToString(str1, actual));
 		return false;
 	}
 }
@@ -105,7 +48,7 @@ bool IsEqualDateISO(const struct isodate *expected, const struct isodate *actual
 // ---------------------------------------------------------------------
 // test cases
 // ---------------------------------------------------------------------
-static const u_short real_month_table[2][13] = {
+static const unsigned short real_month_table[2][13] = {
 	/* -*- table for regular years -*- */
 	{ 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365 },
 	/* -*- table for leap years -*- */
@@ -113,24 +56,91 @@ static const u_short real_month_table[2][13] = {
 };
 
 // days in month, with one month wrap-around at both ends
-static const u_short real_month_days[2][14] = {
+static const unsigned short real_month_days[2][14] = {
 	/* -*- table for regular years -*- */
 	{ 31, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31 },
 	/* -*- table for leap years -*- */
 	{ 31, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31 }
 };
 
+TEST(calendar, is_leapyear) {
+        /* check is_leapyear() */
+	TEST_ASSERT_EQUAL(false, is_leapyear(1900));
+	TEST_ASSERT_EQUAL(false, is_leapyear(1970));
+	TEST_ASSERT_EQUAL(false, is_leapyear(1999));
+	TEST_ASSERT_EQUAL(true, is_leapyear(2000));
+	TEST_ASSERT_EQUAL(false, is_leapyear(2001));
+	TEST_ASSERT_EQUAL(true, is_leapyear(2004));
+	TEST_ASSERT_EQUAL(true, is_leapyear(2040));
+}
+
+TEST(calendar, julian0) {
+        /* check julian0() */
+	TEST_ASSERT_EQUAL(693961, julian0(1900));
+	TEST_ASSERT_EQUAL(719528, julian0(1970));
+	TEST_ASSERT_EQUAL(730120, julian0(1999));
+	TEST_ASSERT_EQUAL(730485, julian0(2000));
+	TEST_ASSERT_EQUAL(730851, julian0(2001));
+	TEST_ASSERT_EQUAL(745095, julian0(2040));
+}
+
+TEST(calendar, days_per_year) {
+        /* check is_leapyear() */
+	TEST_ASSERT_EQUAL(365, days_per_year(1900));
+	TEST_ASSERT_EQUAL(365, days_per_year(1970));
+	TEST_ASSERT_EQUAL(365, days_per_year(1999));
+	TEST_ASSERT_EQUAL(366, days_per_year(2000));
+	TEST_ASSERT_EQUAL(365, days_per_year(2001));
+	TEST_ASSERT_EQUAL(366, days_per_year(2004));
+	TEST_ASSERT_EQUAL(366, days_per_year(2040));
+}
+
+#ifdef CLOCK_GENERIC
+TEST(calendar, parse_to_unixtime) {
+        /* check is_leapyear() */
+        clocktime_t  	ct;
+        time_t       	result;
+        unsigned long       Flag;
+
+        ct.day = 1;
+        ct.month = 1;
+        ct.year = 1970;
+        ct.hour = ct.minute = ct.second = ct.usecond = 0;
+        ct.utcoffset = 0;
+        ct.utctime = 0;
+        ct.flags = 0;
+
+        Flag = 0;
+        result = parse_to_unixtime( &ct, &Flag );
+
+	TEST_ASSERT_EQUAL(0, result);
+
+        ct.year = 2000;
+        ct.hour = 2;
+        ct.utctime = 0;
+        result = parse_to_unixtime( &ct, &Flag );
+	TEST_ASSERT_EQUAL(946692000L, result);
+
+        ct.year = 2037;
+        ct.minute = 2;
+        ct.second = 3;
+        ct.utctime = 0;
+        result = parse_to_unixtime( &ct, &Flag );
+	TEST_ASSERT_EQUAL(2114388123L, result);
+}
+#endif
+
 // test the day/sec join & split ops, making sure that 32bit
 // intermediate results would definitely overflow and the hi DWORD of
-// the 'vint64' is definitely needed.
+// the 'time64_t' is definitely needed.
 TEST(calendar, DaySplitMerge) {
 	int32_t day;
 	int32_t sec;
 
 	for (day = -1000000; day <= 1000000; day += 100) {
 		for (sec = -100000; sec <= 186400; sec += 10000) {
-			vint64	     merge = ntpcal_dayjoin(day, sec);
-			ntpcal_split split = ntpcal_daysplit(&merge);
+			time64_t	     merge = ntpcal_dayjoin(day, sec);
+			ntpcal_split split = ntpcal_daysplit(merge);
 			int32_t	     eday  = day;
 			int32_t	     esec  = sec;
 
@@ -194,7 +204,7 @@ TEST(calendar, LeapYears1) {
 
 	for (dateIn.year = 1; dateIn.year < 10000; ++dateIn.year) {
 		dateIn.month	= 2;
-		dateIn.monthday = 28 + leapdays(dateIn.year);
+		dateIn.monthday = is_leapyear(dateIn.year) ? 29 : 28;
 		dateIn.yearday	= 31 + dateIn.monthday;
 
 		ntpcal_rd_to_date(&dateOut, ntpcal_date_to_rd(&dateIn));
@@ -210,7 +220,7 @@ TEST(calendar, LeapYears2) {
 	for (dateIn.year = 1; dateIn.year < 10000; ++dateIn.year) {
 		dateIn.month	= 3;
 		dateIn.monthday = 1;
-		dateIn.yearday	= 60 + leapdays(dateIn.year);
+		dateIn.yearday	= is_leapyear(dateIn.year) ? 61 : 60;
 
 		ntpcal_rd_to_date(&dateOut, ntpcal_date_to_rd(&dateIn));
 		TEST_ASSERT_TRUE(IsEqualDate(&dateIn, &dateOut));
@@ -231,7 +241,7 @@ TEST(calendar, RoundTripDate) {
 		expDate.year++;
 		expDate.month	= 0;
 		expDate.yearday = 0;
-		leaps = leapdays(expDate.year);
+		leaps = is_leapyear(expDate.year) ? 1 : 0;
 		while (expDate.month < 12) {
 			expDate.month++;
 			expDate.monthday = 0;
@@ -252,6 +262,12 @@ TEST(calendar, RoundTripDate) {
 
 
 TEST_GROUP_RUNNER(calendar) {
+	RUN_TEST_CASE(calendar, is_leapyear);
+	RUN_TEST_CASE(calendar, julian0);
+	RUN_TEST_CASE(calendar, days_per_year);
+#ifdef CLOCK_GENERIC
+	RUN_TEST_CASE(calendar, parse_to_unixtime);
+#endif
 	RUN_TEST_CASE(calendar, DaySplitMerge);
 	RUN_TEST_CASE(calendar, SplitYearDays1);
 	RUN_TEST_CASE(calendar, SplitYearDays2);

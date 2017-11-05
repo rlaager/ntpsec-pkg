@@ -106,9 +106,9 @@ class Node(object):
 					shutil.rmtree(self.abspath())
 				else:
 					os.remove(self.abspath())
-			except OSError as e:
+			except OSError:
 				if os.path.exists(self.abspath()):
-					raise e
+					raise
 		finally:
 			if evict:
 				self.evict()
@@ -224,13 +224,11 @@ class Node(object):
 			c1=c1.parent
 			c2=c2.parent
 		if c1.parent:
-			for i in range(up):
-				lst.append('..')
+			lst.extend(['..']*up)
+			lst.reverse()
+			return os.sep.join(lst)or'.'
 		else:
-			if lst and not Utils.is_win32:
-				lst.append('')
-		lst.reverse()
-		return os.sep.join(lst)or'.'
+			return self.abspath()
 	def abspath(self):
 		try:
 			return self.cache_abspath

@@ -11,7 +11,7 @@
 #define _XOPEN_SOURCE	600
 #endif
 
-#include <config.h>
+#include "config.h"
 #include "ntp.h"	/* only for the u_* typedefs from GCC; remove someday */
 #include "ntp_syslog.h"
 #include "ntp_types.h"
@@ -85,8 +85,8 @@ inp_sel240x( parse_t      *parseio,
 {
 	unsigned long rc;
 
-	parseprintf( DD_PARSE,
-	             ("inp_sel240x(0x%lx, 0x%x, ...)\n",(long)parseio, ch));
+	parseprintf(DD_PARSE, ("inp_sel240x(0x%lx, 0x%x, ...)\n",
+                    (unsigned long)parseio, (unsigned)ch));
 
 	switch( ch )
 	{

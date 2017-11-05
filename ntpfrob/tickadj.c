@@ -9,7 +9,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <config.h>
+#include "config.h"
 
 #include "ntp_types.h"
 #include "ntp_syscall.h"
@@ -25,23 +25,16 @@
 # include <sys/timex.h>
 
 static struct timex txc;
-#endif /* HAVE_ADJTIMEX */
 
-void tickadj(const bool json, const int newtick)
+void tickadj(const bool json_b, const int newtick)
 {
-#ifndef HAVE_ADJTIMEX
-	UNUSED_ARG(json);
-	UNUSED_ARG(newtick);
-	fputs("ntpfrob: \n", stderr);
-	exit(1);
-#else
 	if (newtick != 0)
 	{
-#ifdef STRUCT_TIMEX_HAS_TIME_TICK
+#ifdef HAVE_STRUCT_TIMEX_TIME_TICK
 		if ( (txc.time_tick = newtick) < 1 )
 #else
 		if ( (txc.tick = newtick) < 1 )
-#endif /* STRUCT_TIMEX_HAS_TIME_TICK */
+#endif /* HAVE_STRUCT_TIMEX_TIME_TICK */
 		{
 			fprintf(stderr, "ntpfrob: silly value for tick: %d\n", newtick);
 			exit(1);
@@ -49,11 +42,11 @@ void tickadj(const bool json, const int newtick)
 #ifdef MOD_TIMETICK
 		txc.modes = MOD_TIMETICK;
 #else
-#ifdef STRUCT_TIMEX_HAS_MODES
+#ifdef HAVE_STRUCT_TIMEX_MODES
 		txc.modes = ADJ_TICK;
 #else
 		txc.mode = ADJ_TICK;
-#endif /* STRUCT_TIMEX_HAS_MODES */
+#endif /* HAVE_STRUCT_TIMEX_MODES */
 #endif /* MOD_TIMETICK */
 	}
 	else
@@ -61,11 +54,11 @@ void tickadj(const bool json, const int newtick)
 #ifdef MOD_TIMETICK
 		txc.modes = 0;
 #else
-#ifdef STRUCT_TIMEX_HAS_MODES
+#ifdef HAVE_STRUCT_TIMEX_MODES
 		txc.modes = 0;
 #else
 		txc.mode = 0;
-#endif /* STRUCT_TIMEX_HAS_MODES */
+#endif /* HAVE_STRUCT_TIMEX_MODES */
 #endif /* MOD_TIMETICK */
 	}
 
@@ -75,22 +68,23 @@ void tickadj(const bool json, const int newtick)
 	}
 	else
 	{
-#ifdef STRUCT_TIMEX_HAS_TIME_TICK
-		if (json)
+#ifdef HAVE_STRUCT_TIMEX_TIME_TICK
+		if (json_b)
 			printf("{\"tick\":%ld,\"tick_adj\":%ld}\n",
 			       txc.time_tick, txc.tickadj);
 		else
 			printf("tick = %ld\ntick_adj = %ld\n",
 			       txc.time_tick, txc.tickadj);
 #else
-		if (json)
+		if (json_b)
 			printf("{\"tick\":%ld}\n", txc.tick);
 		else
 			printf("tick = %ld\n", txc.tick);
-#endif /* STRUCT_TIMEX_HAS_TIME_TICK */
+#endif /* HAVE_STRUCT_TIMEX_TIME_TICK */
 	}
 
-#endif /* HAVE_ADJTIMEX */
 }
+
+#endif /* HAVE_ADJTIMEX */
 
 /* end */

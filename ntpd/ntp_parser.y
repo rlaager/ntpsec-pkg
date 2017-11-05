@@ -11,7 +11,7 @@
  */
 
 %{
-  #include <config.h>
+  #include "config.h"
 
   #include "ntp.h"
   #include "ntpd.h"
@@ -20,7 +20,6 @@
   #include "ntp_filegen.h"
   #include "ntp_scanner.h"
   #include "ntp_config.h"
-  #include "ntp_crypto.h"
 
   #define YYMALLOC	emalloc
   #define YYFREE	free
@@ -58,7 +57,7 @@
 %token	<Integer>	T_Auth
 %token	<Integer>	T_Average
 %token	<Integer>	T_Baud
-%token	<Integer>	T_Beacon
+%token	<Integer>	T_Bias
 %token	<Integer>	T_Broadcast
 %token	<Integer>	T_Burst
 %token	<Integer>	T_Calibrate
@@ -66,12 +65,9 @@
 %token	<Integer>	T_Clockstats
 %token	<Integer>	T_Cohort
 %token	<Integer>	T_ControlKey
-%token	<Integer>	T_Crypto
-%token	<Integer>	T_Cryptostats
 %token	<Integer>	T_Ctl
 %token	<Integer>	T_Day
 %token	<Integer>	T_Default
-%token	<Integer>	T_Digest
 %token	<Integer>	T_Disable
 %token	<Integer>	T_Discard
 %token	<Integer>	T_Dispersion
@@ -95,7 +91,6 @@
 %token	<Integer>	T_Freq
 %token	<Integer>	T_Fudge
 %token	<Integer>	T_Holdover
-%token	<Integer>	T_Host
 %token	<Integer>	T_Huffpuff
 %token	<Integer>	T_Iburst
 %token	<Integer>	T_Ignore
@@ -115,7 +110,6 @@
 %token	<Integer>	T_Kernel
 %token	<Integer>	T_Key
 %token	<Integer>	T_Keys
-%token	<Integer>	T_Keysdir
 %token	<Integer>	T_Kod
 %token	<Integer>	T_Mssntp
 %token	<Integer>	T_Leapfile
@@ -137,6 +131,7 @@
 %token	<Integer>	T_Mdnstries
 %token	<Integer>	T_Mem
 %token	<Integer>	T_Memlock
+%token	<Integer>	T_Minage
 %token	<Integer>	T_Minclock
 %token	<Integer>	T_Mindepth
 %token	<Integer>	T_Mindist
@@ -177,15 +172,12 @@
 %token	<Integer>	T_Preempt
 %token	<Integer>	T_Prefer
 %token	<Integer>	T_Protostats
-%token	<Integer>	T_Pw
-%token	<Integer>	T_Randfile
 %token	<Integer>	T_Rawstats
 %token	<Integer>	T_Refclock
 %token	<Integer>	T_Refid
 %token	<Integer>	T_Requestkey
 %token	<Integer>	T_Reset
 %token	<Integer>	T_Restrict
-%token	<Integer>	T_Revoke
 %token	<Integer>	T_Rlimit
 %token	<Integer>	T_Saveconfigdir
 %token	<Integer>	T_Server
@@ -220,6 +212,7 @@
 %token	<Integer>	T_Unit
 %token	<Integer>	T_Unconfig
 %token	<Integer>	T_Unpeer
+%token	<Integer>	T_Unrestrict
 %token	<Integer>	T_Usestats
 %token	<Integer>	T_Version
 %token	<Integer>	T_WanderThreshold	/* Not a token */
@@ -238,9 +231,6 @@
 %type	<Integer>	client_type
 %type	<Integer>	counter_set_keyword
 %type	<Int_fifo>	counter_set_list
-%type	<Attr_val>	crypto_command
-%type	<Attr_val_fifo>	crypto_command_list
-%type	<Integer>	crypto_str_keyword
 %type	<Attr_val>	discard_option
 %type	<Integer>	discard_option_keyword
 %type	<Attr_val_fifo>	discard_option_list
@@ -252,7 +242,6 @@
 %type	<Integer>	fudge_factor_bool_keyword
 %type	<Integer>	fudge_factor_dbl_keyword
 %type	<Attr_val_fifo>	fudge_factor_list
-%type	<Attr_val_fifo>	integer_list
 %type	<Attr_val_fifo>	integer_list_range
 %type	<Attr_val>	integer_list_range_elt
 %type	<Attr_val>	integer_range
@@ -305,6 +294,7 @@
 %type	<Attr_val_fifo>	tos_option_list
 %type	<Integer>	unpeer_keyword
 %type	<Set_var>	variable_assign
+%type	<Integer>	restrict_prefix
 
 %%
 
@@ -328,7 +318,7 @@ command_list
 			 */
 			struct FILE_INFO * ip_ctx = lex_current();
 			msyslog(LOG_ERR, 
-				"syntax error in %s line %d, column %d",
+				"CONFIG: syntax error in %s line %d, column %d",
 				ip_ctx->fname,
 				ip_ctx->errpos.nline,
 				ip_ctx->errpos.ncol);
@@ -426,7 +416,7 @@ option_int
 	:	option_int_keyword T_Integer
 			{ $$ = create_attr_ival($1, $2); }
 	|	option_int_keyword T_U_int
-			{ $$ = create_attr_uval($1, $2); }
+			{ $$ = create_attr_uval($1, (unsigned int)$2); }
 	|	T_Stratum T_Integer
 		{
 			if ($2 >= 0 && $2 <= STRATUM_UNSPEC) {
@@ -470,7 +460,8 @@ option_string
 	;
 
 option_double_keyword
-	:	T_Time1
+	:	T_Bias
+	|	T_Time1
 	|	T_Time2
 	;
 
@@ -521,23 +512,14 @@ other_mode_command
 authentication_command
 	:	T_ControlKey T_Integer
 			{ cfgt.auth.control_key = $2; }
-	|	T_Crypto crypto_command_list
-		{ 
-			cfgt.auth.cryptosw++;
-			CONCAT_G_FIFOS(cfgt.auth.crypto_cmd_list, $2);
-		}
 	|	T_Keys T_String
 			{ cfgt.auth.keys = $2; }
-	|	T_Keysdir T_String
-			{ cfgt.auth.keysdir = $2; }
 	|	T_Requestkey T_Integer
 			{
 			    msyslog(LOG_WARNING,
-				    "requestkey is a no-op because "
+				    "CONFIG: requestkey is a no-op because "
 				    "ntpdc has been removed.");
 			}
-	|	T_Revoke T_Integer
-			{ cfgt.auth.revoke = $2; }
 	|	T_Trustedkey integer_list_range
 		{
 			cfgt.auth.trusted_key_list = $2;
@@ -549,37 +531,6 @@ authentication_command
 		}
 	|	T_NtpSignDsocket T_String
 			{ cfgt.auth.ntp_signd_socket = $2; }
-	;
-
-crypto_command_list
-	:	/* empty list */
-			{ $$ = NULL; }
-	|	crypto_command_list crypto_command
-		{
-			$$ = $1;
-			APPEND_G_FIFO($$, $2);
-		}
-	;
-
-crypto_command
-	:	crypto_str_keyword T_String
-			{ $$ = create_attr_sval($1, $2); }
-	|	T_Revoke T_Integer
-		{
-			$$ = NULL;
-			cfgt.auth.revoke = $2;
-			msyslog(LOG_WARNING,
-				"'crypto revoke %d' is deprecated, "
-				"please use 'revoke %d' instead.",
-				cfgt.auth.revoke, cfgt.auth.revoke);
-		}
-	;
-
-crypto_str_keyword
-	:	T_Host
-	|	T_Pw
-	|	T_Randfile
-	|	T_Digest
 	;
 
 
@@ -620,7 +571,6 @@ tos_option_int_keyword
 	|	T_Orphan
 	|	T_Orphanwait
 	|	T_Minsane
-	|	T_Beacon
 	;
 
 tos_option_dbl_keyword
@@ -672,7 +622,6 @@ stats_list
 
 stat
 	:	T_Clockstats
-	|	T_Cryptostats
 	|	T_Loopstats
 	|	T_Peerstats
 	|	T_Rawstats
@@ -756,6 +705,11 @@ filegen_type
  * -----------------------
  */
 
+restrict_prefix
+	: T_Restrict
+	| T_Unrestrict
+	;
+
 access_control_command
 	:	T_Discard discard_option_list
 		{
@@ -765,35 +719,35 @@ access_control_command
 		{
 			CONCAT_G_FIFOS(cfgt.mru_opts, $2);
 		}
-	|	T_Restrict address ac_flag_list
+	|	restrict_prefix address ac_flag_list
 		{
 			restrict_node *rn;
 
-			rn = create_restrict_node($2, NULL, $3,
+			rn = create_restrict_node($1, $2, NULL, $3,
 						  lex_current()->curpos.nline);
 			APPEND_G_FIFO(cfgt.restrict_opts, rn);
 		}
-	|	T_Restrict ip_address T_Mask ip_address ac_flag_list
+	|	restrict_prefix ip_address T_Mask ip_address ac_flag_list
 		{
 			restrict_node *rn;
 
-			rn = create_restrict_node($2, $4, $5,
+			rn = create_restrict_node($1, $2, $4, $5,
 						  lex_current()->curpos.nline);
 			APPEND_G_FIFO(cfgt.restrict_opts, rn);
 		}
-	|	T_Restrict T_Default ac_flag_list
+	|	restrict_prefix T_Default ac_flag_list
 		{
 			restrict_node *rn;
 
-			rn = create_restrict_node(NULL, NULL, $3,
+			rn = create_restrict_node($1, NULL, NULL, $3,
 						  lex_current()->curpos.nline);
 			APPEND_G_FIFO(cfgt.restrict_opts, rn);
 		}
-	|	T_Restrict T_Ipv4_flag T_Default ac_flag_list
+	|	restrict_prefix T_Ipv4_flag T_Default ac_flag_list
 		{
 			restrict_node *rn;
 
-			rn = create_restrict_node(
+			rn = create_restrict_node($1,
 				create_address_node(
 					estrdup("0.0.0.0"), 
 					AF_INET),
@@ -804,11 +758,11 @@ access_control_command
 				lex_current()->curpos.nline);
 			APPEND_G_FIFO(cfgt.restrict_opts, rn);
 		}
-	|	T_Restrict T_Ipv6_flag T_Default ac_flag_list
+	|	restrict_prefix T_Ipv6_flag T_Default ac_flag_list
 		{
 			restrict_node *rn;
 			
-			rn = create_restrict_node(
+			rn = create_restrict_node($1,
 				create_address_node(
 					estrdup("::"), 
 					AF_INET6),
@@ -819,13 +773,13 @@ access_control_command
 				lex_current()->curpos.nline);
 			APPEND_G_FIFO(cfgt.restrict_opts, rn);
 		}
-	|	T_Restrict T_Source ac_flag_list
+	|	restrict_prefix T_Source ac_flag_list
 		{
 			restrict_node *	rn;
 
 			APPEND_G_FIFO($3, create_int_node($2));
 			rn = create_restrict_node(
-				NULL, NULL, $3, lex_current()->curpos.nline);
+				$1, NULL, NULL, $3, lex_current()->curpos.nline);
 			APPEND_G_FIFO(cfgt.restrict_opts, rn);
 		}
 	;
@@ -905,6 +859,7 @@ mru_option_keyword
 	|	T_Initalloc
 	|	T_Initmem
 	|	T_Maxage
+	|	T_Minage
 	|	T_Maxdepth
 	|	T_Maxmem
 	|	T_Mindepth
@@ -977,13 +932,13 @@ refclock_command
 #ifdef REFCLOCK
 			peer_node *my_node;
 			address_node *fakeaddr;
-			char addrbuf[NI_MAXHOST];
+			char addrbuf[1025];	/* NI_MAXHOSTS on Linux */
 			int dtype;
 
 			for (dtype = 1; dtype < (int)num_refclock_conf; dtype++)
 			    if (refclock_conf[dtype]->basename != NULL && strcasecmp(refclock_conf[dtype]->basename, $2) == 0)
 				goto foundit;
-			 msyslog(LOG_ERR, "Unknown driver name %s", $2);
+			 msyslog(LOG_ERR, "CONFIG: Unknown driver name %s", $2);
 			 exit(1);
 		foundit:
 			snprintf(addrbuf, sizeof(addrbuf),
@@ -1185,13 +1140,13 @@ miscellaneous_command
 				break;
 			}
 			if (lex_level() > MAXINCLUDELEVEL) {
-				fprintf(stderr, "getconfig: Maximum include file level exceeded.\n");
-				msyslog(LOG_ERR, "getconfig: Maximum include file level exceeded.");
+				fprintf(stderr, "getconfig(): Maximum include file level exceeded.\n");
+				msyslog(LOG_ERR, "CONFIG: Maximum include file level exceeded.");
 			} else {
 				const char * path = $2;
-				if (!lex_push_file(path, "r")) {
-					fprintf(stderr, "getconfig: Couldn't open <%s>\n", path);
-					msyslog(LOG_ERR, "getconfig: Couldn't open <%s>", path);
+				if (!lex_push_file(path)) {
+					fprintf(stderr, "getconfig(): Couldn't open <%s>\n", path);
+					msyslog(LOG_ERR, "CONFIG: Couldn't open <%s>", path);
 				}
 			}
 			YYFREE($2); /* avoid leak */
@@ -1206,8 +1161,6 @@ miscellaneous_command
 			{ CONCAT_G_FIFOS(cfgt.phone, $2); }
 	|	T_Setvar variable_assign
 			{ APPEND_G_FIFO(cfgt.setvar, $2); }
-	|	T_Ttl integer_list
-			{ CONCAT_G_FIFOS(cfgt.ttl, $2); }
 	;
 
 misc_cmd_dbl_keyword
@@ -1386,19 +1339,6 @@ counter_set_keyword
  * -------------------
  */
 
-integer_list
-	:	integer_list T_Integer
-		{
-			$$ = $1;
-			APPEND_G_FIFO($$, create_int_node($2));
-		}
-	|	T_Integer
-		{
-			$$ = NULL;
-			APPEND_G_FIFO($$, create_int_node($1));
-		}
-	;
-
 integer_list_range
 	:	integer_list_range integer_list_range_elt
 		{
@@ -1469,12 +1409,12 @@ yyerror(
 	ip_ctx = lex_current();
 	ip_ctx->errpos = ip_ctx->tokpos;
 	
-	msyslog(LOG_ERR, "line %d column %d %s", 
+	msyslog(LOG_ERR, "CONFIG: line %d column %d %s", 
 		ip_ctx->errpos.nline, ip_ctx->errpos.ncol, msg);
 	if (!lex_from_file()) {
 		/* Save the error message in the correct buffer */
 		retval = snprintf(remote_config.err_msg + remote_config.err_pos,
-				  MAXLINE - remote_config.err_pos,
+				  (size_t)(MAXLINE - remote_config.err_pos),
 				  "column %d %s",
 				  ip_ctx->errpos.ncol, msg);
 

@@ -11,7 +11,7 @@ VERSION="1.003"
 # leap-seconds file manager/updater
 
 # Depends on:
-#  wget sed, tr, shasum, logger
+#  wget sed, tr, shasum/sha1sum, logger
 
 # ########## Default configuration ##########
 #
@@ -44,7 +44,7 @@ LOGFAC=daemon
 
 PATHLIST="/opt/sbin:/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:"
 
-REQUIREDCMDS=" wget logger tr sed shasum"
+REQUIREDCMDS=" wget logger tr sed"
 
 SELF="`basename $0`"
 
@@ -107,7 +107,7 @@ need not be run more frequently than about once every three weeks.
 
 For cron-friendly behavior, define CRONJOB=1 in the crontab.
 
-This script depends on:$REQUIREDCMDS
+This script depends on: sha1sum/shasum $REQUIREDCMDS
 
 Version $VERSION
 EOF
@@ -211,6 +211,16 @@ for P in $REQUIREDCMDS ; do
     exit 1
 done
 
+# find sha1sum or shasum
+if >/dev/null 2>&1 which "sha1sum" ; then
+    SHASUM="sha1sum"
+elif >/dev/null 2>&1 which "shasum" ; then
+    SHASUM="shasum"
+else
+    echo "FATAL: Can not find sha1sum or shasum command, please install"
+    exit 1
+fi
+
 # Handle logging
 
 if ! LOGGER="`2>/dev/null which logger`" ; then
@@ -249,9 +259,9 @@ INTERVAL=$(( $INTERVAL *1 ))
 # #@ number : the NTP date that the file expires
 # Date (seconds since 1900) leaps : leaps is the # of seconds to add for times >= Date
 # Date lines have comments.
-# #h hex hex hex hex hex is the SHA-1 checksum of the data & dates, excluding whitespace w/o leading zeroes
+# #h hex hex hex hex hex is the SHA1 checksum of the data & dates, excluding whitespace w/o leading zeroes
 
-function verifySHA {
+function verifySHA1 {
 
     if [ ! -f "$1" ]; then
         return 1
@@ -265,27 +275,29 @@ function verifySHA {
 
     local DATA="`echo \"$RAW\" | sed -e'/^#h/d' -e's/^#[\$@]//g' | tr -d '[:space:]'`"
 
-    # Compute the SHA hash of the data, removing the marker and filename
-    # Computed in binary mode, which shouldn't matter since whitespace has been removed
-    # shasum comes in several flavors; a portable one is available in Perl (with Digest::SHA)
+    # Compute the SHA1 hash of the data, removing the marker and filename
+    # Computed in binary mode, which shouldn't matter since whitespace
+    # has been removed
+    # shasum/sha1sum comes in several flavors;
+    # a portable one is available in Perl (with Digest::SHA)
 
-    local DSHA="`echo -n \"$DATA\" | shasum | sed -e's/[? *].*$//'`"
+    local DSHA1="`echo -n \"$DATA\" | $SHASUM | sed -e's/[? *].*$//'`"
 
     # Extract the file's hash. Restore any leading zeroes in hash segments.
 
     # The sed [] includes a tab (\t) and space; #h is followed by a tab and space
-    local FSHA="`echo \"$RAW\" | sed -e'/^#h/!d' -e's/^#h//' -e's/[ 	] */ 0x/g'`"
-    FSHA=`printf '%08x%08x%08x%08x%08x' $FSHA`
+    local FSHA1="`echo \"$RAW\" | sed -e'/^#h/!d' -e's/^#h//' -e's/[ 	] */ 0x/g'`"
+    FSHA1=`printf '%08x%08x%08x%08x%08x' $FSHA1`
 
-    if [ -n "$FSHA" -a \( "$FSHA" = "$DSHA" \) ]; then
+    if [ -n "$FSHA1" -a \( "$FSHA1" = "$DSHA1" \) ]; then
         if [ -n "$2" ]; then
             log "info" "Checksum of $1 validated"
         fi
     else
         log "error" "Checksum of $1 is invalid:"
-	[ -z "$FSHA" ] && FSHA="(no checksum record found in file)"
-        log "error" "EXPECTED: $FSHA"
-        log "error" "COMPUTED: $DSHA"
+	[ -z "$FSHA1" ] && FSHA1="(no checksum record found in file)"
+        log "error" "EXPECTED: $FSHA1"
+        log "error" "COMPUTED: $DSHA1"
         return 1
     fi
 
@@ -309,10 +321,10 @@ if ! [ -f "$NTPCONF" ]; then
 fi
 
 # Parse ntp.conf for leapfile directive
-
+# FIXME broken on MacOS/macports
 LEAPFILE="`sed $NTPCONF -e'/^ *leapfile  *.*$/!d' -e's/^ *leapfile  *//'`"
 if [ -z "$LEAPFILE" ]; then
-    log "error" "$NTPCONF does not specify a leapfile"
+    log "warning" "$NTPCONF does not specify a leapfile"
 fi
 
 # Allow placing the file someplace else - testing
@@ -329,20 +341,20 @@ fi
 # Or is expiring soon
 #  Download a new one
 
-if [ -n "$FORCE" ] || ! verifySHA $LEAPFILE "$VERBOSE" || [ $EXPIRES -lt `date -d "NOW + $PREFETCH" +%s` ] ; then
+if [ -n "$FORCE" ] || ! verifySHA1 $LEAPFILE "$VERBOSE" || [ $EXPIRES -lt `date -d "NOW + $PREFETCH" +%s` ] ; then
     TRY=0
     while true; do
         TRY=$(( $TRY + 1 ))
         if [ -n "$VERBOSE" ]; then
             log "info" "Attempting download from $LEAPSRC, try $TRY.."
         fi
-        if wget $PROTO $PREFER -o ${TMPFILE}.log $LEAPSRC -O $TMPFILE ; then
+        if wget -T 10 $PROTO $PREFER -o ${TMPFILE}.log $LEAPSRC -O $TMPFILE ; then
             log "info" "Download of $LEAPSRC succeeded"
             if [ -n "$VERBOSE" ]; then
                 cat ${TMPFILE}.log
             fi
 
-            if ! verifySHA $TMPFILE "$VERBOSE" ; then
+            if ! verifySHA1 $TMPFILE "$VERBOSE" ; then
 		# There is no point in retrying, as the file on the server is almost
 		# certainly corrupt.
 
@@ -359,11 +371,12 @@ if [ -n "$FORCE" ] || ! verifySHA $LEAPFILE "$VERBOSE" || [ $EXPIRES -lt `date -
             if [ ! -f $LEAPFILE ]; then
 		log "notice" "$LEAPFILE was missing, creating new copy - check permissions"
                 touch $LEAPFILE
-		# Can't copy permissions from old file, copy from NTPCONF instead
+		# Can't copy permissions from old file,
+                # copy from NTPCONF instead
 		REFFILE="$NTPCONF"
             fi
-            chmod --reference $REFFILE $TMPFILE
-            chown --reference $REFFILE $TMPFILE
+            chmod --reference=$REFFILE $TMPFILE
+            chown --reference=$REFFILE $TMPFILE
 	    ( which selinuxenabled && selinuxenabled && which chcon ) >/dev/null 2>&1
             if  [ $? == 0 ] ; then
                 chcon --reference $REFFILE $TMPFILE

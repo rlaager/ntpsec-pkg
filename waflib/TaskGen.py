@@ -79,7 +79,8 @@ class task_gen(object):
 		tmp=[]
 		for a in keys:
 			for x in prec.values():
-				if a in x:break
+				if a in x:
+					break
 			else:
 				tmp.append(a)
 		tmp.sort()
@@ -248,23 +249,44 @@ def process_rule(self):
 		cache=self.bld.cache_rule_attr
 	except AttributeError:
 		cache=self.bld.cache_rule_attr={}
+	chmod=getattr(self,'chmod',None)
+	shell=getattr(self,'shell',True)
+	color=getattr(self,'color','BLUE')
+	scan=getattr(self,'scan',None)
+	_vars=getattr(self,'vars',[])
+	cls_str=getattr(self,'cls_str',None)
+	cls_keyword=getattr(self,'cls_keyword',None)
+	use_cache=getattr(self,'cache_rule','True')
+	scan_val=has_deps=hasattr(self,'deps')
+	if scan:
+		scan_val=id(scan)
+	key=Utils.h_list((name,self.rule,chmod,shell,color,cls_str,cls_keyword,scan_val,_vars))
 	cls=None
-	if getattr(self,'cache_rule','True'):
+	if use_cache:
 		try:
-			cls=cache[(name,self.rule)]
+			cls=cache[key]
 		except KeyError:
 			pass
 	if not cls:
 		rule=self.rule
-		if hasattr(self,'chmod'):
+		if chmod is not None:
 			def chmod_fun(tsk):
 				for x in tsk.outputs:
-					os.chmod(x.abspath(),self.chmod)
-			rule=(self.rule,chmod_fun)
-		cls=Task.task_factory(name,rule,getattr(self,'vars',[]),shell=getattr(self,'shell',True),color=getattr(self,'color','BLUE'),scan=getattr(self,'scan',None))
-		if getattr(self,'scan',None):
+					os.chmod(x.abspath(),tsk.generator.chmod)
+			if isinstance(rule,tuple):
+				rule=list(rule)
+				rule.append(chmod_fun)
+				rule=tuple(rule)
+			else:
+				rule=(rule,chmod_fun)
+		cls=Task.task_factory(name,rule,_vars,shell=shell,color=color)
+		if cls_str:
+			setattr(cls,'__str__',self.cls_str)
+		if cls_keyword:
+			setattr(cls,'keyword',self.cls_keyword)
+		if scan:
 			cls.scan=self.scan
-		elif getattr(self,'deps',None):
+		elif has_deps:
 			def scan(self):
 				nodes=[]
 				for x in self.generator.to_list(getattr(self.generator,'deps',None)):
@@ -274,19 +296,15 @@ def process_rule(self):
 					nodes.append(node)
 				return[nodes,[]]
 			cls.scan=scan
-		if getattr(self,'always',None):
-			cls.always_run=True
-		if getattr(self,'timeout',None):
-			cls.timeout=self.timeout
 		for x in('after','before','ext_in','ext_out'):
 			setattr(cls,x,getattr(self,x,[]))
-		if getattr(self,'cache_rule','True'):
-			cache[(name,self.rule)]=cls
-		if getattr(self,'cls_str',None):
-			setattr(cls,'__str__',self.cls_str)
-		if getattr(self,'cls_keyword',None):
-			setattr(cls,'keyword',self.cls_keyword)
+		if use_cache:
+			cache[key]=cls
 	tsk=self.create_task(name)
+	if getattr(self,'timeout',None):
+		tsk.timeout=self.timeout
+	if getattr(self,'always',None):
+		tsk.always_run=True
 	if getattr(self,'target',None):
 		if isinstance(self.target,str):
 			self.target=self.target.split()
@@ -368,8 +386,10 @@ class subst_pc(Task.Task):
 		code=code%d
 		self.outputs[0].write(code,encoding=getattr(self.generator,'encoding','ISO8859-1'))
 		self.generator.bld.raw_deps[self.uid()]=lst
-		try:delattr(self,'cache_sig')
-		except AttributeError:pass
+		try:
+			delattr(self,'cache_sig')
+		except AttributeError:
+			pass
 		self.force_permissions()
 	def sig_vars(self):
 		bld=self.generator.bld

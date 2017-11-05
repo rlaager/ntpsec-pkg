@@ -11,7 +11,6 @@
  */
 
 #include <termios.h>
-#define TTY	struct termios
 
 #if defined(HAVE_SYS_MODEM_H)
 #include <sys/modem.h>
@@ -33,9 +32,5 @@
 #define LDISC_RAW	0x020	/* raw binary */
 #define	LDISC_REMOTE	0x080	/* remote mode */
 #define	LDISC_7O1	0x100	/* 7-bit, odd parity for Z3801A */
-
-/* function prototypes for ntp_tty.c */
-extern	int	ntp_tty_setup(int, u_int, u_int);
-extern	int	ntp_tty_ioctl(int, u_int);
 
 #endif /* GUARD_NTP_TTY_H */

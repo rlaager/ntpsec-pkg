@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#include <config.h>
+#include "config.h"
 #include "ntp_fp.h"
 #include "ntp_calendar.h"
 
@@ -21,6 +21,8 @@
 #include "mbg_gps166.h"
 #include "binio.h"
 #include "ascii.h"
+
+#define MBG_EXTENDED	0x00000001
 
 /*
  * The Meinberg receiver every second sends a datagram of the following form
@@ -136,10 +138,10 @@ get_mbg_header(
 	       GPS_MSG_HDR *headerp
 	       )
 {
-  headerp->cmd = (GPS_CMD) get_lsb_short(bufpp);
+  headerp->cmd = (GPS_CMD) get_lsb_uint16(bufpp);
   headerp->len = get_lsb_uint16(bufpp);
-  headerp->data_csum = (CSUM) get_lsb_short(bufpp);
-  headerp->hdr_csum  = (CSUM) get_lsb_short(bufpp);
+  headerp->data_csum = (CSUM) get_lsb_uint16(bufpp);
+  headerp->hdr_csum  = (CSUM) get_lsb_uint16(bufpp);
 }
 
 static struct format meinberg_fmt[] =
@@ -398,7 +400,8 @@ mbg_input(
 {
 	unsigned int rtc;
 
-	parseprintf(DD_PARSE, ("mbg_input(0x%lx, 0x%x, ...)\n", (long)parseio, ch));
+	parseprintf(DD_PARSE, ("mbg_input(0x%lx, 0x%x, ...)\n",
+                    (unsigned long)parseio, (unsigned)ch));
 
 	switch (ch)
 	{
@@ -566,7 +569,8 @@ gps_input(
 
   msg_buf = (struct msg_buf *)parseio->parse_pdata;
 
-  parseprintf(DD_PARSE, ("gps_input(0x%lx, 0x%x, ...)\n", (long)parseio, ch));
+  parseprintf(DD_PARSE, ("gps_input(0x%lx, 0x%x, ...)\n",
+              (unsigned long)parseio, (unsigned)ch));
 
   if (!msg_buf)
     return PARSE_INP_SKIP;
@@ -596,7 +600,8 @@ gps_input(
 	}
 
       parseio->parse_dtime.parse_msglen = 1; /* reset buffer pointer */
-      parseio->parse_dtime.parse_msg[0] = ch; /* fill in first character */
+      /* fill in first character */
+      parseio->parse_dtime.parse_msg[0] = (unsigned char)ch;
       parseio->parse_dtime.parse_stime  = *tstamp; /* collect timestamp */
       return PARSE_INP_SKIP;
     }
@@ -608,7 +613,8 @@ gps_input(
       (parseio->parse_index < parseio->parse_dsize))
     parseio->parse_data[parseio->parse_index++] = ch;
 
-  parseio->parse_dtime.parse_msg[parseio->parse_dtime.parse_msglen++] = ch;
+  parseio->parse_dtime.parse_msg[parseio->parse_dtime.parse_msglen++] \
+     = (unsigned char)ch;
 
   if (parseio->parse_dtime.parse_msglen > sizeof(parseio->parse_dtime.parse_msg))
     {
@@ -643,10 +649,11 @@ gps_input(
 	  parseio->parse_index = 0;
 	  return PARSE_INP_TIME;
 	}
-      else
-	{
-	  return PARSE_INP_SKIP;
-	}
+      return PARSE_INP_SKIP;
+
+    default:
+      /* huh? */
+      break;
     }
 
   /* cnt == 0, so the header or the whole message is complete */

@@ -3,13 +3,15 @@
  *		   Provides service to ntpq and others.
  */
 
-#include <config.h>
+#include "config.h"
 
 #include <stdio.h>
 #include <ctype.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#include <openssl/evp.h>	/* provides OpenSSL digest API */
 
 #include "ntpd.h"
 #include "ntp_io.h"
@@ -18,12 +20,11 @@
 #include "ntp_calendar.h"
 #include "ntp_stdlib.h"
 #include "ntp_config.h"
-#include "ntp_crypto.h"
 #include "ntp_assert.h"
 #include "ntp_leapsec.h"
-#include "ntp_md5.h"	/* provides OpenSSL digest API */
 #include "lib_strbuf.h"
 #include "ntp_syscall.h"
+#include "timespecops.h"
 
 /* undefine to suppress random tags and get fixed emission order */
 #define USE_RANDOMIZE_RESPONSES
@@ -35,7 +36,7 @@
 struct ctl_proc {
 	short control_code;		/* defined request code */
 #define NO_REQUEST	(-1)
-	u_short flags;			/* flags word */
+	unsigned short flags;			/* flags word */
 	/* Only one flag.  Authentication required or not. */
 #define NOAUTH	0
 #define AUTH	1
@@ -48,7 +49,7 @@ struct ctl_proc {
  */
 static	void	ctl_error	(uint8_t);
 #ifdef REFCLOCK
-static	u_short ctlclkstatus	(struct refclockstat *);
+static	unsigned short ctlclkstatus	(struct refclockstat *);
 #endif
 static	void	ctl_flushpkt	(uint8_t);
 static	void	ctl_putdata	(const char *, unsigned int, bool);
@@ -57,9 +58,9 @@ static	void	ctl_putdblf	(const char *, int, int, double);
 #define	ctl_putdbl(tag, d)	ctl_putdblf(tag, 1, 3, d)
 #define	ctl_putdbl6(tag, d)	ctl_putdblf(tag, 1, 6, d)
 #define	ctl_putsfp(tag, sfp)	ctl_putdblf(tag, 0, -1, \
-					    FPTOD(sfp))
-static	void	ctl_putuint	(const char *, u_long);
-static	void	ctl_puthex	(const char *, u_long);
+					    FP_UNSCALE(sfp))
+static	void	ctl_putuint	(const char *, unsigned long);
+static	void	ctl_puthex	(const char *, unsigned long);
 static	void	ctl_putint	(const char *, long);
 static	void	ctl_putts	(const char *, l_fp *);
 static	void	ctl_putadr	(const char *, uint32_t,
@@ -68,13 +69,14 @@ static	void	ctl_putrefid	(const char *, uint32_t);
 static	void	ctl_putarray	(const char *, double *, int);
 static	void	ctl_putsys	(int);
 static	void	ctl_putpeer	(int, struct peer *);
-static	void	ctl_putfs	(const char *, tstamp_t);
+static	void	ctl_puttime	(const char *, time_t);
 #ifdef REFCLOCK
 static	void	ctl_putclock	(int, struct refclockstat *, int);
 #endif	/* REFCLOCK */
 static	const struct ctl_var *ctl_getitem(const struct ctl_var *,
 					  char **);
-static	u_short	count_var	(const struct ctl_var *);
+static	unsigned short ctlsysstatus	(void);
+static	unsigned short	count_var	(const struct ctl_var *);
 static	void	control_unspec	(struct recvbuf *, int);
 static	void	read_status	(struct recvbuf *, int);
 static	void	read_sysvars	(void);
@@ -89,12 +91,12 @@ static	void	send_mru_entry	(mon_entry *, int);
 static	void	send_random_tag_value(int);
 #endif /* USE_RANDOMIZE_RESPONSES */
 static	void	read_mru_list	(struct recvbuf *, int);
-static	void	send_ifstats_entry(endpt *, u_int);
+static	void	send_ifstats_entry(endpt *, unsigned int);
 static	void	read_ifstats	(struct recvbuf *);
 static	void	sockaddrs_from_restrict_u(sockaddr_u *,	sockaddr_u *,
 					  restrict_u *, int);
-static	void	send_restrict_entry(restrict_u *, int, u_int);
-static	void	send_restrict_list(restrict_u *, int, u_int *);
+static	void	send_restrict_entry(restrict_u *, int, unsigned int);
+static	void	send_restrict_list(restrict_u *, int, unsigned int *);
 static	void	read_addr_restrictions(struct recvbuf *);
 static	void	read_ordlist	(struct recvbuf *, int);
 static	uint32_t	derive_nonce	(sockaddr_u *, uint32_t, uint32_t);
@@ -147,24 +149,24 @@ static const struct ctl_proc control_codes[] = {
 #define	CS_MRU_DEEPEST		26
 #define	CS_MRU_MINDEPTH		27
 #define	CS_MRU_MAXAGE		28
-#define	CS_MRU_MAXDEPTH		29
-#define	CS_MRU_MEM		30
-#define	CS_MRU_MAXMEM		31
-#define	CS_SS_UPTIME		32
-#define	CS_SS_RESET		33
-#define	CS_SS_RECEIVED		34
-#define	CS_SS_THISVER		35
-#define	CS_SS_OLDVER		36
-#define	CS_SS_BADFORMAT		37
-#define	CS_SS_BADAUTH		38
-#define	CS_SS_DECLINED		39
-#define	CS_SS_RESTRICTED	40
-#define	CS_SS_LIMITED		41
-#define	CS_SS_KODSENT		42
-#define	CS_SS_PROCESSED		43
-#define	CS_PEERADR		44
-#define	CS_PEERMODE		45
-#define	CS_BCASTDELAY		46	/* not used */
+#define	CS_MRU_MINAGE		29
+#define	CS_MRU_MAXDEPTH		30
+#define	CS_MRU_MEM		31
+#define	CS_MRU_MAXMEM		32
+#define	CS_SS_UPTIME		33
+#define	CS_SS_RESET		34
+#define	CS_SS_RECEIVED		35
+#define	CS_SS_THISVER		36
+#define	CS_SS_OLDVER		37
+#define	CS_SS_BADFORMAT		38
+#define	CS_SS_BADAUTH		39
+#define	CS_SS_DECLINED		40
+#define	CS_SS_RESTRICTED	41
+#define	CS_SS_LIMITED		42
+#define	CS_SS_KODSENT		43
+#define	CS_SS_PROCESSED		44
+#define	CS_PEERADR		45
+#define	CS_PEERMODE		46
 #define	CS_AUTHDELAY		47
 #define	CS_AUTHKEYS		48
 #define	CS_AUTHFREEK		49
@@ -210,9 +212,17 @@ static const struct ctl_proc control_codes[] = {
 #define	CS_TIMER_XMTS		87
 #define	CS_FUZZ			88
 #define	CS_WANDER_THRESH	89
-#define	CS_LEAPSMEARINTV	90
-#define	CS_LEAPSMEAROFFS	91
-#define	CS_MAXCODE		CS_LEAPSMEAROFFS
+#define CS_MRU_EXISTS		90
+#define CS_MRU_NEW		91
+#define CS_MRU_RECYCLEOLD	92
+#define CS_MRU_RECYCLEFULL	93
+#define CS_MRU_NONE		94
+#define CS_MRU_OLDEST_AGE	95
+#define	CS_LEAPSMEARINTV	96
+#define	CS_LEAPSMEAROFFS	97
+#define	CS_TICK                 98
+#define	CS_NUMCTLREQ		99
+#define	CS_MAXCODE		CS_NUMCTLREQ
 
 /*
  * Peer variables we understand
@@ -284,7 +294,7 @@ static const struct ctl_proc control_codes[] = {
 #define	CC_FUDGEVAL2	10
 #define	CC_FLAGS	11
 #define	CC_DEVICE	12
-#define	CC_VARLIST	13
+#define	CC_VARLIST	13U
 #define	CC_MAXCODE	CC_VARLIST
 
 /*
@@ -321,24 +331,24 @@ static const struct ctl_var sys_var[] = {
 	{ CS_MRU_DEEPEST,	RO, "mru_deepest" },	/* 26 */
 	{ CS_MRU_MINDEPTH,	RO, "mru_mindepth" },	/* 27 */
 	{ CS_MRU_MAXAGE,	RO, "mru_maxage" },	/* 28 */
-	{ CS_MRU_MAXDEPTH,	RO, "mru_maxdepth" },	/* 29 */
-	{ CS_MRU_MEM,		RO, "mru_mem" },	/* 30 */
-	{ CS_MRU_MAXMEM,	RO, "mru_maxmem" },	/* 31 */
-	{ CS_SS_UPTIME,		RO, "ss_uptime" },	/* 32 */
-	{ CS_SS_RESET,		RO, "ss_reset" },	/* 33 */
-	{ CS_SS_RECEIVED,	RO, "ss_received" },	/* 34 */
-	{ CS_SS_THISVER,	RO, "ss_thisver" },	/* 35 */
-	{ CS_SS_OLDVER,		RO, "ss_oldver" },	/* 36 */
-	{ CS_SS_BADFORMAT,	RO, "ss_badformat" },	/* 37 */
-	{ CS_SS_BADAUTH,	RO, "ss_badauth" },	/* 38 */
-	{ CS_SS_DECLINED,	RO, "ss_declined" },	/* 39 */
-	{ CS_SS_RESTRICTED,	RO, "ss_restricted" },	/* 40 */
-	{ CS_SS_LIMITED,	RO, "ss_limited" },	/* 41 */
-	{ CS_SS_KODSENT,	RO, "ss_kodsent" },	/* 42 */
-	{ CS_SS_PROCESSED,	RO, "ss_processed" },	/* 43 */
-	{ CS_PEERADR,		RO, "peeradr" },	/* 44 */
-	{ CS_PEERMODE,		RO, "peermode" },	/* 45 */
-	//{ CS_BCASTDELAY,	RO, "bcastdelay" },	/* 46 */
+	{ CS_MRU_MINAGE,	RO, "mru_minage" },     /* 29 */
+	{ CS_MRU_MAXDEPTH,	RO, "mru_maxdepth" },	/* 30 */
+	{ CS_MRU_MEM,		RO, "mru_mem" },	/* 31 */
+	{ CS_MRU_MAXMEM,	RO, "mru_maxmem" },	/* 32 */
+	{ CS_SS_UPTIME,		RO, "ss_uptime" },	/* 33 */
+	{ CS_SS_RESET,		RO, "ss_reset" },	/* 34 */
+	{ CS_SS_RECEIVED,	RO, "ss_received" },	/* 35 */
+	{ CS_SS_THISVER,	RO, "ss_thisver" },	/* 36 */
+	{ CS_SS_OLDVER,		RO, "ss_oldver" },	/* 37 */
+	{ CS_SS_BADFORMAT,	RO, "ss_badformat" },	/* 38 */
+	{ CS_SS_BADAUTH,	RO, "ss_badauth" },	/* 39 */
+	{ CS_SS_DECLINED,	RO, "ss_declined" },	/* 40 */
+	{ CS_SS_RESTRICTED,	RO, "ss_restricted" },	/* 41 */
+	{ CS_SS_LIMITED,	RO, "ss_limited" },	/* 42 */
+	{ CS_SS_KODSENT,	RO, "ss_kodsent" },	/* 43 */
+	{ CS_SS_PROCESSED,	RO, "ss_processed" },	/* 44 */
+	{ CS_PEERADR,		RO, "peeradr" },	/* 45 */
+	{ CS_PEERMODE,		RO, "peermode" },	/* 46 */
 	{ CS_AUTHDELAY,		RO, "authdelay" },	/* 47 */
 	{ CS_AUTHKEYS,		RO, "authkeys" },	/* 48 */
 	{ CS_AUTHFREEK,		RO, "authfreek" },	/* 49 */
@@ -382,9 +392,18 @@ static const struct ctl_var sys_var[] = {
 	{ CS_TIMER_XMTS,	RO, "timer_xmts" },	/* 87 */
 	{ CS_FUZZ,		RO, "fuzz" },		/* 88 */
 	{ CS_WANDER_THRESH,	RO, "clk_wander_threshold" }, /* 89 */
-	{ CS_LEAPSMEARINTV,	RO, "leapsmearinterval" },    /* 90 */
-	{ CS_LEAPSMEAROFFS,	RO, "leapsmearoffset" },      /* 91 */
-	{ 0,		EOV, "" }		/* 91 */
+	{ CS_MRU_EXISTS,	RO, "mru_exists" },	/* 90 */
+	{ CS_MRU_NEW,		RO, "mru_new" },	/* 91 */
+	{ CS_MRU_RECYCLEOLD,	RO, "mru_recycleold" },	/* 92 */
+	{ CS_MRU_RECYCLEFULL,	RO, "mru_recyclefull" },/* 93 */
+	{ CS_MRU_NONE,		RO, "mru_none" },	/* 94 */
+	{ CS_MRU_OLDEST_AGE,	RO, "mru_oldest_age" },	/* 95 */
+	{ CS_LEAPSMEARINTV,	RO, "leapsmearinterval" },    /* 96 */
+	{ CS_LEAPSMEAROFFS,	RO, "leapsmearoffset" },      /* 97 */
+	{ CS_TICK,		RO, "tick" },		/* 98 */
+	/* new in NTPsec */
+	{ CS_NUMCTLREQ,		RO, "ss_numctlreq" },	/* 99 */
+	{ 0,                    EOV, "" }		/* 99 */
 };
 
 static struct ctl_var *ext_sys_var = NULL;
@@ -584,6 +603,13 @@ static struct utsname utsnamebuf;
 keyid_t ctl_auth_keyid;
 
 /*
+ *  * A hack.  To keep the authentication module clear of ntp-ism's, we
+ *   * include a time reset variable for its stats here.
+ *    */
+static unsigned long auth_timereset;
+
+
+/*
  * We keep track of the last error reported by the system internally
  */
 static	uint8_t ctl_sys_last_event;
@@ -593,21 +619,21 @@ static	uint8_t ctl_sys_num_events;
 /*
  * Statistic counters to keep track of requests and responses.
  */
-u_long ctltimereset;		/* time stats reset */
-u_long numctlreq;		/* number of requests we've received */
-u_long numctlbadpkts;		/* number of bad control packets */
-u_long numctlresponses;		/* number of resp packets sent with data */
-u_long numctlfrags;		/* number of fragments sent */
-u_long numctlerrors;		/* number of error responses sent */
-u_long numctltooshort;		/* number of too short input packets */
-u_long numctlinputresp;		/* number of responses on input */
-u_long numctlinputfrag;		/* number of fragments on input */
-u_long numctlinputerr;		/* number of input pkts with err bit set */
-u_long numctlbadoffset;		/* number of input pkts with nonzero offset */
-u_long numctlbadversion;	/* number of input pkts with unknown version */
-u_long numctldatatooshort;	/* data too short for count */
-u_long numctlbadop;		/* bad op code found in packet */
-u_long numasyncmsgs;		/* number of async messages we've sent */
+static unsigned long ctltimereset;	/* time stats reset */
+static unsigned long numctlreq;		/* # of requests we've received */
+static unsigned long numctlbadpkts;	/* # of bad control packets */
+static unsigned long numctlresponses;	/* # of resp packets sent with data */
+static unsigned long numctlfrags;	/* # of fragments sent */
+static unsigned long numctlerrors;	/* # of error responses sent */
+static unsigned long numctltooshort;	/* # of too short input packets */
+static unsigned long numctlinputresp;	/* # of responses on input */
+static unsigned long numctlinputfrag;	/* # of fragments on input */
+static unsigned long numctlinputerr;	/* # of input pkts with err bit set */
+static unsigned long numctlbadoffset;	/* # of input pkts with nonzero offset */
+static unsigned long numctlbadversion;	/* # of input pkts with unknown version */
+static unsigned long numctldatatooshort;    /* data too short for count */
+static unsigned long numctlbadop;	/* bad op code found in packet */
+static unsigned long numasyncmsgs;	/* # of async messages we've sent */
 
 /*
  * Response packet used by these routines. Also some state information
@@ -620,7 +646,7 @@ static struct ntp_control rpkt;
 static uint8_t	res_version;
 static uint8_t	res_opcode;
 static associd_t res_associd;
-static u_short	res_frags;	/* datagrams in this response */
+static unsigned short	res_frags;	/* datagrams in this response */
 static int	res_offset;	/* offset of payload in response */
 static uint8_t * datapt;
 static int	datalinelen;
@@ -644,8 +670,6 @@ static	char *reqend;
 #ifndef MIN
 #define MIN(a, b) (((a) <= (b)) ? (a) : (b))
 #endif
-
-#define MILLISECONDS	1000	/* milliseconds per second -magic numbers suck */
 
 /*
  * init_control - initialize request data
@@ -683,7 +707,7 @@ ctl_error(
 	int		maclen;
 
 	numctlerrors++;
-	DPRINTF(3, ("sending control error %u\n", errcode));
+	DPRINT(3, ("sending control error %u\n", errcode));
 
 	/*
 	 * Fill in the fields. We assume rpkt.sequence and rpkt.associd
@@ -691,7 +715,7 @@ ctl_error(
 	 */
 	rpkt.r_m_e_op = (uint8_t)CTL_RESPONSE | CTL_ERROR |
 			(res_opcode & CTL_OP_MASK);
-	rpkt.status = htons((u_short)(errcode << 8) & 0xff00);
+	rpkt.status = htons((unsigned short)(errcode << 8) & 0xff00);
 	rpkt.count = 0;
 
 	/*
@@ -700,9 +724,10 @@ ctl_error(
 	if (res_authenticate) {
 		maclen = authencrypt(res_keyid, (uint32_t *)&rpkt,
 				     CTL_HEADER_LEN);
-		sendpkt(rmt_addr, lcl_inter, -2, &rpkt,	CTL_HEADER_LEN + maclen);
+		sendpkt(rmt_addr, lcl_inter, &rpkt,
+                        (int)CTL_HEADER_LEN + maclen);
 	} else
-		sendpkt(rmt_addr, lcl_inter, -3, &rpkt, CTL_HEADER_LEN);
+		sendpkt(rmt_addr, lcl_inter, &rpkt, CTL_HEADER_LEN);
 }
 
 /*
@@ -722,7 +747,7 @@ process_control(
 	int properlen;
 	size_t maclen;
 
-	DPRINTF(3, ("in process_control()\n"));
+	DPRINT(3, ("in process_control()\n"));
 
 	/*
 	 * Save the addresses for error responses
@@ -739,7 +764,7 @@ process_control(
 	if (rbufp->recv_length < (int)CTL_HEADER_LEN
 	    || (CTL_RESPONSE | CTL_MORE | CTL_ERROR) & pkt->r_m_e_op
 	    || pkt->offset != 0) {
-		DPRINTF(1, ("invalid format in control packet\n"));
+		DPRINT(1, ("invalid format in control packet\n"));
 		if (rbufp->recv_length < (int)CTL_HEADER_LEN)
 			numctltooshort++;
 		if (CTL_RESPONSE & pkt->r_m_e_op)
@@ -754,8 +779,8 @@ process_control(
 	}
 	res_version = PKT_VERSION(pkt->li_vn_mode);
 	if (res_version > NTP_VERSION || res_version < NTP_OLDVERSION) {
-		DPRINTF(1, ("unknown version %d in control packet\n",
-			    res_version));
+		DPRINT(1, ("unknown version %d in control packet\n",
+			   res_version));
 		numctlbadversion++;
 		return;
 	}
@@ -772,7 +797,7 @@ process_control(
 	rpkt.status = 0;
 	res_frags = 1;
 	res_offset = 0;
-	res_associd = htons(pkt->associd);
+	res_associd = ntohs(pkt->associd);
 	res_authenticate = false;
 	res_keyid = 0;
 	res_authokay = false;
@@ -783,44 +808,44 @@ process_control(
 	datapt = rpkt.data;
 
 	if ((rbufp->recv_length & 0x3) != 0)
-		DPRINTF(3, ("Control packet length %zd unrounded\n",
-			    rbufp->recv_length));
+		DPRINT(3, ("Control packet length %zu unrounded\n",
+			   rbufp->recv_length));
 
 	/*
 	 * We're set up now. Make sure we've got at least enough
 	 * incoming data space to match the count.
 	 */
-	req_data = rbufp->recv_length - CTL_HEADER_LEN;
+	req_data = (int)rbufp->recv_length - (int)CTL_HEADER_LEN;
 	if (req_data < req_count || rbufp->recv_length & 0x3) {
 		ctl_error(CERR_BADFMT);
 		numctldatatooshort++;
 		return;
 	}
 
-	properlen = req_count + CTL_HEADER_LEN;
+	properlen = req_count + (int)CTL_HEADER_LEN;
 	/* round up proper len to a 8 octet boundary */
 
 	properlen = (properlen + 7) & ~7;
-	maclen = rbufp->recv_length - properlen;
+	maclen = rbufp->recv_length - (size_t)properlen;
 	if ((rbufp->recv_length & 3) == 0 &&
 	    maclen >= MIN_MAC_LEN && maclen <= MAX_MAC_LEN) {
 		res_authenticate = true;
 		pkid = (void *)((char *)pkt + properlen);
 		res_keyid = ntohl(*pkid);
-		DPRINTF(3, ("recv_len %zd, properlen %d, wants auth with keyid %08x, MAC length=%zu\n",
-			    rbufp->recv_length, properlen, res_keyid,
-			    maclen));
+		DPRINT(3, ("recv_len %zu, properlen %d, wants auth with keyid %08x, MAC length=%zu\n",
+			   rbufp->recv_length, properlen, res_keyid,
+			   maclen));
 
 		if (!authistrusted(res_keyid))
-			DPRINTF(3, ("invalid keyid %08x\n", res_keyid));
+			DPRINT(3, ("invalid keyid %08x\n", res_keyid));
 		else if (authdecrypt(res_keyid, (uint32_t *)pkt,
-				     rbufp->recv_length - maclen,
-				     maclen)) {
+				     (int)rbufp->recv_length - (int)maclen,
+				     (int)maclen)) {
 			res_authokay = true;
-			DPRINTF(3, ("authenticated okay\n"));
+			DPRINT(3, ("authenticated okay\n"));
 		} else {
 			res_keyid = 0;
-			DPRINTF(3, ("authentication failed\n"));
+			DPRINT(3, ("authentication failed\n"));
 		}
 	}
 
@@ -835,8 +860,8 @@ process_control(
 	 */
 	for (cc = control_codes; cc->control_code != NO_REQUEST; cc++) {
 		if (cc->control_code == res_opcode) {
-			DPRINTF(3, ("opcode %d, found command handler\n",
-				    res_opcode));
+			DPRINT(3, ("opcode %d, found command handler\n",
+				   res_opcode));
 			if (cc->flags == AUTH
 			    && (!res_authokay
 				|| res_keyid != ctl_auth_keyid)) {
@@ -860,19 +885,19 @@ process_control(
 /*
  * ctlpeerstatus - return a status word for this peer
  */
-u_short
+unsigned short
 ctlpeerstatus(
-	register struct peer *p
+	struct peer *p
 	)
 {
-	u_short status;
+	unsigned short status;
 
 	status = p->status;
-	if (FLAG_CONFIG & p->flags)
+	if (FLAG_CONFIG & p->cfg.flags)
 		status |= CTL_PST_CONFIG;
-	if (p->keyid)
+	if (p->cfg.peerkey)
 		status |= CTL_PST_AUTHENABLE;
-	if (FLAG_AUTHENTIC & p->flags)
+	if (FLAG_AUTHENTIC & p->cfg.flags)
 		status |= CTL_PST_AUTHENTIC;
 	if (p->reach)
 		status |= CTL_PST_REACH;
@@ -887,7 +912,7 @@ ctlpeerstatus(
  * ctlclkstatus - return a status word for this clock
  */
 #ifdef REFCLOCK
-static u_short
+static unsigned short
 ctlclkstatus(
 	struct refclockstat *pcs
 	)
@@ -900,10 +925,10 @@ ctlclkstatus(
 /*
  * ctlsysstatus - return the system status word
  */
-u_short
+static unsigned short
 ctlsysstatus(void)
 {
-	register uint8_t this_clock;
+	uint8_t this_clock;
 
 	this_clock = CTL_SST_TS_UNSPEC;
 #ifdef REFCLOCK
@@ -944,7 +969,7 @@ ctl_flushpkt(
 		*datapt++ = '\n';
 		dlen += 2;
 	}
-	sendlen = dlen + CTL_HEADER_LEN;
+	sendlen = dlen + (int)CTL_HEADER_LEN;
 
 	/*
 	 * Zero-fill the unused part of the packet.  This wasn't needed
@@ -953,7 +978,7 @@ ctl_flushpkt(
 	 * which means Python mode 6 clients might actually see the trailing
 	 * garbage.
 	 */
-	memset(rpkt.data + sendlen, '\0', sizeof(rpkt.data) - sendlen);
+	memset(rpkt.data + sendlen, '\0', sizeof(rpkt.data) - (size_t)sendlen);
 	
 	/*
 	 * Pad to a multiple of 32 bits
@@ -967,8 +992,8 @@ ctl_flushpkt(
 	 */
 	rpkt.r_m_e_op = CTL_RESPONSE | more |
 			(res_opcode & CTL_OP_MASK);
-	rpkt.count = htons((u_short)dlen);
-	rpkt.offset = htons((u_short)res_offset);
+	rpkt.count = htons((unsigned short)dlen);
+	rpkt.offset = htons((unsigned short)res_offset);
 	if (res_authenticate) {
 		totlen = sendlen;
 		/*
@@ -983,9 +1008,9 @@ ctl_flushpkt(
 		memcpy(datapt, &keyid, sizeof(keyid));
 		maclen = authencrypt(res_keyid,
 				     (uint32_t *)&rpkt, totlen);
-		sendpkt(rmt_addr, lcl_inter, -5, &rpkt, totlen + maclen);
+		sendpkt(rmt_addr, lcl_inter, &rpkt, totlen + maclen);
 	} else {
-		sendpkt(rmt_addr, lcl_inter, -6, &rpkt, sendlen);
+		sendpkt(rmt_addr, lcl_inter, &rpkt, sendlen);
 	}
 	if (more)
 		numctlfrags++;
@@ -1012,37 +1037,50 @@ ctl_putdata(
 	bool bin		/* set to true when data is binary */
 	)
 {
-	int overhead;
+	unsigned int overhead;
+	unsigned int currentlen;
 	const uint8_t * dataend = &rpkt.data[CTL_MAX_DATA_LEN];
 
 	overhead = 0;
 	if (!bin) {
-		datanotbinflag = true;
-		overhead = 3;
-		if (datasent) {
-			*datapt++ = ',';
+	    datanotbinflag = true;
+	    overhead = 3;
+	    if (datasent) {
+		*datapt++ = ',';
+		datalinelen++;
+		if ((dlen + (unsigned int)datalinelen + 1) >= MAXDATALINELEN) {
+			*datapt++ = '\r';
+			*datapt++ = '\n';
+			datalinelen = 0;
+		} else {
+			*datapt++ = ' ';
 			datalinelen++;
-			if ((dlen + datalinelen + 1) >= MAXDATALINELEN) {
-				*datapt++ = '\r';
-				*datapt++ = '\n';
-				datalinelen = 0;
-			} else {
-				*datapt++ = ' ';
-				datalinelen++;
-			}
 		}
+	    }
 	}
 
 	/*
 	 * Save room for trailing junk
 	 */
 	while (dlen + overhead + datapt > dataend) {
+		/*
+		 * Not enough room in this one, flush it out.
+		 */
+		currentlen = MIN(dlen, (unsigned int)(dataend - datapt));
+
+		memcpy(datapt, dp, currentlen);
+
+		datapt += currentlen;
+		dp += currentlen;
+		dlen -= currentlen;
+		datalinelen += (int)currentlen;
+
 		ctl_flushpkt(CTL_MORE);
 	}
 
 	memcpy(datapt, dp, dlen);
 	datapt += dlen;
-	datalinelen += dlen;
+	datalinelen += (int)dlen;
 	datasent = true;
 }
 
@@ -1055,6 +1093,8 @@ ctl_putdata(
  *
  *		len is the data length excluding the NUL terminator,
  *		as in ctl_putstr("var", "value", strlen("value"));
+ *		The write will be truncated if data contains  a NUL,
+ *		so don't do that.
  *
  * ESR, 2016: Whoever wrote this should be *hurt*.  If the string value is 
  * empty, no "=" and no value literal is written, just the bare tag.  
@@ -1067,21 +1107,14 @@ ctl_putstr(
 	)
 {
 	char buffer[512];
-	char *cp;
-	size_t tl;
+	size_t tl = strlen(tag);
 
-	tl = strlen(tag);
+	if (tl >= sizeof(buffer))
+	    return;
 	memcpy(buffer, tag, tl);
-	cp = buffer + tl;
-	if (len > 0) {
-		NTP_INSIST(tl + 3 + len <= sizeof(buffer));
-		*cp++ = '=';
-		*cp++ = '"';
-		memcpy(cp, data, len);
-		cp += len;
-		*cp++ = '"';
-	}
-	ctl_putdata(buffer, (u_int)(cp - buffer), false);
+	if (len > 0)
+	    snprintf(buffer + tl, sizeof(buffer) - tl, "=\"%s\"", data);
+	ctl_putdata(buffer, (unsigned int)strlen(buffer), false);
 }
 
 
@@ -1106,15 +1139,16 @@ ctl_putunqstr(
 	size_t tl;
 
 	tl = strlen(tag);
+	if (tl + 1 + len >= sizeof(buffer))
+	    return;
 	memcpy(buffer, tag, tl);
 	cp = buffer + tl;
 	if (len > 0) {
-		NTP_INSIST(tl + 1 + len <= sizeof(buffer));
 		*cp++ = '=';
 		memcpy(cp, data, len);
 		cp += len;
 	}
-	ctl_putdata(buffer, (u_int)(cp - buffer), false);
+	ctl_putdata(buffer, (unsigned int)(cp - buffer), false);
 }
 
 
@@ -1135,11 +1169,12 @@ ctl_putdblf(
 
 	cp = buffer;
 	cq = tag;
-	while (*cq != '\0')
+	while (*cq != '\0' && cp < buffer + sizeof(buffer) - 1)
 		*cp++ = *cq++;
 	*cp++ = '=';
-	NTP_INSIST((size_t)(cp - buffer) < sizeof(buffer));
-	snprintf(cp, sizeof(buffer) - (cp - buffer), use_f ? "%.*f" : "%.*g",
+	INSIST((size_t)(cp - buffer) < sizeof(buffer));
+	snprintf(cp, sizeof(buffer) - (size_t)(cp - buffer),
+                 use_f ? "%.*f" : "%.*g",
 	    precision, d);
 	cp += strlen(cp);
 	ctl_putdata(buffer, (unsigned)(cp - buffer), false);
@@ -1151,53 +1186,52 @@ ctl_putdblf(
 static void
 ctl_putuint(
 	const char *tag,
-	u_long uval
+	unsigned long uval
 	)
 {
-	register char *cp;
-	register const char *cq;
+	char *cp;
+	const char *cq;
 	char buffer[200];
 
 	cp = buffer;
 	cq = tag;
-	while (*cq != '\0')
+	while (*cq != '\0' && cp < buffer + sizeof(buffer) - 1)
 		*cp++ = *cq++;
 
 	*cp++ = '=';
-	NTP_INSIST((cp - buffer) < (int)sizeof(buffer));
-	snprintf(cp, sizeof(buffer) - (cp - buffer), "%lu", uval);
+	INSIST((cp - buffer) < (int)sizeof(buffer));
+	snprintf(cp, sizeof(buffer) - (size_t)(cp - buffer), "%lu", uval);
 	cp += strlen(cp);
 	ctl_putdata(buffer, (unsigned)( cp - buffer ), false);
 }
 
 /*
- * ctl_putfs - write a decoded filestamp into the response
+ * ctl_puttime - write a decoded filestamp into the response
  */
 static void
-ctl_putfs(
+ctl_puttime(
 	const char *tag,
-	tstamp_t uval
+	time_t uval
 	)
 {
-	register char *cp;
-	register const char *cq;
+	char *cp;
+	const char *cq;
 	char buffer[200];
 	struct tm tmbuf, *tm = NULL;
-	time_t fstamp;
+	time_t fstamp = uval;
 
 	cp = buffer;
 	cq = tag;
-	while (*cq != '\0')
+	while (*cq != '\0' && cp < buffer + sizeof(buffer) - 1)
 		*cp++ = *cq++;
 
 	*cp++ = '=';
-	fstamp = uval - JAN_1970;
 	tm = gmtime_r(&fstamp, &tmbuf);
-	if (NULL ==  tm)
+	if (NULL == tm)
 		return;
-	NTP_INSIST((cp - buffer) < (int)sizeof(buffer));
-	snprintf(cp, sizeof(buffer) - (cp - buffer),
-		 "%04d%02d%02d%02d%02d", tm->tm_year + 1900,
+	INSIST((cp - buffer) < (int)sizeof(buffer));
+	snprintf(cp, sizeof(buffer) - (size_t)(cp - buffer),
+		 "%04d-%02d-%02dT%02d:%02dZ", tm->tm_year + 1900,
 		 tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 	cp += strlen(cp);
 	ctl_putdata(buffer, (unsigned)( cp - buffer ), false);
@@ -1211,21 +1245,21 @@ ctl_putfs(
 static void
 ctl_puthex(
 	const char *tag,
-	u_long uval
+	unsigned long uval
 	)
 {
-	register char *cp;
-	register const char *cq;
+	char *cp;
+	const char *cq;
 	char buffer[200];
 
 	cp = buffer;
 	cq = tag;
-	while (*cq != '\0')
+	while (*cq != '\0' && cp < buffer + sizeof(buffer) - 1)
 		*cp++ = *cq++;
 
 	*cp++ = '=';
-	NTP_INSIST((cp - buffer) < (int)sizeof(buffer));
-	snprintf(cp, sizeof(buffer) - (cp - buffer), "0x%lx", uval);
+	INSIST((cp - buffer) < (int)sizeof(buffer));
+	snprintf(cp, sizeof(buffer) - (size_t)(cp - buffer), "0x%lx", uval);
 	cp += strlen(cp);
 	ctl_putdata(buffer,(unsigned)( cp - buffer ), false);
 }
@@ -1240,18 +1274,18 @@ ctl_putint(
 	long ival
 	)
 {
-	register char *cp;
-	register const char *cq;
+	char *cp;
+	const char *cq;
 	char buffer[200];
 
 	cp = buffer;
 	cq = tag;
-	while (*cq != '\0')
+	while (*cq != '\0' && cp < buffer + sizeof(buffer) - 1)
 		*cp++ = *cq++;
 
 	*cp++ = '=';
-	NTP_INSIST((cp - buffer) < (int)sizeof(buffer));
-	snprintf(cp, sizeof(buffer) - (cp - buffer), "%ld", ival);
+	INSIST((cp - buffer) < (int)sizeof(buffer));
+	snprintf(cp, sizeof(buffer) - (size_t)(cp - buffer), "%ld", ival);
 	cp += strlen(cp);
 	ctl_putdata(buffer, (unsigned)( cp - buffer ), false);
 }
@@ -1266,19 +1300,19 @@ ctl_putts(
 	l_fp *ts
 	)
 {
-	register char *cp;
-	register const char *cq;
+	char *cp;
+	const char *cq;
 	char buffer[200];
 
 	cp = buffer;
 	cq = tag;
-	while (*cq != '\0')
+	while (*cq != '\0' && cp < buffer + sizeof(buffer) - 1)
 		*cp++ = *cq++;
 
 	*cp++ = '=';
-	NTP_INSIST((size_t)(cp - buffer) < sizeof(buffer));
-	snprintf(cp, sizeof(buffer) - (cp - buffer), "0x%08x.%08x",
-		 (u_int)ts->l_ui, (u_int)ts->l_uf);
+	INSIST((size_t)(cp - buffer) < sizeof(buffer));
+	snprintf(cp, sizeof(buffer) - (size_t)(cp - buffer), "0x%08x.%08x",
+		 (unsigned int)lfpuint(*ts), (unsigned int)lfpfrac(*ts));
 	cp += strlen(cp);
 	ctl_putdata(buffer, (unsigned)( cp - buffer ), false);
 }
@@ -1294,13 +1328,13 @@ ctl_putadr(
 	sockaddr_u *addr
 	)
 {
-	register char *cp;
-	register const char *cq;
+	char *cp;
+	const char *cq;
 	char buffer[200];
 
 	cp = buffer;
 	cq = tag;
-	while (*cq != '\0')
+	while (*cq != '\0' && cp < buffer + sizeof(buffer) - 1)
 		*cp++ = *cq++;
 
 	*cp++ = '=';
@@ -1308,8 +1342,8 @@ ctl_putadr(
 		cq = numtoa(addr32);
 	else
 		cq = socktoa(addr);
-	NTP_INSIST((cp - buffer) < (int)sizeof(buffer));
-	snprintf(cp, sizeof(buffer) - (cp - buffer), "%s", cq);
+	INSIST((cp - buffer) < (int)sizeof(buffer));
+	snprintf(cp, sizeof(buffer) - (size_t)(cp - buffer), "%s", cq);
 	cp += strlen(cp);
 	ctl_putdata(buffer, (unsigned)(cp - buffer), false);
 }
@@ -1351,7 +1385,7 @@ ctl_putrefid(
 			*optr = '.';
 	if (!(optr <= oplim))
 		optr = past_eq;
-	ctl_putdata(output, (u_int)(optr - output), false);
+	ctl_putdata(output, (unsigned int)(optr - output), false);
 }
 
 
@@ -1365,13 +1399,13 @@ ctl_putarray(
 	int start
 	)
 {
-	register char *cp;
-	register const char *cq;
+	char *cp;
+	const char *cq;
 	char buffer[200];
 	int i;
 	cp = buffer;
 	cq = tag;
-	while (*cq != '\0')
+	while (*cq != '\0' && cp < buffer + sizeof(buffer) - 1)
 		*cp++ = *cq++;
 	*cp++ = '=';
 	i = start;
@@ -1379,9 +1413,9 @@ ctl_putarray(
 		if (i == 0)
 			i = NTP_SHIFT;
 		i--;
-		NTP_INSIST((cp - buffer) < (int)sizeof(buffer));
-		snprintf(cp, sizeof(buffer) - (cp - buffer),
-			 " %.2f", arr[i] * 1e3);
+		INSIST((cp - buffer) < (int)sizeof(buffer));
+		snprintf(cp, sizeof(buffer) - (size_t)(cp - buffer),
+			 " %.2f", arr[i] * MS_PER_S);
 		cp += strlen(cp);
 	} while (i != start);
 	ctl_putdata(buffer, (unsigned)(cp - buffer), false);
@@ -1398,13 +1432,13 @@ ctl_putsys(
 {
 	l_fp tmp;
 	char str[256];
-	u_int u;
+	unsigned int u;
 	double kb;
 	double dtemp;
 	const char *ss;
 #ifdef HAVE_KERNEL_PLL
 	static struct timex ntx;
-	static u_long ntp_adjtime_time;
+	static unsigned long ntp_adjtime_time;
 
 	/*
 	 * CS_K_* variables depend on up-to-date output of ntp_adjtime()
@@ -1413,7 +1447,7 @@ ctl_putsys(
 	    current_time != ntp_adjtime_time) {
 		ZERO(ntx);
 		if (ntp_adjtime(&ntx) < 0)
-			msyslog(LOG_ERR, "ntp_adjtime() for mode 6 query failed: %m");
+			msyslog(LOG_ERR, "MODE6: ntp_adjtime() for mode 6 query failed: %m");
 		else
 			ntp_adjtime_time = current_time;
 	}
@@ -1434,13 +1468,12 @@ ctl_putsys(
 		break;
 
 	case CS_ROOTDELAY:
-		ctl_putdbl(sys_var[CS_ROOTDELAY].text, sys_rootdelay *
-			   1e3);
+		ctl_putdbl(sys_var[CS_ROOTDELAY].text, sys_rootdelay * MS_PER_S);
 		break;
 
 	case CS_ROOTDISPERSION:
 		ctl_putdbl(sys_var[CS_ROOTDISPERSION].text,
-			   sys_rootdisp * 1e3);
+			   sys_rootdisp * MS_PER_S);
 		break;
 
 	case CS_REFID:
@@ -1482,19 +1515,21 @@ ctl_putsys(
 		break;
 
 	case CS_OFFSET:
-		ctl_putdbl6(sys_var[CS_OFFSET].text, last_offset * 1e3);
+		ctl_putdbl6(sys_var[CS_OFFSET].text, last_offset * MS_PER_S);
 		break;
 
 	case CS_DRIFT:
-		ctl_putdbl(sys_var[CS_DRIFT].text, drift_comp * 1e6);
+                /* a.k.a frequency.  (s/s), reported as us/s a.k.a. ppm */
+		ctl_putdbl6(sys_var[CS_DRIFT].text, drift_comp * US_PER_S);
 		break;
 
 	case CS_JITTER:
-		ctl_putdbl6(sys_var[CS_JITTER].text, sys_jitter * 1e3);
+		ctl_putdbl6(sys_var[CS_JITTER].text, sys_jitter * MS_PER_S);
 		break;
 
 	case CS_ERROR:
-		ctl_putdbl(sys_var[CS_ERROR].text, clock_jitter * 1e3);
+		/* a.k.a clk_jitter (s).  output as ms */
+		ctl_putdbl6(sys_var[CS_ERROR].text, clock_jitter * MS_PER_S);
 		break;
 
 	case CS_CLOCK:
@@ -1514,14 +1549,13 @@ ctl_putsys(
 		break;
 
 	case CS_VERSION:
-		snprintf(str, sizeof(str), "%s %s",
-			"ntpd", Version);
-		ctl_putstr(sys_var[CS_VERSION].text, str, strlen(str));
+		ss = ntpd_version();
+		ctl_putstr(sys_var[CS_VERSION].text, ss, strlen(ss));
 		break;
 
 	case CS_STABIL:
-		ctl_putdbl(sys_var[CS_STABIL].text, clock_stability *
-			   1e6);
+		/* a.k.a clk_wander (s/s), output as us/s */
+		ctl_putdbl6(sys_var[CS_STABIL].text, clock_stability * US_PER_S);
 		break;
 
 	case CS_VARLIST:
@@ -1531,7 +1565,7 @@ ctl_putsys(
 		char *buffp, *buffend;
 		bool firstVarName;
 		const char *ss1;
-		int len;
+		size_t len;
 		const struct ctl_var *k;
 
 		buffp = buf;
@@ -1565,14 +1599,14 @@ ctl_putsys(
 			if (NULL == ss1)
 				len = strlen(k->text);
 			else
-				len = ss1 - k->text;
+				len = (size_t)(ss1 - k->text);
 			if (buffp + len + 1 >= buffend)
 				break;
 			if (firstVarName) {
 				*buffp++ = ',';
 				firstVarName = false;
 			}
-			memcpy(buffp, k->text,(unsigned)len);
+			memcpy(buffp, k->text, len);
 			buffp += len;
 		}
 		if (buffp + 2 >= buffend)
@@ -1595,7 +1629,7 @@ ctl_putsys(
 		leap_signature_t lsig;
 		leapsec_getsig(&lsig);
 		if (lsig.ttime > 0)
-			ctl_putfs(sys_var[CS_LEAPTAB].text, lsig.ttime);
+			ctl_puttime(sys_var[CS_LEAPTAB].text, lsig.ttime);
 		break;
 	}
 
@@ -1604,7 +1638,7 @@ ctl_putsys(
 		leap_signature_t lsig;
 		leapsec_getsig(&lsig);
 		if (lsig.etime > 0)
-			ctl_putfs(sys_var[CS_LEAPEND].text, lsig.etime);
+			ctl_puttime(sys_var[CS_LEAPEND].text, lsig.etime);
 		break;
 	}
 
@@ -1617,7 +1651,7 @@ ctl_putsys(
 	case CS_LEAPSMEAROFFS:
 		if (leap_smear_intv > 0)
 			ctl_putdbl(sys_var[CS_LEAPSMEAROFFS].text,
-				   leap_smear.doffset * 1e3);
+				   leap_smear.doffset * MS_PER_S);
 		break;
 #endif	/* ENABLE_LEAP_SMEAR */
 
@@ -1635,7 +1669,7 @@ ctl_putsys(
 
 	case CS_MRU_MEM:
 		kb = mru_entries * (sizeof(mon_entry) / 1024.);
-		u = (u_int)kb;
+		u = (unsigned int)kb;
 		if (kb - u >= 0.5)
 			u++;
 		ctl_putuint(sys_var[varid].text, u);
@@ -1653,17 +1687,49 @@ ctl_putsys(
 		ctl_putint(sys_var[varid].text, mru_maxage);
 		break;
 
+	case CS_MRU_MINAGE:
+		ctl_putint(sys_var[varid].text, mru_minage);
+		break;
+
 	case CS_MRU_MAXDEPTH:
 		ctl_putuint(sys_var[varid].text, mru_maxdepth);
 		break;
 
 	case CS_MRU_MAXMEM:
 		kb = mru_maxdepth * (sizeof(mon_entry) / 1024.);
-		u = (u_int)kb;
+		u = (unsigned int)kb;
 		if (kb - u >= 0.5)
 			u++;
 		ctl_putuint(sys_var[varid].text, u);
 		break;
+
+	case CS_MRU_EXISTS:
+		ctl_putuint(sys_var[varid].text, mru_exists);
+		break;
+
+	case CS_MRU_NEW:
+		ctl_putuint(sys_var[varid].text, mru_new);
+		break;
+
+	case CS_MRU_RECYCLEOLD:
+		ctl_putuint(sys_var[varid].text, mru_recycleold);
+		break;
+
+	case CS_MRU_RECYCLEFULL:
+		ctl_putuint(sys_var[varid].text, mru_recyclefull);
+		break;
+
+	case CS_MRU_NONE:
+		ctl_putuint(sys_var[varid].text, mru_none);
+		break;
+
+	case CS_MRU_OLDEST_AGE: {
+		l_fp now;
+		get_systime(&now);
+		ctl_putuint(sys_var[varid].text,
+                            (unsigned long)mon_get_oldest_age(now));
+		break;
+		}
 
 	case CS_SS_UPTIME:
 		ctl_putuint(sys_var[varid].text, current_time);
@@ -1715,8 +1781,8 @@ ctl_putsys(
 		break;
 
 	case CS_AUTHDELAY:
-		LFPTOD(&sys_authdelay, dtemp);
-		ctl_putdbl(sys_var[varid].text, dtemp * 1e3);
+		dtemp = lfptod(sys_authdelay);
+		ctl_putdbl(sys_var[varid].text, dtemp * MS_PER_S);
 		break;
 
 	case CS_AUTHKEYS:
@@ -1724,7 +1790,7 @@ ctl_putsys(
 		break;
 
 	case CS_AUTHFREEK:
-		ctl_putuint(sys_var[varid].text, authnumfreekeys);
+		ctl_putuint(sys_var[varid].text, (unsigned long)authnumfreekeys);
 		break;
 
 	case CS_AUTHKLOOKUPS:
@@ -1789,7 +1855,7 @@ ctl_putsys(
 		CTL_IF_KERNLOOP(
 			ctl_putdblf,
 			(sys_var[varid].text, 0, -1,
-			 ntp_error_in_seconds(ntx.offset)*MILLISECONDS)
+			 ntp_error_in_seconds(ntx.offset) * MS_PER_S)
 		);
 		break;
 
@@ -1804,7 +1870,7 @@ ctl_putsys(
 		CTL_IF_KERNLOOP(
 			ctl_putdblf,
 			(sys_var[varid].text, 0, 6,
-			 ntp_error_in_seconds(ntx.maxerror)*MILLISECONDS)
+			 ntp_error_in_seconds(ntx.maxerror) * MS_PER_S)
 		);
 		break;
 
@@ -1812,7 +1878,7 @@ ctl_putsys(
 		CTL_IF_KERNLOOP(
 			ctl_putdblf,
 			(sys_var[varid].text, 0, 6,
-			 ntp_error_in_seconds(ntx.esterror)*MILLISECONDS)
+			 ntp_error_in_seconds(ntx.esterror) * MS_PER_S)
 		);
 		break;
 
@@ -1820,7 +1886,7 @@ ctl_putsys(
 #ifndef HAVE_KERNEL_PLL
 		ss = "";
 #else
-		ss = k_st_flags(ntx.status);
+		ss = k_st_flags((uint32_t)ntx.status);
 #endif
 		ctl_putstr(sys_var[varid].text, ss, strlen(ss));
 		break;
@@ -1836,7 +1902,7 @@ ctl_putsys(
 		CTL_IF_KERNLOOP(
 			ctl_putdblf,
 			(sys_var[varid].text, 0, 6,
-			 ntp_error_in_seconds(ntx.precision)*MILLISECONDS)
+			 ntp_error_in_seconds(ntx.precision) * MS_PER_S)
 		);
 		break;
 
@@ -1865,7 +1931,7 @@ ctl_putsys(
 		CTL_IF_KERNPPS(
 			ctl_putdbl,
 			(sys_var[varid].text,
-			 ntp_error_in_seconds(ntx.jitter)*MILLISECONDS)
+			 ntp_error_in_seconds(ntx.jitter) * MS_PER_S)
 		);
 		break;
 
@@ -1967,11 +2033,26 @@ ctl_putsys(
 		break;
 
 	case CS_FUZZ:
-		ctl_putdbl(sys_var[varid].text, sys_fuzz * 1e3);
+		/* a.k.a. fuzz (s), output in ms */
+		ctl_putdbl6(sys_var[varid].text, sys_fuzz * MS_PER_S);
 		break;
+
 	case CS_WANDER_THRESH:
-		ctl_putdbl(sys_var[varid].text, wander_threshold * 1e6);
+		ctl_putdbl(sys_var[varid].text, wander_threshold * US_PER_S);
 		break;
+
+	case CS_TICK:
+		/* a.k.a. sys_tick (s), output in ms */
+		ctl_putdbl6(sys_var[varid].text, sys_tick * MS_PER_S);
+		break;
+
+	case CS_NUMCTLREQ:
+		ctl_putuint(sys_var[varid].text, numctlreq);
+		break;
+
+        default:
+                /* huh? */
+                break;
 	}
 }
 
@@ -1989,23 +2070,23 @@ ctl_putpeer(
 	char *s;
 	char *t;
 	char *be;
-	int i;
+	size_t sz;
 	const struct ctl_var *k;
 
 	switch (id) {
 
 	case CP_CONFIG:
 		ctl_putuint(peer_var[id].text,
-			    !(FLAG_PREEMPT & p->flags));
+			    !(FLAG_PREEMPT & p->cfg.flags));
 		break;
 
 	case CP_AUTHENABLE:
-		ctl_putuint(peer_var[id].text, !(p->keyid));
+		ctl_putuint(peer_var[id].text, !(p->cfg.peerkey));
 		break;
 
 	case CP_AUTHENTIC:
 		ctl_putuint(peer_var[id].text,
-			    !!(FLAG_AUTHENTIC & p->flags));
+			    !!(FLAG_AUTHENTIC & p->cfg.flags));
 		break;
 
 	case CP_SRCADR:
@@ -2022,9 +2103,9 @@ ctl_putpeer(
 				   strlen(p->hostname));
 #ifdef REFCLOCK
 		if (p->procptr != NULL) {
-		    char buf[NI_MAXHOST];
-		    strlcpy(buf, refclock_name(p), sizeof(buf));
-		    ctl_putstr(peer_var[id].text, buf, strlen(buf));
+		    char buf1[256];
+		    strlcpy(buf1, refclock_name(p), sizeof(buf1));
+		    ctl_putstr(peer_var[id].text, buf1, strlen(buf1));
 		}
 #endif /* REFCLOCK */
 		break;
@@ -2045,16 +2126,16 @@ ctl_putpeer(
 
 	case CP_IN:
 		if (p->r21 > 0.)
-			ctl_putdbl(peer_var[id].text, p->r21 / 1e3);
+			ctl_putdbl(peer_var[id].text, p->r21 / MS_PER_S);
 		break;
 
 	case CP_OUT:
 		if (p->r34 > 0.)
-			ctl_putdbl(peer_var[id].text, p->r34 / 1e3);
+			ctl_putdbl(peer_var[id].text, p->r34 / MS_PER_S);
 		break;
 
 	case CP_RATE:
-		ctl_putuint(peer_var[id].text, p->throttle);
+		ctl_putuint(peer_var[id].text, (unsigned long)p->throttle);
 		break;
 
 	case CP_LEAP:
@@ -2082,16 +2163,16 @@ ctl_putpeer(
 		break;
 
 	case CP_ROOTDELAY:
-		ctl_putdbl(peer_var[id].text, p->rootdelay * 1e3);
+		ctl_putdbl(peer_var[id].text, p->rootdelay * MS_PER_S);
 		break;
 
 	case CP_ROOTDISPERSION:
-		ctl_putdbl(peer_var[id].text, p->rootdisp * 1e3);
+		ctl_putdbl(peer_var[id].text, p->rootdisp * MS_PER_S);
 		break;
 
 	case CP_REFID:
 #ifdef REFCLOCK
-		if (p->flags & FLAG_REFCLOCK) {
+		if (p->cfg.flags & FLAG_REFCLOCK) {
 			ctl_putrefid(peer_var[id].text, p->refid);
 			break;
 		}
@@ -2116,8 +2197,8 @@ ctl_putpeer(
 		break;
 
 	case CP_BIAS:
-		if (p->bias != 0.)
-			ctl_putdbl(peer_var[id].text, p->bias * 1e3);
+		if ( !D_ISZERO_NS(p->cfg.bias) )
+			ctl_putdbl(peer_var[id].text, p->cfg.bias);
 		break;
 
 	case CP_REACH:
@@ -2125,23 +2206,20 @@ ctl_putpeer(
 		break;
 
 	case CP_FLASH:
-		ctl_puthex(peer_var[id].text, p->flash);
+		ctl_puthex(peer_var[id].text, (unsigned long)p->flash);
 		break;
 
 	case CP_TTL:
 #ifdef REFCLOCK
-		if (p->flags & FLAG_REFCLOCK) {
-			ctl_putuint(peer_var[id].text, p->ttl);
+		if (p->cfg.flags & FLAG_REFCLOCK) {
+			ctl_putuint(peer_var[id].text, p->cfg.ttl);
 			break;
 		}
 #endif
-		if (p->ttl > 0 && p->ttl < COUNTOF(sys_ttl))
-			ctl_putint(peer_var[id].text,
-				   sys_ttl[p->ttl]);
 		break;
 
 	case CP_UNREACH:
-		ctl_putuint(peer_var[id].text, p->unreach);
+		ctl_putuint(peer_var[id].text, (unsigned long)p->unreach);
 		break;
 
 	case CP_TIMER:
@@ -2150,26 +2228,26 @@ ctl_putpeer(
 		break;
 
 	case CP_DELAY:
-		ctl_putdbl(peer_var[id].text, p->delay * 1e3);
+		ctl_putdbl6(peer_var[id].text, p->delay * MS_PER_S);
 		break;
 
 	case CP_OFFSET:
-		ctl_putdbl(peer_var[id].text, p->offset * 1e3);
+		ctl_putdbl6(peer_var[id].text, p->offset * MS_PER_S);
 		break;
 
 	case CP_JITTER:
-		ctl_putdbl(peer_var[id].text, p->jitter * 1e3);
+		ctl_putdbl6(peer_var[id].text, p->jitter * MS_PER_S);
 		break;
 
 	case CP_DISPERSION:
-		ctl_putdbl(peer_var[id].text, p->disp * 1e3);
+		ctl_putdbl6(peer_var[id].text, p->disp * MS_PER_S);
 		break;
 
 	case CP_KEYID:
-		if (p->keyid > NTP_MAXKEY)
-			ctl_puthex(peer_var[id].text, p->keyid);
+		if (p->cfg.peerkey > NTP_MAXKEY)
+			ctl_puthex(peer_var[id].text, p->cfg.peerkey);
 		else
-			ctl_putuint(peer_var[id].text, p->keyid);
+			ctl_putuint(peer_var[id].text, p->cfg.peerkey);
 		break;
 
 	case CP_FILTDELAY:
@@ -2211,18 +2289,18 @@ ctl_putpeer(
 		for (k = peer_var; !(EOV & k->flags); k++) {
 			if (PADDING & k->flags)
 				continue;
-			i = strlen(k->text);
-			if (s + i + 1 >= be)
+			sz = strlen(k->text);
+			if (s + sz + 1 >= be)
 				break;
 			if (s != t)
 				*s++ = ',';
-			memcpy(s, k->text, i);
-			s += i;
+			memcpy(s, k->text, sz);
+			s += sz;
 		}
 		if (s + 2 < be) {
 			*s++ = '"';
 			*s = '\0';
-			ctl_putdata(buf, (u_int)(s - buf), false);
+			ctl_putdata(buf, (unsigned int)(s - buf), false);
 		}
 		break;
 
@@ -2280,7 +2358,7 @@ ctl_putclock(
 	char buf[CTL_MAX_DATA_LEN];
 	char *s, *t, *be;
 	const char *ss;
-	int i;
+	size_t sz;
 	const struct ctl_var *k;
 
 	switch (id) {
@@ -2325,13 +2403,13 @@ ctl_putclock(
 	case CC_FUDGETIME1:
 		if (mustput || (pcs->haveflags & CLK_HAVETIME1))
 			ctl_putdbl(clock_var[id].text,
-				   pcs->fudgetime1 * 1e3);
+				   pcs->fudgetime1 * MS_PER_S);
 		break;
 
 	case CC_FUDGETIME2:
 		if (mustput || (pcs->haveflags & CLK_HAVETIME2))
 			ctl_putdbl(clock_var[id].text,
-				   pcs->fudgetime2 * 1e3);
+				   pcs->fudgetime2 * MS_PER_S);
 		break;
 
 	case CC_FUDGEVAL1:
@@ -2384,14 +2462,14 @@ ctl_putclock(
 			if (PADDING & k->flags)
 				continue;
 
-			i = strlen(k->text);
-			if (s + i + 1 >= be)
+			sz = strlen(k->text);
+			if (s + sz + 1 >= be)
 				break;
 
 			if (s != t)
 				*s++ = ',';
-			memcpy(s, k->text, i);
-			s += i;
+			memcpy(s, k->text, sz);
+			s += sz;
 		}
 
 		for (k = pcs->kv_list; k && !(EOV & k->flags); k++) {
@@ -2404,14 +2482,14 @@ ctl_putclock(
 
 			while (*ss && *ss != '=')
 				ss++;
-			i = ss - k->text;
-			if (s + i + 1 >= be)
+			sz = (size_t)(ss - k->text);
+			if (s + sz + 1 >= be)
 				break;
 
 			if (s != t)
 				*s++ = ',';
-			memcpy(s, k->text, (unsigned)i);
-			s += i;
+			memcpy(s, k->text, sz);
+			s += sz;
 			*s = '\0';
 		}
 		if (s + 2 >= be)
@@ -2421,6 +2499,10 @@ ctl_putclock(
 		*s = '\0';
 		ctl_putdata(buf, (unsigned)(s - buf), false);
 		break;
+
+        default:
+                /* huh? */
+                break;
 	}
 }
 #endif
@@ -2438,7 +2520,7 @@ ctl_getitem(
 {
 	static const struct ctl_var eol = { 0, EOV, NULL };
 	static char buf[128];
-	static u_long quiet_until;
+	static unsigned long quiet_until;
 	const struct ctl_var *v;
 	const char *pch;
 	char *cp;
@@ -2495,7 +2577,7 @@ ctl_getitem(
 								if (quiet_until <= current_time) {
 									quiet_until = current_time + 300;
 									msyslog(LOG_WARNING,
-"Possible 'ntpdx' exploit from %s#%u (possibly spoofed)", socktoa(rmt_addr), SRCPORT(rmt_addr));
+"MODE6: Possible 'ntpdx' exploit from %s#%u (possibly spoofed)", socktoa(rmt_addr), SRCPORT(rmt_addr));
 								}
 							return NULL;
 						}
@@ -2565,14 +2647,11 @@ read_status(
 	const uint8_t *cp;
 	size_t n;
 	/* a_st holds association ID, status pairs alternating */
-	u_short a_st[CTL_MAX_DATA_LEN / sizeof(u_short)];
+	unsigned short a_st[CTL_MAX_DATA_LEN / sizeof(unsigned short)];
 
 	UNUSED_ARG(rbufp);
 	UNUSED_ARG(restrict_mask);
-#ifdef DEBUG
-	if (debug > 2)
-		printf("read_status: ID %d\n", res_associd);
-#endif
+	DPRINT(3, ("read_status: ID %d\n", res_associd));
 	/*
 	 * Two choices here. If the specified association ID is
 	 * zero we return all known association ID's.  Otherwise
@@ -2641,20 +2720,20 @@ read_peervars(void)
 	if (res_authokay)
 		peer->num_events = 0;
 	ZERO(wants);
-	gotvar = 0;
+	gotvar = false;
 	while (NULL != (v = ctl_getitem(peer_var, &valuep))) {
 		if (v->flags & EOV) {
 			ctl_error(CERR_UNKNOWNVAR);
 			return;
 		}
-		NTP_INSIST(v->code < COUNTOF(wants));
+		INSIST(v->code < COUNTOF(wants));
 		wants[v->code] = 1;
-		gotvar = 1;
+		gotvar = true;
 	}
 	if (gotvar) {
 		for (i = 1; i < COUNTOF(wants); i++)
 			if (wants[i])
-				ctl_putpeer(i, peer);
+				ctl_putpeer((int)i, peer);
 	} else
 		for (cp = def_peer_var; *cp != 0; cp++)
 			ctl_putpeer((int)*cp, peer);
@@ -2670,8 +2749,8 @@ read_sysvars(void)
 {
 	const struct ctl_var *v;
 	struct ctl_var *kv;
-	u_int	n;
-	u_int	gotvar;
+	unsigned int	n;
+	bool	gotvar;
 	const uint8_t *cs;
 	char *	valuep;
 	const char * pch;
@@ -2687,12 +2766,12 @@ read_sysvars(void)
 		ctl_sys_num_events = 0;
 	wants_count = CS_MAXCODE + 1 + count_var(ext_sys_var);
 	wants = emalloc_zero(wants_count);
-	gotvar = 0;
+	gotvar = false;
 	while (NULL != (v = ctl_getitem(sys_var, &valuep))) {
 		if (!(EOV & v->flags)) {
-			NTP_INSIST(v->code < wants_count);
+			INSIST(v->code < wants_count);
 			wants[v->code] = 1;
-			gotvar = 1;
+			gotvar = true;
 		} else {
 			v = ctl_getitem(ext_sys_var, &valuep);
 			if (NULL == v) {
@@ -2707,15 +2786,15 @@ read_sysvars(void)
 				return;
 			}
 			n = v->code + CS_MAXCODE + 1;
-			NTP_INSIST(n < wants_count);
+			INSIST(n < wants_count);
 			wants[n] = 1;
-			gotvar = 1;
+			gotvar = true;
 		}
 	}
 	if (gotvar) {
 		for (n = 1; n <= CS_MAXCODE; n++)
 			if (wants[n])
-				ctl_putsys(n);
+				ctl_putsys((int)n);
 		for (n = 0; n + CS_MAXCODE + 1 < wants_count; n++)
 			if (wants[n + CS_MAXCODE + 1]) {
 				pch = ext_sys_var[n].text;
@@ -2885,14 +2964,14 @@ static void configure(
 		ctl_flushpkt(0);
 		NLOG(NLOG_SYSINFO)
 			msyslog(LOG_NOTICE,
-				"runtime config from %s rejected due to nomodify restriction",
+				"MODE6: runtime config from %s rejected due to nomodify restriction",
 				socktoa(&rbufp->recv_srcadr));
 		sys_restricted++;
 		return;
 	}
 
 	/* Initialize the remote config buffer */
-	data_count = reqend - reqpt;
+	data_count = (size_t)(reqend - reqpt);
 
 	if (data_count > sizeof(remote_config.buffer) - 2) {
 		snprintf(remote_config.err_msg,
@@ -2902,7 +2981,7 @@ static void configure(
 			    strlen(remote_config.err_msg), false);
 		ctl_flushpkt(0);
 		msyslog(LOG_NOTICE,
-			"runtime config from %s rejected: request too long",
+			"MODE6: runtime config from %s rejected: request too long",
 			socktoa(&rbufp->recv_srcadr));
 		return;
 	}
@@ -2925,9 +3004,9 @@ static void configure(
 		replace_nl = false;
 	}
 
-	DPRINTF(1, ("Got Remote Configuration Command: %s\n",
-		remote_config.buffer));
-	msyslog(LOG_NOTICE, "%s config: %s",
+	DPRINT(1, ("Got Remote Configuration Command: %s\n",
+		   remote_config.buffer));
+	msyslog(LOG_NOTICE, "MODE6: %s config: %s",
 		socktoa(&rbufp->recv_srcadr),
 		remote_config.buffer);
 
@@ -2949,13 +3028,14 @@ static void configure(
 			remote_config.err_pos += retval;
 	}
 
-	ctl_putdata(remote_config.err_msg, remote_config.err_pos, false);
+	ctl_putdata(remote_config.err_msg, (unsigned int)remote_config.err_pos,
+                    false);
 	ctl_flushpkt(0);
 
-	DPRINTF(1, ("Reply: %s\n", remote_config.err_msg));
+	DPRINT(1, ("Reply: %s\n", remote_config.err_msg));
 
 	if (remote_config.no_errors > 0)
-		msyslog(LOG_NOTICE, "%d error in %s config",
+		msyslog(LOG_NOTICE, "MODE6: %d error in %s config",
 			remote_config.no_errors,
 			socktoa(&rbufp->recv_srcadr));
 }
@@ -2972,35 +3052,37 @@ static uint32_t derive_nonce(
 	)
 {
 	static uint32_t	salt[4];
-	static u_long	last_salt_update;
+	static unsigned long	last_salt_update;
 	union d_tag {
 		uint8_t	digest[EVP_MAX_MD_SIZE];
 		uint32_t extract;
 	}		d;
-	EVP_MD_CTX	ctx;
-	u_int		len;
+	EVP_MD_CTX	*ctx;
+	unsigned int	len;
 
-	while (!salt[0] || current_time - last_salt_update >= 3600) {
-	    salt[0] = ntp_random();
-		salt[1] = ntp_random();
-		salt[2] = ntp_random();
-		salt[3] = ntp_random();
-		last_salt_update = current_time;
+	while (!salt[0] || current_time - last_salt_update >= SECSPERHR) {
+            salt[0] = (uint32_t)ntp_random();
+            salt[1] = (uint32_t)ntp_random();
+            salt[2] = (uint32_t)ntp_random();
+            salt[3] = (uint32_t)ntp_random();
+            last_salt_update = current_time;
 	}
 
-	EVP_DigestInit(&ctx, EVP_get_digestbynid(NID_md5));
-	EVP_DigestUpdate(&ctx, salt, sizeof(salt));
-	EVP_DigestUpdate(&ctx, &ts_i, sizeof(ts_i));
-	EVP_DigestUpdate(&ctx, &ts_f, sizeof(ts_f));
+	ctx = EVP_MD_CTX_create();
+	EVP_DigestInit_ex(ctx, EVP_md5(), NULL);
+	EVP_DigestUpdate(ctx, salt, sizeof(salt));
+	EVP_DigestUpdate(ctx, &ts_i, sizeof(ts_i));
+	EVP_DigestUpdate(ctx, &ts_f, sizeof(ts_f));
 	if (IS_IPV4(addr))
-		EVP_DigestUpdate(&ctx, &SOCK_ADDR4(addr),
+		EVP_DigestUpdate(ctx, &SOCK_ADDR4(addr),
 			         sizeof(SOCK_ADDR4(addr)));
 	else
-		EVP_DigestUpdate(&ctx, &SOCK_ADDR6(addr),
+		EVP_DigestUpdate(ctx, &SOCK_ADDR6(addr),
 			         sizeof(SOCK_ADDR6(addr)));
-	EVP_DigestUpdate(&ctx, &NSRCPORT(addr), sizeof(NSRCPORT(addr)));
-	EVP_DigestUpdate(&ctx, salt, sizeof(salt));
-	EVP_DigestFinal(&ctx, d.digest, &len);
+	EVP_DigestUpdate(ctx, &NSRCPORT(addr), sizeof(NSRCPORT(addr)));
+	EVP_DigestUpdate(ctx, salt, sizeof(salt));
+	EVP_DigestFinal_ex(ctx, d.digest, &len);
+	EVP_MD_CTX_destroy(ctx);
 
 	return d.extract;
 }
@@ -3018,10 +3100,10 @@ static void generate_nonce(
 	uint32_t derived;
 
 	derived = derive_nonce(&rbufp->recv_srcadr,
-			       rbufp->recv_time.l_ui,
-			       rbufp->recv_time.l_uf);
+			       lfpuint(rbufp->recv_time),
+			       lfpfrac(rbufp->recv_time));
 	snprintf(nonce, nonce_octets, "%08x%08x%08x",
-		 rbufp->recv_time.l_ui, rbufp->recv_time.l_uf, derived);
+		 lfpuint(rbufp->recv_time), lfpfrac(rbufp->recv_time), derived);
 }
 
 
@@ -3036,23 +3118,22 @@ static int validate_nonce(
 	struct recvbuf *	rbufp
 	)
 {
-	u_int	ts_i;
-	u_int	ts_f;
-	l_fp	ts;
-	l_fp	now_delta;
-	u_int	supposed;
-	u_int	derived;
+	unsigned int	ts_i;
+	unsigned int	ts_f;
+	l_fp		ts;
+	l_fp		now_delta;
+	unsigned int	supposed;
+	unsigned int	derived;
 
 	if (3 != sscanf(pnonce, "%08x%08x%08x", &ts_i, &ts_f, &supposed))
 		return false;
 
-	ts.l_ui = (uint32_t)ts_i;
-	ts.l_uf = (uint32_t)ts_f;
-	derived = derive_nonce(&rbufp->recv_srcadr, ts.l_ui, ts.l_uf);
+	ts = lfpinit_u(ts_i, (uint32_t)ts_f);
+	derived = derive_nonce(&rbufp->recv_srcadr, lfpuint(ts), lfpfrac(ts));
 	get_systime(&now_delta);
-	L_SUB(&now_delta, &ts);
+	now_delta -= ts;
 
-	return (supposed == derived && now_delta.l_ui < 16);
+	return (supposed == derived && lfpuint(now_delta) < NONCE_TIMEOUT);
 }
 
 
@@ -3086,7 +3167,7 @@ send_random_tag_value(
 	noise >>= 5;
 	buf[3] = '.';
 	snprintf(&buf[4], sizeof(buf) - 4, "%d", indx);
-	ctl_putuint(buf, noise);
+	ctl_putuint(buf, (unsigned long)noise);
 }
 #endif /* USE_RANDOMIZE_RESPONSE */
 
@@ -3112,13 +3193,13 @@ send_mru_entry(
 	char	tag[32];
 	bool	sent[6]; /* 6 tag=value pairs */
 	uint32_t noise;
-	u_int	which = 0;
-	u_int	remaining;
+	unsigned int	which = 0;
+	unsigned int	remaining;
 	const char * pch;
 
 	remaining = COUNTOF(sent);
 	ZERO(sent);
-	noise = ntp_random();
+	noise = (uint32_t)ntp_random();
 	while (remaining > 0) {
 #ifdef USE_RANDOMIZE_RESPONSES
 	 	which = (noise & 7) % COUNTOF(sent);
@@ -3158,6 +3239,10 @@ send_mru_entry(
 		case 5:
 			snprintf(tag, sizeof(tag), rs_fmt, count);
 			ctl_puthex(tag, mon->flags);
+			break;
+
+		default:
+			/* huh? */
 			break;
 		}
 		sent[which] = true;
@@ -3212,6 +3297,12 @@ send_mru_entry(
  *	laddr=		Return entries associated with the server's IP
  *			address given.  No port specification is needed,
  *			and any supplied is ignored.
+ *      recent=		Set the reporting start point to retrieve roughly
+ *			a specified number of most recent entries
+ *			'Roughly' because the logic cannot anticipate
+ *			update volume. Use this to volume-limit the
+ *			response when you are monitoring something like
+ *			a pool server with a very long MRU list.
  *	resall=		0x-prefixed hex restrict bits which must all be
  *			lit for an MRU entry to be included.
  *			Has precedence over any resany=.
@@ -3290,19 +3381,22 @@ static void read_mru_list(
 	static const char	resany_text[] =		"resany";
 	static const char	maxlstint_text[] =	"maxlstint";
 	static const char	laddr_text[] =		"laddr";
+	static const char	recent_text[] =		"recent";
 	static const char	resaxx_fmt[] =		"0x%hx";
 
-	u_int			limit;
-	u_short			frags;
-	u_short			resall;
-	u_short			resany;
+	unsigned int		limit;
+	unsigned short		frags;
+	unsigned short		resall;
+	unsigned short		resany;
 	int			mincount;
-	u_int			maxlstint;
+	unsigned int		maxlstint;
 	sockaddr_u		laddr;
+	unsigned int		recent;
 	endpt *                 lcladr;
-	u_int			count;
-	u_int			ui;
-	u_int			uf;
+	unsigned int		count;
+	static unsigned int	countdown;
+	unsigned int		ui;
+	unsigned int		uf;
 	l_fp			last[16];
 	sockaddr_u		addr[COUNTOF(last)];
 	char			buf[128];
@@ -3314,7 +3408,7 @@ static void read_mru_list(
 	int			nonce_valid;
 	size_t			i;
 	int			priors;
-	u_short			hash;
+	unsigned short		hash;
 	mon_entry *		mon;
 	mon_entry *		prior_mon;
 	l_fp			now;
@@ -3323,7 +3417,7 @@ static void read_mru_list(
 		ctl_error(CERR_PERMISSION);
 		NLOG(NLOG_SYSINFO)
 			msyslog(LOG_NOTICE,
-				"mrulist from %s rejected due to nomrulist restriction",
+				"MODE6: mrulist from %s rejected due to nomrulist restriction",
 				socktoa(&rbufp->recv_srcadr));
 		sys_restricted++;
 		return;
@@ -3340,6 +3434,7 @@ static void read_mru_list(
 	set_var(&in_parms, resany_text, sizeof(resany_text), 0);
 	set_var(&in_parms, maxlstint_text, sizeof(maxlstint_text), 0);
 	set_var(&in_parms, laddr_text, sizeof(laddr_text), 0);
+	set_var(&in_parms, recent_text, sizeof(recent_text), 0);
 	for (i = 0; i < COUNTOF(last); i++) {
 		snprintf(buf, sizeof(buf), last_fmt, (int)i);
 		set_var(&in_parms, buf, strlen(buf) + 1, 0);
@@ -3355,6 +3450,7 @@ static void read_mru_list(
 	resall = 0;
 	resany = 0;
 	maxlstint = 0;
+	recent = 0;
 	lcladr = NULL;
 	priors = 0;
 	ZERO(last);
@@ -3394,31 +3490,33 @@ static void read_mru_list(
 			if (1 != sscanf(val, "%u", &maxlstint))
 				goto blooper;
 		} else if (!strcmp(laddr_text, v->text)) {
-			if (!decodenetnum(val, &laddr))
+			if (decodenetnum(val, &laddr))
 				goto blooper;
 			lcladr = getinterface(&laddr, 0);
+		} else if (!strcmp(recent_text, v->text)) {
+			if (1 != sscanf(val, "%u", &recent))
+				goto blooper;
 		} else if (1 == sscanf(v->text, last_fmt, &si) &&
 			   (size_t)si < COUNTOF(last)) {
 			if (2 != sscanf(val, "0x%08x.%08x", &ui, &uf))
 				goto blooper;
-			last[si].l_ui = ui;
-			last[si].l_uf = uf;
+			last[si] = lfpinit_u(ui, uf);
 			if (!SOCK_UNSPEC(&addr[si]) && si == priors)
 				priors++;
 		} else if (1 == sscanf(v->text, addr_fmt, &si) &&
 			   (size_t)si < COUNTOF(addr)) {
-			if (!decodenetnum(val, &addr[si]))
+			if (decodenetnum(val, &addr[si]))
 				goto blooper;
-			if (last[si].l_ui && last[si].l_uf && si == priors)
+			if (lfpuint(last[si]) && lfpfrac(last[si]) && si == priors)
 				priors++;
 		} else {
-			DPRINTF(1, ("read_mru_list: invalid key item: '%s' (ignored)\n",
-				    v->text));
+			DPRINT(1, ("read_mru_list: invalid key item: '%s' (ignored)\n",
+				   v->text));
 			continue;
 
 		blooper:
-			DPRINTF(1, ("read_mru_list: invalid param for '%s': '%s' (bailing)\n",
-				    v->text, val));
+			DPRINT(1, ("read_mru_list: invalid param for '%s': '%s' (bailing)\n",
+				   v->text, val));
 			free(pnonce);
 			pnonce = NULL;
 			break;
@@ -3462,7 +3560,7 @@ static void read_mru_list(
 			if (ADDR_PORT_EQ(&mon->rmtadr, &addr[i]))
 				break;
 		if (mon != NULL) {
-			if (L_ISEQU(&mon->last, &last[i]))
+			if (mon->last == last[i])
 				break;
 			mon = NULL;
 		}
@@ -3490,6 +3588,7 @@ static void read_mru_list(
 			mon = PREV_DLIST(mon_mru_list, mon, mru);
 	} else {	/* start with the oldest */
 		mon = TAIL_DLIST(mon_mru_list, mru);
+		countdown = mru_entries;
 	}
 
 	/*
@@ -3509,13 +3608,14 @@ static void read_mru_list(
 			continue;
 		if (resany && !(resany & mon->flags))
 			continue;
-		if (maxlstint > 0 && now.l_ui - mon->last.l_ui >
+		if (maxlstint > 0 && lfpuint(now) - lfpuint(mon->last) >
 		    maxlstint)
 			continue;
 		if (lcladr != NULL && mon->lcladr != lcladr)
 			continue;
-
-		send_mru_entry(mon, count);
+		if (recent != 0 && countdown-- > recent)
+			continue;
+		send_mru_entry(mon, (int)count);
 #ifdef USE_RANDOMIZE_RESPONSES
 		if (!count)
 			send_random_tag_value(0);
@@ -3531,7 +3631,7 @@ static void read_mru_list(
 	if (NULL == mon) {
 #ifdef USE_RANDOMIZE_RESPONSES
 		if (count > 1)
-			send_random_tag_value(count - 1);
+			send_random_tag_value((int)count - 1);
 #endif /* USE_RANDOMIZE_RESPONSES */
 		ctl_putts("now", &now);
 		/* if any entries were returned confirm the last */
@@ -3552,7 +3652,7 @@ static void read_mru_list(
 static void
 send_ifstats_entry(
 	endpt *	la,
-	u_int	ifnum
+	unsigned int	ifnum
 	)
 {
 	const char addr_fmtu[] =	"addr.%u";
@@ -3560,8 +3660,6 @@ send_ifstats_entry(
 	const char en_fmt[] =		"en.%u";	/* enabled */
 	const char name_fmt[] =		"name.%u";
 	const char flags_fmt[] =	"flags.%u";
-	const char tl_fmt[] =		"tl.%u";	/* ttl */
-	const char mc_fmt[] =		"mc.%u";	/* mcast count */
 	const char rx_fmt[] =		"rx.%u";
 	const char tx_fmt[] =		"tx.%u";
 	const char txerr_fmt[] =	"txerr.%u";
@@ -3571,8 +3669,8 @@ send_ifstats_entry(
 	uint8_t	sent[IFSTATS_FIELDS]; /* 12 tag=value pairs */
 	int	noisebits;
 	uint32_t noise;
-	u_int	which = 0;
-	u_int	remaining;
+	unsigned int	which = 0;
+	unsigned int	remaining;
 	const char *pch;
 
 	remaining = COUNTOF(sent);
@@ -3581,7 +3679,7 @@ send_ifstats_entry(
 	noisebits = 0;
 	while (remaining > 0) {
 		if (noisebits < 4) {
-			noise = ntp_random();
+			noise = (uint32_t)ntp_random();
 			noisebits = 31;
 		}
 #ifdef USE_RANDOMIZE_RESPONSES
@@ -3622,42 +3720,36 @@ send_ifstats_entry(
 
 		case 4:
 			snprintf(tag, sizeof(tag), flags_fmt, ifnum);
-			ctl_puthex(tag, (u_int)la->flags);
+			ctl_puthex(tag, (unsigned int)la->flags);
 			break;
 
 		case 5:
-			snprintf(tag, sizeof(tag), tl_fmt, ifnum);
-			ctl_putint(tag, la->last_ttl);
-			break;
-
-		case 6:
-			snprintf(tag, sizeof(tag), mc_fmt, ifnum);
-			ctl_putint(tag, la->num_mcast);
-			break;
-
-		case 7:
 			snprintf(tag, sizeof(tag), rx_fmt, ifnum);
 			ctl_putint(tag, la->received);
 			break;
 
-		case 8:
+		case 6:
 			snprintf(tag, sizeof(tag), tx_fmt, ifnum);
 			ctl_putint(tag, la->sent);
 			break;
 
-		case 9:
+		case 7:
 			snprintf(tag, sizeof(tag), txerr_fmt, ifnum);
 			ctl_putint(tag, la->notsent);
 			break;
 
-		case 10:
+		case 8:
 			snprintf(tag, sizeof(tag), pc_fmt, ifnum);
 			ctl_putuint(tag, la->peercnt);
 			break;
 
-		case 11:
+		case 9:
 			snprintf(tag, sizeof(tag), up_fmt, ifnum);
 			ctl_putuint(tag, current_time - la->starttime);
+			break;
+
+		default:
+			/* Get here if IFSTATS_FIELDS is too big. */
 			break;
 		}
 		sent[which] = true;
@@ -3678,7 +3770,7 @@ read_ifstats(
 	struct recvbuf *	rbufp
 	)
 {
-	u_int	ifidx;
+	unsigned int	ifidx;
 	endpt *	la;
 
 	UNUSED_ARG(rbufp);
@@ -3710,17 +3802,17 @@ sockaddrs_from_restrict_u(
 	ZERO(*psaA);
 	ZERO(*psaM);
 	if (!ipv6) {
-		psaA->sa.sa_family = AF_INET;
-		psaA->sa4.sin_addr.s_addr = htonl(pres->u.v4.addr);
-		psaM->sa.sa_family = AF_INET;
-		psaM->sa4.sin_addr.s_addr = htonl(pres->u.v4.mask);
+		SET_AF(psaA, AF_INET);
+		PSOCK_ADDR4(psaA)->s_addr = htonl(pres->u.v4.addr);
+		SET_AF(psaM, AF_INET);
+		PSOCK_ADDR4(psaM)->s_addr = htonl(pres->u.v4.mask);
 	} else {
-		psaA->sa.sa_family = AF_INET6;
-		memcpy(&psaA->sa6.sin6_addr, &pres->u.v6.addr,
-		       sizeof(psaA->sa6.sin6_addr));
-		psaM->sa.sa_family = AF_INET6;
-		memcpy(&psaM->sa6.sin6_addr, &pres->u.v6.mask,
-		       sizeof(psaA->sa6.sin6_addr));
+		SET_AF(psaA, AF_INET6);
+		memcpy(&SOCK_ADDR6(psaA), &pres->u.v6.addr,
+		       sizeof(SOCK_ADDR6(psaA)));
+		SET_AF(psaM, AF_INET6);
+		memcpy(&SOCK_ADDR6(psaM), &pres->u.v6.mask,
+		       sizeof(SOCK_ADDR6(psaA)));
 	}
 }
 
@@ -3737,7 +3829,7 @@ static void
 send_restrict_entry(
 	restrict_u *	pres,
 	int		ipv6,
-	u_int		idx
+	unsigned int		idx
 	)
 {
 	const char addr_fmtu[] =	"addr.%u";
@@ -3748,8 +3840,8 @@ send_restrict_entry(
 	uint8_t		sent[RESLIST_FIELDS]; /* 4 tag=value pairs */
 	int		noisebits;
 	uint32_t		noise;
-	u_int		which = 0;
-	u_int		remaining;
+	unsigned int		which = 0;
+	unsigned int		remaining;
 	sockaddr_u	addr;
 	sockaddr_u	mask;
 	const char *	pch;
@@ -3764,7 +3856,7 @@ send_restrict_entry(
 	noisebits = 0;
 	while (remaining > 0) {
 		if (noisebits < 2) {
-			noise = ntp_random();
+			noise = (uint32_t)ntp_random();
 			noisebits = 31;
 		}
 #ifdef USE_RANDOMIZE_RESPONSES
@@ -3792,7 +3884,7 @@ send_restrict_entry(
 
 		case 2:
 			snprintf(tag, sizeof(tag), hits_fmt, idx);
-			ctl_putuint(tag, pres->count);
+			ctl_putuint(tag, pres->hitcount);
 			break;
 
 		case 3:
@@ -3802,12 +3894,16 @@ send_restrict_entry(
 			if ('\0' == match_str[0]) {
 				pch = access_str;
 			} else {
-				LIB_GETBUF(buf);
+				buf = lib_getbuf();
 				snprintf(buf, LIB_BUFLENGTH, "%s %s",
 					 match_str, access_str);
 				pch = buf;
 			}
 			ctl_putunqstr(tag, pch, strlen(pch));
+			break;
+
+		default:
+			/* huh? */
 			break;
 		}
 		sent[which] = true;
@@ -3823,7 +3919,7 @@ static void
 send_restrict_list(
 	restrict_u *	pres,
 	int		ipv6,
-	u_int *		pidx
+	unsigned int *		pidx
 	)
 {
 	for ( ; pres != NULL; pres = pres->link) {
@@ -3841,7 +3937,7 @@ read_addr_restrictions(
 	struct recvbuf *	rbufp
 )
 {
-	u_int idx;
+	unsigned int idx;
 
 	UNUSED_ARG(rbufp);
 
@@ -3866,7 +3962,7 @@ read_ordlist(
 	const char addr_rst_s[] = "addr_restrictions";
 	const size_t a_r_chars = COUNTOF(addr_rst_s) - 1;
 	struct ntp_control *	cpkt;
-	u_short			qdata_octets;
+	unsigned short		qdata_octets;
 
 	UNUSED_ARG(rbufp);
 	UNUSED_ARG(restrict_mask);
@@ -3940,7 +4036,7 @@ read_clockstatus(
 	char *			valuep;
 	uint8_t *		wants;
 	size_t			wants_alloc;
-	int			gotvar;
+	bool			gotvar;
 	const uint8_t *		cc;
 	struct ctl_var *	kv;
 	struct refclockstat	cs;
@@ -3956,16 +4052,16 @@ read_clockstatus(
 		 * is a clock use it, else search peer_list for one.
 		 */
 		if (sys_peer != NULL && (FLAG_REFCLOCK &
-		    sys_peer->flags))
+		    sys_peer->cfg.flags))
 			peer = sys_peer;
 		else
 			for (peer = peer_list;
 			     peer != NULL;
 			     peer = peer->p_link)
-				if (FLAG_REFCLOCK & peer->flags)
+				if (FLAG_REFCLOCK & peer->cfg.flags)
 					break;
 	}
-	if (NULL == peer || !(FLAG_REFCLOCK & peer->flags)) {
+	if (NULL == peer || !(FLAG_REFCLOCK & peer->cfg.flags)) {
 		ctl_error(CERR_BADASSOC);
 		return;
 	}
@@ -4008,12 +4104,12 @@ read_clockstatus(
 	}
 
 	if (gotvar) {
-		for (i = 1; i <= CC_MAXCODE; i++)
+	    for (i = 1; i <= (int)CC_MAXCODE; i++)
 			if (wants[i])
 				ctl_putclock(i, &cs, true);
 		if (kv != NULL)
 			for (i = 0; !(EOV & kv[i].flags); i++)
-				if (wants[i + CC_MAXCODE + 1])
+				if (wants[(unsigned int)i + CC_MAXCODE + 1])
 					ctl_putdata(kv[i].text,
 						    strlen(kv[i].text),
 						    false);
@@ -4063,6 +4159,7 @@ report_event(
 	const char *str		/* protostats string */
 	)
 {
+	#define NTP_MAXSTRLEN	256	/* max string length */
 	char	statstr[NTP_MAXSTRLEN];
 	size_t	len;
 
@@ -4084,14 +4181,14 @@ report_event(
 		ctl_sys_num_events++;
 		snprintf(statstr, sizeof(statstr),
 		    "0.0.0.0 %04x %02x %s",
-		    ctlsysstatus(), err, eventstr(err));
+		    ctlsysstatus(), (unsigned)err, eventstr(err));
 		if (str != NULL) {
 			len = strlen(statstr);
 			snprintf(statstr + len, sizeof(statstr) - len,
 			    " %s", str);
 		}
 		NLOG(NLOG_SYSEVENT)
-			msyslog(LOG_INFO, "%s", statstr);
+			msyslog(LOG_INFO, "MODE6: %s", statstr);
 	} else {
 
 		/*
@@ -4118,20 +4215,17 @@ report_event(
 
 		snprintf(statstr, sizeof(statstr),
 		    "%s %04x %02x %s", src,
-		    ctlpeerstatus(peer), err, eventstr(err));
+		    ctlpeerstatus(peer), (unsigned)err, eventstr(err));
 		if (str != NULL) {
 			len = strlen(statstr);
 			snprintf(statstr + len, sizeof(statstr) - len,
 			    " %s", str);
 		}
 		NLOG(NLOG_PEEREVENT)
-			msyslog(LOG_INFO, "%s", statstr);
+			msyslog(LOG_INFO, "MODE6: %s", statstr);
 	}
 	record_proto_stats(statstr);
-#if DEBUG
-	if (debug)
-		printf("event at %lu %s\n", current_time, statstr);
-#endif
+	DPRINT(1, ("event at %lu %s\n", current_time, statstr));
 
 }
 
@@ -4184,12 +4278,12 @@ ctl_clr_stats(void)
 	numasyncmsgs = 0;
 }
 
-static u_short
+static unsigned short
 count_var(
 	const struct ctl_var *k
 	)
 {
-	u_int c;
+	unsigned int c;
 
 	if (NULL == k)
 		return 0;
@@ -4198,24 +4292,24 @@ count_var(
 	while (!(EOV & (k++)->flags))
 		c++;
 
-	NTP_ENSURE(c <= USHRT_MAX);
-	return (u_short)c;
+	ENSURE(c <= USHRT_MAX);
+	return (unsigned short)c;
 }
 
 
 char *
 add_var(
 	struct ctl_var **kv,
-	u_long size,
-	u_short def
+	unsigned long size,
+	unsigned short def
 	)
 {
-	u_short		c;
+	unsigned short	c;
 	struct ctl_var *k;
 	char *		buf;
 
 	c = count_var(*kv);
-	*kv  = erealloc(*kv, (c + 2) * sizeof(**kv));
+	*kv  = erealloc(*kv, (c + 2U) * sizeof(**kv));
 	k = *kv;
 	buf = emalloc(size);
 	k[c].code  = c;
@@ -4233,8 +4327,8 @@ void
 set_var(
 	struct ctl_var **kv,
 	const char *data,
-	u_long size,
-	u_short def
+	unsigned long size,
+	unsigned short def
 	)
 {
 	struct ctl_var *k;
@@ -4280,8 +4374,8 @@ set_var(
 void
 set_sys_var(
 	const char *data,
-	u_long size,
-	u_short def
+	unsigned long size,
+	unsigned short def
 	)
 {
 	set_var(&ext_sys_var, data, size, def);
@@ -4332,12 +4426,6 @@ free_varlist(
 
 
 /* from ntp_request.c when ntpdc was nuked */
-
-/*
- *  * A hack.  To keep the authentication module clear of ntp-ism's, we
- *   * include a time reset variable for its stats here.
- *    */
-u_long auth_timereset;
 
 /*
  *  * reset_auth_stats - reset the authentication stat counters.  Done here

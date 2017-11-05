@@ -63,7 +63,7 @@ def process_py(self,node):
 	else:
 		pyd=node.abspath()
 	for ext in lst:
-		if self.env.PYTAG:
+		if self.env.PYTAG and not self.env.NOPYCACHE:
 			name=node.name[:-3]
 			pyobj=node.parent.get_bld().make_node('__pycache__').make_node("%s.%s.%s"%(name,self.env.PYTAG,ext))
 			pyobj.parent.mkdir()
@@ -382,11 +382,16 @@ def check_python_module(conf,module_name,condition=''):
 			conf.end_msg(ret)
 def configure(conf):
 	v=conf.env
-	if Options.options.pythondir:
+	if getattr(Options.options,'pythondir',None):
 		v.PYTHONDIR=Options.options.pythondir
-	if Options.options.pythonarchdir:
+	if getattr(Options.options,'pythonarchdir',None):
 		v.PYTHONARCHDIR=Options.options.pythonarchdir
-	conf.find_program('python',var='PYTHON',value=Options.options.python or sys.executable)
+	if getattr(Options.options,'nopycache',None):
+		v.NOPYCACHE=Options.options.nopycache
+	if not v.PYTHON:
+		v.PYTHON=[getattr(Options.options,'python',None)or sys.executable]
+	v.PYTHON=Utils.to_list(v.PYTHON)
+	conf.find_program('python',var='PYTHON')
 	v.PYFLAGS=''
 	v.PYFLAGS_OPT='-O'
 	v.PYC=getattr(Options.options,'pyc',1)
@@ -399,6 +404,7 @@ def options(opt):
 	pyopt=opt.add_option_group("Python Options")
 	pyopt.add_option('--nopyc',dest='pyc',action='store_false',default=1,help='Do not install bytecode compiled .pyc files (configuration) [Default:install]')
 	pyopt.add_option('--nopyo',dest='pyo',action='store_false',default=1,help='Do not install optimised compiled .pyo files (configuration) [Default:install]')
+	pyopt.add_option('--nopycache',dest='nopycache',action='store_true',help='Do not use __pycache__ directory to install objects [Default:auto]')
 	pyopt.add_option('--python',dest="python",help='python binary to be used [Default: %s]'%sys.executable)
 	pyopt.add_option('--pythondir',dest='pythondir',help='Installation path for python modules (py, platform-independent .py and .pyc files)')
 	pyopt.add_option('--pythonarchdir',dest='pythonarchdir',help='Installation path for python extension (pyext, platform-dependent .so or .dylib files)')

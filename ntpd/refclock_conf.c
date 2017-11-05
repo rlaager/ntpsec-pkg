@@ -4,7 +4,7 @@
  * This is the only place in the code that knows how to map driver numeric types
  * to driver method tables and their attributes.
  */
-#include <config.h>
+#include "config.h"
 
 #include <stdio.h>
 #include <sys/types.h>
@@ -13,123 +13,15 @@
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
 
-static struct refclock refclock_none = {
-    NULL, noentry, noentry, noentry, noentry, noentry, noentry
+struct refclock refclock_none = {
+	NULL,		/* basename of driver */
+	NULL,		/* start up driver */
+	NULL,		/* shut down driver */
+	NULL,		/* transmit poll message */
+	NULL,		/* not used (old hpgps_control) */
+	NULL,		/* initialize driver */
+	NULL,		/* timer - not used */
 };
-
-#ifdef CLOCK_LOCAL
-extern	struct refclock	refclock_local;
-#else
-#define	refclock_local	refclock_none
-#endif
-
-#ifdef CLOCK_SPECTRACOM
-extern	struct refclock	refclock_spectracom;
-#else
-#define	refclock_spectracom	refclock_none
-#endif
-
-#ifdef CLOCK_GENERIC
-extern	struct refclock	refclock_parse;
-#else
-#define	refclock_parse	refclock_none
-#endif
-
-#if defined(CLOCK_MAGNAVOX) && defined(HAVE_PPSAPI)
-extern	struct refclock	refclock_magnavox;
-#else
-#define	refclock_magnavox	refclock_none
-#endif
-
-#ifdef CLOCK_ARBITER
-extern  struct refclock refclock_arbiter;
-#else
-#define refclock_arbiter refclock_none
-#endif
-
-#ifdef CLOCK_TRUETIME
-extern	struct refclock	refclock_true;
-#else
-#define	refclock_true	refclock_none
-#endif
-
-#ifdef CLOCK_MODEM
-extern	struct refclock	refclock_modem;
-#else
-#define refclock_modem	refclock_none
-#endif
-
-#ifdef CLOCK_NMEA
-extern	struct refclock refclock_nmea;
-#else
-#define	refclock_nmea	refclock_none
-#endif
-
-#if defined (CLOCK_PPS) && defined(HAVE_PPSAPI)
-extern	struct refclock	refclock_pps;
-#else
-#define refclock_pps	refclock_none
-#endif
-
-#ifdef CLOCK_HPGPS
-extern	struct refclock	refclock_hpgps;
-#else
-#define	refclock_hpgps	refclock_none
-#endif
-
-#ifdef CLOCK_SHM
-extern	struct refclock refclock_shm;
-#else
-#define refclock_shm refclock_none
-#endif
-
-#ifdef CLOCK_TRIMBLE
-extern	struct refclock refclock_trimble;
-#else
-#define refclock_trimble refclock_none
-#endif
-
-#if defined(CLOCK_ONCORE)
-extern	struct refclock refclock_oncore;
-#else
-#define refclock_oncore refclock_none
-#endif
-
-#if defined(CLOCK_JUPITER) && defined(HAVE_PPSAPI)
-extern	struct refclock refclock_jupiter;
-#else
-#define refclock_jupiter refclock_none
-#endif
-
-#if defined(CLOCK_DUMBCLOCK)
-extern struct refclock refclock_dumbclock;
-#else
-#define refclock_dumbclock refclock_none
-#endif
-
-#ifdef CLOCK_JJY
-extern	struct refclock	refclock_jjy;
-#else
-#define	refclock_jjy refclock_none
-#endif
-
-#ifdef CLOCK_ZYFER
-extern	struct refclock	refclock_zyfer;
-#else
-#define	refclock_zyfer refclock_none
-#endif
-
-#ifdef CLOCK_NEOCLOCK
-extern	struct refclock	refclock_neoclock4x;
-#else
-#define	refclock_neoclock4x	refclock_none
-#endif
-
-#if defined(CLOCK_GPSDJSON)
-extern struct refclock refclock_gpsdjson;
-#else
-#define refclock_gpsdjson refclock_none
-#endif
 
 /*
  * This is the only place in the code that knows about the mapping between
@@ -151,7 +43,7 @@ struct refclock * const refclock_conf[] = {
 	&refclock_none,		/* 6 was: REFCLK_IRIG_AUDIO */
 	&refclock_none,		/* 7 was: REFCLK_CHU_AUDIO */
 	&refclock_parse,	/* 8 REFCLK_GENERIC */
-	&refclock_magnavox,	/* 9 REFCLK_GPS_MX4200 */
+	&refclock_none,		/* 9 was: REFCLK_GPS_MX4200 */
 	&refclock_none,		/* 10 was: REFCLK_GPS_AS2201 */
 	&refclock_arbiter,	/* 11 REFCLK_GPS_ARBITER */
 	&refclock_none,		/* 12 was: REFCLK_IRIG_TPRO */
@@ -173,9 +65,9 @@ struct refclock * const refclock_conf[] = {
 	&refclock_shm,		/* 28 REFCLK_SHM */
 	&refclock_trimble,	/* 29 REFCLK_PALISADE */
 	&refclock_oncore,	/* 30 REFCLK_ONCORE */
-	&refclock_jupiter,	/* 31 REFCLK_GPS_JUPITER */
+	&refclock_none,		/* 31 was: REFCLK_GPS_JUPITER */
 	&refclock_none,		/* 32 was: REFCLK_CHRONOLOG */
-	&refclock_dumbclock,	/* 33 REFCLK_DUMBCLOCK */
+	&refclock_none,		/* 33 was: REFCLK_DUMBCLOCK */
 	&refclock_none,		/* 34 was: REFCLOCK_ULINK */
 	&refclock_none,		/* 35 was: REFCLOCK_PCF */
 	&refclock_none,		/* 36 was: REFCLOCK_WWV_AUDIO */

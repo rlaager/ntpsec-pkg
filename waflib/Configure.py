@@ -96,11 +96,11 @@ class ConfigurationContext(Context.Context):
 		env.hash=self.hash
 		env.files=self.files
 		env.environ=dict(self.environ)
-		if not self.env.NO_LOCK_IN_RUN and not getattr(Options.options,'no_lock_in_run'):
+		if not(self.env.NO_LOCK_IN_RUN or env.environ.get('NO_LOCK_IN_RUN')or getattr(Options.options,'no_lock_in_run')):
 			env.store(os.path.join(Context.run_dir,Options.lockfile))
-		if not self.env.NO_LOCK_IN_TOP and not getattr(Options.options,'no_lock_in_top'):
+		if not(self.env.NO_LOCK_IN_TOP or env.environ.get('NO_LOCK_IN_TOP')or getattr(Options.options,'no_lock_in_top')):
 			env.store(os.path.join(Context.top_dir,Options.lockfile))
-		if not self.env.NO_LOCK_IN_OUT and not getattr(Options.options,'no_lock_in_out'):
+		if not(self.env.NO_LOCK_IN_OUT or env.environ.get('NO_LOCK_IN_OUT')or getattr(Options.options,'no_lock_in_out')):
 			env.store(os.path.join(Context.out_dir,Options.lockfile))
 	def prepare_env(self,env):
 		if not env.PREFIX:
@@ -128,7 +128,8 @@ class ConfigurationContext(Context.Context):
 			tmpenv.store(os.path.join(self.cachedir.abspath(),key+Build.CACHE_SUFFIX))
 	def load(self,input,tooldir=None,funs=None,with_sys_path=True,cache=False):
 		tools=Utils.to_list(input)
-		if tooldir:tooldir=Utils.to_list(tooldir)
+		if tooldir:
+			tooldir=Utils.to_list(tooldir)
 		for tool in tools:
 			if cache:
 				mag=(tool,id(self.env),tooldir,funs)
@@ -150,8 +151,10 @@ class ConfigurationContext(Context.Context):
 			else:
 				func=getattr(module,'configure',None)
 				if func:
-					if type(func)is type(Utils.readf):func(self)
-					else:self.eval_rules(func)
+					if type(func)is type(Utils.readf):
+						func(self)
+					else:
+						self.eval_rules(func)
 			self.tools.append({'tool':tool,'tooldir':tooldir,'funs':funs})
 	def post_recurse(self,node):
 		super(ConfigurationContext,self).post_recurse(node)
@@ -234,7 +237,7 @@ def find_program(self,filename,**kw):
 		path_list=environ.get('PATH','').split(os.pathsep)
 	if kw.get('value'):
 		ret=self.cmd_to_list(kw['value'])
-	elif var in environ:
+	elif environ.get(var):
 		ret=self.cmd_to_list(environ[var])
 	elif self.env[var]:
 		ret=self.cmd_to_list(self.env[var])
@@ -307,7 +310,7 @@ def run_build(self,*k,**kw):
 	bdir=os.path.join(dir,'testbuild')
 	if not os.path.exists(bdir):
 		os.makedirs(bdir)
-	cls_name=getattr(self,'run_build_cls','build')
+	cls_name=kw.get('run_build_cls')or getattr(self,'run_build_cls','build')
 	self.test_bld=bld=Context.create_context(cls_name,top_dir=dir,out_dir=bdir)
 	bld.init_dirs()
 	bld.progress_bar=0

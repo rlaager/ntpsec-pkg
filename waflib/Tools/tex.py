@@ -9,17 +9,20 @@ re_bibunit=re.compile(r'\\(?P<type>putbib)\[(?P<file>[^\[\]]*)\]',re.M)
 def bibunitscan(self):
 	node=self.inputs[0]
 	nodes=[]
-	if not node:return nodes
+	if not node:
+		return nodes
 	code=node.read()
 	for match in re_bibunit.finditer(code):
 		path=match.group('file')
 		if path:
+			found=None
 			for k in('','.bib'):
 				Logs.debug('tex: trying %s%s',path,k)
 				fi=node.parent.find_resource(path+k)
 				if fi:
+					found=True
 					nodes.append(fi)
-			else:
+			if not found:
 				Logs.debug('tex: could not find %s',path)
 	Logs.debug('tex: found the following bibunit files: %s',nodes)
 	return nodes
@@ -64,7 +67,8 @@ class tex(Task.Task):
 		nodes=[]
 		names=[]
 		seen=[]
-		if not node:return(nodes,names)
+		if not node:
+			return(nodes,names)
 		def parse_node(node):
 			if node in seen:
 				return

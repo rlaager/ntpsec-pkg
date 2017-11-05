@@ -1,7 +1,7 @@
 /*
  * numtoa - return asciized network numbers store in local array space
  */
-#include <config.h>
+#include "config.h"
 
 #include <sys/types.h>
 #include <netinet/in.h>		/* ntohl */
@@ -17,16 +17,16 @@ numtoa(
 	uint32_t num
 	)
 {
-	register uint32_t netnum;
-	register char *buf;
+	uint32_t netnum;
+	char *buf;
 
 	netnum = ntohl(num);
-	LIB_GETBUF(buf);
+	buf = lib_getbuf();
 	snprintf(buf, LIB_BUFLENGTH, "%lu.%lu.%lu.%lu",
-		 ((u_long)netnum >> 24) & 0xff,
-		 ((u_long)netnum >> 16) & 0xff,
-		 ((u_long)netnum >> 8) & 0xff,
-		 (u_long)netnum & 0xff);
+		 ((unsigned long)netnum >> 24) & 0xff,
+		 ((unsigned long)netnum >> 16) & 0xff,
+		 ((unsigned long)netnum >> 8) & 0xff,
+		 (unsigned long)netnum & 0xff);
 	return buf;
 }
 
@@ -44,7 +44,7 @@ refid_str(
 	if (stratum > 1)
 		return numtoa(refid);
 
-	LIB_GETBUF(text);
+	text = lib_getbuf();
 	text[0] = '.';
 	memcpy(&text[1], &refid, sizeof(refid));
 	text[1 + sizeof(refid)] = '\0';

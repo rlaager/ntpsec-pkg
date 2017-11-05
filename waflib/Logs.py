@@ -158,7 +158,8 @@ def error(*k,**kw):
 				buf.append('  File %r, line %d, in %s'%(filename,lineno,name))
 				if line:
 					buf.append('	%s'%line.strip())
-			if buf:log.error('\n'.join(buf))
+			if buf:
+				log.error('\n'.join(buf))
 def warn(*k,**kw):
 	global log
 	log.warn(*k,**kw)
@@ -177,7 +178,11 @@ def init_log():
 	log.setLevel(logging.DEBUG)
 def make_logger(path,name):
 	logger=logging.getLogger(name)
-	hdlr=logging.FileHandler(path,'w')
+	if sys.hexversion>0x3000000:
+		encoding=sys.stdout.encoding
+	else:
+		encoding=None
+	hdlr=logging.FileHandler(path,'w',encoding=encoding)
 	formatter=logging.Formatter('%(message)s')
 	hdlr.setFormatter(formatter)
 	logger.addHandler(hdlr)

@@ -2,12 +2,11 @@
 /*
  * refclock_local - local pseudo-clock driver
  */
-#include <config.h>
+#include "config.h"
 #include "ntp.h"
 #include "ntpd.h"
 #include "ntp_refclock.h"
 #include "ntp_stdlib.h"
-#include "ntp_control.h"	/* for CTL_* clocktypes */
 #include "ntp_syscall.h"
 
 #include <stdio.h>
@@ -52,21 +51,11 @@
 /*
  * Local interface definitions
  */
-#define PRECISION	(-7)	/* about 10 ms precision */
+/* #define PRECISION	(-7)	* about 10 ms precision UNUSED */
 #define NAME		"LOCAL"	/* shortname */
 #define DESCRIPTION	"Undisciplined local clock" /* WRU */
 #define STRATUM 	5	/* default stratum */
 #define DISPERSION	.01	/* default dispersion (10 ms) */
-
-/*
- * Imported from the timer module
- */
-extern u_long current_time;
-
-/*
- * Imported from ntp_proto
- */
-extern int8_t sys_precision;
 
 /*
  * Function prototypes
@@ -77,7 +66,7 @@ static	void	local_poll	(int, struct peer *);
 /*
  * Local variables
  */
-static	u_long poll_time;	/* last time polled */
+static	unsigned long poll_time;	/* last time polled */
 
 /*
  * Transfer vector
@@ -85,11 +74,11 @@ static	u_long poll_time;	/* last time polled */
 struct	refclock refclock_local = {
 	NAME,			/* basename of driver */
 	local_start,		/* start up driver */
-	noentry,		/* shut down driver (not used) */
+	NULL,			/* shut down driver (not used) */
 	local_poll,	 	/* transmit poll message */
-	noentry,		/* not used (old lcl_control) */
-	noentry,		/* initialize driver (not used) */
-	noentry 		/* timer - not used */
+	NULL,			/* not used (old lcl_control) */
+	NULL,			/* initialize driver (not used) */
+	NULL 			/* timer - not used */
 };
 
 

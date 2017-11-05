@@ -1,9 +1,10 @@
 /*
  * lib_strbuf - library string storage
  */
-#include <config.h>
+#include "config.h"
 
-#include <isc/net.h>
+#include "isc_netaddr.h"
+#include "ntp_stdlib.h"
 
 /*
  * Storage declarations

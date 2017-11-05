@@ -52,6 +52,11 @@ class BuildContext(Context.Context):
 		for v in SAVED_ATTRS:
 			if not hasattr(self,v):
 				setattr(self,v,{})
+	def set_cur(self,cur):
+		self.current_group=cur
+	def get_cur(self):
+		return self.current_group
+	cur=property(get_cur,set_cur)
 	def get_variant_dir(self):
 		if not self.variant:
 			return self.out_dir
@@ -123,7 +128,7 @@ class BuildContext(Context.Context):
 			pass
 		else:
 			if env.version<Context.HEXVERSION:
-				raise Errors.WafError('Version mismatch! reconfigure the project')
+				raise Errors.WafError('Project was configured with a different version of Waf, please reconfigure it')
 			for t in env.tools:
 				self.setup(**t)
 		dbfn=os.path.join(self.variant_dir,Context.DBFILE)
@@ -181,10 +186,12 @@ class BuildContext(Context.Context):
 			raise Errors.BuildError(self.producer.error)
 	def setup(self,tool,tooldir=None,funs=None):
 		if isinstance(tool,list):
-			for i in tool:self.setup(i,tooldir)
+			for i in tool:
+				self.setup(i,tooldir)
 			return
 		module=Context.load_tool(tool,tooldir)
-		if hasattr(module,"setup"):module.setup(self)
+		if hasattr(module,"setup"):
+			module.setup(self)
 	def get_env(self):
 		try:
 			return self.all_envs[self.variant]
@@ -257,7 +264,8 @@ class BuildContext(Context.Context):
 		left=fs%(idx,total,col1,pc,col2)
 		right='][%s%s%s]'%(col1,self.timer,col2)
 		cols=Logs.get_term_cols()-len(left)-len(right)+2*len(col1)+2*len(col2)
-		if cols<7:cols=7
+		if cols<7:
+			cols=7
 		ratio=((cols*idx)//total)-1
 		bar=('='*ratio+'>').ljust(cols)
 		msg=Logs.indicator%(left,bar,right)
@@ -351,7 +359,7 @@ class BuildContext(Context.Context):
 		return lst
 	def post_group(self):
 		if self.targets=='*':
-			for tg in self.groups[self.cur]:
+			for tg in self.groups[self.current_group]:
 				try:
 					f=tg.post
 				except AttributeError:
@@ -359,8 +367,8 @@ class BuildContext(Context.Context):
 				else:
 					f()
 		elif self.targets:
-			if self.cur<self._min_grp:
-				for tg in self.groups[self.cur]:
+			if self.current_group<self._min_grp:
+				for tg in self.groups[self.current_group]:
 					try:
 						f=tg.post
 					except AttributeError:
@@ -378,7 +386,7 @@ class BuildContext(Context.Context):
 			elif not ln.is_child_of(self.srcnode):
 				Logs.warn('CWD %s is not under %s, forcing --targets=* (run distclean?)',ln.abspath(),self.srcnode.abspath())
 				ln=self.srcnode
-			for tg in self.groups[self.cur]:
+			for tg in self.groups[self.current_group]:
 				try:
 					f=tg.post
 				except AttributeError:
@@ -395,26 +403,25 @@ class BuildContext(Context.Context):
 				tasks.append(tg)
 		return tasks
 	def get_build_iterator(self):
-		self.cur=0
+		self.current_group=0
 		if self.targets and self.targets!='*':
 			(self._min_grp,self._exact_tg)=self.get_targets()
 		global lazy_post
 		if self.post_mode!=POST_LAZY:
-			while self.cur<len(self.groups):
+			while self.current_group<len(self.groups):
 				self.post_group()
-				self.cur+=1
-			self.cur=0
-		while self.cur<len(self.groups):
+				self.current_group+=1
+			self.current_group=0
+		while self.current_group<len(self.groups):
 			if self.post_mode!=POST_AT_ONCE:
 				self.post_group()
-			tasks=self.get_tasks_group(self.cur)
+			tasks=self.get_tasks_group(self.current_group)
 			Task.set_file_constraints(tasks)
 			Task.set_precedence_constraints(tasks)
 			self.cur_tasks=tasks
-			self.cur+=1
-			if not tasks:
-				continue
-			yield tasks
+			if tasks:
+				yield tasks
+			self.current_group+=1
 		while 1:
 			yield[]
 	def install_files(self,dest,files,**kw):
@@ -703,8 +710,15 @@ class ListContext(BuildContext):
 			self.get_tgen_by_name('')
 		except Errors.WafError:
 			pass
-		for k in sorted(self.task_gen_cache_names.keys()):
-			Logs.pprint('GREEN',k)
+		targets=sorted(self.task_gen_cache_names)
+		line_just=max(len(t)for t in targets)if targets else 0
+		for target in targets:
+			tgen=self.task_gen_cache_names[target]
+			descript=getattr(tgen,'description','')
+			if descript:
+				target=target.ljust(line_just)
+				descript=': %s'%descript
+			Logs.pprint('GREEN',target,label=descript)
 class StepContext(BuildContext):
 	'''executes tasks in a step-by-step fashion, for debugging'''
 	cmd='step'
