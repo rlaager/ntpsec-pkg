@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -x
 # Repack an upstream tarball, unpacking waf files inside it.
 #
 # Meant to be run by uscan(1) as the "command param", after repacking
@@ -42,7 +42,19 @@ filename="$3"
 
 source="$(dpkg-parsechangelog -SSource)"
 newups="${upstream}${repacksuffix}"
+
 basedir="$(dirname "$filename")"
+if [ -z "$filename" ]
+then
+    # For whatever reason, a filename is not always passed.
+    if [ -f "${source}_${upstream}.orig.tar.gz" ]
+    then
+        basedir=.
+    elif [ -f "../${source}_${upstream}.orig.tar.gz" ]
+    then
+        basedir=..
+    fi
+fi
 
 unpack_waf() {
 	local olddir="$PWD"
