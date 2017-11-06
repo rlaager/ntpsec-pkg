@@ -33,6 +33,7 @@ Depends: adduser,
          lsb-base (>= 3.2-13),
          netbase,
          python3 (>= 3.3),
+         python3-ntp,
          tzdata (>= 2015d-1),
          ${misc:Depends},
          ${shlibs:Depends}
