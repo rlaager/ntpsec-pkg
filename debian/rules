@@ -106,16 +106,20 @@ install: build-stamp
 	install -D -m 0644 debian/ntpdate.dhcp debian/ntpsec-ntpdate/etc/dhcp/dhclient-exit-hooks.d/ntpdate
 	install -D -m 0755 debian/ntpdate-debian debian/ntpsec-ntpdate/usr/sbin/ntpdate-debian
 
+ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
+	# install apport hook
+	install -D -m 644 debian/source_ntp.py debian/ntpsec/usr/share/apport/package-hooks/source_ntp.py
+
+	install -D -m 0644 debian/ntp.conf.ubuntu debian/ntpsec/etc/ntp.conf
+else
 	install -D -m 0644 debian/ntp.conf debian/ntpsec/etc/ntp.conf
+endif
 	install -D -m 0644 debian/ntpviz.conf debian/ntpsec-ntpviz/etc/ntp.d/ntpviz.conf
 
 	# install apparmor profile
 	install -D -m 0644 debian/apparmor-profile debian/ntpsec/etc/apparmor.d/usr.sbin.ntpd
 	install -D -m 0644 debian/apparmor-profile.tunable debian/ntpsec/etc/apparmor.d/tunables/ntpd
 	dh_link -pntpsec etc/apparmor.d/usr.sbin.ntpd etc/apparmor/init/network-interface-security/usr.sbin.ntpd
-
-	# install apport hook
-	install -D -m 644 debian/source_ntp.py debian/ntpsec/usr/share/apport/package-hooks/source_ntp.py
 
 	dh_link
 	dh_install
@@ -151,6 +155,10 @@ binary-arch: build install
 	dh_installinit -pntpsec-ntpdate
 	mv debian/ntpsec-ntpdate/etc/default/ntpsec-ntpdate \
 		debian/ntpsec-ntpdate/etc/default/ntpdate
+ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
+	install -m 644 debian/ntpsec-ntpdate.default.ubuntu \
+		debian/ntpsec-ntpdate/etc/default/ntpdate
+endif
 	dh_apparmor --profile-name=usr.sbin.ntpd -pntpsec
 	dh_installcron -a
 	dh_installlogcheck -a

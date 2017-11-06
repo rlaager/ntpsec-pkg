@@ -18,6 +18,4 @@
   - Then, drop all of ntpdate entirely, including the locking in the init
     script.  Move ntpdig to the ntpsec package.
 
-- Peel out Ubuntu changes; test on Jessie. Commit. Upload for experimental.
-
 - Use system libjsmn (which means libjsmn needs packaging)
