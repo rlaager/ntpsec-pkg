@@ -143,6 +143,7 @@ Depends: python3 (>= 3.3),
          ${python3:Depends},
          ${shlibs:Depends}
 Provides: ${python3:Provides}
+Section: python
 Description: Python 3 NTP Helper Classes
  NTP, the Network Time Protocol, is used to keep computer clocks
  accurate by synchronizing them over the Internet or a local network,
