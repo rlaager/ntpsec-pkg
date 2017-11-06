@@ -1,7 +1,5 @@
 - Get ntpviz working automatically with an include file
 
-- Re-enable seccomp
-
 - Rework init script?
   - Create a systemd unit
     - Make it explicitly *not* restart ntpd and document why.
