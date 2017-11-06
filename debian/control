@@ -5,7 +5,7 @@ Maintainer: Richard Laager <rlaager@wiktel.com>
 Build-Depends: asciidoc,
                autorevision (>= 1.18),
                bison,
-               debhelper (>= 9),
+               debhelper (>= 10),
                dh-apache2,
                dh-apparmor,
                dh-python,
