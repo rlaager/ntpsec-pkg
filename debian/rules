@@ -153,8 +153,8 @@ binary-arch: build install
 	dh_installinit -pntpsec --name=ntp --error-handler=installinit_error
 	dh_installinit -pntpsec-ntpviz --name=ntpviz
 	dh_installinit -pntpsec-ntpdate
-	dh_systemd_enable --name=ntp.service
-	dh_systemd_start ntp.service
+	dh_systemd_enable -pntpsec --name=ntp.service
+	dh_systemd_start -pntpsec ntp.service
 	mv debian/ntpsec-ntpdate/etc/default/ntpsec-ntpdate \
 		debian/ntpsec-ntpdate/etc/default/ntpdate
 ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
