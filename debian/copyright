@@ -129,7 +129,7 @@ Copyright: 2015 Ximin Luo <infinity0@debian.org>
            2016 Richard Laager <rlaager@wiktel.com>
 License: CC0
 
-Files: include/ntp_filegen.h ntpd/ntp_filegen.c 
+Files: include/ntp_filegen.h ntpd/ntp_filegen.c
 Copyright: 1992, 1996 by Rainer Pruy
            Friedrich-Alexander Universität Erlangen-Nürnberg, Germany
 License: Keep-Credits
