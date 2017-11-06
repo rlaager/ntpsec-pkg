@@ -150,7 +150,7 @@ binary-arch: build install
 	dh_installdocs -a
 	dh_installexamples -a
 	dh_installman -a
-	dh_systemd_enable -pntpsec --name=ntp.service
+	dh_systemd_enable -pntpsec --name=ntp
 	dh_installinit -pntpsec --name=ntp --error-handler=installinit_error
 	dh_installinit -pntpsec-ntpviz --name=ntpviz
 	dh_installinit -pntpsec-ntpdate
