@@ -107,6 +107,7 @@ install: build-stamp
 	install -D -m 0755 debian/ntpdate-debian debian/ntpsec-ntpdate/usr/sbin/ntpdate-debian
 
 	install -D -m 0644 debian/ntp.conf debian/ntpsec/etc/ntp.conf
+	install -D -m 0644 debian/ntpviz.conf debian/ntpsec-ntpviz/etc/ntp.d/ntpviz.conf
 
 	# install apparmor profile
 	install -D -m 0644 debian/apparmor-profile debian/ntpsec/etc/apparmor.d/usr.sbin.ntpd

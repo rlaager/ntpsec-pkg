@@ -1,5 +1,3 @@
-- Get ntpviz working automatically with an include file
-
 - Rework init script?
   - Create a systemd unit
     - Make it explicitly *not* restart ntpd and document why.
