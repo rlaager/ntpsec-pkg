@@ -24,7 +24,7 @@ X-Python3-Version: >= 3.3
 Build-Conflicts: libavahi-compat-libdnssd-dev,
                  libwww-dev,
                  libwww-ssl-dev
-Standards-Version: 3.9.8
+Standards-Version: 4.1.1
 Homepage: https://www.ntpsec.org
 
 Package: ntpsec
