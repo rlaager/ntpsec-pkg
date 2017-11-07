@@ -107,9 +107,6 @@ install: build-stamp
 	install -D -m 0755 debian/ntpdate-debian debian/ntpsec-ntpdate/usr/sbin/ntpdate-debian
 
 ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
-	# install apport hook
-	install -D -m 644 debian/source_ntp.py debian/ntpsec/usr/share/apport/package-hooks/source_ntp.py
-
 	install -D -m 0644 debian/ntp.conf.ubuntu debian/ntpsec/etc/ntp.conf
 else
 	install -D -m 0644 debian/ntp.conf debian/ntpsec/etc/ntp.conf
@@ -120,6 +117,9 @@ endif
 	install -D -m 0644 debian/apparmor-profile debian/ntpsec/etc/apparmor.d/usr.sbin.ntpd
 	install -D -m 0644 debian/apparmor-profile.tunable debian/ntpsec/etc/apparmor.d/tunables/ntpd
 	dh_link -pntpsec etc/apparmor.d/usr.sbin.ntpd etc/apparmor/init/network-interface-security/usr.sbin.ntpd
+
+	# install apport hook
+	install -D -m 644 debian/source_ntp.py debian/ntpsec/usr/share/apport/package-hooks/source_ntp.py
 
 	dh_link
 	dh_install
