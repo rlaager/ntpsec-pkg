@@ -29,7 +29,7 @@ if [ -d "$statsdir" ]; then
 		# Note that gzip won't compress the file names that
 		# are hard links to the live/current files, so this
 		# compresses yesterday and previous, leaving the live
-		# log alone.  We supress the warnings gzip issues
+		# log alone.  We suppress the warnings gzip issues
 		# about not compressing the linked file.
 		gzip --best --quiet -- *stats.???????? 
 		return=$?
