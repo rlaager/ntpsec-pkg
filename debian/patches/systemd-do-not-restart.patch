@@ -1,0 +1,24 @@
+Description: systemd: Do not restart
+ It is important to specify -g on the command line to allow NTP to correct
+ the clock on boot.  However, if Restart=yes is set, a malicious (or broken)
+ server could send the incorrect time, trip the panic threshold, and when
+ ntpd restarts, serve it the incorrect time (which would be accepted).
+Forwarded: no
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2017-11-06
+--- a/etc/ntpd.service
++++ b/etc/ntpd.service
+@@ -9,8 +9,12 @@
+ 
+ [Service]
+ PrivateTmp=true
++# It is important to specify -g on the command line to allow NTP to correct
++# the clock on boot.  However, if Restart=yes is set, a malicious (or broken)
++# server could send the incorrect time, trip the panic threshold, and when
++# ntpd restarts, serve it the incorrect time (which would be accepted).
+ ExecStart=/usr/bin/ntpd -n -g -N -u ntp:ntp
+-Restart=always
++Restart=no
+ 
+ [Install]
+ WantedBy=multi-user.target

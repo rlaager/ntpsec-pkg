@@ -1,0 +1,27 @@
+Description: systemd: Use high priority
+ Use -N to raise the priority of ntpd.
+Forwarded: no
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2017-11-06
+--- a/etc/ntpd.service
++++ b/etc/ntpd.service
+@@ -9,7 +9,7 @@
+ 
+ [Service]
+ PrivateTmp=true
+-ExecStart=/usr/bin/ntpd -n -g -u ntp:ntp
++ExecStart=/usr/bin/ntpd -n -g -N -u ntp:ntp
+ Restart=always
+ 
+ [Install]
+--- a/etc/rc/ntpd
++++ b/etc/rc/ntpd
+@@ -13,7 +13,7 @@
+ PIDFILE=/var/run/ntpd.pid
+ USER=ntp
+ GROUP=ntp
+-NTPD_OPTS="-g -u $USER:$GROUP -p $PIDFILE"
++NTPD_OPTS="-g -N -u $USER:$GROUP -p $PIDFILE"
+ 
+ ntpd_start() {
+     if [ -r $PIDFILE ]; then

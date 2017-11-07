@@ -1,0 +1,15 @@
+Description: systemd: Fix man section
+ The man page is in section 8, not section 1.
+Forwarded: not-needed
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2017-11-06
+--- a/etc/ntpd.service
++++ b/etc/ntpd.service
+@@ -1,6 +1,6 @@
+ [Unit]
+ Description=Network Time Service
+-Documentation=man:ntpd(1)
++Documentation=man:ntpd(8)
+ Wants=network.target
+ ConditionVirtualization=!container
+ ConditionCapability=CAP_SYS_TIME
