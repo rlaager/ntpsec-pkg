@@ -1,4 +1,5 @@
 # To be upstreamed
+fix-ntpdig.patch
 
 # Not to be upstreamed
 hardcode-python3-path.patch
