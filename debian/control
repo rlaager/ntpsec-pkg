@@ -2,6 +2,7 @@ Source: ntpsec
 Section: net
 Priority: optional
 Maintainer: Richard Laager <rlaager@wiktel.com>
+Uploaders: tony mancill <tmancill@debian.org>
 Build-Depends: asciidoc,
                autorevision (>= 1.18),
                bison,
