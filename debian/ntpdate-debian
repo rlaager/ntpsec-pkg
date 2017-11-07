@@ -18,8 +18,8 @@ if [ "$NTPDATE_USE_NTP_CONF" = yes ]; then
 	fi
 fi
 
-if [ -r /var/lib/ntpdate/default.dhcp ]; then
-       . /var/lib/ntpdate/default.dhcp
+if [ -r /run/ntpdate.dhcp ]; then
+	. /run/ntpdate.dhcp
 fi
 
 exec /usr/sbin/ntpdate $NTPOPTIONS "$@" $NTPSERVERS

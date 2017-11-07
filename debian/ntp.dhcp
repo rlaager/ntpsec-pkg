@@ -1,5 +1,5 @@
 NTP_CONF=/etc/ntp.conf
-NTP_DHCP_CONF=/var/lib/ntp/ntp.conf.dhcp
+NTP_DHCP_CONF=/run/ntp.conf.dhcp
 
 
 ntp_server_restart() {
