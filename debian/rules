@@ -36,7 +36,6 @@ endif
 		--enable-debug-gdb --enable-mssntp --enable-seccomp \
 		--refclock=local,spectracom,generic,arbiter,nmea,pps,hpgps,shm,trimble,oncore,jjy,zyfer,neoclock,gpsd \
 		--enable-doc --htmldir=/usr/share/doc/ntpsec/html
-	touch $@
 
 override_dh_auto_build:
 	python3 waf build -v
