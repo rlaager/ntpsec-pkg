@@ -30,7 +30,7 @@ information provided by the DHCP server, and restarting the NTP
 server.
 
 In order for this to work, the "ntp-servers" option must be mentioned
-in the "request" statement in /etc/dhcp3/dhclient.conf.  This is not
+in the "request" statement in /etc/dhcp/dhclient.conf.  This is not
 the case in a default installation.  A complete configuration might
 look like this, for example:
 
@@ -42,7 +42,7 @@ look like this, for example:
 If you don't like using the NTP servers sent by the DHCP server, this
 is also the right place to turn off this behavior.
 
-To make the DHCP server in the Debian package dhcp3-server send NTP
+To make the DHCP server in the Debian package isc-dhcp-server send NTP
 server information, add a line like the following at an appropriate
 place:
 
