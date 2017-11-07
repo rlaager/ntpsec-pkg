@@ -124,6 +124,7 @@ Package: ntpsec-doc
 Architecture: all
 Depends: ${misc:Depends}
 Section: doc
+Multi-Arch: foreign
 Description: Network Time Protocol documentation
  NTP, the Network Time Protocol, is used to keep computer clocks
  accurate by synchronizing them over the Internet or a local network,
