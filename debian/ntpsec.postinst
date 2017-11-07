@@ -4,7 +4,7 @@ set -e
 
 if [ "$1" = "configure" ]; then
 	addgroup --system --quiet ntp
-	adduser --system --quiet --ingroup ntp --home /nonexistent --no-create-home ntp
+	adduser --system --quiet --ingroup ntp --no-create-home --home /nonexistent ntp
 	chown -R ntp:ntp /var/lib/ntp
 
 	# If ntpsec-ntpviz is not installed, remove the log directory (but only
