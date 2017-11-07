@@ -7,8 +7,10 @@ export DEB_CFLAGS_MAINT_APPEND = -fno-strict-aliasing
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 include /usr/share/dpkg/buildflags.mk
 
-configure-stamp:
-	dh_testdir
+%:
+	dh $@
+
+override_dh_auto_configure:
 ifeq (hurd, $(DEB_HOST_ARCH_OS))
 	# hurd does not provided the system calls needed for ntpd to work.
 	exit 1
@@ -36,30 +38,16 @@ endif
 		--enable-doc --htmldir=/usr/share/doc/ntpsec/html
 	touch $@
 
-build: build-arch build-indep
-build-arch: build-stamp
-build-indep: build-stamp
-build-stamp: configure-stamp
-	dh_testdir
+override_dh_auto_build:
 	python3 waf build -v
-	touch $@
 
-clean:
-	dh_testdir
-	dh_testroot
-	rm -f build-stamp configure-stamp
+override_dh_auto_clean:
 	python3 waf clean || true
 	rm -rf build .lock-waf_*_build ntpclients/ntp pylib/control.py pylib/magic.py pylib/version.py .waf*
 	find -name "*.pyc" -delete
 	rm -f wafhelpers/autorevision.sh
-	dh_clean
 
-install: build-stamp
-	dh_testdir
-	dh_testroot
-	dh_prep
-	dh_installdirs
-
+override_dh_install:
 	python3 waf install --destdir=$(CURDIR)/debian/tmp
 	rm -rf debian/tmp/usr/lib/python3/dist-packages/ntp/__pycache__
 
@@ -129,32 +117,7 @@ endif
 	dh_link
 	dh_install
 
-binary-indep: build install
-	dh_testdir -i
-	dh_testroot -i
-	dh_installdocs -i
-	dh_installexamples -i
-	dh_installman -i
-	dh_installcron -i
-	dh_installlogcheck -i
-	dh_installchangelogs -i
-	dh_installifupdown -i
-	dh_apache2 -i
-	dh_perl -i
-	dh_python3 -i
-	dh_compress -i
-	dh_fixperms -i
-	dh_installdeb -i
-	dh_gencontrol -i
-	dh_md5sums -i
-	dh_builddeb -i
-
-binary-arch: build install
-	dh_testdir -a
-	dh_testroot -a
-	dh_installdocs -a
-	dh_installexamples -a
-	dh_installman -a
+override_dh_installinit:
 	dh_systemd_enable -pntpsec --name=ntp
 	dh_installinit -pntpsec --name=ntp --error-handler=installinit_error
 	dh_installinit -pntpsec-ntpviz --name=ntpviz
@@ -167,29 +130,18 @@ ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
 		debian/ntpsec-ntpdate/etc/default/ntpdate
 endif
 	dh_apparmor --profile-name=usr.sbin.ntpd -pntpsec
-	dh_installcron -a
+
+override_dh_installlogcheck:
 	dh_installlogcheck -a
 	mv debian/ntpsec-ntpdate/etc/logcheck/ignore.d.server/ntpsec-ntpdate \
 		debian/ntpsec-ntpdate/etc/logcheck/ignore.d.server/ntpdate
-	dh_installchangelogs -a
+
+override_dh_installifupdown:
 	dh_installifupdown -a
 	mv debian/ntpsec-ntpdate/etc/network/if-up.d/ntpsec-ntpdate \
 		debian/ntpsec-ntpdate/etc/network/if-up.d/ntpdate
-	dh_apache2 -a
-	dh_perl -a
-	dh_python3 -a
-	dh_strip -a
-	dh_compress -a
-	dh_fixperms -a
-	dh_installdeb -a
-	dh_shlibdeps -a
-	dh_gencontrol -a
-	dh_md5sums -a
-	dh_builddeb -a
 
-binary: binary-indep binary-arch
-
-PKD  = $(abspath $(dir $(MAKEFILE_LIST)))
+PKD  = $(abspath $(dir $(word 1,$(MAKEFILE_LIST))))
 PKG  = $(word 2,$(shell dpkg-parsechangelog -l$(PKD)/changelog --show-field=Source))
 VER ?= $(shell dpkg-parsechangelog -l$(PKD)/changelog | perl -ne 'print $$1 if m{^Version:\s+(?:\d+:)?(\d.*)(?:\-\d+.*)};')
 
@@ -198,5 +150,3 @@ VER ?= $(shell dpkg-parsechangelog -l$(PKD)/changelog | perl -ne 'print $$1 if m
 get-orig-source:  $(info I: $(PKG)_$(VER))
 	@echo "# Downloading..."
 	uscan --noconf --verbose --rename --destdir=$(CURDIR) --check-dirname-level=0 --force-download --download-version $(VER) $(PKD)
-
-.PHONY: build build-arch build-indep clean binary-indep binary-arch binary install get-orig-source
