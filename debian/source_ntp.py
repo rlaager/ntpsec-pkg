@@ -19,4 +19,4 @@ def add_info(report):
 	recent_syslog(re.compile(r'ntpd\['))
 
 	# Get debug information
-	report['NtpStatus'] = command_output(['ntpq', '-p']) 
+	report['NtpStatus'] = command_output(['ntpq', '-p'])
