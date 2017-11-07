@@ -15,4 +15,3 @@ update-refclock-docs.patch
 use-etc-ntpviz-for-header-and-footer.patch
 use-var-log-ntpstats-for-stats.patch
 fix-python-pie-build.patch
-ntpviz-optionfile.patch

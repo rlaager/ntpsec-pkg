@@ -73,22 +73,15 @@ override_dh_install:
 		etc/ntp-wait.service \
 		debian/ntpsec/lib/systemd/system/ntp-wait.service
 
-	install -d debian/ntpsec-ntpviz/etc/ntpviz/day
+	install -d debian/ntpsec-ntpviz/etc/ntpviz
 	install -m 644 \
-		www/day/footer debian/ntpsec-ntpviz/etc/ntpviz/day/footer.html
+		www/day/footer debian/ntpsec-ntpviz/etc/ntpviz/footer.html
 	install -m 644 \
-		www/day/header debian/ntpsec-ntpviz/etc/ntpviz/day/header.html
+		www/day/header debian/ntpsec-ntpviz/etc/ntpviz/header.html
 	install -m 644 \
-		www/day/optionfile debian/ntpsec-ntpviz/etc/ntpviz/day
+		debian/ntpviz.options debian/ntpsec-ntpviz/etc/ntpviz/options
 	install -m 644 \
 		www/index.html debian/ntpsec-ntpviz/etc/ntpviz/index.html
-	install -d debian/ntpsec-ntpviz/etc/ntpviz/week
-	install -m 644 \
-		www/week/footer debian/ntpsec-ntpviz/etc/ntpviz/week/footer.html
-	install -m 644 \
-		www/week/header debian/ntpsec-ntpviz/etc/ntpviz/week/header.html
-	install -m 644 \
-		www/week/optionfile debian/ntpsec-ntpviz/etc/ntpviz/week
 
 	install -d debian/ntpsec-ntpviz/usr/share/ntpsec-ntpviz/ntpviz
 	install -m 644 \
