@@ -1,17 +1,20 @@
 [Unit]
 Description=Network Time Service
 Documentation=man:ntpd(8)
-After=network.target
+Wants=network.target
+ConditionVirtualization=!container
+ConditionCapability=CAP_SYS_TIME
+After=network.target nss-lookup.target
 Conflicts=systemd-timesyncd.service
 
 [Service]
+PrivateTmp=yes
 # It is important to specify -g on the command line to allow NTP to correct
 # the clock on boot.  However, if Restart=yes is set, a malicious (or broken)
 # server could send the incorrect time, trip the panic threshold, and when
 # ntpd restarts, serve it the incorrect time (which would be accepted).
 Restart=no
 ExecStart=/bin/sh -c 'exec /usr/sbin/ntpd -n -g -N -u ntp:ntp $(if [ /var/lib/ntp/ntp.conf.dhcp -nt /etc/ntp.conf ] ; then echo "-c /var/lib/ntp/ntp.conf.dhcp" ; fi)'
-PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target
