@@ -1,0 +1,29 @@
+Description: systemd: Cleanup ntp-wait.service
+ It seems more proper to do WantedBy=time-sync.target, and it achieves the
+ same effect in practice.
+ .
+ Also, there should be no need to repeat ntpd.service's conditions and
+ conflicts here.
+Forwarded: no
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2017-11-07
+--- a/etc/ntp-wait.service
++++ b/etc/ntp-wait.service
+@@ -2,11 +2,7 @@
+ Description=Wait for ntpd to synchronize system clock
+ Requires=ntpd.service
+ After=ntpd.service
+-Conflicts=systemd-timesyncd.service
+-Wants=time-sync.target
+ Before=time-sync.target
+-ConditionVirtualization=!container
+-ConditionCapability=CAP_SYS_TIME
+ 
+ [Service]
+ Type=oneshot
+@@ -15,4 +11,4 @@
+ StandardOutput=null
+ 
+ [Install]
+-WantedBy=multi-user.target
++WantedBy=time-sync.target

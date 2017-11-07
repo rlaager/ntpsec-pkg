@@ -4,10 +4,12 @@ systemd-use-type-simple.patch
 systemd-use-high-priority.patch
 systemd-do-not-restart.patch
 systemd-use-usr-sbin.patch
+systemd-cleanup-ntp-wait-service.patch
 
 # Not to be upstreamed
 systemd-fix-man-section.patch
 systemd-support-dhcp.patch
+systemd-fix-ntp-wait-service-paths.patch
 hardcode-python3-path.patch
 update-refclock-docs.patch
 use-etc-ntpviz-for-header-and-footer.patch

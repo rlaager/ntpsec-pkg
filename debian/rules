@@ -69,6 +69,9 @@ override_dh_install:
 	install -m 644 \
 		etc/ntpd.service \
 		debian/ntpsec/lib/systemd/system/ntp.service
+	install -m 644 \
+		etc/ntp-wait.service \
+		debian/ntpsec/lib/systemd/system/ntp-wait.service
 
 	install -d debian/ntpsec-ntpviz/etc/ntpviz/day
 	install -m 644 \
@@ -118,6 +121,7 @@ endif
 
 override_dh_installinit:
 	dh_systemd_enable -pntpsec --name=ntp
+	dh_systemd_enable -pntpsec --name=ntp-wait
 	dh_installinit -pntpsec --name=ntp --error-handler=installinit_error
 	dh_installinit -pntpsec-ntpviz --name=ntpviz
 	dh_installinit -pntpsec-ntpdate
