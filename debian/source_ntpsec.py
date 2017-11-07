@@ -1,4 +1,4 @@
-'''apport package hook for ntp
+'''apport package hook for ntpsec
 
 (c) 2010-2011 Canonical Ltd.
 Author: Chuck Short <zulcss@ubuntu.com>
@@ -9,7 +9,7 @@ from os import path
 import re
 
 def add_info(report):
-	attach_conffiles(report, 'ntp')
+	attach_conffiles(report, 'ntpsec')
 
 	# get apparmor stuff
 	attach_mac_events(report, '/usr/sbin/ntpd')

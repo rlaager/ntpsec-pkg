@@ -111,7 +111,7 @@ endif
 	dh_link -pntpsec etc/apparmor.d/usr.sbin.ntpd etc/apparmor/init/network-interface-security/usr.sbin.ntpd
 
 	# install apport hook
-	install -D -m 644 debian/source_ntp.py debian/ntpsec/usr/share/apport/package-hooks/source_ntp.py
+	install -D -m 644 debian/source_ntpsec.py debian/ntpsec/usr/share/apport/package-hooks/source_ntpsec.py
 
 	dh_link
 	dh_install
