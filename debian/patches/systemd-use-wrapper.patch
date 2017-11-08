@@ -5,11 +5,12 @@ Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-08
 --- a/etc/ntpd.service
 +++ b/etc/ntpd.service
-@@ -10,7 +10,7 @@
+@@ -10,7 +10,8 @@
  [Service]
  Type=forking
  PrivateTmp=true
 -ExecStart=/usr/sbin/ntpd -g -N -u ntp:ntp
++PIDFile=/run/ntpd.pid
 +ExecStart=/usr/lib/ntp/ntp-systemd-wrapper
  # Specifying -g on the command line allows ntpd to make large adjustments to
  # the clock on boot.  However, if Restart=yes is set, a malicious (or broken)
