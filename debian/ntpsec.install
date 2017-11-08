@@ -1,3 +1,4 @@
+debian/tmp/usr/bin/ntpmon
 debian/tmp/usr/bin/ntpq
 debian/tmp/usr/bin/ntptrace
 debian/tmp/usr/sbin/ntpd
