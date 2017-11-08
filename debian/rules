@@ -71,7 +71,15 @@ override_dh_install:
 		debian/ntpsec/lib/systemd/system/ntp.service
 	install -m 644 \
 		etc/ntp-wait.service \
-		debian/ntpsec/lib/systemd/system/ntp-wait.service
+		debian/ntpsec/lib/systemd/system/
+
+	install -d debian/ntpsec-ntpviz/lib/systemd/system
+	install -m 644 \
+		etc/ntpviz-daily.service \
+		etc/ntpviz-daily.timer \
+		etc/ntpviz-weekly.service \
+		etc/ntpviz-weekly.timer \
+		debian/ntpsec-ntpviz/lib/systemd/system/
 
 	install -d debian/ntpsec-ntpviz/etc/ntpviz
 	install -m 644 \
@@ -113,12 +121,9 @@ endif
 	dh_install
 
 override_dh_installinit:
-	dh_systemd_enable -pntpsec --name=ntp
-	dh_systemd_enable -pntpsec --name=ntp-wait
 	dh_installinit -pntpsec --name=ntp --error-handler=installinit_error
 	dh_installinit -pntpsec-ntpviz --name=ntpviz
 	dh_installinit -pntpsec-ntpdate
-	dh_systemd_start -pntpsec ntp.service
 	mv debian/ntpsec-ntpdate/etc/default/ntpsec-ntpdate \
 		debian/ntpsec-ntpdate/etc/default/ntpdate
 ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
@@ -126,6 +131,10 @@ ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
 		debian/ntpsec-ntpdate/etc/default/ntpdate
 endif
 	dh_apparmor --profile-name=usr.sbin.ntpd -pntpsec
+
+override_dh_systemd_start:
+	dh_systemd_start -pntpsec ntp.service
+	dh_systemd_start -pntpsec-ntpviz ntpviz-daily.timer ntpviz-weekly.timer
 
 override_dh_installlogcheck:
 	dh_installlogcheck -a

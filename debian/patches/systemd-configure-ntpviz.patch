@@ -1,0 +1,36 @@
+Description: systemd: Configure ntpviz
+ - Configure ntpviz to match the cron.d jobs
+ - ntpd.service is called ntp.service in this package
+Forwarded: not-needed
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2017-11-08
+--- a/etc/ntpviz-daily.service
++++ b/etc/ntpviz-daily.service
+@@ -1,8 +1,9 @@
+ [Unit]
+ Documentation=man:ntpviz(1)
+ Description=Graph daily information for NTP
+-Requires=ntpd.service
++Requires=ntp.service
+ 
+ [Service]
+-Type=simple
+-ExecStart=/usr/bin/ntpviz -w l -p 1 -o /var/www/localhost/htdocs/day
++Type=oneshot
++ExecStart=/usr/bin/ntpviz -p 1 -o /var/lib/ntp/ntpviz/day @/etc/ntpviz/options
++ExecStartPost=/usr/bin/find /var/lib/ntp/ntpviz/day -type f -mtime +1 -delete
+--- a/etc/ntpviz-weekly.service
++++ b/etc/ntpviz-weekly.service
+@@ -1,8 +1,9 @@
+ [Unit]
+ Documentation=man:ntpviz(1)
+ Description=Graph weekly information for NTP
+-Requires=ntpd.service
++Requires=ntp.service
+ 
+ [Service]
+-Type=simple
+-ExecStart=/usr/bin/ntpviz -w l -p 7 -o /var/www/localhost/htdocs/week
++Type=oneshot
++ExecStart=/usr/bin/ntpviz -p 7 -o /var/lib/ntp/ntpviz/week @/etc/ntpviz/options
++ExecStartPost=/usr/bin/find /var/lib/ntp/ntpviz/week -type f -mtime +7 -delete
