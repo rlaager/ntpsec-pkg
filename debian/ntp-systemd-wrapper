@@ -2,6 +2,7 @@
 
 DAEMON=/usr/sbin/ntpd
 PIDFILE=/run/ntpd.pid
+LOCKFILE=/run/lock/ntpdate
 
 if [ -r /etc/default/ntp ]; then
         . /etc/default/ntp
@@ -13,5 +14,12 @@ fi
 
 NTPD_OPTS="$NTPD_OPTS -u $(getent passwd ntp | cut -f 3,4 -d:)"
 
-exec $DAEMON -p $PIDFILE $NTPD_OPTS
-
+# Protect the service startup against concurrent ntpdate ifup hooks
+(
+        if flock -w 180 9; then
+                exec $DAEMON -p $PIDFILE $NTPD_OPTS
+        else
+                echo "Timeout waiting for $LOCKFILE"
+                exit 1
+        fi
+) 9>$LOCKFILE
