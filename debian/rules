@@ -44,7 +44,7 @@ override_dh_auto_clean:
 	python3 waf clean || true
 	rm -rf build .lock-waf_*_build ntpclients/ntp pylib/control.py pylib/magic.py pylib/version.py .waf*
 	find -name "*.pyc" -delete
-	rm -f wafhelpers/autorevision.sh
+	rm -f wafhelpers/autorevision.sh wafhelpers/.autorevision-cache
 
 override_dh_install:
 	python3 waf install --destdir=$(CURDIR)/debian/tmp
