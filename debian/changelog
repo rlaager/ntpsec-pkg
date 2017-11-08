@@ -1,6 +1,7 @@
 ntpsec (1.0.0+dfsg1-1) UNRELEASED; urgency=medium
 
   * Initial release. (Closes: #819806)
-    Packaging forked from ntp_4.2.8p8+dfsg.
+    The packaging was originally forked from ntp_4.2.8p8+dfsg.
+    Changes as of ntp_4.2.8p10+dfsg-5 have been merged.
 
- -- Richard Laager <rlaager@wiktel.com>  Mon, 06 Nov 2017 04:34:52 -0600
+ -- Richard Laager <rlaager@wiktel.com>  Wed, 08 Nov 2017 10:31:05 -0600
