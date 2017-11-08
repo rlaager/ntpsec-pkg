@@ -19,7 +19,7 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 . /lib/lsb/init-functions
 
 DAEMON=/usr/sbin/ntpd
-PIDFILE=/var/run/ntpd.pid
+PIDFILE=/run/ntpd.pid
 
 test -x $DAEMON || exit 5
 
