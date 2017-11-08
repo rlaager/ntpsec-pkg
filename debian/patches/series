@@ -9,6 +9,7 @@ systemd-cleanup-ntp-wait-service.patch
 # Not to be upstreamed
 systemd-fix-man-section.patch
 systemd-support-dhcp.patch
+systemd-support-custom-ntp-groups.patch
 systemd-fix-ntp-wait-service-paths.patch
 systemd-configure-ntpviz.patch
 hardcode-python3-path.patch
