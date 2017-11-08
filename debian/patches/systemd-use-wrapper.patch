@@ -1,17 +1,21 @@
-Description: systemd: Support dhcp
- Debian has an alternate /var/lib/ntp/ntp.conf.dhcp configuration file for
- integration with dhclient.
+Description: systemd: Use wrapper
+ We use a wrapper script for various reasons.  See the script for details.
 Forwarded: not-needed
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-08
 --- a/etc/ntpd.service
 +++ b/etc/ntpd.service
-@@ -14,7 +14,7 @@
+@@ -10,11 +10,11 @@
+ [Service]
+ Type=forking
+ PrivateTmp=true
+-# It is important to specify -g on the command line to allow NTP to correct
++ExecStart=/usr/lib/ntp/ntp-systemd-wrapper
++# It is typical to specify -g on the command line to allow NTP to correct
  # the clock on boot.  However, if Restart=yes is set, a malicious (or broken)
  # server could send the incorrect time, trip the panic threshold, and when
  # ntpd restarts, serve it the incorrect time (which would be accepted).
 -ExecStart=/usr/sbin/ntpd -g -N -u ntp:ntp
-+ExecStart=/bin/sh -c 'exec /usr/sbin/ntpd -g -N -u ntp:ntp $(if [ /run/ntp.conf.dhcp -nt /etc/ntp.conf ] ; then echo "-c /run/ntp.conf.dhcp" ; fi)'
  Restart=no
  
  [Install]

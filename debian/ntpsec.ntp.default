@@ -1,5 +1,1 @@
-# This is only honored by the init script, not the systemd unit.  To customize
-# the options when using systemd, use one of the systemd native methods:
-#  1) Create a drop-in file (remembering to clear ExecStart first).
-#  2) Override the whole unit.
 NTPD_OPTS='-g -N'

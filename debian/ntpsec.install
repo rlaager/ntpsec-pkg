@@ -15,3 +15,4 @@ debian/tmp/usr/share/man/man8/ntpkeygen.8
 debian/tmp/usr/share/man/man8/ntpleapfetch.8
 debian/tmp/usr/share/man/man8/ntptime.8
 debian/tmp/usr/share/man/man8/ntpwait.8
+debian/ntp-systemd-wrapper usr/lib/ntp
