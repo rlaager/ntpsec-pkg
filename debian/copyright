@@ -21,7 +21,7 @@ Copyright: 1992-2009 David L. Mills
              Major rework of WINNT port.
              Clean up recvbuf and iosignal code into separate modules.
            Marc Brett <Marc.Brett@westgeo.com>
-             Magnavox GPS clock driver
+             Magnavox GPS clock driver (removed in NTPsec)
            Piete Brooks <Piete.Brooks@cl.cam.ac.uk>
              MSF clock driver, Trimble PARSE support
            Reg Clemens <reg@dwf.com>
@@ -42,7 +42,7 @@ Copyright: 1992-2009 David L. Mills
            John Hay <jhay@@icomtek.csir.co.za>
              IPv6 support and testing
            Glenn Hollinger <glenn@herald.usask.ca>
-             GOES clock driver
+             GOES clock driver (removed in NTPsec)
            Mike Iglesias <iglesias@uci.edu>
              DEC Alpha port
            Jim Jagielski <jim@jagubox.gsfc.nasa.gov>
@@ -112,21 +112,26 @@ Copyright: 1992-2009 David L. Mills
              TrueTime GPS driver, generic TrueTime clock driver
            Ulrich Windl <Ulrich.Windl@rz.uni-regensburg.de>
              corrected and validated HTML documents according to the HTML DTD
-           2015-2016 NTPsec project contributors
+           2015-2017 NTPsec project contributors
 License: NTP
 
 Files: debian/*
-Copyright: Bruce Walker <w1bw@debian.org>
+Copyright: Bernhard Schmidt <berni@debian.org>
+           Bruce Walker <w1bw@debian.org>
            Bdale Garbee <bdale@gag.com>
            Matthias Urlichs <smurf@debian.org>
            Peter Eisentraut <petere@debian.org>
            Kurt Roeckx <kurt@roeckx.be>
-           2016 Richard Laager <rlaager@wiktel.com>
+           2002-2005 Novell/SUSE
+           2009-2017 Canonical, Ltd.
+           2016-2017 Richard Laager <rlaager@wiktel.com>
 License: NTP
+
+Files: debian/apparmor-profile debian/apparmor-profile.tunable
 
 Files: debian/repack-waf
 Copyright: 2015 Ximin Luo <infinity0@debian.org>
-           2016 Richard Laager <rlaager@wiktel.com>
+           2016-2017 Richard Laager <rlaager@wiktel.com>
 License: CC0
 
 Files: include/ntp_filegen.h ntpd/ntp_filegen.c
@@ -188,6 +193,14 @@ License: Expat
 Files: libntp/ntp_random.c
 Copyright: 1983, 1993 The Regents of the University of California
 License: BSD-4-Clause-UC
+
+Files: ntpclients/ntpleapfetch ntpclients/ntpleapfetch-man.txt
+Copyright: 2014, Timothe Litt <litt@acm.org>
+License: BSD-2-clause
+
+Files: ntpd/ntp_signd.c
+Copyright: 2008, Red Hat, Inc.
+           2008, Andrew Tridgell
 
 Files: ntpd/refclock_jjy.c
 Copyright: 2001-2004, 2015 Takao Abe <takao_abe@xurb.jp>
@@ -252,8 +265,13 @@ License: BSD-4-clause-Trimble
  OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  SUCH DAMAGE.
 
+Files: tests/unity/*
+Copyright: 2010 James Grenning
+           2007-2014 Mike Karlesky, Mark VanderVoord, Greg Williams
+License: Expat
+
 Files: waf waflib/*
-Copyright: 2005-2016 Thomas Nagy
+Copyright: 2005-2017 Thomas Nagy
 License: BSD-3-clause
 
 License: BSD-3-clause
