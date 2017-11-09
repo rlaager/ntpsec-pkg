@@ -6,12 +6,8 @@ Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-08
 --- a/etc/ntpviz-daily.service
 +++ b/etc/ntpviz-daily.service
-@@ -1,8 +1,9 @@
- [Unit]
- Documentation=man:ntpviz(1)
+@@ -3,5 +3,6 @@
  Description=Graph daily information for NTP
--Requires=ntpd.service
-+Requires=ntp.service
  
  [Service]
 -Type=simple
@@ -21,12 +17,8 @@ Last-Update: 2017-11-08
 +ExecStartPost=/usr/bin/find /var/lib/ntp/ntpviz/day -type f -mtime +1 -delete
 --- a/etc/ntpviz-weekly.service
 +++ b/etc/ntpviz-weekly.service
-@@ -1,8 +1,9 @@
- [Unit]
- Documentation=man:ntpviz(1)
+@@ -3,5 +3,6 @@
  Description=Graph weekly information for NTP
--Requires=ntpd.service
-+Requires=ntp.service
  
  [Service]
 -Type=simple
