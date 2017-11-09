@@ -79,6 +79,12 @@ override_dh_install:
 	install -m 644 \
 		etc/ntp-wait.service \
 		debian/ntpsec/lib/systemd/system/
+	install -m 644 \
+		debian/ntpsec.ntp-rotate-stats.service \
+		debian/ntpsec/lib/systemd/system/ntp-rotate-stats.service
+	install -m 644 \
+		debian/ntpsec.ntp-rotate-stats.timer \
+		debian/ntpsec/lib/systemd/system/ntp-rotate-stats.timer
 
 	install -d debian/ntpsec-ntpviz/lib/systemd/system
 	install -m 644 \
@@ -149,7 +155,7 @@ endif
 	dh_apparmor --profile-name=usr.sbin.ntpd -pntpsec
 
 override_dh_systemd_start:
-	dh_systemd_start -pntpsec ntp.service
+	dh_systemd_start -pntpsec ntp.service ntp-rotate-stats.timer
 	dh_systemd_start -pntpsec-ntpviz ntpviz-daily.timer ntpviz-weekly.timer
 
 override_dh_installlogcheck:

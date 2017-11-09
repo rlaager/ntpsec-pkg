@@ -1,6 +1,7 @@
 #!/bin/sh
 
-# The default Debian ntp.conf enables logging of various statistics to
+# The package default /etc/ntp.conf suggests (and the ntpviz package
+# /etc/ntp.d/ntpviz.conf enables) logging of various statistics to
 # the /var/log/ntpstats directory.  The daemon automatically changes
 # to a new datestamped set of files at midnight, so all we need to do
 # is delete old ones, and compress the ones we're keeping so disk
@@ -31,7 +32,7 @@ if [ -d "$statsdir" ]; then
 		# compresses yesterday and previous, leaving the live
 		# log alone.  We suppress the warnings gzip issues
 		# about not compressing the linked file.
-		gzip --best --quiet -- *stats.???????? 
+		gzip --best --quiet -- *stats.????????
 		return=$?
 		case $return in
 		    2)

@@ -38,7 +38,7 @@ Depends: adduser,
          ${misc:Depends},
          ${shlibs:Depends}
 Pre-Depends: dpkg (>= 1.15.7.2)
-Recommends: cron | cron-daemon
+Recommends: systemd | cron | cron-daemon
 Suggests: apparmor (>= 2.1+1075-0ubuntu6),
           ntpsec-doc,
           ntpsec-ntpviz

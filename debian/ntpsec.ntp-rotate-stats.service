@@ -1,0 +1,7 @@
+[Unit]
+Description=Rotate ntpd stats
+Requisite=ntp.service
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/ntp/rotate-stats
