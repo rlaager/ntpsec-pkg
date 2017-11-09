@@ -29,13 +29,14 @@ endif
 	#
 	# Also drop modem.  It "requires a Hayes-compatible 1200bps modem,
 	# hardware now 20 years obsolete".
-	CFLAGS='$(CFLAGS) $(CPPFLAGS) -DMKREPRO_DATE="\"Jan 01 2016\"" -DMKREPRO_TIME="\"00:00:00\""' \
+	CFLAGS='$(CFLAGS) $(CPPFLAGS)' \
 	LDFLAGS='$(LDFLAGS)' \
 		python3 waf configure \
 		--prefix=/usr \
 		--enable-debug-gdb --enable-mssntp --enable-seccomp \
 		--refclock=local,spectracom,generic,arbiter,nmea,pps,hpgps,shm,trimble,oncore,jjy,zyfer,neoclock,gpsd \
-		--enable-doc --htmldir=/usr/share/doc/ntpsec/html
+		--enable-doc --htmldir=/usr/share/doc/ntpsec/html \
+		--build-epoch=$(shell date -d "$(shell dpkg-parsechangelog --show-field=Date)" "+%s")
 
 override_dh_auto_build:
 	python3 waf build -v
