@@ -1,0 +1,2 @@
+# The apparmor configuration file is documented as GPL-2.
+ntpsec: possible-gpl-code-linked-with-openssl
