@@ -43,13 +43,25 @@ override_dh_auto_build:
 
 override_dh_auto_clean:
 	python3 waf clean || true
-	rm -rf build .lock-waf_*_build ntpclients/ntp pylib/control.py pylib/magic.py pylib/version.py .waf*
+	rm -rf \
+		build \
+		.lock-waf_*_build \
+		ntpclients/ntp \
+		pylib/control.py \
+		pylib/magic.py \
+		pylib/version.py \
+		.waf* \
+		wafhelpers/autorevision.sh \
+		wafhelpers/.autorevision-cache
 	find -name "*.pyc" -delete
-	rm -f wafhelpers/autorevision.sh wafhelpers/.autorevision-cache
 
 override_dh_install:
 	python3 waf install --destdir=$(CURDIR)/debian/tmp
 	rm -rf debian/tmp/usr/lib/python3/dist-packages/ntp/__pycache__
+	mv \
+		debian/tmp/usr/bin/ntptime \
+		debian/tmp/usr/bin/ntpkeygen \
+		debian/tmp/usr/sbin/
 
 	install -m 755 \
 		ntpclients/ntpmon \
@@ -60,11 +72,6 @@ override_dh_install:
 		ntpclients/ntpleapfetch \
 		ntpclients/ntpwait \
 		debian/tmp/usr/sbin
-
-	# move the administrator programs from /usr/bin to /usr/sbin
-	for file in ntptime ntpkeygen; do \
-		mv debian/tmp/usr/bin/$$file debian/tmp/usr/sbin/$$file || exit; \
-	done
 
 	install -d debian/ntpsec/lib/systemd/system
 	install -m 644 \
