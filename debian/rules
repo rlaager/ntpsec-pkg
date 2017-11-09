@@ -62,7 +62,6 @@ override_dh_install:
 		debian/tmp/usr/bin/ntptime \
 		debian/tmp/usr/bin/ntpkeygen \
 		debian/tmp/usr/sbin/
-
 	install -m 755 \
 		ntpclients/ntpmon \
 		ntpclients/ntptrace \
