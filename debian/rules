@@ -105,25 +105,34 @@ override_dh_install:
 		www/ntpsec-logo.png \
 		debian/ntpsec-ntpviz/usr/share/ntpsec-ntpviz/ntpviz
 
-	install -D -m 0644 debian/ntp.dhcp debian/ntpsec/etc/dhcp/dhclient-exit-hooks.d/ntp
-	install -D -m 0755 debian/ntp.networkmanager debian/ntpsec/etc/NetworkManager/dispatcher.d/ntp
-	install -D -m 0644 debian/ntpdate.dhcp debian/ntpsec-ntpdate/etc/dhcp/dhclient-exit-hooks.d/ntpdate
-	install -D -m 0755 debian/ntpdate-debian debian/ntpsec-ntpdate/usr/sbin/ntpdate-debian
+	install -D -m 0644 debian/ntp.dhcp \
+		debian/ntpsec/etc/dhcp/dhclient-exit-hooks.d/ntp
+	install -D -m 0755 debian/ntp.networkmanager \
+		debian/ntpsec/etc/NetworkManager/dispatcher.d/ntp
+	install -D -m 0644 debian/ntpdate.dhcp \
+		debian/ntpsec-ntpdate/etc/dhcp/dhclient-exit-hooks.d/ntpdate
+	install -D -m 0755 debian/ntpdate-debian \
+		debian/ntpsec-ntpdate/usr/sbin/ntpdate-debian
 
 ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
 	install -D -m 0644 debian/ntp.conf.ubuntu debian/ntpsec/etc/ntp.conf
 else
 	install -D -m 0644 debian/ntp.conf debian/ntpsec/etc/ntp.conf
 endif
-	install -D -m 0644 debian/ntpviz.conf debian/ntpsec-ntpviz/etc/ntp.d/ntpviz.conf
+	install -D -m 0644 debian/ntpviz.conf \
+		debian/ntpsec-ntpviz/etc/ntp.d/ntpviz.conf
 
 	# install apparmor profile
-	install -D -m 0644 debian/apparmor-profile debian/ntpsec/etc/apparmor.d/usr.sbin.ntpd
-	install -D -m 0644 debian/apparmor-profile.tunable debian/ntpsec/etc/apparmor.d/tunables/ntpd
-	dh_link -pntpsec etc/apparmor.d/usr.sbin.ntpd etc/apparmor/init/network-interface-security/usr.sbin.ntpd
+	install -D -m 0644 debian/apparmor-profile \
+		debian/ntpsec/etc/apparmor.d/usr.sbin.ntpd
+	install -D -m 0644 debian/apparmor-profile.tunable \
+		debian/ntpsec/etc/apparmor.d/tunables/ntpd
+	dh_link -pntpsec etc/apparmor.d/usr.sbin.ntpd \
+		etc/apparmor/init/network-interface-security/usr.sbin.ntpd
 
 	# install apport hook
-	install -D -m 644 debian/source_ntpsec.py debian/ntpsec/usr/share/apport/package-hooks/source_ntpsec.py
+	install -D -m 644 debian/source_ntpsec.py \
+		debian/ntpsec/usr/share/apport/package-hooks/source_ntpsec.py
 
 	dh_link
 	dh_install
@@ -162,4 +171,6 @@ VER ?= $(shell dpkg-parsechangelog -l$(PKD)/changelog | perl -ne 'print $$1 if m
 ## http://wiki.debian.org/onlyjob/get-orig-source
 get-orig-source:  $(info I: $(PKG)_$(VER))
 	@echo "# Downloading..."
-	uscan --noconf --verbose --rename --destdir=$(CURDIR) --check-dirname-level=0 --force-download --download-version $(VER) $(PKD)
+	uscan --noconf --verbose --rename --destdir=$(CURDIR) \
+		--check-dirname-level=0 --force-download \
+		--download-version $(VER) $(PKD)
