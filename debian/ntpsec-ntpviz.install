@@ -1,2 +1,6 @@
 debian/tmp/usr/bin/ntpviz
+debian/tmp/usr/sbin/ntploggps
+debian/tmp/usr/sbin/ntplogtemp
 debian/tmp/usr/share/man/man1/ntpviz.1
+debian/tmp/usr/share/man/man8/ntploggps.8
+debian/tmp/usr/share/man/man8/ntplogtemp.8

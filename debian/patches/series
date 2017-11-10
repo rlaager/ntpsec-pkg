@@ -7,7 +7,7 @@ systemd-use-usr-sbin.patch
 systemd-cleanup-ntp-wait-service.patch
 
 # Not to be upstreamed
-systemd-fix-ntpviz-dependencies.patch
+systemd-remove-extra-dependencies.patch
 systemd-fix-man-section.patch
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
@@ -16,4 +16,5 @@ hardcode-python3-path.patch
 update-refclock-docs.patch
 use-etc-ntpviz-for-header-and-footer.patch
 use-var-log-ntpstats-for-stats.patch
+use-sbin-for-ntploggps-and-ntplogtemp.patch
 fix-python-pie-build.patch
