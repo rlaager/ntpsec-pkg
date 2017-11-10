@@ -1,0 +1,53 @@
+Description: systemd: Remove extra dependencies
+ The ntpviz services should not Requires=ntpd.service.  That has the effect of
+ starting ntpd.service (if it was stopped) whenever the timer fires.  The same
+ applies to ntploggps and gpsd.service.  Instead, we should use Requisite.  We
+ also need to do the same for ntp-wait.service; while it has no timer, having
+ a Requires=ntpd.service there ends up causing the same problem for the
+ ntpviz-* services by way of indirect dependencies; this may be a systemd bug.
+Forwarded: no
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2017-11-10
+--- a/etc/ntpviz-daily.service
++++ b/etc/ntpviz-daily.service
+@@ -1,7 +1,7 @@
+ [Unit]
+ Documentation=man:ntpviz(1)
+ Description=Graph daily information for NTP
+-Requires=ntpd.service
++Requisite=ntpd.service
+ 
+ [Service]
+ Type=simple
+--- a/etc/ntpviz-weekly.service
++++ b/etc/ntpviz-weekly.service
+@@ -1,7 +1,7 @@
+ [Unit]
+ Documentation=man:ntpviz(1)
+ Description=Graph weekly information for NTP
+-Requires=ntpd.service
++Requisite=ntpd.service
+ 
+ [Service]
+ Type=simple
+--- a/etc/ntploggps.service
++++ b/etc/ntploggps.service
+@@ -1,7 +1,7 @@
+ [Unit]
+ Documentation=man:ntploggps(1)
+ Description=GPS information logger for ntpviz
+-Requires=gpsd.service
++Requisite=gpsd.service
+ 
+ [Service]
+ Type=simple
+--- a/etc/ntp-wait.service
++++ b/etc/ntp-wait.service
+@@ -1,6 +1,6 @@
+ [Unit]
+ Description=Wait for ntpd to synchronize system clock
+-Requires=ntpd.service
++Requisite=ntpd.service
+ After=ntpd.service
+ Before=time-sync.target
+ 

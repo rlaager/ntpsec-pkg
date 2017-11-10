@@ -3,11 +3,15 @@ Description: systemd: Configure ntpviz
  - ntpd.service is called ntp.service in this package
 Forwarded: not-needed
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-08
+Last-Update: 2017-11-10
 --- a/etc/ntpviz-daily.service
 +++ b/etc/ntpviz-daily.service
-@@ -3,5 +3,6 @@
+@@ -1,8 +1,9 @@
+ [Unit]
+ Documentation=man:ntpviz(1)
  Description=Graph daily information for NTP
+-Requisite=ntpd.service
++Requisite=ntp.service
  
  [Service]
 -Type=simple
@@ -17,8 +21,12 @@ Last-Update: 2017-11-08
 +ExecStartPost=/usr/bin/find /var/lib/ntp/ntpviz/day -type f -mtime +1 -delete
 --- a/etc/ntpviz-weekly.service
 +++ b/etc/ntpviz-weekly.service
-@@ -3,5 +3,6 @@
+@@ -1,8 +1,9 @@
+ [Unit]
+ Documentation=man:ntpviz(1)
  Description=Graph weekly information for NTP
+-Requisite=ntpd.service
++Requisite=ntp.service
  
  [Service]
 -Type=simple
