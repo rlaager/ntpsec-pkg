@@ -61,6 +61,7 @@ override_dh_install:
 	mv \
 		debian/tmp/usr/bin/ntptime \
 		debian/tmp/usr/bin/ntpkeygen \
+		debian/tmp/usr/bin/ntploggps \
 		debian/tmp/usr/bin/ntplogtemp \
 		debian/tmp/usr/sbin/
 	install -m 755 \
@@ -89,6 +90,8 @@ override_dh_install:
 
 	install -d debian/ntpsec-ntpviz/lib/systemd/system
 	install -m 644 \
+		etc/ntploggps.service \
+		etc/ntploggps.timer \
 		etc/ntplogtemp.service \
 		etc/ntplogtemp.timer \
 		etc/ntpviz-daily.service \
@@ -160,6 +163,7 @@ endif
 override_dh_systemd_start:
 	dh_systemd_start -pntpsec ntp.service ntp-rotate-stats.timer
 	dh_systemd_start -pntpsec-ntpviz \
+		ntploggps.timer \
 		ntplogtemp.timer \
 		ntpviz-daily.timer \
 		ntpviz-weekly.timer
