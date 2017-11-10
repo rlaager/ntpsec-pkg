@@ -18,8 +18,6 @@ endif
 	# Use the packaged version of autorevision:
 	ln -sf /usr/bin/autorevision wafhelpers/autorevision.sh
 
-	# We set MKREPRO_DATE and MKREPRO_TIME to allow for reproducible builds.
-	#
 	# Only build with refclocks NOT slated for removal.  See also
 	# debian/patches/update-refclock-docs.patch.
 	#
