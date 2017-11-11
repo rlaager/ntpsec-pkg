@@ -19,7 +19,8 @@ endif
 	ln -sf /usr/bin/autorevision wafhelpers/autorevision.sh
 
 	# Only build with refclocks NOT slated for removal.  See also
-	# debian/patches/update-refclock-docs.patch.
+	# debian/patches/update-refclock-docs.patch.  However, if the reason
+	# for deprecation is only "two digit years", I *am* keeping it.
 	#
 	# Upstream references:
 	# https://www.ntpsec.org/removal-plan.html
@@ -27,12 +28,23 @@ endif
 	#
 	# Also drop modem.  It "requires a Hayes-compatible 1200bps modem,
 	# hardware now 20 years obsolete".
+	#
+	# gpsd is a tough call.  It's not deprecated upstream, and it still can
+	# work.  However, upstream recommends the use of SHM, as does every
+	# example HOWTO I found with a quick search.  Furthermore, it is buggy:
+	#   https://lists.ntpsec.org/pipermail/devel/2016-October/002392.html
+	# Also, it "makes all sorts of non-standard assumptions about how gpsd
+	# is configured.  A configuration that is contorted and non-obvious":
+	#   https://lists.ntpsec.org/pipermail/devel/2016-October/002392.html
+	# Most importantly, it is an attractive nuisance.  If someone is told
+	# that the best practice is to use "gpsd", they might logically think
+	# they should use the gpsd driver.
 	CFLAGS='$(CFLAGS) $(CPPFLAGS)' \
 	LDFLAGS='$(LDFLAGS)' \
 		python3 waf configure \
 		--prefix=/usr \
 		--enable-debug-gdb --enable-mssntp \
-		--refclock=local,spectracom,generic,arbiter,nmea,pps,hpgps,shm,trimble,oncore,jjy,zyfer,neoclock,gpsd \
+		--refclock=local,spectracom,generic,arbiter,nmea,pps,hpgps,shm,trimble,jjy,zyfer,neoclock \
 		--enable-doc --htmldir=/usr/share/doc/ntpsec/html \
 		--build-epoch=$(shell date -d "$(shell dpkg-parsechangelog --show-field=Date)" "+%s")
 
