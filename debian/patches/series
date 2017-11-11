@@ -18,6 +18,7 @@ hardcode-python3-path.patch
 use-python2-for-ntploggps.patch
 update-refclock-docs.patch
 use-etc-ntpviz-for-header-and-footer.patch
+fix-ntploggps.patch
 use-var-log-ntpstats-for-stats.patch
 use-sbin-for-ntploggps-and-ntplogtemp.patch
 fix-python-pie-build.patch
