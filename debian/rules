@@ -57,6 +57,7 @@ override_dh_auto_clean:
 		build \
 		.lock-waf_*_build \
 		ntpclients/ntp \
+		ntpd/version.h \
 		pylib/control.py \
 		pylib/magic.py \
 		pylib/version.py \
