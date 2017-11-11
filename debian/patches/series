@@ -1,5 +1,6 @@
 # To be upstreamed
 fix-ntpdig.patch
+fix-name-of-psutil.patch
 systemd-remove-remainafterexit.patch
 systemd-use-high-priority.patch
 systemd-do-not-restart.patch

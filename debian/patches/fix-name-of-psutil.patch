@@ -1,0 +1,37 @@
+Description: Fix name of psutil
+ psutil and psutils are different software packages with different purposes.
+Forwarded: no
+Origin: vendor
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2017-11-10
+--- a/INSTALL
++++ b/INSTALL
+@@ -38,7 +38,7 @@
+ components like ntpviz or building documentation unless asked. See
+ buildprep --help for details on available options.  asciidoc has a
+ huge tail of dependencies and you probably don't want it unless you're
+-planning to modify the documentation.  psutils may require different
++planning to modify the documentation.  psutil may require different
+ packages depending on whether your base Python version is 2 or 3.
+ 
+ === Details ===
+@@ -55,7 +55,7 @@
+    Required for ntpviz when using Python version 2.6
+    Install with pip: pip install argparse
+ 
+-psutils::
++psutil::
+    Optional for ntpviz.  Allows running with ionice()
+    Debian: python-psutil or python3-psutil
+    Ubuntu: python-psutil or python3-psutil
+--- a/ntpclients/ntpviz
++++ b/ntpclients/ntpviz
+@@ -1533,7 +1533,7 @@
+ 
+         except ImportError:
+             if 0 < args.debug_level:
+-                sys.stderr.write("ntpviz: INFO: psutils not found\n")
++                sys.stderr.write("ntpviz: INFO: psutil not found\n")
+             pass
+ 
+         # set nice()

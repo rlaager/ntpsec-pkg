@@ -106,7 +106,7 @@ Depends: fonts-liberation,
          systemd | cron | cron-daemon,
          ${misc:Depends}
 Recommends: ntpsec,
-            psutils,
+            systemd | python3-psutil,
             ${misc:Recommends}
 Suggests: python-gps
 Description: NTP statistics graphing utility
