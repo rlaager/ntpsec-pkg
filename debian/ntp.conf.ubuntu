@@ -25,7 +25,7 @@ pool 2.ubuntu.pool.ntp.org iburst preempt
 pool 3.ubuntu.pool.ntp.org iburst preempt
 
 # Use Ubuntu's ntp server as a fallback.
-pool ntp.ubuntu.com preempt
+server ntp.ubuntu.com preempt
 
 # Access control configuration; see /usr/share/doc/ntpsec-doc/html/accopt.html
 # for details.
