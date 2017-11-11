@@ -4,22 +4,24 @@ Description: Use /etc/ntpviz for header and footer
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-08
+Last-Update: 2017-11-05
 --- a/docs/includes/ntpviz-body.txt
 +++ b/docs/includes/ntpviz-body.txt
-@@ -169,11 +169,15 @@
+@@ -169,11 +169,17 @@
  
  The first file is named 'header'.  The contents of that file will be
  added almost at the top of the body on the generated index page.
-+As a special exception, the default jobs in the ntpsec-ntpviz package
-+use `/etc/ntpviz/header.html`.
++As a special exception, the default cron job in the ntpsec-ntpviz package
++has symlinks such that it uses `/etc/ntpviz/day/header.html` and
++`/etc/ntpviz/week/header.html`.
  
  This is the place to put links to other web pages, or headline notes.
  
  The second file is named 'footer'.  The contents of that file will be
  added almost at the bottom of the body on the generated index.
-+As a special exception, the default jobs in the ntpsec-ntpviz package
-+use `/etc/ntpviz/footer.html`.
++As a special exception, the default cron job in the ntpsec-ntpviz package
++has symlinks such that it uses `/etc/ntpviz/day/footer.html` and
++`/etc/ntpviz/week/footer.html`.
  
  It is suggested that notes on the server be included in the footer
  file: OS, versions, CPU speed, etc.  You may also put links there.
