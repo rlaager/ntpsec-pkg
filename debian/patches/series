@@ -8,6 +8,7 @@ systemd-use-usr-sbin.patch
 systemd-cleanup-ntp-wait-service.patch
 
 # Not to be upstreamed
+systemd-ionice-ntpviz.patch
 systemd-remove-extra-dependencies.patch
 systemd-fix-man-section.patch
 systemd-use-wrapper.patch

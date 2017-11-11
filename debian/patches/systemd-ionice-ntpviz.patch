@@ -1,0 +1,22 @@
+Description: systemd: ionice ntpviz
+ ntpviz tries to use psutil to ionice itself.  Doing it here means it works
+ without needing psutil installed, saving a dependency.
+Forwarded: not-needed
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2017-11-10
+--- a/etc/ntpviz-daily.service
++++ b/etc/ntpviz-daily.service
+@@ -5,4 +5,5 @@
+ 
+ [Service]
+ Type=simple
++IOSchedulingClass=idle
+ ExecStart=/usr/bin/ntpviz -w l -p 1 -o /var/www/localhost/htdocs/day
+--- a/etc/ntpviz-weekly.service
++++ b/etc/ntpviz-weekly.service
+@@ -5,4 +5,5 @@
+ 
+ [Service]
+ Type=simple
++IOSchedulingClass=idle
+ ExecStart=/usr/bin/ntpviz -w l -p 7 -o /var/www/localhost/htdocs/week
