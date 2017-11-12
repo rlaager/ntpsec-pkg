@@ -1,0 +1,21 @@
+Description: Use ntpwait -q
+ The -q option makes ntpwait less strict.  We do not need full synchronization
+ before time-sync.target.  The goal is to ensure that the time is close, but
+ most importantly, not going to move backwards.  (This is all that is provided
+ by systemd-timesyncd, for example.)  The initial stepping of the clock is
+ sufficient.  This change can mean the difference of many minutes in delay.
+Forwarded: not-needed
+Origin: vendor
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2017-11-12
+--- a/etc/ntp-wait.service
++++ b/etc/ntp-wait.service
+@@ -6,7 +6,7 @@
+ 
+ [Service]
+ Type=oneshot
+-ExecStart=/usr/sbin/ntpwait -s 1 -n 30000
++ExecStart=/usr/sbin/ntpwait -s 1 -n 30000 -q
+ RemainAfterExit=yes
+ StandardOutput=null
+ 

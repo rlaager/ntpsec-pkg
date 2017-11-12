@@ -10,11 +10,14 @@ systemd-use-usr-sbin.patch
 systemd-cleanup-ntp-wait-service.patch
 
 # Not to be upstreamed
+refactor-ntpwait.patch
+add-ntpwait-quick-mode.patch
 systemd-ionice-ntpviz.patch
 systemd-remove-extra-dependencies.patch
 systemd-fix-man-section.patch
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
+systemd-use-ntpwait--q.patch
 systemd-configure-ntpviz.patch
 hardcode-python3-path.patch
 use-python2-for-ntploggps.patch
