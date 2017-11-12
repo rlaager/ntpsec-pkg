@@ -2,6 +2,7 @@
 fix-ntpdig.patch
 fix-name-of-psutil.patch
 fix-ntpviz-file-encodings.patch
+fix-spectracom-log-prefixes.patch
 systemd-remove-remainafterexit.patch
 systemd-use-high-priority.patch
 systemd-do-not-restart.patch
