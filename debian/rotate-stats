@@ -25,22 +25,25 @@ if [ -d "$statsdir" ]; then
 	# compress whatever is left to save space but make sure to really
 	# do it only in the expected directory.
 	cd "$statsdir" || exit 1
-	ls -d -- *stats.???????? > /dev/null 2>&1
-	if [ $? -eq 0 ]; then
-		# Note that gzip won't compress the file names that
-		# are hard links to the live/current files, so this
-		# compresses yesterday and previous, leaving the live
-		# log alone.  We suppress the warnings gzip issues
-		# about not compressing the linked file.
-		gzip --best --quiet -- *stats.????????
-		return=$?
-		case $return in
-		    2)
-			exit 0			# squash all warnings
-			;;
-		    *)
-			exit $return	 	# but let real errors through
-			;;
-		esac
-	fi
+	for pattern in "*stats.????????" "gpsd.????-??-??" "temps.????-??-??"
+	do
+		ls -d -- $pattern > /dev/null 2>&1
+		if [ $? -eq 0 ]; then
+			# Note that gzip won't compress the file names that
+			# are hard links to the live/current files, so this
+			# compresses yesterday and previous, leaving the live
+			# log alone.  We suppress the warnings gzip issues
+			# about not compressing the linked file.
+			gzip --best --quiet -- $pattern
+			return=$?
+			case $return in
+			    2)
+				# squash all warnings
+				;;
+			    *)
+				exit $return # but let real errors through
+				;;
+			esac
+		fi
+	done
 fi
