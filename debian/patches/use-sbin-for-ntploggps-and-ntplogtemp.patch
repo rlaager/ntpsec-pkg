@@ -4,7 +4,7 @@ Description: Use sbin for ntploggps and ntplogtemp
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-10
+Last-Update: 2017-11-12
 --- a/ntpclients/ntploggps-man.txt
 +++ b/ntpclients/ntploggps-man.txt
 @@ -1,4 +1,4 @@
@@ -42,7 +42,7 @@ Last-Update: 2017-11-10
      ctx.manpage(8, "ntpclients/ntpwait-man.txt")
 --- a/etc/ntploggps.service
 +++ b/etc/ntploggps.service
-@@ -5,4 +5,4 @@
+@@ -6,4 +6,4 @@
  
  [Service]
  Type=simple

@@ -5,9 +5,15 @@ Description: systemd: Remove extra dependencies
  also need to do the same for ntp-wait.service; while it has no timer, having
  a Requires=ntpd.service there ends up causing the same problem for the
  ntpviz-* services by way of indirect dependencies; this may be a systemd bug.
+ .
+ Also, instead of having timers.target pull in the timers, we have the
+ relevant daemon server (ntpd.service or gpsd.service) pull in the timers.
+ This way, if the daemon is not running, the timers don't run either.  This is
+ especially important for gpsd.service.  If one doesn't have gpsd installed,
+ ntploggps.timer / ntploggps.service would fail.
 Forwarded: no
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-10
+Last-Update: 2017-11-12
 --- a/etc/ntpviz-daily.service
 +++ b/etc/ntpviz-daily.service
 @@ -1,7 +1,7 @@
@@ -32,12 +38,13 @@ Last-Update: 2017-11-10
  Type=simple
 --- a/etc/ntploggps.service
 +++ b/etc/ntploggps.service
-@@ -1,7 +1,7 @@
+@@ -1,7 +1,8 @@
  [Unit]
  Documentation=man:ntploggps(1)
  Description=GPS information logger for ntpviz
 -Requires=gpsd.service
 +Requisite=gpsd.service
++After=gpsd.service
  
  [Service]
  Type=simple
@@ -51,3 +58,42 @@ Last-Update: 2017-11-10
  After=ntpd.service
  Before=time-sync.target
  
+--- a/etc/ntploggps.timer
++++ b/etc/ntploggps.timer
+@@ -1,5 +1,6 @@
+ [Unit]
+ Description=Run ntploggps every five minutes
++Requisite=gpsd.service
+ 
+ [Timer]
+ OnBootSec=5min
+@@ -7,4 +8,4 @@
+ Persistent=true
+ 
+ [Install]
+-WantedBy=timers.target
++WantedBy=gpsd.service
+--- a/etc/ntplogtemp.timer
++++ b/etc/ntplogtemp.timer
+@@ -7,4 +7,4 @@
+ Persistent=true
+ 
+ [Install]
+-WantedBy=timers.target
++WantedBy=ntpd.service
+--- a/etc/ntpviz-daily.timer
++++ b/etc/ntpviz-daily.timer
+@@ -6,4 +6,4 @@
+ Persistent=true
+ 
+ [Install]
+-WantedBy=timers.target
++WantedBy=ntpd.service
+--- a/etc/ntpviz-weekly.timer
++++ b/etc/ntpviz-weekly.timer
+@@ -6,4 +6,4 @@
+ Persistent=true
+ 
+ [Install]
+-WantedBy=timers.target
++WantedBy=ntpd.service

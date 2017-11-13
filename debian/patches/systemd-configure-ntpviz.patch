@@ -36,3 +36,27 @@ Last-Update: 2017-11-10
 -ExecStart=/usr/bin/ntpviz -w l -p 7 -o /var/www/localhost/htdocs/week
 +ExecStart=/usr/bin/ntpviz -p 7 -o /var/lib/ntp/ntpviz/week @/etc/ntpviz/options
 +ExecStartPost=/usr/bin/find /var/lib/ntp/ntpviz/week -type f -mtime +7 -delete
+--- a/etc/ntplogtemp.timer
++++ b/etc/ntplogtemp.timer
+@@ -7,4 +7,4 @@
+ Persistent=true
+ 
+ [Install]
+-WantedBy=ntpd.service
++WantedBy=ntp.service
+--- a/etc/ntpviz-daily.timer
++++ b/etc/ntpviz-daily.timer
+@@ -6,4 +6,4 @@
+ Persistent=true
+ 
+ [Install]
+-WantedBy=ntpd.service
++WantedBy=ntp.service
+--- a/etc/ntpviz-weekly.timer
++++ b/etc/ntpviz-weekly.timer
+@@ -6,4 +6,4 @@
+ Persistent=true
+ 
+ [Install]
+-WantedBy=ntpd.service
++WantedBy=ntp.service

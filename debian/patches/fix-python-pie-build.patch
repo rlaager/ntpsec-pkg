@@ -6,7 +6,7 @@ Description: Fix Python PIE build
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-10
+Last-Update: 2017-11-12
 --- a/waflib/Tools/c.py
 +++ b/waflib/Tools/c.py
 @@ -16,7 +16,7 @@
@@ -26,7 +26,7 @@ Last-Update: 2017-11-10
 +Documentation=man:ntploggps(8)
  Description=GPS information logger for ntpviz
  Requisite=gpsd.service
- 
+ After=gpsd.service
 --- a/etc/ntplogtemp.service
 +++ b/etc/ntplogtemp.service
 @@ -1,5 +1,5 @@
