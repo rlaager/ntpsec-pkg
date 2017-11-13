@@ -19,6 +19,38 @@ clocks on networks that are not connected to the Internet.  The
 documentation in the package ntpsec-doc will assist with these tasks.
 
 
+Refclock Changes
+----------------
+
+There is a new syntax for configuring refclocks that uses names
+instead of numbers encoded in loopback IP addresses.  The old syntax
+is accepted for backwards compatibility.
+
+Many refclock drivers have been removed upstream.  Several have been
+disabled in this package.
+
+If you were using the Type 45 GPSD client protocol (JSON) driver, you
+will need to switch to the SHM driver.
+
+Two drivers have new device path prefixes:
+    Type  4 - Generic Spectracom Receivers
+      /dev/wwvb0 -> /dev/spectracom0
+    Type 29 - Trimble Palisade/Thunderbolt/Acutime GPSes
+      /dev/palisade0 -> /dev/trimble0
+Both of these drivers, plus these two have been deprecated:
+    Type 11 - Arbiter 1088A/B GPS Receiver
+    Type 44 - NeoClock4X DCF77 / TDF Receiver
+If you use any of these, please alert the package maintainer or the
+upstream NTPsec project right away.
+
+While not deprecated, if you use the Type 20 Generic NMEA GPS Receiver
+driver, you should strongly consider switching to the gpsd and the SHM
+driver.
+
+If you use the SHM driver and apparmor, see the note in:
+/etc/apparmor.d/usr.sbin.ntpd
+
+
 DHCP
 ----
 
@@ -129,4 +161,5 @@ If your system uses AppArmor, please note that the shipped enforcing profile
 works with the default installation, and changes in your configuration may
 require changes to the installed apparmor profile. Please see
 https://wiki.ubuntu.com/DebuggingApparmor before filing a bug against this
-software.
+software.  If you use the SHM driver, see the note in:
+/etc/apparmor.d/usr.sbin.ntpd
