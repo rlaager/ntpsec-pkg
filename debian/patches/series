@@ -8,12 +8,12 @@ systemd-use-high-priority.patch
 systemd-do-not-restart.patch
 systemd-use-usr-sbin.patch
 systemd-cleanup-ntp-wait-service.patch
-
-# Not to be upstreamed
 refactor-ntpwait.patch
 add-ntpwait-quick-mode.patch
-systemd-ionice-ntpviz.patch
 systemd-remove-extra-dependencies.patch
+
+# Not to be upstreamed
+systemd-ionice-ntpviz.patch
 systemd-fix-man-section.patch
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
