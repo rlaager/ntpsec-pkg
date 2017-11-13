@@ -11,7 +11,7 @@ statsdir=$(grep -v '^#' /etc/ntp.conf | sed -nr 's/^statsdir[[:space:]]+([^[:spa
 
 # The ntpsec package, unlike ntp, uses /var/log/ntpstats as the default for
 # statsdir.
-if [ -n "$statsdir" ]; then
+if [ -z "$statsdir" ]; then
 	statsdir=/var/log/ntpstats
 fi
 
