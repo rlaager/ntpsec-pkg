@@ -51,6 +51,16 @@ If you use the SHM driver and apparmor, see the note in:
 /etc/apparmor.d/usr.sbin.ntpd
 
 
+ntpviz
+------
+
+A visualization utility, ntpviz, is available in the ntpsec-ntpviz
+package.  When installed, it will configure (by way of an /etc/ntp.d
+file) ntpd to log stats.  It adds systemd units and cron jobs that
+generate daily and weekly graphs from those stats.  If Apache is
+installed, these will be served at /ntpviz/ by default.
+
+
 DHCP
 ----
 
