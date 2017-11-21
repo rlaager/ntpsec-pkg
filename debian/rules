@@ -1,11 +1,10 @@
 #!/usr/bin/make -f
 
-DEB_HOST_ARCH_OS ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+include /usr/share/dpkg/default.mk
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+bindnow,+pie
 export DEB_CFLAGS_MAINT_APPEND = -fno-strict-aliasing
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
-include /usr/share/dpkg/buildflags.mk
 
 %:
 	dh $@ --with apache2,python3
@@ -195,13 +194,11 @@ override_dh_installifupdown:
 		debian/ntpsec-ntpdate/etc/network/if-up.d/ntpdate
 
 PKD  = $(abspath $(dir $(word 1,$(MAKEFILE_LIST))))
-PKG  = $(word 2,$(shell dpkg-parsechangelog -l$(PKD)/changelog --show-field=Source))
-VER ?= $(shell dpkg-parsechangelog -l$(PKD)/changelog | perl -ne 'print $$1 if m{^Version:\s+(?:\d+:)?(\d.*)(?:\-\d+.*)};')
 
 .PHONY: get-orig-source
 ## http://wiki.debian.org/onlyjob/get-orig-source
-get-orig-source:  $(info I: $(PKG)_$(VER))
+get-orig-source:  $(info I: $(DEB_SOURCE)_$(DEB_VERSION))
 	@echo "# Downloading..."
 	uscan --noconf --verbose --rename --destdir=$(CURDIR) \
 		--check-dirname-level=0 --force-download \
-		--download-version $(VER) $(PKD)
+		--download-version $(DEB_VERSION) $(PKD)
