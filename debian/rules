@@ -61,8 +61,7 @@ override_dh_auto_clean:
 		pylib/magic.py \
 		pylib/version.py \
 		.waf* \
-		wafhelpers/autorevision.sh \
-		wafhelpers/.autorevision-cache
+		wafhelpers/autorevision.sh
 	find -name "*.pyc" -delete
 
 override_dh_install:
