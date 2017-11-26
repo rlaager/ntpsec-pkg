@@ -1,27 +1,27 @@
 Description: systemd: Cleanup ntp-wait.service
  It seems more proper to do WantedBy=time-sync.target, and it achieves the
- same effect in practice.
+ proper effect.  Then, WantedBy implies a reverse Before, so the
+ Before=time-sync.target is redundant.
  .
- Also, there should be no need to repeat ntpd.service's conditions and
- conflicts here.
+ I assume the original arrangement was copied from systemd-timesyncd.  That
+ is more analogous to ntpd, not ntpwait.  In fact, systemd needs to add a
+ systemd-timesyncd-wait (which would be analogous to ntp-wait):
+ https://github.com/systemd/systemd/issues/5097
 Forwarded: no
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-07
+Last-Update: 2017-11-26
 --- a/etc/ntp-wait.service
 +++ b/etc/ntp-wait.service
-@@ -2,11 +2,7 @@
- Description=Wait for ntpd to synchronize system clock
+@@ -3,8 +3,6 @@
  Requires=ntpd.service
  After=ntpd.service
--Conflicts=systemd-timesyncd.service
+ Conflicts=systemd-timesyncd.service
 -Wants=time-sync.target
- Before=time-sync.target
--ConditionVirtualization=!container
--ConditionCapability=CAP_SYS_TIME
+-Before=time-sync.target
+ ConditionVirtualization=!container
+ ConditionCapability=CAP_SYS_TIME
  
- [Service]
- Type=oneshot
-@@ -15,4 +11,4 @@
+@@ -15,4 +13,4 @@
  StandardOutput=null
  
  [Install]
