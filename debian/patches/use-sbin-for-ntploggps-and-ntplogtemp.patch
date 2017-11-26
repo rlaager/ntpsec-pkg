@@ -42,7 +42,13 @@ Last-Update: 2017-11-12
      ctx.manpage(8, "ntpclients/ntpwait-man.txt")
 --- a/etc/ntploggps.service
 +++ b/etc/ntploggps.service
-@@ -6,4 +6,4 @@
+@@ -1,9 +1,9 @@
+ [Unit]
+-Documentation=man:ntploggps(1)
++Documentation=man:ntploggps(8)
+ Description=GPS information logger for ntpviz
+ Requisite=gpsd.service
+ After=gpsd.service
  
  [Service]
  Type=simple
@@ -50,7 +56,11 @@ Last-Update: 2017-11-12
 +ExecStart=/usr/sbin/ntploggps -o -l /var/log/ntpstats/gpsd
 --- a/etc/ntplogtemp.service
 +++ b/etc/ntplogtemp.service
-@@ -4,4 +4,4 @@
+@@ -1,7 +1,7 @@
+ [Unit]
+-Documentation=man:ntplogtemp(1)
++Documentation=man:ntplogtemp(8)
+ Description=Temperature information logger for ntpviz
  
  [Service]
  Type=simple
