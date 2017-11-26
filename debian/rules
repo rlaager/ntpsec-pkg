@@ -38,8 +38,15 @@ endif
 	# Most importantly, it is an attractive nuisance.  If someone is told
 	# that the best practice is to use "gpsd", they might logically think
 	# they should use the gpsd driver.
+	#
+	# We pass LDFLAGS as LINKFLAGS because LINKFLAGS appears first in the
+	# command line.  Debian wants to build with -fPIE for security reasons.
+	# This is not compatible with building shared libraries like the ntpc
+	# python extension.  If the -fPIE flag comes before -shared (or -fPIC),
+	# the latter will override, and the build succeeds.
 	CFLAGS='$(CFLAGS) $(CPPFLAGS)' \
-	LDFLAGS='$(LDFLAGS)' \
+	LDFLAGS='' \
+	LINKFLAGS='$(LDFLAGS)' \
 		python3 waf configure \
 		--prefix=/usr \
 		--enable-debug-gdb --enable-mssntp \
