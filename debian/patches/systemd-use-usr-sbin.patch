@@ -2,9 +2,17 @@ Description: systemd: Use /usr/sbin
  ntpd is installed to /usr/sbin by default.
 Forwarded: no
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-08
+Last-Update: 2017-11-26
 --- a/etc/ntpd.service
 +++ b/etc/ntpd.service
+@@ -1,6 +1,6 @@
+ [Unit]
+ Description=Network Time Service
+-Documentation=man:ntpd(1)
++Documentation=man:ntpd(8)
+ Wants=network.target
+ ConditionVirtualization=!container
+ ConditionCapability=CAP_SYS_TIME
 @@ -10,7 +10,7 @@
  [Service]
  Type=forking

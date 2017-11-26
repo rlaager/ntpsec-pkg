@@ -15,7 +15,6 @@ systemd-remove-extra-dependencies.patch
 # Not to be upstreamed
 use-upstream-version.patch
 systemd-ionice-ntpviz.patch
-systemd-fix-man-section.patch
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
 systemd-use-ntpwait--q.patch
