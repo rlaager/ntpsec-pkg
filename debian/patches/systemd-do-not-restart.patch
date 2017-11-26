@@ -3,6 +3,12 @@ Description: systemd: Do not restart
  the clock on boot.  However, if Restart=yes is set, a malicious (or broken)
  server could send the incorrect time, trip the panic threshold, and when
  ntpd restarts, serve it the incorrect time (which would be accepted).
+ .
+ See page 16 here:
+ http://events.linuxfoundation.org/sites/events/files/slides/vangundy-ntp-security.pdf
+ .
+ This can probably be done by a MITM attacker too, making this essentially
+ the same as CVE-2015-5300.
 Forwarded: no
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-08
