@@ -2,7 +2,7 @@ Description: Add ntpwait quick mode
  By default, ntpwait waits for a full synchronization. With this option,
  ntpwait only waits for the initial clock step to occur (or, without "ntp -g",
  for slewing to begin).
-Forwarded: no
+Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/580
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-12
 --- a/docs/includes/ntpwait-body.txt

@@ -1,6 +1,6 @@
 Description: Refactor ntpwait
  This refactors the code a bit to make way for another change.
-Forwarded: no
+Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/580
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-12

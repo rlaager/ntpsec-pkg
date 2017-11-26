@@ -3,7 +3,7 @@ Description: Fix Python PIE build
  compatible with building shared libraries like the ntpc python extension.  If
  the -fPIE flag comes before -shared (or -fPIC), the latter will override, and
  the build succeeds.
-Forwarded: not-needed
+Forwarded: https://github.com/waf-project/waf/pull/2080
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-12

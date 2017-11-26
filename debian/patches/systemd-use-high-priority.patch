@@ -1,6 +1,6 @@
 Description: systemd: Use high priority
  Use -N to raise the priority of ntpd.
-Forwarded: no
+Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/575
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-08
 --- a/etc/ntpd.service

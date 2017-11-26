@@ -1,6 +1,6 @@
 Description: Fix spectracom log prefixes
  The spectracom driver was logging with the old "wwvb" prefix.
-Forwarded: no
+Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/572
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-12

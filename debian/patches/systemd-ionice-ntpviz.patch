@@ -1,7 +1,7 @@
 Description: systemd: ionice ntpviz
  ntpviz tries to use psutil to ionice itself.  Doing it here means it works
  without needing psutil installed, saving a dependency.
-Forwarded: not-needed
+Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/582
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-10
 --- a/etc/ntpviz-daily.service

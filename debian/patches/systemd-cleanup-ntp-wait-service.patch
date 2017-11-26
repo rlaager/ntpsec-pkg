@@ -7,13 +7,13 @@ Description: systemd: Cleanup ntp-wait.service
  is more analogous to ntpd, not ntpwait.  In fact, systemd needs to add a
  systemd-timesyncd-wait (which would be analogous to ntp-wait):
  https://github.com/systemd/systemd/issues/5097
-Forwarded: no
+Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/581
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-26
 --- a/etc/ntp-wait.service
 +++ b/etc/ntp-wait.service
 @@ -3,8 +3,6 @@
- Requires=ntpd.service
+ Requisite=ntpd.service
  After=ntpd.service
  Conflicts=systemd-timesyncd.service
 -Wants=time-sync.target

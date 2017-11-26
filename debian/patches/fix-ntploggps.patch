@@ -3,13 +3,13 @@ Description: Fix ntploggps
  message.  This fixes the delivery of TDOP (which was otherwise always zero for
  me) and the satellite count (which was often zero).  It also waits for a valid
  TPV message, ensuring it can report the device properly.
-Forwarded: no
+Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/579
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-10
+Last-Update: 2017-11-26
 --- a/ntpclients/ntploggps
 +++ b/ntpclients/ntploggps
-@@ -126,6 +126,9 @@
+@@ -132,6 +132,9 @@
  
      def __init__(self):
          threading.Thread.__init__(self)
@@ -19,7 +19,7 @@ Last-Update: 2017-11-10
          # start the streaming of gps data
          try:
              self.gpsd = gps.gps(mode=gps.WATCH_ENABLE)
-@@ -137,23 +140,30 @@
+@@ -143,23 +146,30 @@
  
      def run(self):
          while gpsp.running:
@@ -63,7 +63,7 @@ Last-Update: 2017-11-10
  
  if __name__ == '__main__':
      # this is the main thread
-@@ -174,10 +184,20 @@
+@@ -180,10 +190,20 @@
              # It may take a second or two to get good data
  
              try:

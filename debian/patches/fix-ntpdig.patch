@@ -2,6 +2,7 @@ Description: Fix ntpdig
  ntpdig (and by extension, the ntpdate wrapper) does not correctly set the
  time.
 Forwarded: https://gitlab.com/NTPsec/ntpsec/issues/407
+Applied-Upstream: https://gitlab.com/NTPsec/ntpsec/commit/4d8d801c3829ca2dad287c502c3aef3cb5a736ef
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-06
 --- a/ntpclients/ntpdig

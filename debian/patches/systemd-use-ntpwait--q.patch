@@ -7,10 +7,10 @@ Description: Use ntpwait -q
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-12
+Last-Update: 2017-11-26
 --- a/etc/ntp-wait.service
 +++ b/etc/ntp-wait.service
-@@ -6,7 +6,7 @@
+@@ -8,7 +8,7 @@
  
  [Service]
  Type=oneshot

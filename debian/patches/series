@@ -1,5 +1,8 @@
-# To be upstreamed
+# Applied upstream
 fix-ntpdig.patch
+systemd-remove-extra-dependencies.patch
+
+# Forwarded upstream
 fix-name-of-psutil.patch
 fix-ntpviz-file-encodings.patch
 fix-spectracom-log-prefixes.patch
@@ -8,13 +11,13 @@ systemd-use-high-priority.patch
 systemd-do-not-restart.patch
 systemd-use-usr-sbin.patch
 systemd-cleanup-ntp-wait-service.patch
+systemd-ionice-ntpviz.patch
 refactor-ntpwait.patch
 add-ntpwait-quick-mode.patch
-systemd-remove-extra-dependencies.patch
+fix-ntploggps.patch
 
-# Not to be upstreamed
+# Forwarding not needed
 use-upstream-version.patch
-systemd-ionice-ntpviz.patch
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
 systemd-use-ntpwait--q.patch
@@ -23,7 +26,6 @@ hardcode-python3-path.patch
 use-python2-for-ntploggps.patch
 update-refclock-docs.patch
 use-etc-ntpviz-for-header-and-footer.patch
-fix-ntploggps.patch
 use-var-log-ntpstats-for-stats.patch
 use-sbin-for-ntploggps-and-ntplogtemp.patch
 fix-python-pie-build.patch
