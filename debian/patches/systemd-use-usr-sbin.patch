@@ -1,6 +1,7 @@
 Description: systemd: Use /usr/sbin
  ntpd is installed to /usr/sbin by default.
 Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/587
+Applied-Upstream: https://gitlab.com/NTPsec/ntpsec/commit/aa7efef660fd8dca2dc20f07c558f6099c709df3
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-26
 --- a/etc/ntpd.service
