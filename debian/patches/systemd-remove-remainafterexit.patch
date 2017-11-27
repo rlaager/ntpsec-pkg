@@ -1,6 +1,7 @@
 Description: systemd: Remove RemainAfterExit
  RemainAfterExit is not proper here.
 Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/574
+Applied-Upstream: https://gitlab.com/NTPsec/ntpsec/commit/830fd14008149b9000741c1ca697f70d56dbdc66
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-08
 --- a/etc/ntpd.service

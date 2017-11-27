@@ -1,20 +1,20 @@
 # Applied upstream
 fix-ntpdig.patch
 systemd-remove-extra-dependencies.patch
-
-# Forwarded upstream
 fix-name-of-psutil.patch
-fix-ntpviz-file-encodings.patch
 fix-spectracom-log-prefixes.patch
+fix-ntpviz-file-encodings.patch
 systemd-remove-remainafterexit.patch
 systemd-use-high-priority.patch
-systemd-do-not-restart.patch
-systemd-use-usr-sbin.patch
-systemd-cleanup-ntp-wait-service.patch
 systemd-ionice-ntpviz.patch
+systemd-cleanup-ntp-wait-service.patch
+fix-ntploggps.patch
+
+# Forwarded upstream
+systemd-use-usr-sbin.patch
+systemd-do-not-restart.patch
 refactor-ntpwait.patch
 add-ntpwait-quick-mode.patch
-fix-ntploggps.patch
 
 # Forwarding not needed
 use-upstream-version.patch

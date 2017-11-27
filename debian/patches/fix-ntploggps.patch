@@ -3,9 +3,14 @@ Description: Fix ntploggps
  message.  This fixes the delivery of TDOP (which was otherwise always zero for
  me) and the satellite count (which was often zero).  It also waits for a valid
  TPV message, ensuring it can report the device properly.
+ .
+ Matt Selsky fixed a tabs-vs-spaces mistake.
 Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/579
+Applied-Upstream: https://gitlab.com/NTPsec/ntpsec/commit/3d3cd2f382c5375f11bf7cec6e98dc7677abdfec
+Applied-Upstream: https://gitlab.com/NTPsec/ntpsec/commit/7420f0ec82deb9fdd76fbd10d76e7e6026ee43d0
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
+Author: Matt Selsky <matthew.selsky@twosigma.com>
 Last-Update: 2017-11-26
 --- a/ntpclients/ntploggps
 +++ b/ntpclients/ntploggps
@@ -81,8 +86,8 @@ Last-Update: 2017-11-26
 +                   satellites_used is not None and \
 +                   tdop is not None:
 +                    if last_time != current_time:
-+			s = '%i %s %f %d' % (current_time, device, tdop,
-+					     satellites_used)
++                        s = '%i %s %f %d' % (current_time, device, tdop,
++                                             satellites_used)
 +                        Logger.info(s)
 +                        last_time = current_time
                      if args.once:

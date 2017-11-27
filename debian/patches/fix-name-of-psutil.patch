@@ -1,6 +1,7 @@
 Description: Fix name of psutil
  psutil and psutils are different software packages with different purposes.
 Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/571
+Applied-Upstream: https://gitlab.com/NTPsec/ntpsec/commit/42f36d8eb691ca9bb403b9f8efbb04e6538708ef
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-10

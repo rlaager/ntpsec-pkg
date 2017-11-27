@@ -1,6 +1,6 @@
 Description: systemd: Use /usr/sbin
  ntpd is installed to /usr/sbin by default.
-Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/574
+Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/587
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-26
 --- a/etc/ntpd.service
@@ -19,6 +19,6 @@ Last-Update: 2017-11-26
  PrivateTmp=true
 -ExecStart=/usr/bin/ntpd -g -N -u ntp:ntp
 +ExecStart=/usr/sbin/ntpd -g -N -u ntp:ntp
- # Specifying -g on the command line allows ntpd to make large adjustments to
- # the clock on boot.  However, if Restart=yes is set, a malicious (or broken)
- # server could send the incorrect time, trip the panic threshold, and when
+ Restart=always
+ 
+ [Install]

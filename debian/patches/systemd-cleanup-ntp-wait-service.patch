@@ -8,6 +8,7 @@ Description: systemd: Cleanup ntp-wait.service
  systemd-timesyncd-wait (which would be analogous to ntp-wait):
  https://github.com/systemd/systemd/issues/5097
 Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/581
+Applied-Upstream: https://gitlab.com/NTPsec/ntpsec/commit/a905a7618268c90e54fdd4d07aabfa04de6cf964
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-26
 --- a/etc/ntp-wait.service

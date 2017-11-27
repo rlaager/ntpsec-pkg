@@ -1,6 +1,7 @@
 Description: Fix ntpviz file encodings
  This fixes ntpviz on python3.  We need to specify the file encoding.
 Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/573
+Applied-Upstream: https://gitlab.com/NTPsec/ntpsec/commit/03176993a0465257270108e21516ff30aa600f51
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-11
