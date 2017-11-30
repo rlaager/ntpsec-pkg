@@ -10,9 +10,9 @@ systemd-ionice-ntpviz.patch
 systemd-cleanup-ntp-wait-service.patch
 fix-ntploggps.patch
 systemd-use-usr-sbin.patch
+systemd-do-not-restart.patch
 
 # Forwarded upstream
-systemd-do-not-restart.patch
 refactor-ntpwait.patch
 add-ntpwait-quick-mode.patch
 

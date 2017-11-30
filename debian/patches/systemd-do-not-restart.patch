@@ -10,6 +10,7 @@ Description: systemd: Do not restart
  This can probably be done by a MITM attacker too, making this essentially
  the same as CVE-2015-5300.
 Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/576
+Applied-Upstream: https://gitlab.com/NTPsec/ntpsec/commit/8459d15f8cf19a54cf149779d0d967883aa5c6b4
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-08
 --- a/etc/ntpd.service
