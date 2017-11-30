@@ -143,7 +143,7 @@ Copyright: 2015 Ximin Luo <infinity0@debian.org>
            2016-2017 Richard Laager <rlaager@wiktel.com>
 License: CC0
 
-Files: ascii.h include/binio.h include/ieee754io.h include/parse_conf.h include/parse.h include/trimble.h libparse/binio.c libparse/clk_dcf7000.c libparse/clk_meinberg.c libparse/clk_rawdcf.c libparse/clk_schmid.c libparse/clk_trimtaip.c libparse/clk_trimtsip.c libparse/data_mbg.c libparse/gpstolfp.c libparse/ieee754io.c libparse/parse.c libparse/parse_conf.c libparse/trim_info.c ntpd/refclock_generic.c
+Files: include/ascii.h include/binio.h include/ieee754io.h include/parse_conf.h include/parse.h include/trimble.h libparse/binio.c libparse/clk_dcf7000.c libparse/clk_meinberg.c libparse/clk_rawdcf.c libparse/clk_schmid.c libparse/clk_trimtaip.c libparse/clk_trimtsip.c libparse/data_mbg.c libparse/gpstolfp.c libparse/ieee754io.c libparse/parse.c libparse/parse_conf.c libparse/trim_info.c ntpd/refclock_generic.c
 Copyright: 1989-2015 Frank Kardel <kardel@ntp.org>
            2015-2017 NTPsec project contributors
 License: BSD-3-clause
@@ -156,7 +156,7 @@ Files: devel/hacking.txt
 Copyright: 2015-2017 NTPsec project contributors
 License: CC-BY-4.0
 
-Files: include/isc_error.h include/isc_interfaceiter.h include/isc_netaddr.h include/isc_result.h include/ntp_assert.h libntp/assert.c libntp/isc_error.c libntp/isc_interfaceiter.c libntp/isc_net.c libntp/strl_obsd.
+Files: include/isc_error.h include/isc_interfaceiter.h include/isc_netaddr.h include/isc_result.h include/ntp_assert.h libntp/assert.c libntp/isc_error.c libntp/isc_interfaceiter.c libntp/isc_net.c libntp/strl_obsd.c
 Copyright: 1999-2003 Internet Software Consortium
            2004-2015 Internet Systems Consortium, Inc. ("ISC")
            2015-2017 NTPsec project contributors
@@ -205,8 +205,8 @@ Comment: This is currently used.  The plan is to create a standalone package of
          standalone libjsmn package once it is created.
 License: Expat
 
-Files: libntp/ntp_dns.c libntp/ntp_random.c
-Copyright: 1983, 1993 The Regents of the University of California
+Files: libntp/ntp_dns.c libntp/ntp_random.c ntpd/refclock_jupiter.c
+Copyright: 1983, 1993, 1997, 1998, 2003 The Regents of the University of California
            2015-2017 by the NTPsec project contributors
 License: BSD-4-Clause-UC
 
@@ -271,11 +271,6 @@ License: BSD-3-clause-Abe
  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT ( INCLUDING
  NEGLIGENCE OR OTHERWISE ) ARISING IN ANY WAY OUT OF THE USE OF
  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-Files: ntpd/refclock_jupiter.c
-Copyright: 1997, 1998, 2003 The Regents of the University of California
-           2015-2017 by the NTPsec project contributors
-License: BSD-4-Clause-UC
 
 Files: ntpd/refclock_oncore.c
 Copyright: Poul-Henning Kamp <phk@FreeBSD.ORG>
