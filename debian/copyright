@@ -205,8 +205,8 @@ Comment: This is currently used.  The plan is to create a standalone package of
          standalone libjsmn package once it is created.
 License: Expat
 
-Files: libntp/ntp_dns.c libntp/ntp_random.c ntpd/refclock_jupiter.c
-Copyright: 1983, 1993, 1997, 1998, 2003 The Regents of the University of California
+Files: libntp/ntp_dns.c libntp/ntp_random.c
+Copyright: 1983, 1993 The Regents of the University of California
            2015-2017 by the NTPsec project contributors
 License: BSD-4-Clause-UC
 
