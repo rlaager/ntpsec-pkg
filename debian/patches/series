@@ -12,15 +12,10 @@ fix-ntploggps.patch
 systemd-use-usr-sbin.patch
 systemd-do-not-restart.patch
 
-# Forwarded upstream
-refactor-ntpwait.patch
-add-ntpwait-quick-mode.patch
-
 # Forwarding not needed
 use-upstream-version.patch
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
-systemd-use-ntpwait--q.patch
 systemd-configure-ntpviz.patch
 hardcode-python3-path.patch
 use-python2-for-ntploggps.patch
