@@ -26,6 +26,9 @@
   capability sys_resource,
   capability sys_time,
   capability sys_nice,
+  # This is needed for /var/lib/ntp/ntp.drift, which is read on startup, as
+  # root, but is owned by ntp and has mode 600.
+  capability dac_override,
 
   # ntp uses AF_INET, AF_INET6 and AF_UNSPEC
   network dgram,
