@@ -1,3 +1,12 @@
+ntpsec (1.0.0+dfsg1-2) unstable; urgency=medium
+
+  * debian/apparmor-profile: add attach_disconnected.
+    Thanks to Christian Ehrhardt <christian.ehrhardt@canonical.com>
+  * Fix reading the drift file on startup
+  * Drop the ntpwait "quick mode" patch
+
+ -- Richard Laager <rlaager@wiktel.com>  Wed, 13 Dec 2017 17:18:10 -0600
+
 ntpsec (1.0.0+dfsg1-1) unstable; urgency=medium
 
   * Initial release. (Closes: #819806)
