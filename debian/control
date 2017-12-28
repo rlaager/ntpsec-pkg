@@ -24,6 +24,8 @@ Build-Conflicts: libavahi-compat-libdnssd-dev,
                  libwww-dev,
                  libwww-ssl-dev
 Standards-Version: 4.1.2
+Vcs-Browser: https://github.com/rlaager/ntpsec-pkg
+Vcs-Git: https://github.com/rlaager/ntpsec-pkg.git
 Homepage: https://www.ntpsec.org
 
 Package: ntpsec
