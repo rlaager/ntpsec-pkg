@@ -3,14 +3,15 @@ Upstream-Name: NTPsec
 Source: https://www.ntpsec.org
 
 Files: *
-Copyright: 1992-2009 David L. Mills
+Copyright: 2011-2017 Network Time Foundation
+           2015-2017 NTPsec project contributors
            Mark Andrews <mark_andrews@isc.org>
              Leitch atomic clock controller
            Bernd Altmeier <altmeier@atlsoft.de>
              hopf Elektronik serial line and PCI-bus devices
            Viraj Bais <vbais@mailman1.intel.com>
-           Clayton Kirkwood <kirkwood@striderfm.intel.com>
-             port to WindowsNT 3.5
+           Nelson B Bolyard <nelson@bolyard.me>
+             update and complete broadcast and crypto features in sntp
            Michael Barone <michael,barone@lmco.com>
              GPSVME fixes
            Jean-Francois Boudreault <Jean-Francois.Boudreault@viagenie.qc.ca>
@@ -39,8 +40,16 @@ Copyright: 1992-2009 David L. Mills
              Linux port
            Dennis Ferguson <dennis@mrbill.canet.ca>
              foundation code for NTP Version 2 as specified in RFC-1119
+           Daniel Fox Franke <dfranke@dfranke.us>
+             CVE fixes, protocol machine refactoring
            John Hay <jhay@@icomtek.csir.co.za>
              IPv6 support and testing
+           Dave Hart <davehart@davehart.com>
+             General maintenance
+           Damon Hart-Davis <d@hd.org>
+             ARCRON MSF clock driver
+           Claas Hilbrecht <neoclock4x@linum.com>
+             NeoClock4X clock driver
            Glenn Hollinger <glenn@herald.usask.ca>
              GOES clock driver (removed in NTPsec)
            Mike Iglesias <iglesias@uci.edu>
@@ -49,18 +58,22 @@ Copyright: 1992-2009 David L. Mills
              A/UX port
            Jeff Johnson <jbj@chatham.usdesign.com>
              massive prototyping overhaul
-           Hans Lambermont <Hans.Lambermont@nl.origin-it.com>
-                           <H.Lambermont@chello.nl>
-             ntpsweep
+           William L. Jones <jones@hermes.chpc.utexas.edu>
+             RS/6000 AIX modifications, HPUX modifications
            Poul-Henning Kamp <phk@FreeBSD.ORG>
              Oncore driver (Original author)
            Frank Kardel <kardel@ntp.org>
              PARSE <GENERIC> driver (>14 reference clocks), STREAMS modules for
              PARSE, support scripts, syslog cleanup, dynamic interface handling
-           William L. Jones <jones@hermes.chpc.utexas.edu>
-             RS/6000 AIX modifications, HPUX modifications
            Dave Katz <dkatz@cisco.com>
              RS/6000 AIX port
+           Johannes Maximilian Kuehn <kuehn@ntp.org>
+             Rewrote sntp (now ntpdig) to comply with NTPv4 specification
+           Clayton Kirkwood <kirkwood@striderfm.intel.com>
+             port to WindowsNT 3.5
+           Hans Lambermont <Hans.Lambermont@nl.origin-it.com>
+                           <H.Lambermont@chello.nl>
+             ntpsweep
            Craig Leres <leres@ee.lbl.gov>
              4.4BSD port, ppsclock, Magnavox GPS clock driver
            George Lindholm <lindholm@ucs.ubc.ca>
@@ -72,6 +85,11 @@ Copyright: 1992-2009 David L. Mills
              RFC-1305
            Danny Mayer <mayer@ntp.org>
              Network I/O, Windows Port, Code Maintenance
+           Gary E. Miller <gem@rellim.com>
+             Code ANSIfication, testing, ntpviz
+           1992-2009 David L. Mills
+             Version 4 foundation, precision kernel
+             clock drivers: 1, 3, 4, 6, 7, 11, 13, 18, 19, 22, 36
            Wolfgang Moeller <moeller@gwdgv1.dnet.gwdg.de>
              VMS port
            Jeffrey Mogul <mogul@pa.dec.com>
@@ -82,10 +100,16 @@ Copyright: 1992-2009 David L. Mills
              SCO OpenServer port
            Derek Mulcahy <derek@toybox.demon.co.uk>
              ARCRON MSF clock driver
-           Damon Hart-Davis <d@hd.org>
-             ARCRON MSF clock driver
+           Hal Murray <hmurray@megapathdsl.net>
+             Code cleanups, bug hunting, sage advice
+           Rob Neal <neal@ntp.org>
+             code maintenance
            Rainer Pruy <Rainer.Pruy@informatik.uni-erlangen.de>
              monitoring/trap scripts, statistics file handling
+           Eric S. Raymond <esr@thyrsus.com>
+             Massive code reduction/refactoring/hardening
+             documentation cleanup and update
+             new refclock configuration syntax
            Dirce Richards <dirce@zk3.dec.com>
              Digital UNIX V4.0 port
            Wilfredo Sánchez <wsanchez@apple.com>
@@ -96,23 +120,35 @@ Copyright: 1992-2009 David L. Mills
              Saved a Lot of space on the stuff in the html/pic/ subdirectory
            Ray Schnitzler <schnitz@unipress.com>
              Unixware1 port
+           Matt Selsky <matthew.selsky@twosigma.com>
+             Documentation corrections, compiler warning and port cleanup
+           Michael Shields <shields@tembel.org>
+             USNO clock driver
+           Jack Sasportas <jack@innovativeinternet.com>
+             Saved a Lot of space on the stuff in the html/pic/ subdirectory
            Michael Shields <shields@tembel.org>
              USNO clock driver
            Jeff Steinman <jss@pebbles.jpl.nasa.gov>
              Datum PTS clock driver
            Harlan Stenn <harlan@pfcs.com>
              GNU automake/autoconfigure makeover, various other bits
+             (see the ChangeLog)
            Kenneth Stone <ken@sdd.hp.com>
              HP-UX port
+           Amar Takhar <verm@darkbeer.org>
+            waf build recipe
            Ajit Thyagarajan <ajit@ee.udel.edu>
              IP multicast/anycast support
            Tomoaki TSURUOKA <tsuruoka@nc.fukuoka-u.ac.jp>
              TRAK clock driver
+           Brian Utterback <brian.utterback@oracle.com>
+             General codebase
+           Loganaden Velvindron <loganaden@gmail.com>
+             Sandboxing (libseccomp) support
            Paul A Vixie <vixie@vix.com>
              TrueTime GPS driver, generic TrueTime clock driver
            Ulrich Windl <Ulrich.Windl@rz.uni-regensburg.de>
              corrected and validated HTML documents according to the HTML DTD
-           2015-2017 NTPsec project contributors
 License: NTP
 
 Files: debian/*
@@ -156,6 +192,11 @@ Files: devel/hacking.txt
 Copyright: 2015-2017 NTPsec project contributors
 License: CC-BY-4.0
 
+Files: devel/trace/*.ini
+Copyright: 2015 Chris Johns <chrisj@ntpsec.org>
+           2015-2017 NTPsec project contributors
+License: NTP
+
 Files: include/isc_error.h include/isc_interfaceiter.h include/isc_netaddr.h include/isc_result.h include/ntp_assert.h libntp/assert.c libntp/isc_error.c libntp/isc_interfaceiter.c libntp/isc_net.c libntp/strl_obsd.c
 Copyright: 1999-2003 Internet Software Consortium
            2004-2015 Internet Systems Consortium, Inc. ("ISC")
@@ -167,17 +208,6 @@ Comment: This is not compatible with upstream libisc. The NTPsec lead developer
            the ISC export library shipped with BIND9.  Most of the code in that
            library was not needed and has been discarded.
 License: ISC
- Permission to use, copy, modify, and distribute this software for any
- purpose with or without fee is hereby granted, provided that the above
- copyright notice and this permission notice appear in all copies.
- .
- THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- PERFORMANCE OF THIS SOFTWARE.
 
 Files: include/ntp_filegen.h ntpd/ntp_filegen.c
 Copyright: 1992, 1996 by Rainer Pruy
@@ -205,10 +235,20 @@ Comment: This is currently used.  The plan is to create a standalone package of
          standalone libjsmn package once it is created.
 License: Expat
 
+Files: libntp/emalloc.c
+Copyright: 2008 Otto Moerbeek <otto@drijf.net>
+           2015-2017 NTPsec project contributors
+License: NTP and ISC
+
 Files: libntp/ntp_dns.c libntp/ntp_random.c
 Copyright: 1983, 1993 The Regents of the University of California
            2015-2017 by the NTPsec project contributors
 License: BSD-4-Clause-UC
+
+Files: libntp/strl_obsd.c
+Copyright: 1998 Todd C. Miller <Todd.Miller@courtesan.com>
+           2015-2017 NTPsec project contributors
+License: ISC
 
 Files: libparse/clk_computime.c
 Copyright: Alois Camenzind <alois.camenzind@ubs.ch>
@@ -275,6 +315,9 @@ License: BSD-3-clause-Abe
 Files: ntpd/refclock_oncore.c
 Copyright: Poul-Henning Kamp <phk@FreeBSD.ORG>
            2015-2017 by the NTPsec project contributors
+Comment: The "COPYRIGHT 1991-1994 MOTOROLA INC." and similar are part of a
+ copy of text from a label on hardware, to illustrate the models of hardware
+ the driver was tested with.
 License: Beerware
  As long as you retain this notice you can do whatever you want with this
  stuff. If we meet some day, and you think this stuff is worth it, you can buy
@@ -311,6 +354,15 @@ License: BSD-4-clause-Trimble
  OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  SUCH DAMAGE.
 
+Files: packaging/SUSE/ntpsec.spec
+Copyright: 2016 Malcolm J Lewis <malcolmlewis@opensuse.org>
+           2017 SUSE LINUX GmbH
+License: NTP
+
+Files: packaging/SUSE/ntp.conf
+Copyright: 2017 SUSE LINUX GmbH
+License: NTP
+
 Files: tests/unity/*
 Copyright: 2010 James Grenning
            2007-2014 Mike Karlesky, Mark VanderVoord, Greg Williams
@@ -319,6 +371,10 @@ License: Expat
 Files: waf waflib/*
 Copyright: 2005-2017 Thomas Nagy
 License: BSD-3-clause
+
+Files: wafhelpers/autorevision.sh
+Copyright: 2012-2016 dak180 <dak180@users.sourceforge.net> and contributors
+License: Expat
 
 License: BSD-2-clause
  Redistribution and use in source and binary forms, with or without
@@ -798,6 +854,19 @@ License: Expat
  CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License: ISC
+ Permission to use, copy, modify, and distribute this software for any
+ purpose with or without fee is hereby granted, provided that the above
+ copyright notice and this permission notice appear in all copies.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
+ REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+ AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
+ INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+ LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+ OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+ PERFORMANCE OF THIS SOFTWARE.
 
 License: NTP
  Permission to use, copy, modify, and distribute this software and
