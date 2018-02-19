@@ -169,7 +169,7 @@ endif
 	dh_link
 	dh_install
 
-override_dh_installinit:
+override_dh_installinit-arch:
 	dh_installinit -pntpsec --name=ntp --error-handler=installinit_error
 	dh_installinit -pntpsec-ntpviz --name=ntpviz
 	dh_installinit -pntpsec-ntpdate
@@ -189,12 +189,12 @@ override_dh_systemd_start:
 		ntpviz-daily.timer \
 		ntpviz-weekly.timer
 
-override_dh_installlogcheck:
+override_dh_installlogcheck-arch:
 	dh_installlogcheck -a
 	mv debian/ntpsec-ntpdate/etc/logcheck/ignore.d.server/ntpsec-ntpdate \
 		debian/ntpsec-ntpdate/etc/logcheck/ignore.d.server/ntpdate
 
-override_dh_installifupdown:
+override_dh_installifupdown-arch:
 	dh_installifupdown -a
 	mv debian/ntpsec-ntpdate/etc/network/if-up.d/ntpsec-ntpdate \
 		debian/ntpsec-ntpdate/etc/network/if-up.d/ntpdate
