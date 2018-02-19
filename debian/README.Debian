@@ -171,5 +171,10 @@ If your system uses AppArmor, please note that the shipped enforcing profile
 works with the default installation, and changes in your configuration may
 require changes to the installed apparmor profile. Please see
 https://wiki.ubuntu.com/DebuggingApparmor before filing a bug against this
-software.  If you use the SHM driver, see the note in:
-/etc/apparmor.d/usr.sbin.ntpd
+software.
+
+For use with clocks that report via shared memory (e.g. gpsd), you may need
+to give ntpd access to all of shared memory, though this can be considered
+dangerous. See https://launchpad.net/bugs/722815 for details. To enable, add
+this to /etc/apparmor.d/local/usr.sbin.ntpd:
+    capability ipc_owner,
