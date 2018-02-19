@@ -38,15 +38,13 @@ Depends: adduser,
          tzdata (>= 2015d-1),
          ${misc:Depends},
          ${shlibs:Depends}
-Pre-Depends: dpkg (>= 1.15.7.2)
 Recommends: systemd | cron | cron-daemon
 Suggests: apparmor (>= 2.1+1075-0ubuntu6),
           ntpsec-doc,
           ntpsec-ntpviz
 Breaks: apparmor (<< 2.3.1+1403-0ubuntu10),
         apparmor-profiles (<< 2.3.1+1403-0ubuntu10),
-        apparmor-profiles-extra (<< 1.8),
-        dhcp3-client (<< 4.1.0-1)
+        apparmor-profiles-extra (<< 1.8)
 Conflicts: ntp,
            time-daemon
 Provides: time-daemon
@@ -80,8 +78,6 @@ Depends: netbase,
          ${shlibs:Depends}
 Conflicts: ntpdate
 Replaces: ntpdate
-Pre-Depends: dpkg (>= 1.15.7.2)
-Breaks: dhcp3-client (<< 4.1.0-1)
 Description: client for setting system time from NTP servers
  NTP, the Network Time Protocol, is used to keep computer clocks
  accurate by synchronizing them over the Internet or a local network,
