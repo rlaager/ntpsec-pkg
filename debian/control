@@ -75,6 +75,7 @@ Package: ntpsec-ntpdate
 Architecture: any
 Depends: netbase,
          python3 (>= 3.3),
+         python3-ntp,
          ${misc:Depends},
          ${shlibs:Depends}
 Conflicts: ntpdate
