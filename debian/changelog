@@ -1,3 +1,24 @@
+ntpsec (1.0.0+dfsg1-3) unstable; urgency=medium
+
+  * Add Vcs-* headers
+  * Update Standards-Version to 4.1.3
+  * Improve debian/copyright (Closes: 890758)
+  * Bump the autorevision version requirement (Closes: 890761)
+  * Fix FTBFS when building arch-indep only.
+    Thanks to Daniel Baumann <daniel.baumann@progress-linux.org>
+    (Closes: 890762)
+  * Make ntpsec-ntpdate depend on python3-ntp (Closes: 890770)
+  * Inline the SHM message in README.Debian
+  * Add note about AppArmor tunable in README.Debian.
+    Thanks to Bernhard Schmidt <berni@debian.org>
+  * Drop historic Breaks/Pre-Depends.
+    Thanks to Bernhard Schmidt <berni@debian.org>
+  * Changes as of ntp_4.2.8p10+dfsg-6 have been merged as appropriate, except
+    the patch for the increased stack size for bug #887385.  I have asked
+    upstream if this is applicable to NTPsec.
+
+ -- Richard Laager <rlaager@wiktel.com>  Sun, 18 Feb 2018 23:57:34 -0600
+
 ntpsec (1.0.0+dfsg1-2) unstable; urgency=medium
 
   * debian/apparmor-profile: add attach_disconnected.
