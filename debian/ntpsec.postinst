@@ -18,7 +18,7 @@ if [ "$1" = "configure" ]; then
 
 	# If the directory does exist, make sure the ownership is correct.
 	if [ -d /var/log/ntpstats ]; then
-		chown -R ntp:ntp /var/log/ntpstats
+		chown ntp:ntp /var/log/ntpstats
 	fi
 fi
 
