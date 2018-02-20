@@ -13,9 +13,7 @@ ntpsec (1.0.0+dfsg1-3) unstable; urgency=medium
     Thanks to Bernhard Schmidt <berni@debian.org>
   * Drop historic Breaks/Pre-Depends.
     Thanks to Bernhard Schmidt <berni@debian.org>
-  * Changes as of ntp_4.2.8p10+dfsg-6 have been merged as appropriate, except
-    the patch for the increased stack size for bug #887385.  I have asked
-    upstream if this is applicable to NTPsec.
+  * Changes as of ntp_4.2.8p10+dfsg-6 have been merged as appropriate.
 
  -- Richard Laager <rlaager@wiktel.com>  Sun, 18 Feb 2018 23:57:34 -0600
 
