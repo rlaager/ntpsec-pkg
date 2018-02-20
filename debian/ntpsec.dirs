@@ -2,4 +2,3 @@ etc/apparmor.d/force-complain
 etc/apparmor.d/tunables
 usr/sbin
 usr/share/apport/package-hooks
-var/lib/ntp
