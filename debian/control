@@ -108,7 +108,8 @@ Depends: fonts-liberation,
 Recommends: ntpsec,
             systemd | python3-psutil,
             ${misc:Recommends}
-Suggests: python-gps
+Suggests: python,
+          python-gps
 Description: NTP statistics graphing utility
  NTP, the Network Time Protocol, is used to keep computer clocks
  accurate by synchronizing them over the Internet or a local network,
