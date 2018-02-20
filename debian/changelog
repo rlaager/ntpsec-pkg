@@ -13,9 +13,14 @@ ntpsec (1.0.0+dfsg1-3) unstable; urgency=medium
     Thanks to Bernhard Schmidt <berni@debian.org>
   * Drop historic Breaks/Pre-Depends.
     Thanks to Bernhard Schmidt <berni@debian.org>
+  * ntpsec: Stop creating /var/log/ntpstats
+  * ntpsec-ntpviz: Add Suggests: python
+  * Create /var/lib/ntp in the postinst
+  * Do not recursively chown /var/log/ntpstats
+  * Suppress a lintian warning
   * Changes as of ntp_4.2.8p10+dfsg-6 have been merged as appropriate.
 
- -- Richard Laager <rlaager@wiktel.com>  Sun, 18 Feb 2018 23:57:34 -0600
+ -- Richard Laager <rlaager@wiktel.com>  Tue, 20 Feb 2018 02:27:41 -0600
 
 ntpsec (1.0.0+dfsg1-2) unstable; urgency=medium
 
