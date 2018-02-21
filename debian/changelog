@@ -18,9 +18,10 @@ ntpsec (1.0.0+dfsg1-3) unstable; urgency=medium
   * Create /var/lib/ntp in the postinst
   * Do not recursively chown /var/log/ntpstats
   * Suppress a lintian warning
+  * Drop historic apparmor Suggests/Breaks/Replaces
   * Changes as of ntp_4.2.8p10+dfsg-6 have been merged as appropriate.
 
- -- Richard Laager <rlaager@wiktel.com>  Tue, 20 Feb 2018 02:27:41 -0600
+ -- Richard Laager <rlaager@wiktel.com>  Wed, 21 Feb 2018 00:29:24 -0600
 
 ntpsec (1.0.0+dfsg1-2) unstable; urgency=medium
 
