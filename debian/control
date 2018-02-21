@@ -39,18 +39,14 @@ Depends: adduser,
          ${misc:Depends},
          ${shlibs:Depends}
 Recommends: systemd | cron | cron-daemon
-Suggests: apparmor (>= 2.1+1075-0ubuntu6),
+Suggests: apparmor,
           ntpsec-doc,
           ntpsec-ntpviz
-Breaks: apparmor (<< 2.3.1+1403-0ubuntu10),
-        apparmor-profiles (<< 2.3.1+1403-0ubuntu10),
-        apparmor-profiles-extra (<< 1.8)
+Breaks: apparmor-profiles-extra (<< 1.8)
 Conflicts: ntp,
            time-daemon
 Provides: time-daemon
-Replaces: apparmor (<< 2.3.1+1403-0ubuntu10),
-          apparmor-profiles (<< 2.3.1+1403-0ubuntu10),
-          ntp,
+Replaces: ntp,
           time-daemon
 Description: Network Time Protocol daemon and utility programs
  NTP, the Network Time Protocol, is used to keep computer clocks
