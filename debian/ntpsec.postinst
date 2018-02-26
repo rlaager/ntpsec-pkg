@@ -12,7 +12,7 @@ if [ "$1" = "configure" ]; then
 	# likely switching from NTP Classic, and this preserves the existing
 	# behavior.  (If they were using logging, the directory will not be
 	# empty.)
-	if ! dpkg -s ntpsec-ntpviz >/dev/null 2>&1; then
+	if ! dpkg -s ntpsec-ntpviz > /dev/null 2>&1; then
 	        rmdir /var/log/ntpstats 2> /dev/null || true
 	fi
 
