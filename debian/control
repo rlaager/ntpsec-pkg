@@ -95,7 +95,8 @@ Description: client for setting system time from NTP servers
 
 Package: ntpsec-ntpviz
 Architecture: any
-Depends: fonts-liberation,
+Depends: adduser,
+         fonts-liberation,
          gnuplot,
          python3 (>= 3.3),
          python3-ntp,

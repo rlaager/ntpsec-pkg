@@ -9,7 +9,10 @@ installinit_error() {
 #DEBHELPER#
 
 if [ "$1" = "purge" ]; then
-	deluser --system --quiet ntp || true
 	rm -rf /var/lib/ntp/
 	rm -rf /var/log/ntpstats/
+	if ! LANG=C dpkg -s ntpsec-ntpviz 2> /dev/null | \
+	     grep -qE "^Status: (hold|install)"; then
+		deluser --system --quiet ntp || true
+	fi
 fi

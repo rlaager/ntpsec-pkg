@@ -6,6 +6,14 @@ if [ "$1" = "configure" ]; then
 	# If the log directory does not exist, create it and restart ntpd to
 	# enable logging.
 	if ! [ -d /var/log/ntpstats ]; then
+		# This has to be duplicated from the ntpsec postinst so that the ntp
+		# user and group exist for the install command below. This package
+		# intentionally does not depend on ntpsec.  Even if it did, a
+		# Pre-Depends would be required, which Policy frowns upon.
+		addgroup --system --quiet ntp
+		adduser --system --quiet --ingroup ntp \
+			--no-create-home --home /nonexistent ntp
+
 		install -o ntp -g ntp -d /var/log/ntpstats
 		invoke-rc.d ntp restart
 	fi
