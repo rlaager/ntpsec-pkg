@@ -1,3 +1,10 @@
+ntpsec (1.0.0+dfsg1-4) unstable; urgency=medium
+
+  * Remove empty /var/log/ntpstats on ntpviz removal
+  * Fix installing ntpsec-ntpviz without ntpsec (Closes: 891278)
+
+ -- Richard Laager <rlaager@wiktel.com>  Mon, 26 Feb 2018 05:09:15 -0600
+
 ntpsec (1.0.0+dfsg1-3) unstable; urgency=medium
 
   * Add Vcs-* headers
