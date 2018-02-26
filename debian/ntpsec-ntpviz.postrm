@@ -4,6 +4,7 @@ set -e
 
 if [ "$1" != "upgrade" ]; then
     rm -rf /var/lib/ntp/ntpviz
+    rmdir /var/log/ntpstats 2> /dev/null || true
 fi
 
 #DEBHELPER#
