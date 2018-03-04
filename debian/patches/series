@@ -13,6 +13,7 @@ systemd-use-usr-sbin.patch
 systemd-do-not-restart.patch
 
 # Forwarding not needed
+systemd-allow-running-in-containers.patch
 use-upstream-version.patch
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch

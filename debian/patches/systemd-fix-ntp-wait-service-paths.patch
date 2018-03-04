@@ -3,10 +3,10 @@ Description: systemd: Fix ntp-wait.service paths
  - ntpd.service is called ntp.service in this package
 Forwarded: not-needed
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-26
+Last-Update: 2018-03-04
 --- a/etc/ntp-wait.service
 +++ b/etc/ntp-wait.service
-@@ -1,14 +1,14 @@
+@@ -1,13 +1,13 @@
  [Unit]
  Description=Wait for ntpd to synchronize system clock
 -Requisite=ntpd.service
@@ -14,7 +14,6 @@ Last-Update: 2017-11-26
 +Requisite=ntp.service
 +After=ntp.service
  Conflicts=systemd-timesyncd.service
- ConditionVirtualization=!container
  ConditionCapability=CAP_SYS_TIME
  
  [Service]
