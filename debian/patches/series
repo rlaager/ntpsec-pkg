@@ -11,9 +11,9 @@ systemd-cleanup-ntp-wait-service.patch
 fix-ntploggps.patch
 systemd-use-usr-sbin.patch
 systemd-do-not-restart.patch
+systemd-allow-running-in-containers.patch
 
 # Forwarding not needed
-systemd-allow-running-in-containers.patch
 use-upstream-version.patch
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
