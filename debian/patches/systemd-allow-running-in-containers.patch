@@ -14,6 +14,7 @@ Description: systemd: Allow running in containers
  https://bugs.debian.org/890771
 Bug: https://bugs.debian.org/890771
 Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/657
+Applied-Upstream: https://gitlab.com/NTPsec/ntpsec/commit/6d5cb0fedd86735b65d091a4135410d42d1ac88f
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2018-03-04
 --- a/etc/ntp-wait.service
