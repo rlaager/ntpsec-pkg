@@ -12,6 +12,7 @@ fix-ntploggps.patch
 systemd-use-usr-sbin.patch
 systemd-do-not-restart.patch
 systemd-allow-running-in-containers.patch
+Merge-Classic-fix-for-CVE-2018-7182.patch
 
 # Forwarding not needed
 use-upstream-version.patch
