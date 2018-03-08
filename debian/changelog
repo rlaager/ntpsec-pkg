@@ -1,3 +1,9 @@
+ntpsec (1.0.0+dfsg1-5) unstable; urgency=high
+
+  * Fix CVE-2018-7182
+
+ -- Richard Laager <rlaager@wiktel.com>  Wed, 07 Mar 2018 19:47:34 -0600
+
 ntpsec (1.0.0+dfsg1-4) unstable; urgency=medium
 
   * Remove empty /var/log/ntpstats on ntpviz removal
