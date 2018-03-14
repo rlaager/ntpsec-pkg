@@ -44,6 +44,7 @@ Suggests: apparmor,
           ntpsec-ntpviz
 Breaks: apparmor-profiles-extra (<< 1.8)
 Conflicts: ntp,
+           ntpdate,
            time-daemon
 Provides: time-daemon
 Replaces: ntp,
