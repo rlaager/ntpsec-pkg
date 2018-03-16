@@ -6,25 +6,31 @@ Description: Use python2 for ntploggps
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-05
---- a/ntpclients/ntploggps
-+++ b/ntpclients/ntploggps
+Last-Update: 2018-03-16
+--- a/ntpclients/ntploggps.py
++++ b/ntpclients/ntploggps.py
 @@ -1,4 +1,4 @@
 -#!/usr/bin/python3
 +#!/usr/bin/python
  # -*- coding: utf-8 -*-
  
  """\
-@@ -30,8 +30,6 @@
- try:
-     package = 'GPSD'  # pylint: disable=invalid-name
-     import gps
--    package = 'NTP'  # pylint: disable=invalid-name
--    import ntp.util
- except ImportError as e:
-     sys.stderr.write("ntploggps: can't find Python %s modules.\n" % package)
+@@ -44,14 +44,6 @@
      sys.stderr.write("%s\n" % e)
-@@ -100,10 +98,6 @@
+     sys.exit(1)
+ 
+-try:
+-    import ntp.util
+-except ImportError as e:
+-    sys.stderr.write(
+-        "ntploggps: can't find Python NTP library -- check PYTHONPATH.\n")
+-    sys.stderr.write("%s\n" % e)
+-    sys.exit(1)
+-
+ def logging_setup():
+     "Create logging object"
+     logFormat = logging.Formatter('%(message)s')
+@@ -104,10 +96,6 @@
                      dest='verbose',
                      help="be verbose")
  

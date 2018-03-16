@@ -5,7 +5,7 @@ Description: Hardcode python3 path
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-05
+Last-Update: 2018-03-16
 --- a/attic/calc_tickadj/calc_tickadj
 +++ b/attic/calc_tickadj/calc_tickadj
 @@ -1,4 +1,4 @@
@@ -38,46 +38,6 @@ Last-Update: 2017-11-05
  # coding: utf-8
  """\
  Usage: temper-temper-log
---- a/ntpclients/ntpq
-+++ b/ntpclients/ntpq
-@@ -1,4 +1,4 @@
--#!/usr/bin/env python
-+#!/usr/bin/python3
- # -*- coding: utf-8 -*-
- #
- # ntpq - query an NTP server using mode 6 commands
---- a/ntpclients/ntpviz
-+++ b/ntpclients/ntpviz
-@@ -1,4 +1,4 @@
--#!/usr/bin/env python
-+#!/usr/bin/python3
- # -*- coding: utf-8 -*-
- """\
- ntpviz - logfile visualizer for NTP log files
---- a/ntpclients/ntpsweep
-+++ b/ntpclients/ntpsweep
-@@ -1,4 +1,4 @@
--#!/usr/bin/env python
-+#!/usr/bin/python3
- # -*- coding: utf-8 -*-
- """
- ntpsweep - print various information about given NTP servers
---- a/ntpclients/ntptrace
-+++ b/ntpclients/ntptrace
-@@ -1,4 +1,4 @@
--#!/usr/bin/env python
-+#!/usr/bin/python3
- # -*- coding: utf-8 -*-
- """
- ntptrace - trace peers of an NTP server
---- a/ntpclients/ntpwait
-+++ b/ntpclients/ntpwait
-@@ -1,4 +1,4 @@
--#!/usr/bin/env python
-+#!/usr/bin/python3
- # -*- coding: utf-8 -*-
- """\
- ntpwait - Wait for ntpd to stabilize the system clock.
 --- a/wafhelpers/pythonize-header
 +++ b/wafhelpers/pythonize-header
 @@ -1,4 +1,4 @@
@@ -86,14 +46,6 @@ Last-Update: 2017-11-05
  # -*- coding: utf-8 -*-
  """
  Generate a Python module from a C file of macro definitions.
---- a/ntpclients/ntpkeygen
-+++ b/ntpclients/ntpkeygen
-@@ -1,4 +1,4 @@
--#!/usr/bin/env python
-+#!/usr/bin/python3
- # -*- coding: utf-8 -*-
- #
- # ntpkeygen - generate cryptographic keys for NTP clients and servers
 --- a/devel/linkcheck
 +++ b/devel/linkcheck
 @@ -1,4 +1,4 @@
@@ -102,22 +54,6 @@ Last-Update: 2017-11-05
  #
  # linkcheck - check link integrity in an asciidoc document tree
  #
---- a/ntpclients/ntpmon
-+++ b/ntpclients/ntpmon
-@@ -1,4 +1,4 @@
--#!/usr/bin/env python
-+#!/usr/bin/python3
- # -*- coding: utf-8 -*-
- 
- # SPDX-License-Identifier: BSD-2-clause
---- a/ntpclients/ntpdig
-+++ b/ntpclients/ntpdig
-@@ -1,4 +1,4 @@
--#!/usr/bin/env python
-+#!/usr/bin/python3
- # -*- coding: utf-8 -*-
- """
- ntpdig - simple SNTP client
 --- a/contrib/zone-temp-log
 +++ b/contrib/zone-temp-log
 @@ -1,4 +1,4 @@
@@ -166,22 +102,6 @@ Last-Update: 2017-11-05
  
  """Find all Pythons in the command path, and corresponding exe/lib locations.
  
---- a/ntpclients/ntploggps
-+++ b/ntpclients/ntploggps
-@@ -1,4 +1,4 @@
--#!/usr/bin/env python
-+#!/usr/bin/python3
- # -*- coding: utf-8 -*-
- 
- """\
---- a/ntpclients/ntplogtemp
-+++ b/ntpclients/ntplogtemp
-@@ -1,4 +1,4 @@
--#!/usr/bin/env python
-+#!/usr/bin/python3
- # -*- coding: utf-8 -*-
- 
- """\
 --- a/tests/pylib/jigs.py
 +++ b/tests/pylib/jigs.py
 @@ -1,4 +1,4 @@
@@ -190,14 +110,6 @@ Last-Update: 2017-11-05
  # -*- coding: utf-8 -*-
  
  from __future__ import print_function, division
---- a/tests/pylib/test_agentx.py
-+++ b/tests/pylib/test_agentx.py
-@@ -1,4 +1,4 @@
--#!/usr/bin/env python
-+#!/usr/bin/python3
- # -*- coding: utf-8 -*-
- 
- import unittest
 --- a/tests/pylib/test_packet.py
 +++ b/tests/pylib/test_packet.py
 @@ -1,4 +1,4 @@
@@ -222,3 +134,107 @@ Last-Update: 2017-11-05
  # -*- coding: utf-8 -*-
  
  from __future__ import print_function
+--- a/ntpclients/ntpdig.py
++++ b/ntpclients/ntpdig.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ """
+ ntpdig - simple SNTP client
+--- a/ntpclients/ntpkeygen.py
++++ b/ntpclients/ntpkeygen.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ #
+ # ntpkeygen - generate cryptographic keys for NTP clients and servers
+--- a/ntpclients/ntploggps.py
++++ b/ntpclients/ntploggps.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ 
+ """\
+--- a/ntpclients/ntplogtemp.py
++++ b/ntpclients/ntplogtemp.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ 
+ """\
+--- a/ntpclients/ntpmon.py
++++ b/ntpclients/ntpmon.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ 
+ # SPDX-License-Identifier: BSD-2-clause
+--- a/ntpclients/ntpq.py
++++ b/ntpclients/ntpq.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ #
+ # ntpq - query an NTP server using mode 6 commands
+--- a/ntpclients/ntpsnmpd.py
++++ b/ntpclients/ntpsnmpd.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ 
+ from __future__ import print_function, division
+--- a/ntpclients/ntpsweep.py
++++ b/ntpclients/ntpsweep.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ """
+ ntpsweep - print various information about given NTP servers
+--- a/ntpclients/ntptrace.py
++++ b/ntpclients/ntptrace.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ """
+ ntptrace - trace peers of an NTP server
+--- a/ntpclients/ntpviz.py
++++ b/ntpclients/ntpviz.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ """\
+ ntpviz - logfile visualizer for NTP log files
+--- a/ntpclients/ntpwait.py
++++ b/ntpclients/ntpwait.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ """\
+ ntpwait - Wait for ntpd to stabilize the system clock.
+--- a/pylib/agentx.py
++++ b/pylib/agentx.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ 
+ from __future__ import print_function, division
+--- a/tests/pylib/test_agentx_packet.py
++++ b/tests/pylib/test_agentx_packet.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ 
+ import unittest

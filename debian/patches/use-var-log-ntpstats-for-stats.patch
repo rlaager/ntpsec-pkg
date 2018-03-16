@@ -9,7 +9,7 @@ Description: Use /var/log/ntpstats for stats
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-05
+Last-Update: 2018-03-16
 --- a/docs/includes/ntpd-body.txt
 +++ b/docs/includes/ntpd-body.txt
 @@ -516,7 +516,7 @@
@@ -23,7 +23,7 @@ Last-Update: 2017-11-05
  
 --- a/ntpd/ntp_util.c
 +++ b/ntpd/ntp_util.c
-@@ -51,7 +51,7 @@
+@@ -50,7 +50,7 @@
   * Statistics file stuff
   */
  #ifndef NTP_VAR

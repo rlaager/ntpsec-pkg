@@ -20,7 +20,7 @@ Description: Document disabled refclocks
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-10
+Last-Update: 2018-03-16
 --- a/docs/refclock.txt
 +++ b/docs/refclock.txt
 @@ -163,20 +163,20 @@
@@ -45,7 +45,7 @@ Last-Update: 2017-11-10
  |link:driver_neoclock.html[neoclock]    | D | NeoClock4X DCF77 / TDF Receiver
 -|link:driver_gpsd.html[gpsd]            | T | GPSD client protocol
 +|link:driver_gpsd.html[gpsd]            | d | GPSD client protocol
- |==========================================================================
+ |====================================================================
  
  The name in the left column is the driver type to be used in the
 @@ -188,6 +188,7 @@

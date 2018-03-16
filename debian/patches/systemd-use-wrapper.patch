@@ -2,10 +2,10 @@ Description: systemd: Use wrapper
  We use a wrapper script for various reasons.  See the script for details.
 Forwarded: not-needed
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-08
+Last-Update: 2018-03-16
 --- a/etc/ntpd.service
 +++ b/etc/ntpd.service
-@@ -10,7 +10,8 @@
+@@ -9,7 +9,8 @@
  [Service]
  Type=forking
  PrivateTmp=true

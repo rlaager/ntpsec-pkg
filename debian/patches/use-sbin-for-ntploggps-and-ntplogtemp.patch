@@ -4,26 +4,26 @@ Description: Use sbin for ntploggps and ntplogtemp
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-12
+Last-Update: 2018-03-16
 --- a/ntpclients/ntploggps-man.txt
 +++ b/ntpclients/ntploggps-man.txt
 @@ -1,4 +1,4 @@
 -= ntploggps(1) =
 += ntploggps(8) =
  :doctype: manpage
- 
- == NAME ==
+ :man source: NTPsec
+ :man version: @NTPSEC_VERSION@
 --- a/ntpclients/ntplogtemp-man.txt
 +++ b/ntpclients/ntplogtemp-man.txt
 @@ -1,4 +1,4 @@
--= ntplogtemp-(1) =
-+= ntplogtemp-(8) =
+-= ntplogtemp(1) =
++= ntplogtemp(8) =
  :doctype: manpage
- 
- == NAME ==
+ :man source: NTPsec
+ :man version: @NTPSEC_VERSION@
 --- a/wscript
 +++ b/wscript
-@@ -1101,14 +1101,14 @@
+@@ -1070,14 +1070,14 @@
      if ctx.cmd == 'clean':
          afterparty(ctx)
  
