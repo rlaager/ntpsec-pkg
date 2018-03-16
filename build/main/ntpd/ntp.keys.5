@@ -2,12 +2,12 @@
 .\"     Title: ntp.keys
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/10/2017
-.\"    Manual: \ \&
-.\"    Source: \ \&
+.\"      Date: 03/15/2018
+.\"    Manual: NTPsec
+.\"    Source: NTPsec 1.1.0
 .\"  Language: English
 .\"
-.TH "NTP\&.KEYS" "5" "10/10/2017" "\ \&" "\ \&"
+.TH "NTP\&.KEYS" "5" "03/15/2018" "NTPsec 1\&.1\&.0" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -28,7 +28,7 @@
 .\" * MAIN CONTENT STARTS HERE *
 .\" -----------------------------------------------------------------
 .SH "NAME"
-ntp.keys \- NTP symmetric key file format configuration file
+ntp.keys \- NTP symmetric key file format
 .SH "DESCRIPTION"
 .sp
 This document describes the format of an NTP symmetric key file\&. For a description of the use of this type of file, see the "Authentication Support" page of the Web documentation\&.
@@ -49,29 +49,67 @@ keyno type key
 .sp
 where keyno is a positive integer (between 1 and 65534), type is the message digest algorithm, and key is the key itself\&.
 .sp
-The key may be given in a format controlled by the type field\&. The type MD5 is always supported\&. If ntpd was built with the OpenSSL library then any digest library supported by that library may be specified\&. However, if compliance with FIPS 140\-2 is required the type must be \fISHA1\fR\&.
+The file does not need to be sorted by keyno\&.
 .sp
-What follows are some key types, and corresponding formats:
-.PP
-\fIMD5\fR
-.RS 4
-The key is 1 to 16 printable characters terminated by an EOL, whitespace, or a
-\fI#\fR
-(which is the "start of comment" character)\&.
-.RE
-.PP
-\fISHA1\fR; \fIRMD160\fR
-.RS 4
-The key is a hex\-encoded ASCII string of 40 characters, which is truncated as necessary\&.
+type can be any digest type supported by your OpenSSL package\&. Digests longer than 20 bytes will be trucnated\&.
 .sp
-Note that the keys used by the ntpq(1) programs are checked against passwords requested by the programs and entered by hand, so it is generally appropriate to specify these keys in ASCII format\&.
+You can probably get a list from man 1 dgst or openssl help\&. (As of Jan 2018, they lie\&. Be sure to try it\&. ntpd(8) will print an error on startup if a selected type isn\(cqt supported\&.)
+.sp
+The following types are widely supported:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+  md5, sha1, ripemd160, sha224, sha256, sha384, sha512
+.fi
+.if n \{\
 .RE
+.\}
+.sp
+FIPS 140\-2, FIPS 180\-4, and/or FIPS 202 may restrict your choices\&. If it matters to you, check with your lawyer\&. (Let us know if you find a good reference\&.)
+.sp
+The key may be printable ASCII excluding "#" or hex encoded\&. Keys longer than 20 characters are assumed to be hex\&. The max length of a (possibly de\-hexified) key is 32 bytes\&. If you want to use an ASCII key longer than 20 bytes, you must hexify it\&.
+.sp
+Note that the keys used by the ntpq(1) programs are checked against passwords entered by hand, so it is generally appropriate to specify these keys in ASCII format\&. Or you can cut\-paste a hex string from your password manager\&.
+.SH "USAGE"
+.sp
+In order to use symmetric keys, the client side configuration file needs:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+  keys <path\-to\-client\-keys\-file>
+  trustedkey <keyno>
+  server \&.\&.\&. key <keyno>
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+The server side needs:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+  keys <path\-to\-server\-keys\-file>
+  trustedkey <keyno>
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+Note that the client and server key files must both contain identical copies of the line specified by keyno\&.
 .SH "FILES"
 .PP
 /etc/ntp\&.keys
 .RS 4
-a common location of the configuration file
+is a common location for the keys file
 .RE
+.sp
+Reminder: You have to keep it secret\&.
 .SH "SEE ALSO"
 .sp
-ntp\&.conf(5), ntpd(8), ntpq(1), ntpdig(1)\&.
+ntp\&.conf(5), ntpd(8), ntpq(1), ntpkeygen(8), ntpdig(1)\&.

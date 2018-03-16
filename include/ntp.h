@@ -87,7 +87,6 @@ extern int32_t ntp_random (void);
 /*
  * Miscellaneous stuff
  */
-#define NTP_MAXKEY	65535	/* max authentication key number */
 /*
  * Limits of things
  */
@@ -160,12 +159,12 @@ typedef struct __endpt {
  */
 struct peer_ctl {
 	uint8_t		version;
-	unsigned int	flags;
 	uint8_t		minpoll;
 	uint8_t		maxpoll;
-	uint32_t	ttl;
+	uint32_t	flags;
 	keyid_t		peerkey;
 	double		bias;
+	uint32_t	mode;	/* only used by refclocks */
 #ifdef REFCLOCK
 	uint32_t	baud;
 	char		*path;
@@ -215,10 +214,11 @@ struct peer_ctl {
  * we are peering with. Most of this stuff is from section 3.2 of the
  * spec.
  *
- * The ttl field is overloaded; it's used in the refclock case to pass
- * in a mode byte that may contain a baud rate or subtype. Splitting
- * this field would complicate some call sequences that are already
- * unpleasantly intricate.
+ * The mode field is overloaded; it's used in the refclock case to pass
+ * in a mode word that may contain a baud rate or subtype as well as flags.
+ * Splitting this field would complicate some call sequences that are
+ * already unpleasantly intricate.
+ * It used to be called ttl which was used by multicast which we dropped.
  */
 struct peer {
 	struct peer *p_link;	/* link pointer in free & peer lists */
@@ -242,7 +242,6 @@ struct peer {
 #ifdef REFCLOCK
 	struct refclockproc *procptr; /* refclock structure pointer */
 	bool	is_pps_driver;	/* is this the PPS driver? */
-	uint8_t	refclkunit;	/* reference clock unit number */
 	uint8_t	sstclktype;	/* clock type for system status word */
 #endif /* REFCLOCK */
 
@@ -268,14 +267,14 @@ struct peer {
 	uint8_t	new_status;	/* under-construction status */
 	uint8_t	reach;		/* reachability register */
 	int	flash;		/* protocol error test tally bits */
-	unsigned long	epoch;		/* reference epoch */
+	uptime_t	epoch;	/* reference epoch */
 	int	burst;		/* packets remaining in burst */
 	int	retry;		/* retry counter */
 	int	filter_nextpt;	/* index into filter shift register */
 	double	filter_delay[NTP_SHIFT]; /* delay shift register */
 	double	filter_offset[NTP_SHIFT]; /* offset shift register */
 	double	filter_disp[NTP_SHIFT]; /* dispersion shift register */
-	unsigned long	filter_epoch[NTP_SHIFT]; /* epoch shift register */
+	uptime_t	filter_epoch[NTP_SHIFT]; /* epoch shift register */
 	uint8_t	filter_order[NTP_SHIFT]; /* filter sort index */
 	l_fp	rec;		/* receive time stamp */
 	l_fp	xmt;		/* transmit time stamp */
@@ -305,8 +304,8 @@ struct peer {
 #define end_clear_to_zero update
 	int	unreach;	/* watchdog counter */
 	int	throttle;	/* rate control */
-	unsigned long	outdate;	/* send time last packet */
-	unsigned long	nextdate;	/* send time next packet */
+	uptime_t	outdate;	/* send time last packet */
+	uptime_t	nextdate;	/* send time next packet */
 
 	/*
 	 * Statistic counters

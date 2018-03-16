@@ -28,25 +28,29 @@ import threading
 import time
 
 try:
-    package = 'GPSD'  # pylint: disable=invalid-name
-    import gps
-    package = 'NTP'  # pylint: disable=invalid-name
-    import ntp.util
-except ImportError as e:
-    sys.stderr.write("ntploggps: can't find Python %s modules.\n" % package)
-    sys.stderr.write("%s\n" % e)
-    sys.exit(1)
-
-try:
     import argparse
 except ImportError:
     sys.stderr.write("""
-ntpologgps: can't find the Python argparse module
+ntploggps: can't find the Python argparse module
          If your Python version is < 2.7, then manual installation is needed:
          # pip install argparse
 """)
     sys.exit(1)
 
+try:
+    import gps
+except ImportError as e:
+    sys.stderr.write("ntploggps: can't find Python GPSD library.\n")
+    sys.stderr.write("%s\n" % e)
+    sys.exit(1)
+
+try:
+    import ntp.util
+except ImportError as e:
+    sys.stderr.write(
+        "ntploggps: can't find Python NTP library -- check PYTHONPATH.\n")
+    sys.stderr.write("%s\n" % e)
+    sys.exit(1)
 
 def logging_setup():
     "Create logging object"
@@ -132,6 +136,9 @@ class GpsPoller(threading.Thread):
 
     def __init__(self):
         threading.Thread.__init__(self)
+        self.device = None
+        self.satellites_used = None
+        self.tdop = None
         # start the streaming of gps data
         try:
             self.gpsd = gps.gps(mode=gps.WATCH_ENABLE)
@@ -143,23 +150,30 @@ class GpsPoller(threading.Thread):
 
     def run(self):
         while gpsp.running:
-            try:
-                self.gpsd.next()     # loop and grab each set of gpsd info
-            except:
+            if self.gpsd.read() == -1:
                 self.running = False
                 break
+            if hasattr(self.gpsd, "data"):
+                if self.gpsd.data.get("class") == "SKY":
+                    self.satellites_used = 0
+                    self.tdop = self.gpsd.data.get("tdop", 0)
+                    for sat in self.gpsd.data.get("satellites", []):
+                        if sat["used"]:
+                            self.satellites_used += 1
+                elif self.gpsd.data.get("class") == "TPV":
+                    self.device = self.gpsd.data.get("device")
 
-    def get_time(self):
+    @property
+    def time(self):
         "Return the gpsd time fix"
-        return self.gpsd.fix.time
-
-    def log_line(self):
-        "Displays the time, device, TDOP, and nSat data collected"
-        s = '%s %s %f %d' % (gps.isotime(self.get_time()),
-                             self.gpsd.device,
-                             self.gpsd.tdop,
-                             self.gpsd.satellites_used)
-        return s
+        t = self.gpsd.fix.time
+        if isinstance(t, int):
+            return t
+        if isinstance(t, float):
+            if gps.isnan(t):
+                return None
+            return t
+        return gps.isotime(t)
 
 if __name__ == '__main__':
     # this is the main thread
@@ -180,10 +194,20 @@ if __name__ == '__main__':
             # It may take a second or two to get good data
 
             try:
-                if 'nan' != gpsp.get_time() and not gps.isnan(gpsp.get_time()):
-                    if last_time != gpsp.get_time():
-                        Logger.info(gpsp.log_line())
-                    last_time = gpsp.get_time()
+                current_time = gpsp.time
+                device = gpsp.device
+                tdop = gpsp.tdop
+                satellites_used = gpsp.satellites_used
+
+                if current_time is not None and \
+                   device is not None and \
+                   satellites_used is not None and \
+                   tdop is not None:
+                    if last_time != current_time:
+                        s = '%i %s %f %d' % (current_time, device, tdop,
+                                             satellites_used)
+                        Logger.info(s)
+                        last_time = current_time
                     if args.once:
                         # just once
                         break

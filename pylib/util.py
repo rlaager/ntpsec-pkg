@@ -18,16 +18,6 @@ import ntp.magic
 import ntp.control
 
 
-if "get_terminal_size" not in dir(shutil):
-    # used by termsize() on python 2.x systems
-    import fcntl
-    import termios
-    import struct
-    PY3 = False
-else:
-    PY3 = True
-
-
 # Old CTL_PST defines for version 2.
 OLD_CTL_PST_CONFIG = 0x80
 OLD_CTL_PST_AUTHENABLE = 0x40
@@ -57,7 +47,16 @@ UNITS_PPX = [UNIT_PPT, UNIT_PPB, UNIT_PPM, UNIT_PPK]
 unitgroups = (UNITS_SEC, UNITS_PPX)
 
 
-def deunicode_units():
+# These two functions are not tested because they will muck up the module
+# for everything else, and they are simple.
+
+def check_unicode():  # pragma: no cover
+    if "UTF-8" != sys.stdout.encoding:
+        deunicode_units()
+        return True  # needed by ntpmon
+    return False
+
+def deunicode_units():  # pragma: no cover
     "Under certain conditions it is not possible to force unicode output, "
     "this overwrites units that contain unicode with safe versions"
     global UNIT_US
@@ -65,7 +64,7 @@ def deunicode_units():
     # Replacement units
     new_us = "us"
     new_ppk = "ppk"
-    # Replace units in unit group
+    # Replace units in unit groups
     UNITS_SEC[UNITS_SEC.index(UNIT_US)] = new_us
     UNITS_PPX[UNITS_PPX.index(UNIT_PPK)] = new_ppk
     # Replace the units themselves
@@ -74,17 +73,20 @@ def deunicode_units():
 
 # Variables that have units
 S_VARS = ("tai", "poll")
-MS_VARS = ("rootdelay", "rootdisp", "offset", "sys_jitter", "clk_jitter",
-           "leapsmearoffset", "authdelay", "koffset", "kmaxerr", "kesterr",
-           "kprecis", "kppsjitter", "fuzz", "clk_wander_threshold", "tick",
-           "in", "out", "bias", "delay", "jitter", "dispersion",
+MS_VARS = ("rootdelay", "rootdisp", "rootdist", "offset", "sys_jitter",
+           "clk_jitter", "leapsmearoffset", "authdelay", "koffset", "kmaxerr",
+           "kesterr", "kprecis", "kppsjitter", "fuzz", "clk_wander_threshold",
+           "tick", "in", "out", "bias", "delay", "jitter", "dispersion",
            "fudgetime1", "fudgetime2")
 PPM_VARS = ("frequency", "clk_wander")
 
 
 def dolog(logfp, text, debug, threshold):
+    # debug is the current debug value
+    # threshold is the trigger for the current log
     if logfp is None:
         return  # can turn off logging by supplying a None file descriptior
+    text = rfc3339(time.time()) + " " + text + "\n"
     if debug >= threshold:
         logfp.write(text)
         logfp.flush()  # we don't want to lose an important log to a crash
@@ -120,6 +122,22 @@ def rfc3339(t):
             rep += "." + subsec
     rep += "Z"
     return rep
+
+
+def deformatNTPTime(txt):
+    txt = txt[2:]  # Strip '0x'
+    txt = "".join(txt.split("."))  # Strip '.'
+    value = ntp.util.hexstr2octets(txt)
+    return value
+
+
+def hexstr2octets(hexstr):
+    if (len(hexstr) % 2) != 0:
+        hexstr = hexstr[:-1]  # slice off the last char
+    values = []
+    for index in range(0, len(hexstr), 2):
+        values.append(chr(int(hexstr[index:index+2], 16)))
+    return "".join(values)
 
 
 def slicedata(data, slicepoint):
@@ -397,7 +415,7 @@ def unitrelativeto(unit, move):
     return None  # couldn't find anything
 
 
-def unitifyvar(value, varname, baseunit=None, width=8):
+def unitifyvar(value, varname, baseunit=None, width=8, unitSpace=False):
     "Call unitify() with the correct units for varname"
     if varname in S_VARS:
         start = UNIT_S
@@ -407,10 +425,10 @@ def unitifyvar(value, varname, baseunit=None, width=8):
         start = UNIT_PPM
     else:
         return value
-    return unitify(value, start, baseunit, width)
+    return unitify(value, start, baseunit, width, unitSpace)
 
 
-def unitify(value, startingunit, baseunit=None, width=8):
+def unitify(value, startingunit, baseunit=None, width=8, unitSpace=False):
     "Formats a numberstring with relevant units. Attemps to fit in width."
     if baseunit is None:
         baseunit = getunitgroup(startingunit)[0]
@@ -421,14 +439,20 @@ def unitify(value, startingunit, baseunit=None, width=8):
         newvalue = cropprecision(value, ooms)
         newvalue, unitsmoved = scalestring(newvalue)
     unitget = unitrelativeto(startingunit, unitsmoved)
+    if unitSpace is True:
+        spaceWidthAdjustment = 1
+        spacer = " "
+    else:
+        spaceWidthAdjustment = 0
+        spacer = ""
     if unitget is not None:  # We have a unit
         if width is None:
             realwidth = None
         else:
-            realwidth = width - len(unitget)
-        newvalue = fitinfield(newvalue, realwidth) + unitget
+            realwidth = width - (len(unitget) + spaceWidthAdjustment)
+        newvalue = fitinfield(newvalue, realwidth) + spacer + unitget
     else:  # don't have a replacement unit, use original
-        newvalue = value + startingunit
+        newvalue = value + spacer + startingunit
     if width is None:
         newvalue = newvalue.strip()
     return newvalue
@@ -516,21 +540,25 @@ def monoclock():
 
 class Cache:
     "Simple time-based cache"
-    ttl = 300
 
-    def __init__(self):
+    def __init__(self, defaultTimeout=300):  # 5 min default TTL
+        self.defaultTimeout = defaultTimeout
         self._cache = {}
 
     def get(self, key):
         if key in self._cache:
-            value, settime = self._cache[key]
-            if settime >= monoclock() - self.ttl:
+            value, settime, ttl = self._cache[key]
+            if settime >= monoclock() - ttl:
                 return value
             else:  # key expired, delete it
                 del self._cache[key]
+                return None
+        else:
+            return None
 
-    def set(self, key, value):
-        self._cache[key] = (value, monoclock())
+    def set(self, key, value, customTTL=None):
+        ttl = customTTL if customTTL is not None else self.defaultTimeout
+        self._cache[key] = (value, monoclock(), ttl)
 
 
 # A hack to avoid repeatedly hammering on DNS when ntpmon runs.
@@ -568,13 +596,25 @@ def canonicalize_dns(inhost, family=socket.AF_UNSPEC):
 TermSize = collections.namedtuple("TermSize", ["width", "height"])
 
 
-def termsize():
+# Python 2.x does not have the shutil.get_terminal_size function.
+# This conditional import is only needed by termsize() and should be kept
+# near it. It is not inside the function because the unit tests need to be
+# able to splice in a jig.
+if str is bytes:  # We are on python 2.x
+    import fcntl
+    import termios
+    import struct
+
+
+def termsize():  # pragma: no cover
     "Return the current terminal size."
     # Alternatives at http://stackoverflow.com/questions/566746
     # The way this is used makes it not a big deal if the default is wrong.
     size = (80, 24)
     if os.isatty(1):
-        if PY3 is True:
+        if str is not bytes:
+            # str is bytes means we are >py3.0, but this will still fail
+            # on versions <3.3. We do not support those anyway.
             (w, h) = shutil.get_terminal_size((80, 24))
             size = (w, h)
         else:
@@ -592,6 +632,7 @@ def termsize():
 
 class PeerStatusWord:
     "A peer status word from readstats(), dissected for display"
+
     def __init__(self, status, pktversion=ntp.magic.NTP_VERSION):
         # Event
         self.event = ntp.control.CTL_PEER_EVENT(status)
@@ -639,7 +680,7 @@ class PeerStatusWord:
                 else:
                     self.condition = ""
             elif (statval & 0x3) == OLD_CTL_PST_SEL_SELCAND:
-                    self.condition = "sel_cand"
+                self.condition = "sel_cand"
             elif (statval & 0x3) == OLD_CTL_PST_SEL_SYNCCAND:
                 self.condition = "sync_cand"
             elif (statval & 0x3) == OLD_CTL_PST_SEL_SYSPEER:
@@ -872,7 +913,7 @@ class PeerSummary:
         srchost = None
         srcport = 0
         stratum = 20
-        ttl = 0
+        mode = 0
         unreach = 0
         xmt = 0
 
@@ -891,7 +932,7 @@ class PeerSummary:
                 # The C code tried to get a fallback ptype from this in case
                 # the hmode field was not included
                 if "local" in self.__header:
-                    dstadr_refid = value
+                    dstadr_refid = rawvalue
             elif name == "dstport":
                 # FIXME, dstport never used.
                 dstport = value
@@ -946,7 +987,7 @@ class PeerSummary:
                 # guess is that it was designed to deal with formats that
                 # no longer occur in this field.
                 if "refid" in self.__header:
-                    dstadr_refid = value
+                    dstadr_refid = rawvalue
             elif name == "rec":
                 rec = value         # l_fp timestamp
                 last_sync = int(now - ntp.ntpc.lfptofloat(rec))
@@ -967,9 +1008,9 @@ class PeerSummary:
                 srcport = value
             elif name == "stratum":
                 stratum = value
-            elif name == "ttl":
-                # FIXME, ttl never used.
-                ttl = value
+            elif name == "mode":
+                # FIXME, mode never used.
+                mode = value
             elif name == "unreach":
                 # FIXME, unreach never used.
                 unreach = value
@@ -1032,7 +1073,7 @@ class PeerSummary:
                     clock_name = canonicalize_dns(srcadr)
                     if self.debug:
                         self.logfp.write("DNS lookup ends.\n")
-                except TypeError:
+                except TypeError:  # pragma: no cover
                     return ''
             else:
                 clock_name = srcadr
@@ -1111,6 +1152,7 @@ class PeerSummary:
 
 class MRUSummary:
     "Reusable class for MRU entry summary generation."
+
     def __init__(self, showhostnames, wideremote=False,
                  debug=0, logfp=sys.stderr):
         self.debug = debug
@@ -1129,9 +1171,7 @@ class MRUSummary:
         else:
             # direct mode doesn't have a reference time
             MJD_1970 = 40587     # MJD for 1 Jan 1970, Unix epoch
-            days = int(last) / 86400
-            seconds = last - days*86400
-            lstint = int(seconds)
+            days, lstint = divmod(int(last), 86400)
             stats = "%5d %5d" % (days + MJD_1970, lstint)
         first = ntp.ntpc.lfptofloat(entry.first)
         active = float(last - first)
@@ -1271,7 +1311,7 @@ class IfstatsSummary:
                     address))
             if bcast:
                 s += "    %s\n" % bcast
-        except TypeError:
+        except TypeError:  # pragma: no cover
             # Can happen when ntpd ships a corrupted response
             return ''
 
@@ -1285,7 +1325,7 @@ class IfstatsSummary:
 
 try:
     from collections import OrderedDict
-except ImportError:
+except ImportError:  # pragma: no cover
     class OrderedDict(dict):
         "A stupid simple implementation in order to be back-portable to 2.6"
 

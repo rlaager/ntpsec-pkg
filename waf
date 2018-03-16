@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # encoding: ISO8859-1
-# Thomas Nagy, 2005-2016
+# Thomas Nagy, 2005-2017
 #
 """
 Redistribution and use in source and binary forms, with or without
@@ -32,13 +32,13 @@ POSSIBILITY OF SUCH DAMAGE.
 
 import os, sys, inspect
 
-VERSION="1.9.13"
-REVISION="c6a32c41574b7fba5e65e4e7336fbc53"
-GIT="24825b55752f882cdd22dd84d1774a174d219dfa"
+VERSION="1.9.14"
+REVISION="d7f6128a2aa20a656027b134f0b4f4a6"
+GIT="a50064fef518fa947e70ff62762268c39aaaca77"
 INSTALL=''
-C1='#/'
-C2='#)'
-C3='#&'
+C1='#('
+C2='#&'
+C3='#$'
 cwd = os.getcwd()
 join = os.path.join
 

@@ -81,7 +81,6 @@ struct zyferunit {
 	uint8_t	Rcvbuf[LENZYFER + 1];
 	uint8_t	polled;		/* poll message flag */
 	int	pollcnt;
-	l_fp    tstamp;         /* timestamp of last poll */
 	int	Rcvptr;
 };
 
@@ -89,7 +88,6 @@ struct zyferunit {
  * Function prototypes
  */
 static	bool	zyfer_start	(int, struct peer *);
-static	void	zyfer_shutdown	(int, struct peer *);
 static	void	zyfer_receive	(struct recvbuf *);
 static	void	zyfer_poll	(int, struct peer *);
 
@@ -99,7 +97,7 @@ static	void	zyfer_poll	(int, struct peer *);
 struct	refclock refclock_zyfer = {
 	NAME,			/* basename of driver */
 	zyfer_start,		/* start up driver */
-	zyfer_shutdown,		/* shut down driver */
+	NULL,			/* shut down driver in the standard way */
 	zyfer_poll,		/* transmit poll message */
 	NULL,			/* not used (old zyfer_control) */
 	NULL,			/* initialize driver (not used) */
@@ -164,29 +162,6 @@ zyfer_start(
 	up->polled = 0;		/* May not be needed... */
 
 	return true;
-}
-
-
-/*
- * zyfer_shutdown - shut down the clock
- */
-static void
-zyfer_shutdown(
-	int unit,
-	struct peer *peer
-	)
-{
-	struct zyferunit *up;
-	struct refclockproc *pp;
-
-	UNUSED_ARG(unit);
-
-	pp = peer->procptr;
-	up = pp->unitptr;
-	if (pp->io.fd != -1)
-		io_closeclock(&pp->io);
-	if (up != NULL)
-		free(up);
 }
 
 

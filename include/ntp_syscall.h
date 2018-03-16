@@ -9,11 +9,9 @@
 #ifndef GUARD_NTP_SYSCALL_H
 #define GUARD_NTP_SYSCALL_H
 
-#ifdef HAVE_SYS_TIMEX_H
 # include <sys/time.h>	/* prerequisite on NetBSD */
 # include <sys/timex.h>
 extern int ntp_adjtime_ns(struct timex *);
-#endif
 
 /*
  * The units of the maxerror and esterror fields vary by platform.  If

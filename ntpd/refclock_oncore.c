@@ -351,7 +351,7 @@ struct instance {
 
 static	bool	oncore_start	      (int, struct peer *);
 static	void	oncore_poll	      (int, struct peer *);
-static	void	oncore_shutdown       (int, struct peer *);
+static	void	oncore_shutdown       (struct refclockproc *);
 static	void	oncore_consume	      (struct instance *);
 static	void	oncore_read_config    (struct instance *);
 static	void	oncore_receive	      (struct recvbuf *);
@@ -764,17 +764,10 @@ oncore_start(
 
 static void
 oncore_shutdown(
-	int unit,
-	struct peer *peer
+	struct refclockproc *pp
 	)
 {
-	struct instance *instance;
-	struct refclockproc *pp;
-
-	UNUSED_ARG(unit);
-
-	pp = peer->procptr;
-	instance = pp->unitptr;
+	struct instance *instance = pp->unitptr;
 
 	if (pp->io.fd != -1)
 		io_closeclock(&pp->io);
@@ -808,13 +801,15 @@ oncore_poll(
 {
 	struct instance *instance;
 
+	UNUSED_ARG(unit);
+
 	instance = peer->procptr->unitptr;
 	if (instance->timeout) {
 		instance->timeout--;
 		if (instance->timeout == 0) {
 			oncore_log(instance, LOG_ERR,
 			    "Oncore: No response from @@Cj, shutting down driver");
-			oncore_shutdown(unit, peer);
+			oncore_shutdown(peer->procptr);
 		} else {
 			oncore_sendmsg(instance, oncore_cmd_Cj, sizeof(oncore_cmd_Cj));
 			oncore_log(instance, LOG_WARNING, "Oncore: Resend @@Cj");
@@ -1502,7 +1497,7 @@ oncore_consume(
 
 		/* Ok, we have a header now */
 		l = sizeof(oncore_messages)/sizeof(oncore_messages[0]) -1;
-		for(m=0; m<l; m++)
+		for(m = 0; m < l; m++)
 			if (!strncmp(oncore_messages[m].flag, (char *)(rcvbuf+2), (size_t) 2))
 				break;
 		if (m == l) {
@@ -1888,7 +1883,6 @@ oncore_msg_any(
 	UNUSED_ARG(len);
 	UNUSED_ARG(idx);
 #else
-	int i;
 	const char *fmt = oncore_messages[idx].fmt;
 	const char *p;
 	char *q;
@@ -1904,7 +1898,7 @@ oncore_msg_any(
 		if (!*fmt) {
 			snprintf(Msg, sizeof(Msg), ">>@@%c%c ", buf[2],
 				 buf[3]);
-			for(i = 2; i < len && i < 2400 ; i++) {
+			for(int i = 2; i < len && i < 2400 ; i++) {
 				snprintf(Msg2, sizeof(Msg2), "%02x",
 					 buf[i]);
 				strlcat(Msg, Msg2, sizeof(Msg));
@@ -2733,7 +2727,7 @@ oncore_msg_CaFaIa(
 				   "ONCORE: self test failed, shutting down driver");
 
 			refclock_report(instance->peer, CEVNT_FAULT);
-			oncore_shutdown(instance->unit, instance->peer);
+			oncore_shutdown(instance->peer->procptr);
 			return;
 		}
 
@@ -3293,7 +3287,7 @@ oncore_msg_Sz(
 
 	if (instance && instance->peer) {
 		oncore_log(instance, LOG_ERR, "Oncore: System Failure at Power On");
-		oncore_shutdown(instance->unit, instance->peer);
+		oncore_shutdown(instance->peer->procptr);
 	}
 }
 

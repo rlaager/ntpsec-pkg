@@ -59,7 +59,7 @@
  * Function prototypes
  */
 static  bool    shm_start       (int unit, struct peer *peer);
-static  void    shm_shutdown    (int unit, struct peer *peer);
+static  void    shm_shutdown    (struct refclockproc *peer);
 static  void    shm_poll        (int unit, struct peer *peer);
 static  void    shm_timer       (int unit, struct peer *peer);
 static	void	shm_clockstats  (int unit, struct peer *peer);
@@ -165,7 +165,7 @@ shm_start(
 	pp->io.datalen = 0;
 	pp->io.fd = -1;
 
-	up->forall = (unit >= 2) && !(peer->cfg.ttl & SHM_MODE_PRIVATE);
+	up->forall = (unit >= 2) && !(peer->cfg.mode & SHM_MODE_PRIVATE);
 
 	up->shm = getShmTime(unit, up->forall);
 
@@ -231,14 +231,11 @@ shm_control(
  */
 static void
 shm_shutdown(
-	int unit,
-	struct peer *peer
+	struct refclockproc * pp
 	)
 {
-	struct refclockproc * const pp = peer->procptr;
 	struct shmunit *      const up = pp->unitptr;
 
-	UNUSED_ARG(unit);
 	if (NULL == up)
 		return;
 

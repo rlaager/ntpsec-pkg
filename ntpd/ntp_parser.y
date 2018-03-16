@@ -58,10 +58,10 @@
 %token	<Integer>	T_Average
 %token	<Integer>	T_Baud
 %token	<Integer>	T_Bias
-%token	<Integer>	T_Broadcast
 %token	<Integer>	T_Burst
 %token	<Integer>	T_Calibrate
 %token	<Integer>	T_Ceiling
+%token	<Integer>	T_Clock
 %token	<Integer>	T_Clockstats
 %token	<Integer>	T_Cohort
 %token	<Integer>	T_ControlKey
@@ -169,7 +169,6 @@
 %token	<Integer>	T_Pool
 %token	<Integer>	T_Ppspath
 %token	<Integer>	T_Port
-%token	<Integer>	T_Preempt
 %token	<Integer>	T_Prefer
 %token	<Integer>	T_Protostats
 %token	<Integer>	T_Rawstats
@@ -206,7 +205,6 @@
 %token	<Integer>	T_Trap
 %token	<Integer>	T_True
 %token	<Integer>	T_Trustedkey
-%token	<Integer>	T_Ttl
 %token	<Integer>	T_Type
 %token	<Integer>	T_U_int			/* Not a token */
 %token	<Integer>	T_Unit
@@ -359,7 +357,6 @@ client_type
 	:	T_Server
 	|	T_Pool
 	|	T_Peer
-	|	T_Broadcast
 	;
 
 address
@@ -407,7 +404,6 @@ option_flag_keyword
 	:	T_Burst
 	|	T_Iburst
 	|	T_Noselect
-	|	T_Preempt
 	|	T_Prefer
 	|	T_True
 	;
@@ -423,7 +419,7 @@ option_int
 				$$ = create_attr_ival($1, $2);
 			} else {
 				$$ = NULL;
-				yyerror("fudge factor: stratum value out of boands, ignored");
+				yyerror("fudge factor: stratum value out of bounds, ignored");
 			}
 		}
 	;
@@ -432,7 +428,6 @@ option_int_keyword
 	:	T_Key
 	|	T_Minpoll
 	|	T_Maxpoll
-	|	T_Ttl
 	|	T_Mode
 	|	T_Subtype
 	|	T_Version
@@ -481,10 +476,22 @@ unpeer_command
 	:	unpeer_keyword address
 		{
 			unpeer_node *my_node;
-			
+
 			my_node = create_unpeer_node($2);
 			if (my_node)
 				APPEND_G_FIFO(cfgt.unpeers, my_node);
+		}
+	|	unpeer_keyword T_Clock T_String optional_unit
+		{
+#ifdef REFCLOCK
+			unpeer_node *my_node;
+
+			my_node = create_unpeer_node(addr_from_typeunit($3, $4));
+			if (my_node)
+				APPEND_G_FIFO(cfgt.unpeers, my_node);
+#else
+			yyerror("no refclock support was compiled in.");
+#endif /* REFCLOCK */
 		}
 	;	
 unpeer_keyword	
@@ -521,14 +528,7 @@ authentication_command
 				    "ntpdc has been removed.");
 			}
 	|	T_Trustedkey integer_list_range
-		{
-			cfgt.auth.trusted_key_list = $2;
-
-			// if (!cfgt.auth.trusted_key_list)
-			// 	cfgt.auth.trusted_key_list = $2;
-			// else
-			// 	LINK_SLIST(cfgt.auth.trusted_key_list, $2, link);
-		}
+		{ CONCAT_G_FIFOS(cfgt.auth.trusted_key_list, $2); }
 	|	T_NtpSignDsocket T_String
 			{ cfgt.auth.ntp_signd_socket = $2; }
 	;
@@ -930,21 +930,8 @@ refclock_command
 	:	T_Refclock T_String optional_unit option_list
 		{
 #ifdef REFCLOCK
-			peer_node *my_node;
-			address_node *fakeaddr;
-			char addrbuf[1025];	/* NI_MAXHOSTS on Linux */
-			int dtype;
-
-			for (dtype = 1; dtype < (int)num_refclock_conf; dtype++)
-			    if (refclock_conf[dtype]->basename != NULL && strcasecmp(refclock_conf[dtype]->basename, $2) == 0)
-				goto foundit;
-			 msyslog(LOG_ERR, "CONFIG: Unknown driver name %s", $2);
-			 exit(1);
-		foundit:
-			snprintf(addrbuf, sizeof(addrbuf),
-				 "127.127.%d.%d", dtype, $3);
-			fakeaddr = create_address_node(estrdup(addrbuf),AF_INET);
-			my_node = create_peer_node(T_Server, fakeaddr, $4);
+			address_node *fakeaddr = addr_from_typeunit($2, $3);
+			peer_node *my_node = create_peer_node(T_Server, fakeaddr, $4);
 			APPEND_G_FIFO(cfgt.peers, my_node);
 #endif /* REFCLOCK */
 		}
@@ -1397,6 +1384,24 @@ number
 
 
 %%
+
+#ifdef REFCLOCK
+address_node *
+addr_from_typeunit(char *type, int unit)
+{
+	char addrbuf[1025];	/* NI_MAXHOSTS on Linux */
+	int dtype;
+
+	for (dtype = 1; dtype < (int)num_refclock_conf; dtype++)
+	    if (refclock_conf[dtype]->basename != NULL && strcasecmp(refclock_conf[dtype]->basename, type) == 0)
+		goto foundit;
+	 msyslog(LOG_ERR, "CONFIG: Unknown driver name %s", type);
+	 exit(1);
+foundit:
+	snprintf(addrbuf, sizeof(addrbuf), "127.127.%d.%d", dtype, unit);
+	return create_address_node(estrdup(addrbuf), AF_INET);
+}
+#endif /* REFCLOCK */
 
 void 
 yyerror(

@@ -97,15 +97,15 @@ static nic_rule *nic_rule_list;
 /*
  * Other statistics of possible interest
  */
-unsigned long packets_dropped;	/* total # of packets dropped on reception */
-unsigned long packets_ignored;	/* packets received on wild card interface */
-unsigned long packets_received;	/* total # of packets received */
-unsigned long packets_sent;	/* total # of packets sent */
-unsigned long packets_notsent;	/* total # of packets which couldn't be sent */
+uint64_t packets_dropped;	/* total # of packets dropped on reception */
+uint64_t packets_ignored;	/* packets received on wild card interface */
+uint64_t packets_received;	/* total # of packets received */
+uint64_t packets_sent;		/* total # of packets sent */
+uint64_t packets_notsent;	/* total # of packets which couldn't be sent */
 
-volatile unsigned long handler_calls;	/* # of calls to interrupt handler */
-volatile unsigned long handler_pkts;	/* number of pkts received by handler */
-unsigned long io_timereset;		/* time counters were reset */
+uint64_t handler_calls;		/* # of calls to interrupt handler */
+uint64_t handler_pkts;		/* number of pkts received by handler */
+uptime_t io_timereset;		/* time counters were reset */
 
 /*
  * Interface stuff
@@ -461,12 +461,11 @@ sockaddr_dump(const sockaddr_u *psau)
 	/* Limit the size of the sockaddr_in6 hex dump */
 	const int maxsize = min(32, sizeof(psau->sa6));
 	const uint8_t *	cp;
-	int		i;
 
 	/* XXX: Should we limit maxsize based on psau->saX.sin_family? */
 	cp = (const void *)&psau->sa6;
 
-	for(i = 0; i < maxsize; i++) {
+	for(int i = 0; i < maxsize; i++) {
 		printf("%02x", *cp++);
 		if (!((i + 1) % 4))
 			printf(" ");
@@ -1323,8 +1322,11 @@ interface_update(
 	if (!new_interface_found)
 		return;
 
+#ifdef ENABLE_DNS_LOOKUP
 #ifdef DEBUG
 	msyslog(LOG_DEBUG, "IO: new interface(s) found: waking up resolver");
+#endif
+	dns_new_interface();
 #endif
 }
 
@@ -1925,7 +1927,6 @@ socket_broadcast_enable(
 	sockaddr_u *		baddr
 	)
 {
-#ifdef SO_BROADCAST
 	int on = 1;
 
 	if (IS_IPV4(baddr)) {
@@ -1941,9 +1942,6 @@ socket_broadcast_enable(
 	}
 	iface->flags |= INT_BCASTXMIT;
 	return true;
-#else
-	return false;
-#endif /* SO_BROADCAST */
 }
 
 #ifdef  OS_MISSES_SPECIFIC_ROUTE_UPDATES
@@ -1958,7 +1956,6 @@ socket_broadcast_disable(
 	sockaddr_u *		baddr
 	)
 {
-#ifdef SO_BROADCAST
 	int off = 0;	/* This seems to be OK as an int */
 
 	if (IS_IPV4(baddr) && setsockopt(iface->fd, SOL_SOCKET,
@@ -1969,9 +1966,6 @@ socket_broadcast_disable(
 
 	iface->flags &= ~INT_BCASTXMIT;
 	return true;
-#else
-	return false;
-#endif /* SO_BROADCAST */
 }
 #endif /* OS_MISSES_SPECIFIC_ROUTE_UPDATES */
 

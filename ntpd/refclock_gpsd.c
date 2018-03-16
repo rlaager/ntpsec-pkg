@@ -214,7 +214,7 @@ typedef struct addrinfo     addrinfoT;
 
 static	void	gpsd_init	(void);
 static	bool	gpsd_start	(int, peerT *);
-static	void	gpsd_shutdown	(int, peerT *);
+static	void	gpsd_shutdown	(struct refclockproc *);
 static	void	gpsd_receive	(struct recvbuf *);
 static	void	gpsd_poll	(int, peerT *);
 static	void	gpsd_control	(int, const struct refclockstat *,
@@ -559,7 +559,7 @@ gpsd_start(
 	LOGIF(CLOCKINFO,
 	      (LOG_NOTICE, "%s: startup, device is '%s'",
 	       refclock_name(peer), up->device));
-	up->mode = MODE_OP_MODE(peer->cfg.ttl);
+	up->mode = MODE_OP_MODE(peer->cfg.mode);
 	if (up->mode > MODE_OP_MAXVAL)
 		up->mode = 0;
 	if (unit >= 128)
@@ -586,21 +586,17 @@ dev_fail:
 
 static void
 gpsd_shutdown(
-	int     unit,
-	peerT * peer)
+	struct refclockproc *pp)
 {
-	clockprocT * const pp = peer->procptr;
 	gpsd_unitT * const up = (gpsd_unitT *)pp->unitptr;
 	gpsd_unitT ** uscan   = &s_clock_units;
-
-	UNUSED_ARG(unit);
 
 	/* The unit pointer might have been removed already. */
 	if (up == NULL)
 		return;
 
 	/* now check if we must close IO resources */
-	if (peer != up->pps_peer) {
+	if (pp != up->pps_peer->procptr) {
 		if (-1 != pp->io.fd) {
 			DPRINT(1, ("%s: closing clock, fd=%d\n",
 				   up->logname, pp->io.fd));
@@ -624,7 +620,7 @@ gpsd_shutdown(
 	}
 	pp->unitptr = NULL;
 	LOGIF(CLOCKINFO,
-	      (LOG_NOTICE, "%s: shutdown", refclock_name(peer)));
+	      (LOG_NOTICE, "shutdown: gpsd_json(%d)", (int)pp->refclkunit));
 }
 
 /* ------------------------------------------------------------------ */
@@ -787,9 +783,9 @@ gpsd_control(
 		up->pps_fudge = dtolfp(pp->fudgetime1);
 		up->ibt_fudge = dtolfp(pp->fudgetime2);
 
-		if (MODE_OP_MODE((uint32_t)up->mode ^ peer->cfg.ttl)) {
+		if (MODE_OP_MODE((uint32_t)up->mode ^ peer->cfg.mode)) {
 			leave_opmode(peer, up->mode);
-			up->mode = MODE_OP_MODE(peer->cfg.ttl);
+			up->mode = MODE_OP_MODE(peer->cfg.mode);
 			enter_opmode(peer, up->mode);
 		}
 	}
@@ -1850,7 +1846,7 @@ gpsd_init_socket(
 	if (-1 == rc) {
 		if (syslogok(pp, up))
 			msyslog(LOG_ERR,
-				"RECLOCK: %s: cannot set GPSD socket to non-blocking: %m",
+				"REFCLOCK: %s: cannot set GPSD socket to non-blocking: %m",
 				up->logname);
 		goto no_socket;
 	}

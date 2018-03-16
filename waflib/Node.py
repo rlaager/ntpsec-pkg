@@ -10,6 +10,7 @@ exclude_regs='''
 **/.#*
 **/%*%
 **/._*
+**/*.swp
 **/CVS
 **/CVS/**
 **/.cvsignore

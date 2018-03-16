@@ -133,7 +133,7 @@ refclock_name(
 	buf = lib_getbuf();
 
 	snprintf(buf, LIB_BUFLENGTH, "%s(%d)",
-			 peer->procptr->clockname, peer->refclkunit);
+			 peer->procptr->clockname, peer->procptr->refclkunit);
 
 	return buf;
 }
@@ -194,11 +194,11 @@ refclock_newpeer(
 	/*
 	 * Initialize structures
 	 */
-	peer->refclkunit = (uint8_t)unit;
 	peer->cfg.flags |= FLAG_REFCLOCK;
 	peer->leap = LEAP_NOTINSYNC;
 	peer->stratum = STRATUM_REFCLOCK;
 	peer->ppoll = peer->cfg.maxpoll;
+	pp->refclkunit = (uint8_t)unit;
 	pp->conf = refclock_conf[clktype];
 	pp->timestarted = current_time;
 	pp->io.fd = -1;
@@ -237,8 +237,6 @@ refclock_unpeer(
 	struct peer *peer	/* peer structure pointer */
 	)
 {
-	int unit;
-
 	/*
 	 * Wiggle the driver to release its resources, then give back
 	 * the interface structure.
@@ -246,9 +244,15 @@ refclock_unpeer(
 	if (NULL == peer->procptr)
 		return;
 
-	unit = peer->refclkunit;
+	/* There's a standard shutdown sequence if user didn't declare one */
 	if (peer->procptr->conf->clock_shutdown)
-		(peer->procptr->conf->clock_shutdown)(unit, peer);
+		(peer->procptr->conf->clock_shutdown)(peer->procptr);
+	else {
+		if (NULL != peer->procptr->unitptr)
+			free(peer->procptr->unitptr);
+		if (-1 != peer->procptr->io.fd)
+			io_closeclock(&peer->procptr->io);
+	}
 	free(peer->procptr);
 	peer->procptr = NULL;
 }
@@ -265,8 +269,8 @@ refclock_timer(
 	struct refclockproc *	pp;
 	int			unit;
 
-	unit = p->refclkunit;
 	pp = p->procptr;
+	unit = pp->refclkunit;
 	if (pp->conf->clock_timer)
 		(*pp->conf->clock_timer)(unit, p);
 	if (pp->action != NULL && pp->nextaction <= current_time)
@@ -289,7 +293,7 @@ refclock_transmit(
 {
 	int unit;
 
-	unit = peer->refclkunit;
+	unit = peer->procptr->refclkunit;
 	peer->sent++;
 	get_systime(&peer->xmt);
 
@@ -300,7 +304,7 @@ refclock_transmit(
 	 */
 	if (peer->burst == 0) {
 		uint8_t oreach;
-		DPRINT(1, ("refclock_transmit: at %lu %s\n",
+		DPRINT(1, ("refclock_transmit: at %u %s\n",
 			   current_time, socktoa(&(peer->srcadr))));
 
 		/*
@@ -409,8 +413,8 @@ refclock_process_f(
 	 * to deducing the year from the receipt time of the sample if
 	 * it finds only a 2-digit year in the timecode.
 	 */
-	if (!clocktime(pp->year, pp->day, pp->hour, pp->minute, pp->second, GMT,
-		       lfpuint(pp->lastrec), &pp->yearstart, &sec))
+	if (!clocktime(pp->year, pp->day, pp->hour, pp->minute, pp->second,
+		       time(NULL), lfpuint(pp->lastrec), &pp->yearstart, &sec))
 		return false;
 
 	setlfpuint(offset, sec);
@@ -514,7 +518,7 @@ refclock_receive(
 {
 	struct refclockproc *pp;
 
-	DPRINT(1, ("refclock_receive: at %lu %s\n",
+	DPRINT(1, ("refclock_receive: at %u %s\n",
 		   current_time, socktoa(&peer->srcadr)));
 
 	/*
@@ -691,23 +695,13 @@ refclock_open(
 	)
 {
 	int	fd;
-	int	omode;
-#ifdef O_NONBLOCK
 	char	trash[128];	/* litter bin for old input data */
-#endif
 
 	/*
 	 * Open serial port and set default options
 	 */
-	omode = O_RDWR;
-#ifdef O_NONBLOCK
-	omode |= O_NONBLOCK;
-#endif
-#ifdef O_NOCTTY
-	omode |= O_NOCTTY;
-#endif
 
-	fd = open(dev, omode, 0777);
+	fd = open(dev, O_RDWR | O_NONBLOCK | O_NOCTTY);
 	/* refclock_open() long returned 0 on failure, avoid it. */
 	if (0 == fd) {
 		fd = dup(0);
@@ -721,7 +715,6 @@ refclock_open(
 		close(fd);
 		return -1;
 	}
-#ifdef O_NONBLOCK
 	/*
 	 * We want to make sure there is no pending trash in the input
 	 * buffer. Since we have non-blocking IO available, this is a
@@ -730,7 +723,6 @@ refclock_open(
 	 */
 	while (read(fd, trash, sizeof(trash)) > 0 || errno == EINTR)
 		/*NOP*/;
-#endif
 	return fd;
 }
 
@@ -860,7 +852,7 @@ refclock_control(
 		return;
 
 	pp = peer->procptr;
-	unit = peer->refclkunit;
+	unit = peer->procptr->refclkunit;
 
 	/*
 	 * Initialize requested data
@@ -1082,7 +1074,7 @@ refclock_catcher(
 	if (dtemp > .5)
 		dtemp -= 1.;
 	SAMPLE(-dtemp + pp->fudgetime1);
-	DPRINT(2, ("refclock_pps: %lu %f %f\n", current_time,
+	DPRINT(2, ("refclock_pps: %u %f %f\n", current_time,
 		   dtemp, pp->fudgetime1));
 	return PPS_OK;
 }

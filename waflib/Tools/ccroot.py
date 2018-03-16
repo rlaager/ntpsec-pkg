@@ -241,7 +241,7 @@ def process_use(self):
 			if y.tmp_use_objects:
 				self.add_objects_from_tgen(y)
 		if getattr(y,'export_includes',None):
-			self.includes.extend(y.to_incnodes(y.export_includes))
+			self.includes=self.includes+y.to_incnodes(y.export_includes)
 		if getattr(y,'export_defines',None):
 			self.env.append_value('DEFINES',self.to_list(y.export_defines))
 	for x in names:
@@ -357,7 +357,7 @@ def apply_vnum(self):
 			outs.append(node.parent.make_node(name2))
 		self.create_task('vnum',node,outs)
 	if getattr(self,'install_task',None):
-		self.install_task.hasrun=Task.SKIP_ME
+		self.install_task.hasrun=Task.SKIPPED
 		path=self.install_task.install_to
 		if self.env.DEST_OS=='openbsd':
 			libname=self.link_task.outputs[0].name

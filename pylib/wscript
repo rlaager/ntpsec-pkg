@@ -1,5 +1,4 @@
 from waflib import Utils  # pylint: disable=import-error
-from wafhelpers.fix_python_config import FixConfig
 
 
 def options(opt):
@@ -7,9 +6,8 @@ def options(opt):
 
 
 def configure(conf):
-    fixed = FixConfig(conf)
-    fixed.load('python')
-    fixed.check_python_version((2, 6, 0))
+    conf.load('python')
+    conf.check_python_version((2, 6, 0))
     conf.check_python_headers(features='pyext')  # Extension-only, no embedded
 
 
@@ -22,6 +20,11 @@ def build(ctx):
     target4 = ctx.srcnode.make_node('wafhelpers/.autorevision-cache')
     sources = srcnode.ant_glob('*.py')
     builds = [x.get_bld() for x in sources]
+
+    # Remove generated files to ensure they are properly updated
+    ctx.exec_command("rm -f %s" % target1.abspath())
+    ctx.exec_command("rm -f %s" % target2.abspath())
+    ctx.exec_command("rm -f %s" % target3.abspath())
 
     # Make sure Python sees .py as well as .pyc/.pyo
     ctx(

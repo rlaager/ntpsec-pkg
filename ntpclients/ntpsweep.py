@@ -4,8 +4,9 @@
 ntpsweep - print various information about given NTP servers
 USAGE: ntpsweep [-<flag> [<val>] | --<name>[{=| }<val>]]... [hostfile]
 
-    -l, --host-list=str        Host to execute actions on
-                                   - may appear multiple times
+    -h, --host=str             Host to execute actions on
+    -l, --host-list=str        Comma-delimited list of Hosts to 
+                                   execute actions on
     -p, --peers                Recursively list all peers a host syncs to
     -m, --maxlevel=num         Traverse peers up to this level
                                    (4 is a reasonable number)
@@ -27,9 +28,15 @@ from __future__ import print_function
 import os
 import sys
 import getopt
-import ntp.packet
-import ntp.util
 
+try:
+    import ntp.packet
+    import ntp.util
+except ImportError as e:
+    sys.stderr.write(
+        "ntpsweep: can't find Python NTP library.\n")
+    sys.stderr.write("%s\n" % e)
+    sys.exit(1)
 
 def ntp_peers(host):
     """Return: a list of peer IP addrs for a specified host,
@@ -166,8 +173,12 @@ if __name__ == '__main__':
             print(__doc__, file=sys.stderr)
             raise SystemExit(0)
 
-    if arguments:
-        hostlist += [ln.strip() for ln in open(arguments[0]).readlines()]
+    try:
+        if arguments:
+            hostlist += [ln.strip() for ln in open(arguments[0]).readlines()]
+    except IOError:
+        sys.stderr.write("Host file not found.\n")
+        raise SystemExit(1)
 
     if not hostlist:
         hostlist = ["localhost"]
@@ -186,7 +197,7 @@ Host                             st offset(s) version     system       processor
             scan_host(host, 0)
         except ntp.packet.ControlException as e:
             sys.stderr.write(e.message + "\n")
-            sys.exit(1)
+            continue
     sys.exit(0)
 
 # end

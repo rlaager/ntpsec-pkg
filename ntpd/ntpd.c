@@ -564,6 +564,8 @@ ntpdmain(
 		exit(1);
 	}
 
+	set_prettydate_pivot(time(NULL));
+	
 # ifdef HAVE_WORKING_FORK
 	/* make sure the FDs are initialised */
 	pipe_fds[0] = -1;
@@ -612,11 +614,6 @@ ntpdmain(
 		 */
 		termlogit = false;    /* do not use stderr after fork */
 		closelog();
-		if (syslog_file != NULL) {
-			fclose(syslog_file);
-			syslog_file = NULL;
-			syslogit = true;
-		}
 		close_all_except(waitsync_fd_to_close);
 		INSIST(0 == open("/dev/null", 0) && 1 == dup2(0, 1) \
 			&& 2 == dup2(0, 2));
@@ -681,6 +678,7 @@ ntpdmain(
 	init_proto(!dumpopts);		/* Call at high priority */
 	init_io();
 	init_loopfilter();
+	init_readconfig();	/* see readconfig() */
 	mon_start(MON_ON);	/* monitor on by default now	  */
 				/* turn off in config if unwanted */
 
@@ -728,7 +726,7 @@ ntpdmain(
 		break;
 	    case 'k':
 		if (ntp_optarg != NULL)
-			getauthkeys(ntp_optarg);
+			set_keys_file(ntp_optarg);
 		break;
             case 'l':
             case 'L':
@@ -766,7 +764,7 @@ ntpdmain(
 				ntp_optarg);
 			exit(1);
 		    } else {
-			authtrust((keyid_t)tkey, true);
+			set_trustedkey((keyid_t)tkey);
 		    }
 	        }
 		break;
@@ -833,7 +831,9 @@ ntpdmain(
 	if (dumpopts) {
 	    if (explicit_config)
 		fprintf(stdout, "conffile \"%s\";\n", explicit_config);
+#ifdef DEBUG
 	    fprintf(stdout, "#debug = %d\n", debug);
+#endif /* DEBUG */
 	    if (driftfile)
 		fprintf(stdout, "driftfile \"%s\";\n", driftfile);
 	    fprintf(stdout, "#allow_panic = %s\n",
@@ -896,7 +896,7 @@ ntpdmain(
         }
 
 	loop_config(LOOP_DRIFTINIT, 0);
-	/* report_event(EVNT_SYSRESTART, NULL, NULL); */
+	report_event(EVNT_SYSRESTART, NULL, NULL);
 
 #ifndef ENABLE_EARLY_DROPROOT
 	/* drop root privileges */

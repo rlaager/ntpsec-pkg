@@ -9,10 +9,20 @@
 #include <stdint.h>
 
 #include <openssl/evp.h>	/* provides OpenSSL digest API */
+#include <openssl/md5.h>
 
 #include "ntp_fp.h"
 #include "ntp_stdlib.h"
 #include "ntp.h"
+
+#ifndef EVP_MD_CTX_reset
+/* Slightly older version of OpenSSL */
+/* Similar hack in ssl_init.c and attic/digest-timing.c */
+#define EVP_MD_CTX_reset(ctx) EVP_MD_CTX_init(ctx)
+#endif
+
+/* Need one per thread. */
+extern EVP_MD_CTX *digest_ctx;
 
 /* ctmemeq - test two blocks memory for equality without leaking
  * timing information.
@@ -28,9 +38,8 @@ static bool ctmemeq(const void *s1, const void *s2, size_t n) {
 	const uint8_t *a = s1;
 	const uint8_t *b = s2;
 	uint8_t accum = 0;
-        size_t i;
 
-	for(i=0; i<n; i++) {
+	for(size_t i = 0; i < n; i++) {
 		accum |= a[i] ^ b[i];
 	}
 
@@ -46,30 +55,31 @@ int
 mac_authencrypt(
 	int	type,		/* hash algorithm */
 	uint8_t	*key,		/* key pointer */
+	int	key_size,	/* key size */
 	uint32_t *pkt,		/* packet pointer */
 	int	length		/* packet length */
 	)
 {
 	uint8_t	digest[EVP_MAX_MD_SIZE];
 	unsigned int	len;
-	EVP_MD_CTX *ctx;
+	EVP_MD_CTX *ctx = digest_ctx;
 
 	/*
 	 * Compute digest of key concatenated with packet. Note: the
 	 * key type and digest type have been verified when the key
 	 * was created.
 	 */
-	ssl_init();
-	ctx = EVP_MD_CTX_create();
+	EVP_MD_CTX_reset(ctx);
 	if (!EVP_DigestInit_ex(ctx, EVP_get_digestbynid(type), NULL)) {
 		msyslog(LOG_ERR,
 		    "MAC: encrypt: digest init failed");
 		return (0);
 	}
-	EVP_DigestUpdate(ctx, key, cache_secretsize);
+	EVP_DigestUpdate(ctx, key, key_size);
 	EVP_DigestUpdate(ctx, (uint8_t *)pkt, (unsigned int)length);
 	EVP_DigestFinal_ex(ctx, digest, &len);
-	EVP_MD_CTX_destroy(ctx);
+	if (MAX_BARE_DIGEST_LENGTH < len)
+		len = MAX_BARE_DIGEST_LENGTH;
 	memmove((uint8_t *)pkt + length + 4, digest, len);
 	return (int)(len + 4);
 }
@@ -84,31 +94,32 @@ bool
 mac_authdecrypt(
 	int	type,		/* hash algorithm */
 	uint8_t	*key,		/* key pointer */
-	uint32_t	*pkt,		/* packet pointer */
+	int	key_size,	/* key size */
+	uint32_t	*pkt,	/* packet pointer */
 	int	length,	 	/* packet length */
 	int	size		/* MAC size */
 	)
 {
 	uint8_t	digest[EVP_MAX_MD_SIZE];
 	unsigned int	len;
-	EVP_MD_CTX *ctx;
+	EVP_MD_CTX *ctx = digest_ctx;
 
 	/*
 	 * Compute digest of key concatenated with packet. Note: the
 	 * key type and digest type have been verified when the key
 	 * was created.
 	 */
-	ssl_init();
-	ctx = EVP_MD_CTX_create();
+	EVP_MD_CTX_reset(ctx);
 	if (!EVP_DigestInit_ex(ctx, EVP_get_digestbynid(type), NULL)) {
 		msyslog(LOG_ERR,
 		    "MAC: decrypt: digest init failed");
 		return false;
 	}
-	EVP_DigestUpdate(ctx, key, cache_secretsize);
+	EVP_DigestUpdate(ctx, key, key_size);
 	EVP_DigestUpdate(ctx, (uint8_t *)pkt, (unsigned int)length);
 	EVP_DigestFinal_ex(ctx, digest, &len);
-	EVP_MD_CTX_destroy(ctx);
+	if (MAX_BARE_DIGEST_LENGTH < len)
+		len = MAX_BARE_DIGEST_LENGTH;
 	if ((unsigned int)size != len + 4) {
 		msyslog(LOG_ERR,
 		    "MAC: decrypt: MAC length error");
@@ -120,21 +131,20 @@ mac_authdecrypt(
 /*
  * Calculate the reference id from the address. If it is an IPv4
  * address, use it as is. If it is an IPv6 address, do a md5 on
- * it and use the bottom 4 bytes.
+ * it and use the top 4 bytes. (Note: NTP Classic claimed it used
+ * the *bottom* 4 bytes, but that didn't match the code or the test.)
  * The result is in network byte order.
  */
 uint32_t
 addr2refid(sockaddr_u *addr)
 {
-	uint8_t		digest[20];
+	uint8_t		digest[MD5_DIGEST_LENGTH];
 	uint32_t	addr_refid;
 	EVP_MD_CTX	*ctx;
 	unsigned int	len;
 
 	if (IS_IPV4(addr))
 		return (NSRCADR(addr));
-
-	ssl_init();
 
 	ctx = EVP_MD_CTX_create();
 #ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW

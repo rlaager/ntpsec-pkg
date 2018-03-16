@@ -142,17 +142,6 @@
 #ifdef HAVE_PPSAPI
 # define	PPSDEV		"/dev/gpspps%d"	/* PPSAPI device override */
 # define	PPS_PRECISION	(-20)		/* precision assumed (~ 1 us) */
-# ifndef O_NOCTTY
-#  define M_NOCTTY	0
-# else
-#  define M_NOCTTY	O_NOCTTY
-# endif
-# ifndef O_NONBLOCK
-#  define M_NONBLOCK	0
-# else
-#  define M_NONBLOCK	O_NONBLOCK
-# endif
-# define PPSOPENMODE	(O_RDWR | M_NOCTTY | M_NONBLOCK)
 #endif
 #ifdef ENABLE_CLASSIC_MODE
 #define	SPEED232	B4800		/* uart speed (4800 bps) */
@@ -283,7 +272,7 @@ typedef struct {
  */
 static	void	nmea_init	(void);
 static	bool	nmea_start	(int, struct peer *);
-static	void	nmea_shutdown	(int, struct peer *);
+static	void	nmea_shutdown	(struct refclockproc *);
 static	void	nmea_receive	(struct recvbuf *);
 static	void	nmea_poll	(int, struct peer *);
 #ifdef HAVE_PPSAPI
@@ -404,7 +393,7 @@ nmea_start(
 
 
 	/* Old style: get baudrate choice from mode byte bits 4/5/6 */
-	rate = (peer->cfg.ttl & NMEA_BAUDRATE_MASK) >> NMEA_BAUDRATE_SHIFT;
+	rate = (peer->cfg.mode & NMEA_BAUDRATE_MASK) >> NMEA_BAUDRATE_SHIFT;
 
 	/* New style: get baudrate from baud option */
 	if (peer->cfg.baud)
@@ -516,14 +505,10 @@ nmea_start(
  */
 static void
 nmea_shutdown(
-	int           unit,
-	struct peer * peer
+	struct refclockproc * pp
 	)
 {
-	struct refclockproc * const pp = peer->procptr;
 	nmea_unit	    * const up = (nmea_unit *)pp->unitptr;
-
-	UNUSED_ARG(unit);
 
 	if (up != NULL) {
 #ifdef HAVE_PPSAPI
@@ -588,7 +573,7 @@ nmea_control(
 		}
 		if ( peer->cfg.ppspath ) {
 		    up->ppsapi_fd = open(peer->cfg.ppspath,
-					 PPSOPENMODE, S_IRUSR | S_IWUSR);
+			O_RDWR | O_NOCTTY | O_NONBLOCK);
 		} else {
 		    up->ppsapi_fd = -1;
 		}
@@ -898,7 +883,7 @@ nmea_receive(
 		return;	/* not something we know about */
 
 	/* Eventually output delay measurement now. */
-	if (peer->cfg.ttl & NMEA_DELAYMEAS_MASK) {
+	if (peer->cfg.mode & NMEA_DELAYMEAS_MASK) {
 		mprintf_clock_stats(peer, "delay %0.6f %.*s",
 			 ldexp(lfpfrac(rd_timestamp), -32),
 			 (int)(strchr(rd_lastcode, ',') - rd_lastcode),
@@ -906,8 +891,8 @@ nmea_receive(
 	}
 	
 	/* See if I want to process this message type */
-	if ((peer->cfg.ttl & NMEA_MESSAGE_MASK) &&
-	    !(peer->cfg.ttl & sentence_mode[sentence])) {
+	if ((peer->cfg.mode & NMEA_MESSAGE_MASK) &&
+	    !(peer->cfg.mode & sentence_mode[sentence])) {
 		up->tally.filtered++;
 		return;
 	}
@@ -1191,7 +1176,7 @@ nmea_poll(
 	 * clockstats file; otherwise just do a normal clock stats
 	 * record. Clear the tally stats anyway.
 	*/
-	if (peer->cfg.ttl & NMEA_EXTLOG_MASK) {
+	if (peer->cfg.mode & NMEA_EXTLOG_MASK) {
 		/* Log & reset counters with extended logging */
 		const char *nmea = pp->a_lastcode;
 		if (*nmea == '\0') nmea = "(none)";
@@ -1701,7 +1686,7 @@ unfold_day(
 	 * cannot assume we can do this; therefore this is done
 	 * in split representation.
 	 */
-	rec_qw = ntpcal_ntp_to_ntp(rec_ui - SECSPERDAY/2, NULL);
+	rec_qw = ntpcal_ntp_to_ntp(rec_ui - SECSPERDAY/2, time(NULL));
 	rec_ds = ntpcal_daysplit(rec_qw);
 	rec_ds.lo = ntpcal_periodic_extend(rec_ds.lo,
 					   ntpcal_date_to_daysec(jd),
@@ -1735,7 +1720,7 @@ unfold_century(
 	struct calendar rec;
 	int32_t		baseyear;
 
-	ntpcal_ntp_to_date(&rec, rec_ui, NULL);
+	ntpcal_ntp_to_date(&rec, rec_ui, time(NULL));
 	baseyear = rec.year - 20;
 	if (baseyear < g_gpsMinYear)
 		baseyear = g_gpsMinYear;
@@ -1856,7 +1841,7 @@ eval_gps_time(
 
 	/* If we fully trust the GPS receiver, just combine days and
 	 * seconds and be done. */
-	if (peer->cfg.ttl & NMEA_DATETRUST_MASK) {
+	if (peer->cfg.mode & NMEA_DATETRUST_MASK) {
 		setlfpuint(retv, time64lo(ntpcal_dayjoin(gps_day, gps_sec)));
 		return retv;
 	}
@@ -1885,7 +1870,7 @@ eval_gps_time(
 	}
 
 	/* - get unfold base: day of full recv time - 512 weeks */
-	vi64 = ntpcal_ntp_to_ntp(lfpuint(*xrecv), NULL);
+	vi64 = ntpcal_ntp_to_ntp(lfpuint(*xrecv), time(NULL));
 	rs64 = ntpcal_daysplit(vi64);
 	rcv_sec = rs64.lo;
 	rcv_day = rs64.hi - 512 * 7;

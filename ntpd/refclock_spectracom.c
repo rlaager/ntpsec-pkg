@@ -132,9 +132,8 @@ struct spectracomunit {
  * Function prototypes
  */
 static	bool	spectracom_start	(int, struct peer *);
-static	void	spectracom_shutdown	(int, struct peer *);
 static	void	spectracom_receive	(struct recvbuf *);
-static	void	spectracom_poll	(int, struct peer *);
+static	void	spectracom_poll		(int, struct peer *);
 static	void	spectracom_timer	(int, struct peer *);
 #ifdef HAVE_PPSAPI
 static	void	spectracom_control	(int, const struct refclockstat *,
@@ -148,9 +147,9 @@ static	void	spectracom_control	(int, const struct refclockstat *,
  * Transfer vector
  */
 struct	refclock refclock_spectracom = {
-	NAME,			/* basename of driver */
+	NAME,				/* basename of driver */
 	spectracom_start,		/* start up driver */
-	spectracom_shutdown,		/* shut down driver */
+	NULL,				/* shut down driver in standard way */
 	spectracom_poll,		/* transmit poll message */
 	SPECTRACOM_CONTROL,		/* fudge set/change notification */
 	NULL,				/* initialize driver (not used) */
@@ -213,29 +212,6 @@ spectracom_start(
 
 
 /*
- * spectracom_shutdown - shut down the clock
- */
-static void
-spectracom_shutdown(
-	int unit,
-	struct peer *peer
-	)
-{
-	struct refclockproc *	pp;
-	struct spectracomunit *	up;
-
-	UNUSED_ARG(unit);
-
-	pp = peer->procptr;
-	up = pp->unitptr;
-	if (-1 != pp->io.fd)
-		io_closeclock(&pp->io);
-	if (NULL != up)
-		free(up);
-}
-
-
-/*
  * spectracom_receive - receive data from the serial interface
  */
 static void
@@ -286,10 +262,10 @@ spectracom_receive(
 	 */
 	if (temp == 0) {
 		if (up->prev_eol_cr) {
-			DPRINT(2, ("wwvb: <LF> @ %s\n", prettydate(trtmp)));
+			DPRINT(2, ("spectracom: <LF> @ %s\n", prettydate(trtmp)));
 		} else {
 			up->laststamp = trtmp;
-			DPRINT(2, ("wwvb: <CR> @ %s\n", prettydate(trtmp)));
+			DPRINT(2, ("spectracom: <CR> @ %s\n", prettydate(trtmp)));
 		}
 		up->prev_eol_cr = !up->prev_eol_cr;
 		return;
@@ -298,7 +274,7 @@ spectracom_receive(
 	pp->lastrec = up->laststamp;
 	up->laststamp = trtmp;
 	up->prev_eol_cr = true;
-	DPRINT(2, ("wwvb: code @ %s\n"
+	DPRINT(2, ("spectracom: code @ %s\n"
 		   "       using %s minus one char\n",
 		   prettydate(trtmp), prettydate(pp->lastrec)));
 	if (pp->lastrec == 0)
@@ -538,7 +514,7 @@ spectracom_poll(
 #endif /* HAVE_PPSAPI */
 	refclock_receive(peer);
 	record_clock_stats(peer, pp->a_lastcode);
-	DPRINT(1, ("wwvb: timecode %d %s\n", pp->lencode,
+	DPRINT(1, ("spectracom: timecode %d %s\n", pp->lencode,
 		   pp->a_lastcode));
 }
 

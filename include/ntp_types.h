@@ -13,6 +13,8 @@
 #include <limits.h>
 #include "ntp_machine.h"
 
+typedef uint32_t uptime_t;	/* seconds since startup */
+
 
 /*
  * This is another naming conflict.
@@ -59,8 +61,15 @@ typedef uint64_t time64_t;
 
 typedef uint16_t	associd_t; /* association ID */
 #define ASSOCID_MAX	USHRT_MAX
+
+/* In the old days...
+ * Only 16 bits were used for shared keys.
+ * Autokey used to use keys bigger than 16 bits. */
 typedef uint32_t keyid_t;	/* cryptographic key ID */
-#define KEYID_T_MAX	(0xffffffff)
+#define NTP_MAXKEY 0xffff	/* max authentication key number */
+
+/* Max digest length in non-extension MACs, add 4 for keyID */
+#define MAX_BARE_DIGEST_LENGTH 20
 
 /*
  * Ordinary double has only 53 bits  of precision in IEEE754.  But l_fp

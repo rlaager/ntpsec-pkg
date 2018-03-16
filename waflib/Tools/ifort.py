@@ -58,7 +58,7 @@ def get_ifort_version(conf,fc):
 	conf.env.FC_VERSION=(k['major'],k['minor'])
 def configure(conf):
 	if Utils.is_win32:
-		compiler,version,path,includes,libdirs,arch=conf.detect_ifort(True)
+		compiler,version,path,includes,libdirs,arch=conf.detect_ifort()
 		v=conf.env
 		v.DEST_CPU=arch
 		v.PATH=path
@@ -111,7 +111,7 @@ def gather_ifort_versions(conf,versions):
 			except WindowsError:
 				pass
 			else:
-				batch_file=os.path.join(path,'bin','iclvars.bat')
+				batch_file=os.path.join(path,'bin','ifortvars.bat')
 				if os.path.isfile(batch_file):
 					targets[target]=target_compiler(conf,'intel',arch,version,target,batch_file)
 		for target,arch in all_ifort_platforms:
@@ -121,7 +121,7 @@ def gather_ifort_versions(conf,versions):
 			except WindowsError:
 				continue
 			else:
-				batch_file=os.path.join(path,'bin','iclvars.bat')
+				batch_file=os.path.join(path,'bin','ifortvars.bat')
 				if os.path.isfile(batch_file):
 					targets[target]=target_compiler(conf,'intel',arch,version,target,batch_file)
 		major=version[0:2]
@@ -214,7 +214,7 @@ class target_compiler(object):
 			return
 		self.is_done=True
 		try:
-			vs=self.conf.get_msvc_version(self.compiler,self.version,self.bat_target,self.bat)
+			vs=self.conf.get_ifort_version_win32(self.compiler,self.version,self.bat_target,self.bat)
 		except Errors.ConfigurationError:
 			self.is_valid=False
 			return

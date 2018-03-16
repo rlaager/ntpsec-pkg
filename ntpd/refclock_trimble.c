@@ -128,7 +128,6 @@ struct trimble_unit {
  * Function prototypes
  */
 static	bool	trimble_start		(int, struct peer *);
-static	void	trimble_shutdown	(int, struct peer *);
 static	void	trimble_poll		(int, struct peer *);
 static	void	trimble_timer		(int, struct peer *);
 static	void 	trimble_io		(struct recvbuf *);
@@ -176,7 +175,7 @@ static const bool tb_disc_in_holdover[TB_DISC_MODES+1] = {
 struct refclock refclock_trimble = {
 	NAME,			/* basename of driver */
 	trimble_start,		/* start up driver */
-	trimble_shutdown,	/* shut down driver */
+	NULL,			/* shut down driver in the standard way */
 	trimble_poll,		/* transmit poll message */
 	NULL,			/* control - not used  */
 	NULL,			/* initialize driver (not used) */
@@ -184,7 +183,7 @@ struct refclock refclock_trimble = {
 };
 
 /* Extract the clock type from the mode setting */
-#define CLK_TYPE(x) ((int)(((x)->cfg.ttl) & 0x7F))
+#define CLK_TYPE(x) ((int)(((x)->cfg.mode) & 0x7F))
 
 /* Supported clock types */
 #define CLK_PALISADE	0	/* Trimble Palisade */
@@ -477,28 +476,6 @@ trimble_start (
 		init_thunderbolt(fd);
 
 	return true;
-}
-
-/*
- * trimble_shutdown - shut down the clock
- */
-static void
-trimble_shutdown (
-	int unit,
-	struct peer *peer
-	)
-{
-	struct trimble_unit *up;
-	struct refclockproc *pp;
-
-	UNUSED_ARG(unit);
-
-	pp = peer->procptr;
-	up = pp->unitptr;
-	if (-1 != pp->io.fd)
-		io_closeclock(&pp->io);
-	if (NULL != up)
-		free(up);
 }
 
 /* 

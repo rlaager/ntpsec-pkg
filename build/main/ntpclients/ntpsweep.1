@@ -2,12 +2,12 @@
 .\"     Title: ntpsweep
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/10/2017
-.\"    Manual: \ \&
-.\"    Source: \ \&
+.\"      Date: 03/15/2018
+.\"    Manual: NTPsec
+.\"    Source: NTPsec 1.1.0
 .\"  Language: English
 .\"
-.TH "NTPSWEEP" "1" "10/10/2017" "\ \&" "\ \&"
+.TH "NTPSWEEP" "1" "03/15/2018" "NTPsec 1\&.1\&.0" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -31,7 +31,7 @@
 ntpsweep \- print various information about given NTP servers
 .SH "SYNOPSIS"
 .sp
-ntpsweep [\-l \fIhost\fR]\&... [\-p] [\-m \fInumber\fR] [\-s \fIprefix\fR] [\-h \fIstring\fR]
+ntpsweep [\-l \fIhost\fR]\&... [\-p] [\-m \fInumber\fR] [\-s \fIprefix\fR] [\-h \fIstring\fR] [hostfile\&...]
 .SH "DESCRIPTION"
 .sp
 ntpsweep prints per host the NTP stratum level, the clock offset in seconds, the daemon version, the operating system and the processor\&. Optionally recursing through all peers\&.
@@ -45,7 +45,7 @@ ntpsweep relies on ntpq and Mode 6 queries to probe servers\&. This depends on t
 .RS 4
 Host to execute actions on\&. This option may appear an unlimited number of times\&.
 .sp
-Use this option to specify the host on which this script operates\&. May appear multiple times\&.
+Use this option to specify the host on which this script operates\&. May appear multiple times\&. Multiple hosts may be specified, delimited by commas\&.
 .RE
 .PP
 \-p, \-\-peers
@@ -67,6 +67,8 @@ Strip this string from hostnames\&.
 .RS 4
 Specify a single host\&. Deprecated option for backwards compatibility\&.
 .RE
+.sp
+If hostfiles are specified, they are treated as lists of hostnames to be swept, one per line\&.
 .SH "EXIT STATUS"
 .sp
 One of the following exit values will be returned:

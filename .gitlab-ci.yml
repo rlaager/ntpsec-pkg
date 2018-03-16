@@ -1,18 +1,35 @@
-pages:
-  stage: deploy
-  script:
-    - apt-get update -qq && apt-get install -y -qq bison python-dev asciidoc
-    - python ./waf configure --enable-doc --prefix=/tmp/docbot-local --htmldir=`pwd`/public/latest/ build install
-    - cp www/favicon.ico `pwd`/public
-    - cp docs/top.html.in `pwd`/public/index.html
-    - cp docs/top-asciidoc.css `pwd`/public/asciidoc.css
-  artifacts:
-    paths:
-      - public
-#  only:
-#    - master
-  tags:
-    - gitlab-org
+#pages:
+#  stage: deploy
+#  script:
+#    - apt-get update -qq && apt-get install -y -qq bison python-dev asciidoc
+#    - python ./waf configure --enable-doc --prefix=/tmp/docbot-local --htmldir=`pwd`/public/latest/ build install
+#    - cp www/favicon.ico `pwd`/public
+#    - cp docs/top.html.in `pwd`/public/index.html
+#    - cp docs/top-asciidoc.css `pwd`/public/asciidoc.css
+#  allow_failure: true
+#  artifacts:
+#    paths:
+#      - public
+##  only:
+##    - master
+#  tags:
+#    - gitlab-org
+
+#codequality:
+#  stage: test
+#  image: docker:latest
+#  variables:
+#    DOCKER_DRIVER: overlay
+#  services:
+#    - docker:dind
+#  script:
+#    - docker pull codeclimate/codeclimate
+#    - docker run --env CODECLIMATE_CODE="$PWD" --volume "$PWD":/code --volume /var/run/docker.sock:/var/run/docker.sock --volume /tmp/cc:/tmp/cc codeclimate/codeclimate analyze -f json > codeclimate.json
+#  allow_failure: true
+#  artifacts:
+#    paths: [codeclimate.json]
+#  tags:
+#    - docker
 
 .job_template: &job_definition
   stage: build
@@ -38,8 +55,7 @@ gitlab-basic:
   <<: *job_definition
   script:
     - apt-get update -qq && apt-get install -y -qq bison libcap-dev pps-tools python-dev
-    - python ./waf configure build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure build check
   tags:
     - gitlab-org
 
@@ -47,50 +63,124 @@ gitlab-refclocks:
   <<: *job_definition
   script:
     - apt-get update -qq && apt-get install -y -qq bison libcap-dev pps-tools python-dev
-    - python ./waf configure --refclock=all build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure --refclock=all build check
   tags:
     - gitlab-org
 
 debian-wheezy-basic:
   <<: *job_definition
   script:
-    - python ./waf configure build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure build check
   tags:
     - debian-wheezy
+  only:
+    - branches@NTPsec/ntpsec
 
 debian-wheezy-refclocks:
   <<: *job_definition
   script:
-    - python ./waf configure --refclock=all build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure --refclock=all build check
   tags:
     - debian-wheezy
+  only:
+    - branches@NTPsec/ntpsec
 
 debian-jessie-basic:
   <<: *job_definition
   script:
-    - python ./waf configure build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure build check
   tags:
     - debian-jessie
+  only:
+    - branches@NTPsec/ntpsec
 
 debian-jessie-refclocks:
   <<: *job_definition
   script:
-    - python ./waf configure --refclock=all build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure --refclock=all build check
   tags:
     - debian-jessie
+  only:
+    - branches@NTPsec/ntpsec
+
+debian-stretch-basic:
+  <<: *job_definition
+  script:
+    - python ./waf configure build check
+  tags:
+    - debian-stretch
+  only:
+    - branches@NTPsec/ntpsec
+
+debian-stretch-refclocks:
+  <<: *job_definition
+  script:
+    - python ./waf configure --refclock=all build check
+  tags:
+    - debian-stretch
+  only:
+    - branches@NTPsec/ntpsec
+
+ubuntu-1404-lts-basic:
+  <<: *job_definition
+  script:
+    - python ./waf configure build check
+  tags:
+    - ubuntu-1404-lts
+  only:
+    - branches@NTPsec/ntpsec
+
+ubuntu-1404-lts-refclocks:
+  <<: *job_definition
+  script:
+    - python ./waf configure --refclock=all build check
+  tags:
+    - ubuntu-1404-lts
+  only:
+    - branches@NTPsec/ntpsec
+
+ubuntu-1604-lts-basic:
+  <<: *job_definition
+  script:
+    - python ./waf configure build check
+  tags:
+    - ubuntu-1604-lts
+  only:
+    - branches@NTPsec/ntpsec
+
+ubuntu-1604-lts-refclocks:
+  <<: *job_definition
+  script:
+    - python ./waf configure --refclock=all build check
+  tags:
+    - ubuntu-1604-lts
+  only:
+    - branches@NTPsec/ntpsec
+
+ubuntu-1710-basic:
+  <<: *job_definition
+  script:
+    - python ./waf configure build check
+  tags:
+    - ubuntu-1710
+  only:
+    - branches@NTPsec/ntpsec
+
+ubuntu-1710-refclocks:
+  <<: *job_definition
+  script:
+    - python ./waf configure --refclock=all build check
+  tags:
+    - ubuntu-1710
+  only:
+    - branches@NTPsec/ntpsec
 
 gcc-7-basic:
   <<: *job_definition
   image: gcc:7
   script:
     - apt-get update -qq && apt-get install -y -qq bison libcap-dev pps-tools python-dev
-    - python ./waf configure build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure build check
   tags:
     - gitlab-org
 
@@ -99,96 +189,134 @@ gcc-7-refclocks:
   image: gcc:7
   script:
     - apt-get update -qq && apt-get install -y -qq bison libcap-dev pps-tools python-dev
-    - python ./waf configure --refclock=all build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure --refclock=all build check
   tags:
     - gitlab-org
+
+freebsd-10-basic:
+  <<: *job_definition
+  script:
+    - python ./waf configure build check
+  tags:
+    - freebsd-10
+  only:
+    - branches@NTPsec/ntpsec
+
+freebsd-10-refclocks:
+  <<: *job_definition
+  script:
+    - python ./waf configure --refclock=all build check
+  tags:
+    - freebsd-10
+  only:
+    - branches@NTPsec/ntpsec
 
 freebsd-11-basic:
   <<: *job_definition
   script:
-    - python ./waf configure build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure build check
   tags:
     - freebsd-11
+  only:
+    - branches@NTPsec/ntpsec
 
 freebsd-11-refclocks:
   <<: *job_definition
   script:
-    - python ./waf configure --refclock=all build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure --refclock=all build check
   tags:
     - freebsd-11
+  only:
+    - branches@NTPsec/ntpsec
 
 centos-6-basic:
   <<: *job_definition
   script:
-    - python ./waf configure build
+    - python ./waf configure build check
   tags:
     - centos-6
+  only:
+    - branches@NTPsec/ntpsec
 
 centos-6-refclocks:
   <<: *job_definition
   script:
-    - python ./waf configure --refclock=all build
+    - python ./waf configure --refclock=all build check
   tags:
     - centos-6
+  only:
+    - branches@NTPsec/ntpsec
 
 centos-7-basic:
   <<: *job_definition
   script:
-    - python ./waf configure build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure build check
   tags:
     - centos-7
+  only:
+    - branches@NTPsec/ntpsec
 
 centos-7-refclocks:
   <<: *job_definition
   script:
-    - python ./waf configure --refclock=all build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure --refclock=all build check
   tags:
     - centos-7
+  only:
+    - branches@NTPsec/ntpsec
 
-fedora-24-basic:
+fedora-26-basic:
   <<: *job_definition
   script:
-    - python ./waf configure build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure build check
   tags:
-    - fedora-24
+    - fedora-26
+  only:
+    - branches@NTPsec/ntpsec
 
-fedora-24-refclocks:
+fedora-26-refclocks:
   <<: *job_definition
   script:
-    - python ./waf configure --refclock=all build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure --refclock=all build check
   tags:
-    - fedora-24
+    - fedora-26
+  only:
+    - branches@NTPsec/ntpsec
 
-fedora-25-basic:
+fedora-27-basic:
   <<: *job_definition
   script:
-    - python ./waf configure build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure build check
   tags:
-    - fedora-25
+    - fedora-27
+  only:
+    - branches@NTPsec/ntpsec
 
-fedora-25-refclocks:
+fedora-27-refclocks:
   <<: *job_definition
   script:
-    - python ./waf configure --refclock=all build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure --refclock=all build check
   tags:
-    - fedora-25
+    - fedora-27
+  only:
+    - branches@NTPsec/ntpsec
 
 python3:
   <<: *job_definition
   image: python:3
   script:
     - apt-get update -qq && apt-get install -y -qq bison libcap-dev pps-tools
-    - python ./waf configure --refclock=all build
-    - python -m unittest discover -s build/main/tests/pylib
+    - python ./waf configure --refclock=all build check
+  tags:
+    - gitlab-org
+
+python-coverage:
+  <<: *job_definition
+  script:
+    - apt-get update -qq && apt-get install -y -qq bison python-dev python-coverage
+    - python ./waf configure build check
+    - for i in build/main/tests/pylib/test_*; do python-coverage run -a --source build/main/pylib $i; done
+    - python-coverage report
   tags:
     - gitlab-org
 

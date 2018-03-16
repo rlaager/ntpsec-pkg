@@ -8,6 +8,7 @@ import ntp.util
 import ntp.packet
 import shutil
 import sys
+import socket
 
 import jigs
 
@@ -34,6 +35,7 @@ class TestPylibUtilMethods(unittest.TestCase):
     def test_dolog(self):
         f = ntp.util.dolog
 
+        faketimemod = jigs.TimeModuleJig()
         # We need a test jig
         class LogTester:
             def __init__(self):
@@ -47,16 +49,23 @@ class TestPylibUtilMethods(unittest.TestCase):
 
             def flush(self):
                 self.flushed = True
-        # Test with logging off (fd == None)
-        #   uh... if someone can think of a way to do that please tell me
-        # Test with logging on, below threshold
-        jig = LogTester()
-        f(jig, "blah", 0, 3)
-        self.assertEqual((jig.written, jig.flushed), (None, False))
-        # Test with logging on, above threshold
-        jig.__init__()  # reset
-        f(jig, "blah", 4, 3)
-        self.assertEqual((jig.written, jig.flushed), ("blah", True))
+        try:
+            timetemp = ntp.util.time
+            ntp.util.time = faketimemod
+            # Test with logging off (fd == None)
+            #   uh... if someone can think of a way to do that please tell me
+            # Test with logging on, below threshold
+            jig = LogTester()
+            faketimemod.time_returns = [0, 1]
+            f(jig, "blah", 0, 3)
+            self.assertEqual((jig.written, jig.flushed), (None, False))
+            # Test with logging on, above threshold
+            jig.__init__()  # reset
+            f(jig, "blah", 4, 3)
+            self.assertEqual((jig.written, jig.flushed),
+                             ("1970-01-01T00:00:01Z blah\n", True))
+        finally:
+            ntp.util.time = timetemp
 
     def test_safeargcast(self):
         f = ntp.util.safeargcast
@@ -107,6 +116,24 @@ class TestPylibUtilMethods(unittest.TestCase):
         else:
             self.assertEqual(f(1480999786.025), "2016-12-06T04:49:46.025Z")
 
+    def test_deformatNTPTime(self):
+        f = ntp.util.deformatNTPTime
+
+        # Test standard
+        self.assertEqual(f("0x0001020304050607.08090A0B0C0D0E0F"),
+                         "\x00\x01\x02\x03\x04\x05\x06\x07"
+                         "\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F")
+        # Test empty
+        self.assertEqual(f(""), "")
+
+    def test_hexstr2octets(self):
+        f = ntp.util.hexstr2octets
+
+        # Test
+        self.assertEqual(f("f00dface"), "\xF0\x0D\xFA\xCE")
+        # Test odd length
+        self.assertEqual(f("cafebabe1"), "\xCA\xFE\xBA\xBE")
+
     def test_slicedata(self):
         f = ntp.util.slicedata
 
@@ -125,6 +152,12 @@ class TestPylibUtilMethods(unittest.TestCase):
         self.assertEqual(ntp.util.portsplit(
             "[0000:1111:2222:3333:4444:5555:6666:7777]:123"),
             ("0000:1111:2222:3333:4444:5555:6666:7777", ":123"))
+
+    def test_stringfilt(self):
+        f = ntp.util.stringfilt
+
+        self.assertEqual(f("1.2345 2.3456 3.4567 4.5678 5.6789 6.789"),
+                         " 1.2345  2.3456  3.4567  4.5678  5.6789   6.789")
 
     def test_oomsbetweenunits(self):
         f = ntp.util.oomsbetweenunits
@@ -251,6 +284,8 @@ class TestPylibUtilMethods(unittest.TestCase):
         self.assertEqual(f("1.995", 4), "2.00")
         # Attempt to catch bug
         self.assertEqual(f("15937.5", None), "15937.5")
+        # Test to bid and no decimals
+        self.assertEqual(f("123456", 4), "123456")
 
     def test_cropprecision(self):
         f = ntp.util.cropprecision
@@ -278,6 +313,8 @@ class TestPylibUtilMethods(unittest.TestCase):
 
         # Zero
         self.assertEqual(f("0.000", nu.UNIT_MS), u"     0µs")
+        # Zero, spaced
+        self.assertEqual(f("0.000", nu.UNIT_MS, unitSpace=True), u"    0 µs")
         # Standard, width=8
         self.assertEqual(f("1.234", nu.UNIT_MS), " 1.234ms")
         # ditto, negative
@@ -373,6 +410,8 @@ class TestPylibUtilMethods(unittest.TestCase):
         self.assertEqual(f("1.234", "offset"), " 1.234ms")
         # PPM var
         self.assertEqual(f("1.234", "frequency"), "1.234ppm")
+        # No unit type
+        self.assertEqual(f("1.234", "blahblahblah"), "1.234")
 
     def test_f8dot4(self):
         f = ntp.util.f8dot4
@@ -452,19 +491,36 @@ class TestPylibUtilMethods(unittest.TestCase):
             monodata = [5, 10, 315, 20]
             cls.set("foo", 42)
             cls.set("bar", 23)
-            self.assertEqual(cls._cache, {"foo": (42, 5),
-                                          "bar": (23, 10)})
+            self.assertEqual(cls._cache, {"foo": (42, 5, 300),
+                                          "bar": (23, 10, 300)})
             self.assertEqual(monodata, [315, 20])
             # Test get, expired
             result = cls.get("foo")
             self.assertEqual(result, None)
             self.assertEqual(monodata, [20])
-            self.assertEqual(cls._cache, {"bar": (23, 10)})
+            self.assertEqual(cls._cache, {"bar": (23, 10, 300)})
             # Test get, valid
             result = cls.get("bar")
             self.assertEqual(result, 23)
             self.assertEqual(monodata, [])
-            self.assertEqual(cls._cache, {"bar": (23, 10)})
+            self.assertEqual(cls._cache, {"bar": (23, 10, 300)})
+            # Test set, custom TTL
+            monodata = [0, 0, 11, 15]
+            cls.set("foo", 42, 10)
+            cls.set("bar", 23, 20)
+            self.assertEqual(cls._cache, {"foo": (42, 0, 10),
+                                          "bar": (23, 0, 20)})
+            self.assertEqual(monodata, [11, 15])
+            # Test get, expired, custom TTL
+            result = cls.get("foo")
+            self.assertEqual(result, None)
+            self.assertEqual(monodata, [15])
+            self.assertEqual(cls._cache, {"bar": (23, 0, 20)})
+            # Test get, valid, custom TTL
+            result = cls.get("bar")
+            self.assertEqual(result, 23)
+            self.assertEqual(monodata, [])
+            self.assertEqual(cls._cache, {"bar": (23, 0, 20)})
         finally:
             ntp.util.monoclock = monotemp
 
@@ -485,33 +541,34 @@ class TestPylibUtilMethods(unittest.TestCase):
             # Test addrinfo fail
             fakesockmod.__init__()
             fakesockmod.gai_error_count = 1
-            self.assertEqual(f("none"), "DNSFAIL:none")
+            self.assertEqual(f("nothing"), "DNSFAIL:nothing")
             self.assertEqual(fakesockmod.gai_calls,
-                             [("none", None, 0, 0, 0, 2)])
+                             [("nothing", None, 0, 0, 0,
+                               socket.AI_CANONNAME)])
             self.assertEqual(fakesockmod.gni_calls, [])
             # Test nameinfo fail
             fakesockmod.__init__()
             fakesockmod.gni_error_count = 1
-            fakesockmod.gni_returns = [("www.Hastur.madness", 42)]
+            fakesockmod.gni_returns = [("www.Hastur.invalid", 42)]
             fakesockmod.gai_returns = [(("family", "socktype", "proto",
-                                         "san.Hastur.madness",
+                                         "san.Hastur.invalid",
                                          "42.23.%$.(#"),)]
-            self.assertEqual(f("bar:42"), "san.hastur.madness:42")
+            self.assertEqual(f("bar:42"), "san.hastur.invalid:42")
             # Test nameinfo fail, no canonname
             fakesockmod.__init__()
             mycache.__init__()
             fakesockmod.gni_error_count = 1
-            fakesockmod.gni_returns = [("www.Hastur.madness", 42)]
+            fakesockmod.gni_returns = [("www.Hastur.invalid", 42)]
             fakesockmod.gai_returns = [(("family", "socktype", "proto",
                                          None, "42.23.%$.(#"),)]
             self.assertEqual(f("bar:42"), "bar:42")
             # Test success
             fakesockmod.__init__()
             mycache.__init__()
-            fakesockmod.gni_returns = [("www.Hastur.madness", 42)]
+            fakesockmod.gni_returns = [("www.Hastur.invalid", 42)]
             fakesockmod.gai_returns = [(("family", "socktype", "proto",
                                          None, "42.23.%$.(#"),)]
-            self.assertEqual(f("bar:42"), "www.hastur.madness:42")
+            self.assertEqual(f("bar:42"), "www.hastur.invalid:42")
         finally:
             ntp.util.canonicalization_cache = cachetemp
             ntp.util.socket = sockettemp
@@ -531,7 +588,7 @@ class TestPylibUtilMethods(unittest.TestCase):
             self.assertEqual(fakeosmod.isatty_calls, [1])
             # termsize takes different code paths for different
             # versions of Python
-            if "get_terminal_size" in dir(shutil):
+            if str is not bytes:
                 # Python 3 version
                 try:
                     shutiltemp = ntp.util.shutil
@@ -544,7 +601,8 @@ class TestPylibUtilMethods(unittest.TestCase):
             else:
                 # Python 2.x version
                 try:
-                    fcntltemp = ntp.util.fcntl
+                    import fcntl
+                    fcntltemp = fcntl
                     ntp.util.fcntl = fakefcntlmod
                     fakeosmod.isatty_returns = [True]
                     data = ["\x11\x11\x22\x22\x33\x33\x44\x44"]
@@ -675,51 +733,51 @@ class TestPylibUtilMethods(unittest.TestCase):
                              "reftime=00000000.00000000 "
                              "2036-02-07T06:28:16.000Z,\n"
                              "clock=10000000.00000000 "
-                             "2044-08-10T03:52:32.000Z,\n"
+                             "1908-07-04T21:24:16.000Z,\n"
                              "org=20000000.00000000 "
-                             "2053-02-11T01:16:48.000Z,\n"
+                             "1917-01-05T18:48:32.000Z,\n"
                              "rec=30000000.00000000 "
-                             "2061-08-14T22:41:04.000Z,\n"
+                             "1925-07-09T16:12:48.000Z,\n"
                              "xmt=40000000.00000000 "
-                             "2070-02-15T20:05:20.000Z\n")
+                             "1934-01-10T13:37:04.000Z\n")
             # Test prettydates, with units
             self.assertEqual(f(data, showunits=True),
                              "reftime=00000000.00000000 "
                              "2036-02-07T06:28:16.000Z,\n"
                              "clock=10000000.00000000 "
-                             "2044-08-10T03:52:32.000Z,\n"
+                             "1908-07-04T21:24:16.000Z,\n"
                              "org=20000000.00000000 "
-                             "2053-02-11T01:16:48.000Z,\n"
+                             "1917-01-05T18:48:32.000Z,\n"
                              "rec=30000000.00000000 "
-                             "2061-08-14T22:41:04.000Z,\n"
+                             "1925-07-09T16:12:48.000Z,\n"
                              "xmt=40000000.00000000 "
-                             "2070-02-15T20:05:20.000Z\n")
+                             "1934-01-10T13:37:04.000Z\n")
             # Test wide terminal
             termsize = (160, 24)
             self.assertEqual(f(data),
                              "reftime=00000000.00000000 "
                              "2036-02-07T06:28:16.000Z, "
                              "clock=10000000.00000000 "
-                             "2044-08-10T03:52:32.000Z, "
+                             "1908-07-04T21:24:16.000Z, "
                              "org=20000000.00000000 "
-                             "2053-02-11T01:16:48.000Z,\n"
+                             "1917-01-05T18:48:32.000Z,\n"
                              "rec=30000000.00000000 "
-                             "2061-08-14T22:41:04.000Z, "
+                             "1925-07-09T16:12:48.000Z, "
                              "xmt=40000000.00000000 "
-                             "2070-02-15T20:05:20.000Z\n")
+                             "1934-01-10T13:37:04.000Z\n")
             # Test narrow terminal
             termsize = (40, 24)
             self.assertEqual(f(data),
                              "\nreftime=00000000.00000000 "
                              "2036-02-07T06:28:16.000Z,\n"
                              "clock=10000000.00000000 "
-                             "2044-08-10T03:52:32.000Z,\n"
+                             "1908-07-04T21:24:16.000Z,\n"
                              "org=20000000.00000000 "
-                             "2053-02-11T01:16:48.000Z,\n"
+                             "1917-01-05T18:48:32.000Z,\n"
                              "rec=30000000.00000000 "
-                             "2061-08-14T22:41:04.000Z,\n"
+                             "1925-07-09T16:12:48.000Z,\n"
                              "xmt=40000000.00000000 "
-                             "2070-02-15T20:05:20.000Z\n")
+                             "1934-01-10T13:37:04.000Z\n")
             termsize = (80, 24)
             # Test ex-obscure cooking
             data = od((("srcadr", ("1.1.1.1", "1.1.1.1")),
@@ -826,6 +884,9 @@ class TestPylibUtilMethods(unittest.TestCase):
             # Test PPM_VARS, with units
             self.assertEqual(f(data, showunits=True),
                              "frequency=0ppm, clk_wander=1ppm\n")
+            # Test unrecognized variable
+            data = od((("yeahyeah", (1, "1")),))
+            self.assertEqual(f(data), "yeahyeah=1\n")
         finally:
             ntp.util.termsize = termtemp
 
@@ -868,7 +929,7 @@ class TestPylibUtilMethods(unittest.TestCase):
             fakesockmod.gai_returns = [("fam", "type", "proto",
                                         "foo.bar.com", "1.2.3.4")]
             self.assertEqual(cls.summary(ent),
-                             "64730     0      0  400 K 7 2"
+                             "64730 23296      0  400 K 7 2"
                              "      1    42 1.2.3.4")
             # Test summary, second options
             mycache._cache = {}
@@ -882,7 +943,7 @@ class TestPylibUtilMethods(unittest.TestCase):
                                          "foo.bar.com", ("1.2.3.4", 42))]]
             cdns_jig_returns = ["foo.com"]
             self.assertEqual(cls.summary(ent),
-                             "64730     0   4.00   20 L 7 2     65"
+                             "64730 23808   4.00   20 L 7 2     65"
                              "    42 foo.com")
             # Test summary, third options
             mycache._cache = {}
@@ -891,7 +952,7 @@ class TestPylibUtilMethods(unittest.TestCase):
             fakesockmod.gai_error_count = 1
             cdns_jig_returns = ["foobarbaz" * 5]  # 45 chars, will be cropped
             self.assertEqual(cls.summary(ent),
-                             "64730     0    256    0 . 7 2      2    42"
+                             "64730 23808    256    0 . 7 2      2    42"
                              " 1.2.3.4 (foobarbazfoobarbazfoobarbazfoob")
             # Test summary, wide
             mycache._cache = {}
@@ -899,7 +960,7 @@ class TestPylibUtilMethods(unittest.TestCase):
             fakesockmod.gai_error_count = 1
             cdns_jig_returns = ["foobarbaz" * 5]  # 45 chars, will be cropped
             self.assertEqual(cls.summary(ent),
-                             "64730     0    256    0 . 7 2      2"
+                             "64730 23808    256    0 . 7 2      2"
                              "    42 1.2.3.4 "
                              "(foobarbazfoobarbazfoobarbazfoobarbazfoobarbaz)")
         finally:
@@ -1088,22 +1149,22 @@ class TestPeerSummary(unittest.TestCase):
             # Test, no units, hmode=BCLIENTX, peers
             cdns_jig_returns = ["clock_canon"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon     .FAIL.           8 b 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon     .FAIL.           8 b 6926"
                              "   32  764   1.2346   2.7183   3.1416\n")
             # Test, no units, hmode=BROADCAST, not multicast
             data["hmode"] = (5, "5")
             cdns_jig_returns = ["clock_canon"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon     .FAIL.           8 B 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon     .FAIL.           8 B 6926"
                              "   32  764   1.2346   2.7183   3.1416\n")
             # Test, no units, hmode=BROADCAST, not multicast
             data["srcadr"] = ("224.2.3.4", "224.2.3.4")
             cdns_jig_returns = ["clock_canon"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon     .FAIL.           8 M 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon     .FAIL.           8 M 6926"
                              "   32  764   1.2346   2.7183   3.1416\n")
             # Test, no units, hmode=CLIENT, local refclock
             data["srcadr"] = ("10.20.30.40", "10.20.30.40")
@@ -1111,82 +1172,107 @@ class TestPeerSummary(unittest.TestCase):
             data["srchost"] = ("(blah)", "(blah)")
             cdns_jig_returns = ["clock_canon"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon     .FAIL.           8 l 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon     .FAIL.           8 l 6926"
                              "   32  764   1.2346   2.7183   3.1416\n")
             # Test, no units, hmode=CLIENT, pool
             data["srchost"] = ("15.25.35.45", "15.25.35.45")
             data["refid"] = ("POOL", "POOL")
             cdns_jig_returns = ["clock_canon"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon     .POOL.           8 p 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon     .POOL.           8 p 6926"
                              "   32  764   1.2346   2.7183   3.1416\n")
             # Test, no units, hmode=CLIENT, manycast client
             data["srcadr"] = ("224.2.3.4", "224.2.3.4")
             data["refid"] = ("FAIL", "FAIL")
             cdns_jig_returns = ["clock_canon"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon     .FAIL.           8 a 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon     .FAIL.           8 a 6926"
                              "   32  764   1.2346   2.7183   3.1416\n")
             # Test, no units, hmode=CLIENT, unicast
             data["srcadr"] = ("10.20.30.40", "10.20.30.40")
             cdns_jig_returns = ["clock_canon"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon     .FAIL.           8 u 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon     .FAIL.           8 u 6926"
                              "   32  764   1.2346   2.7183   3.1416\n")
             # Test, no units, hmode=ACTIVE
             data["hmode"] = (1, "1")
             cdns_jig_returns = ["clock_canon"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon     .FAIL.           8 s 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon     .FAIL.           8 s 6926"
                              "   32  764   1.2346   2.7183   3.1416\n")
             # Test, no units, hmode=PASSIVE
             data["hmode"] = (2, "2")
             cdns_jig_returns = ["clock_canon"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon     .FAIL.           8 S 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon     .FAIL.           8 S 6926"
                              "   32  764   1.2346   2.7183   3.1416\n")
             # Test, no units, don't show hostnames
             cls.showhostnames = False
             cdns_jig_returns = ["clock_canon"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " 10.20.30.40     .FAIL.           8 S 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#10.20.30.40     .FAIL.           8 S 6926"
                              "   32  764   1.2346   2.7183   3.1416\n")
             # Test, no units, name crop
             cls.showhostnames = True
             cdns_jig_returns = ["clock_canon_blah_jabber_quantum"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon_bla .FAIL.           8 S 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon_bla .FAIL.           8 S 6926"
                              "   32  764   1.2346   2.7183   3.1416\n")
-            # Test, no units, name crop
+            # Test, no units, no name crop
             cls.wideremote = True
             cdns_jig_returns = ["clock_canon_blah_jabber_quantum"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon_blah_jabber_quantum\n"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon_blah_jabber_quantum\n"
                              "                 .FAIL.           8 S"
                              " 6926   32  764   1.2346   2.7183   3.1416\n")
             # Test, with units
             cls.showunits = True
             cdns_jig_returns = ["clock_canon"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon     .FAIL.           8 S 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon     .FAIL.           8 S 6926"
                              "   32  764 1.2346ms 2.7183ms 3.1416ms\n")
+            # Test, low precision formatting with units
+            lowpdata = data.copy()
+            lowpdata["delay"] = (1.234, "1.234")
+            cls.showunits = True
+            cdns_jig_returns = ["clock_canon"]
+            faketimemod.time_returns = [0xA0000000]
+            self.assertEqual(cls.summary(0x500, lowpdata, 12345),
+                             "#clock_canon     .FAIL.           8 S 6926"
+                             "   32  764  1.234ms 2.7183ms 3.1416ms\n")
+            # Test, low precision formatting with units
+            cls.showunits = False
+            cdns_jig_returns = ["clock_canon"]
+            faketimemod.time_returns = [0xA0000000]
+            self.assertEqual(cls.summary(0x500, lowpdata, 12345),
+                             "#clock_canon     .FAIL.           8 S 6926"
+                             "   32  764    1.234    2.718    3.142\n")
             # Test, apeers
             cls.showunits = True
             cls.displaymode = "apeers"
             cdns_jig_returns = ["clock_canon"]
             faketimemod.time_returns = [0xA0000000]
-            self.assertEqual(cls.summary(5, data, 12345),
-                             " clock_canon     .FAIL.   12345   8 S 6926"
+            self.assertEqual(cls.summary(0x500, data, 12345),
+                             "#clock_canon     .FAIL.   12345   8 S 6926"
+                             "   32  764 1.2346ms 2.7183ms 3.1416ms\n")
+            # Test rstatus, previous version
+            cls.showunits = True
+            cls.displaymode = "apeers"
+            cdns_jig_returns = ["clock_canon"]
+            faketimemod.time_returns = [0xA0000000]
+            cls.pktversion = 0
+            self.assertEqual(cls.summary(0x300, data, 12345),
+                             "*clock_canon     .FAIL.   12345   8 S 6926"
                              "   32  764 1.2346ms 2.7183ms 3.1416ms\n")
         finally:
             ntp.util.time = timetemp

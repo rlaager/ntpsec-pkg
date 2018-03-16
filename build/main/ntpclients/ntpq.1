@@ -2,12 +2,12 @@
 .\"     Title: ntpq
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/10/2017
-.\"    Manual: \ \&
-.\"    Source: \ \&
+.\"      Date: 03/15/2018
+.\"    Manual: NTPsec
+.\"    Source: NTPsec 1.1.0
 .\"  Language: English
 .\"
-.TH "NTPQ" "1" "10/10/2017" "\ \&" "\ \&"
+.TH "NTPQ" "1" "03/15/2018" "NTPsec 1\&.1\&.0" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -225,22 +225,16 @@ switch\&.
 .PP
 keyid \fIkeyid\fR
 .RS 4
-This command specifies the key number to be used to authenticate configuration requests\&. This must correspond to a key ID configured in
+This command specifies the key number to be used to authenticate configuration requests\&. This must correspond to a key ID configured with the
+controlkey
+command in the server\(cqs
 ntp\&.conf
-for this purpose\&.
 .RE
 .PP
 keytype
 .RS 4
 Specify the digest algorithm to use for authenticated requests, with default
-MD5\&. If the OpenSSL library is installed, digest can be any message digest algorithm supported by the library\&. The current selections are:
-MD2,
-MD4,
-MD5,
-MDC2,
-RIPEMD160
-and
-SHA1\&.
+MD5\&. The keytype must match what the server is expecting for the the specified key ID\&.
 .RE
 .PP
 ntpversion 1 | 2 | 3 | 4
@@ -252,9 +246,7 @@ claims in packets\&. Defaults to 2, Note that mode\-6 control messages (and mode
 .PP
 passwd
 .RS 4
-This command prompts for a password to authenticate requests\&. The password must correspond to the key ID configured in
-ntp\&.conf
-for this purpose\&.
+This command prompts for a password to authenticate requests\&. The password must match what the server is expecting\&. Passwords longer than 20 bytes are assumed to be hex encoding\&.
 .RE
 .PP
 quit
@@ -1274,55 +1266,7 @@ T{
 bias
 T}:T{
 .sp
-unicast/broadcast bias
-T}
-.TE
-.sp 1
-.sp
-The bias variable is calculated when the first broadcast packet is received after the calibration volley\&. It represents the offset of the broadcast subgraph relative to the unicast subgraph\&.
-.sp
-When ntpd is compiled with the OpenSSL software library, additional peer variables are displayed, including the following:
-.TS
-allbox tab(:);
-lt lt
-lt lt
-lt lt
-lt lt
-lt lt.
-T{
-.sp
-Variable
-T}:T{
-.sp
-Description
-T}
-T{
-.sp
-flags
-T}:T{
-.sp
-peer flags
-T}
-T{
-.sp
-signature
-T}:T{
-.sp
-OpenSSL digest/signature scheme
-T}
-T{
-.sp
-initsequence
-T}:T{
-.sp
-initial key ID
-T}
-T{
-.sp
-initkey
-T}:T{
-.sp
-initial key index
+fudge for asymmetric links/paths
 T}
 .TE
 .sp 1
@@ -1459,6 +1403,8 @@ The \-O (\-\-old\-rv) option of legacy versions has been retired\&.
 It is possible for a ":config unpeer" command to fail silently, yielding "Config Succeeded", if it is given a peer identifier that looks like a driver type name or a hostname not present in the peer list\&. The error will however be reported in the system log\&.
 .sp
 The config command cannot be used to change a server\(cqs default restrictions\&.
+.sp
+Under some circumstances python 2 cannot emit unicode\&. When true, the display of units is downgraded to non\-unicode alternatives\&. One place a user is likely to encounter this is when diverting output through a pipe\&. Attempts have been made to force the use of UTF\-8, all of which break the command history feature\&.
 .sp
 When using the \-u option, very old xterms may fail to render μ correctly\&. If this happens, be sure your xterm is started with the \-u8 option, or the \fIutf8\fR resource\*(Aq, and that your console font contains the UTF\-8 &mu character\&. Also confirm your LANG environment variable is set to a UTF\-8 language, like this: "export LANG=en_US\&.utf8"\&.
 .sp

@@ -27,10 +27,9 @@ try:
     import ntp.ntpc
     import ntp.packet
     import ntp.util
-    import ntp.version
 except ImportError as e:
     sys.stderr.write(
-        "ntpq: can't find Python NTP library.\n")
+        "ntpq: can't find Python NTP library -- check PYTHONPATH.\n")
     sys.stderr.write("%s\n" % e)
     sys.exit(1)
 
@@ -61,18 +60,16 @@ version = ntp.util.stdversion()
 forced_utf8 = False
 
 if str is bytes:  # Python 2
-    import codecs
-
     polystr = unicode
     polybytes = bytes
 
     def string_escape(s):
         return s.decode('string_escape')
 
-    # Originally these only triggered if sys.stdout.encoding != "UTF-8":
-    # Unfortunately sometimes sys.stdout.encoding lies
-    sys.stdout = codecs.getwriter('UTF-8')(sys.stdout)
-    sys.stderr = codecs.getwriter('UTF-8')(sys.stderr)
+    # This used to force UTF-8 encoding, but that breaks the readline system.
+    # Unfortunately sometimes sys.stdout.encoding lies about the encoding,
+    # so expect random false positives.
+    ntp.util.check_unicode()
 
 else:  # Python 3
     import io
@@ -111,6 +108,7 @@ else:  # Python 3
         return io.TextIOWrapper(stream.buffer, encoding="utf-8",
                                 newline="\n", line_buffering=True)
 
+    # This is the one situation where we *can* force unicode.
     if "UTF-8" != sys.stdout.encoding:
         forced_utf8 = True
         sys.stdout = make_std_wrapper(sys.stdout)
@@ -137,6 +135,7 @@ NTP_FLOAT = 0xa   # Float value
 
 class Ntpq(cmd.Cmd):
     "ntpq command interpreter"
+
     def __init__(self, session):
         cmd.Cmd.__init__(self)
         self.session = session
@@ -1014,8 +1013,8 @@ usage: writevar assocID name=value,[...]
     def do_mreadlist(self, line):
         "read the peer variables in the variable list for multiple peers"
         if not line:
-                self.warn("usage: mreadlist assocIDlow assocIDhigh\n")
-                return
+            self.warn("usage: mreadlist assocIDlow assocIDhigh\n")
+            return
         idrange = self.__assoc_range_valid(line)
         if not idrange:
             return
@@ -1036,8 +1035,8 @@ usage: mreadlist assocIDlow assocIDhigh
     def do_mrl(self, line):
         "read the peer variables in the variable list for multiple peers"
         if not line:
-                self.warn("usage: mrl assocIDlow assocIDhigh\n")
-                return
+            self.warn("usage: mrl assocIDlow assocIDhigh\n")
+            return
         self.do_mreadlist(line)
 
     def help_mrl(self):
@@ -1049,9 +1048,9 @@ usage: mrl assocIDlow assocIDhigh
     def do_mreadvar(self, line):
         "read peer variables from multiple peers"
         if not line:
-                self.warn("usage: mreadvar assocIDlow assocIDhigh  "
-                          "[ name=value[,...] ]\n")
-                return
+            self.warn("usage: mreadvar assocIDlow assocIDhigh  "
+                      "[ name=value[,...] ]\n")
+            return
         idrange = self.__assoc_range_valid(line)
         if not idrange:
             return
@@ -1073,9 +1072,9 @@ usage: mreadvar assocIDlow assocIDhigh [name=value[,...]]
     def do_mrv(self, line):
         "read peer variables from multiple peers"
         if not line:
-                self.warn(
-                    "usage: mrv assocIDlow assocIDhigh [name=value[,...]]\n")
-                return
+            self.warn(
+                "usage: mrv assocIDlow assocIDhigh [name=value[,...]]\n")
+            return
         self.do_mreadvar(line)
 
     def help_mrv(self):
@@ -1151,8 +1150,8 @@ usage: cv [ assocID ] [ name=value[,...] ]
             ("candidate", "candidate order:     ", NTP_INT),
         )
         if not line:
-                self.warn("usage: pstats assocID\n")
-                return
+            self.warn("usage: pstats assocID\n")
+            return
         associd = self.__assoc_valid(line)
         if associd >= 0:
             self.collect_display(associd=associd,
@@ -1416,6 +1415,7 @@ usage: reslist
             ("precision", "log2 precision:   ", NTP_INT),
             ("rootdelay", "root delay:       ", NTP_FLOAT),
             ("rootdisp", "root dispersion:  ", NTP_FLOAT),
+            ("rootdist", "root distance     ", NTP_FLOAT),
             ("refid", "reference ID:     ", NTP_STR),
             ("reftime", "reference time:   ", NTP_LFP),
             ("sys_jitter", "system jitter:    ", NTP_FLOAT),

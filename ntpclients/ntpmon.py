@@ -32,23 +32,20 @@ import sys
 import time
 
 try:
-    import ntp.packet
-    import ntp.util
-    import ntp.ntpc
-    import ntp.version
     import ntp.control
     import ntp.magic
+    import ntp.ntpc
+    import ntp.packet
+    import ntp.util
 except ImportError as e:
     sys.stderr.write(
-        "ntpmon: can't find Python NTP library.\n")
+        "ntpmon: can't find Python NTP library -- check PYTHONPATH.\n")
     sys.stderr.write("%s\n" % e)
     sys.exit(1)
 
-disableunicode = False
+
 # LANG=C or LANG=POSIX refuse unicode when combined with curses
-if "UTF-8" != sys.stdout.encoding:
-    ntp.util.deunicode_units()
-    disableunicode = True
+disableunicode = ntp.util.check_unicode()
 
 
 try:
@@ -160,6 +157,7 @@ filtdisp   = %(filtdisp)s
 
 class Fatal(Exception):
     "Unrecoverable error."
+
     def __init__(self, msg):
         Exception.__init__(self)
         self.msg = msg
@@ -315,7 +313,7 @@ if __name__ == '__main__':
                                 if e.errorcode == ntp.control.CERR_BADASSOC:
                                     # Probable race condition due to pool
                                     # dropping an associaton during refresh;
-                                    # ignore. (GitLab issue #374.) 
+                                    # ignore. (GitLab issue #374.)
                                     break
                                 raise Fatal(e.message + "\n")
                             except IOError as e:

@@ -60,6 +60,28 @@ nexttok(
 }
 
 
+static void
+check_digest_length(
+	keyid_t keyno,
+	int keytype,
+	char *name) {
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int length = 0;
+    EVP_MD_CTX *ctx;
+    const EVP_MD *md;
+
+    md = EVP_get_digestbynid(keytype);
+    ctx = EVP_MD_CTX_create();
+    EVP_DigestInit_ex(ctx, md, NULL);
+    EVP_DigestFinal_ex(ctx, digest, &length);
+    EVP_MD_CTX_destroy(ctx);
+
+    if (MAX_BARE_DIGEST_LENGTH < length) {
+	msyslog(LOG_ERR, "AUTH: authreadkeys: digest for key %u, %s will be truncated.", keyno, name);
+    }
+}
+
+
 /*
  * authreadkeys - (re)read keys from a file.
  */
@@ -70,7 +92,6 @@ authreadkeys(
 {
 	FILE	*fp;
 	char	*line;
-	char	*token;
 	keyid_t	keyno;
 	int	keytype;
 	char	buf[512];		/* lots of room for line */
@@ -100,7 +121,7 @@ msyslog(LOG_ERR, "AUTH: authreadkeys: reading %s", file);
 	 * Now read lines from the file, looking for key entries
 	 */
 	while ((line = fgets(buf, sizeof buf, fp)) != NULL) {
-		token = nexttok(&line);
+		char *token = nexttok(&line);
 		if (token == NULL)
 			continue;
 		
@@ -149,16 +170,18 @@ msyslog(LOG_ERR, "AUTH: authreadkeys: reading %s", file);
 			*pch = (char)toupper((unsigned char)*pch);
 
 		keytype = OBJ_sn2nid(upcased);
-		if (!keytype && 'm' == tolower((unsigned char)token[0]))
+		if ((NID_undef == keytype) && ('M' == upcased[0]))
 			keytype = NID_md5;
-		if (keytype == 0) {
+		if (NID_undef == keytype) {
 			msyslog(LOG_ERR,
-			    "AUTH: authreadkeys: invalid type for key %u", keyno);
+			    "AUTH: authreadkeys: invalid type for key %u, %s",
+				keyno, token);
 			continue;
 		}
 		if (EVP_get_digestbynid(keytype) == NULL) {
 			msyslog(LOG_ERR,
-			    "AUTH: authreadkeys: no algorithm for key %u", keyno);
+			    "AUTH: authreadkeys: no algorithm for key %u, %s",
+				keyno, token);
 			continue;
 		}
 
@@ -176,20 +199,26 @@ msyslog(LOG_ERR, "AUTH: authreadkeys: reading %s", file);
 		}
 		len = strlen(token);
 		if (len <= 20) {	/* Bug 2537 */
+			check_digest_length(keyno, keytype, upcased);
 			mac_setkey(keyno, keytype, (uint8_t *)token, len);
 			keys++;
 		} else {
 			char	hex[] = "0123456789abcdef";
-			uint8_t	temp;
-			char	*ptr;
 			size_t	jlim;
 
-			jlim = min(len, 2 * sizeof(keystr));
+			jlim = len;
+			if ((2*sizeof(keystr)) < jlim) {
+			  jlim =  2 * sizeof(keystr);
+			  msyslog(LOG_ERR,
+			    "AUTH: authreadkeys: key %u trucated to %u bytes",
+			    keyno, (unsigned int)jlim);
+
+			}
 			for (j = 0; j < jlim; j++) {
-				ptr = strchr(hex, tolower((unsigned char)token[j]));
+				char *ptr = strchr(hex, tolower((unsigned char)token[j]));
 				if (ptr == NULL)
 					break;	/* abort decoding */
-				temp = (uint8_t)(ptr - hex);
+				uint8_t temp = (uint8_t)(ptr - hex);
 				if (j & 1)
 					keystr[j / 2] |= temp;
 				else
@@ -201,6 +230,7 @@ msyslog(LOG_ERR, "AUTH: authreadkeys: reading %s", file);
 				keyno);
 			    continue;
 			}
+			check_digest_length(keyno, keytype, upcased);
 			mac_setkey(keyno, keytype, keystr, jlim / 2);
 			keys++;
 		}
