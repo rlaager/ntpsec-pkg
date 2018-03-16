@@ -63,7 +63,7 @@ static inline l_fp_w htonl_fp(l_fp lfp) {
 #define	NTP_MAXCLOCK	10	/* max candidates */
 #define MINDISPERSE	.001	/* min distance */
 #define CLOCK_SGATE	3.	/* popcorn spike gate */
-#define	NTP_ORPHWAIT	300	/* orphan wair (s) */
+#define	NTP_ORPHWAIT	300	/* orphan wait (s) */
 
 /*
  * pool soliciting restriction duration (s)
@@ -103,6 +103,7 @@ uint8_t	sys_stratum;		/* system stratum */
 int8_t	sys_precision;		/* local clock precision (log2 s) */
 double	sys_rootdelay;		/* roundtrip delay to primary source */
 double	sys_rootdisp;		/* dispersion to primary source */
+double	sys_rootdist;		/* only used fror Mode 6 export */
 uint32_t sys_refid;		/* reference id (network byte order) */
 l_fp	sys_reftime;		/* last update time */
 struct	peer *sys_peer;		/* current peer */
@@ -136,7 +137,6 @@ static	double sys_clockhop;	/* clockhop threshold */
 static int leap_vote_ins;	/* leap consensus for insert */
 static int leap_vote_del;	/* leap consensus for delete */
 static	unsigned long	leapsec;	/* seconds to next leap (proximity class) */
-static int	sys_manycastserver;	/* respond to manycast client pkts */
 int	peer_ntpdate;		/* active peers in ntpdate mode */
 static int sys_survivors;		/* truest of the truechimers */
 
@@ -153,19 +153,20 @@ static int sys_orphwait = NTP_ORPHWAIT; /* orphan wait */
 
 /*
  * Statistics counters - first the good, then the bad
+ * These get reset every hour if sysstats is enabled.
  */
-unsigned long	sys_stattime;		/* elapsed time since reset */
-unsigned long	sys_received;		/* packets received */
-unsigned long	sys_processed;		/* packets for this host */
-unsigned long	sys_newversion;		/* current version */
-unsigned long	sys_oldversion;		/* old version */
-unsigned long	sys_restricted;		/* access denied */
-unsigned long	sys_badlength;		/* bad length or format */
-unsigned long	sys_badauth;		/* bad authentication */
-unsigned long	sys_declined;		/* declined */
-unsigned long	sys_limitrejected;	/* rate exceeded */
-unsigned long	sys_kodsent;		/* KoD sent */
-unsigned long	use_stattime;		/* elapsed time since reset */
+uptime_t	sys_stattime;		/* elapsed time since sysstats reset */
+uint64_t	sys_received;		/* packets received */
+uint64_t	sys_processed;		/* packets for this host */
+uint64_t	sys_newversion;		/* current version */
+uint64_t	sys_oldversion;		/* old version */
+uint64_t	sys_restricted;		/* access denied */
+uint64_t	sys_badlength;		/* bad length or format */
+uint64_t	sys_badauth;		/* bad authentication */
+uint64_t	sys_declined;		/* declined */
+uint64_t	sys_limitrejected;	/* rate exceeded */
+uint64_t	sys_kodsent;		/* KoD sent */
+uptime_t	use_stattime;		/* elapsed time since usestats reset */
 
 double	measured_tick;		/* non-overridable sys_tick (s) */
 
@@ -246,10 +247,9 @@ free_packet(
 	struct parsed_pkt *pkt
 	)
 {
-	size_t i;
 	if(pkt == NULL) { return; };
 	if(pkt->extensions != NULL) {
-		for(i = 0; i < pkt->num_extensions; i++) {
+		for(size_t i = 0; i < pkt->num_extensions; i++) {
 			free(pkt->extensions[i].body);
 			pkt->extensions[i].body = NULL;
 		}
@@ -309,7 +309,6 @@ parse_packet(
 		/* Count and validate extensions */
 		size_t ext_count = 0;
 		size_t extlen = 0;
-		size_t i;
 		while(bufptr <= recv_buf + recv_length - 28) {
 			extlen = ntp_be16dec(bufptr + 2);
 			if(extlen % 4 != 0 || extlen < 16) {
@@ -331,7 +330,7 @@ parse_packet(
 
 		/* Copy extensions */
 		bufptr = recv_buf + LEN_PKT_NOMAC;
-		for(i = 0; i < ext_count; i++) {
+		for(size_t i = 0; i < ext_count; i++) {
 			pkt->extensions[i].type = ntp_be16dec(bufptr);
 			pkt->extensions[i].len = ntp_be16dec(bufptr + 2) - 4;
 			pkt->extensions[i].body =
@@ -501,17 +500,7 @@ handle_fastxmit(
 	(void)peer;
 
 	if (rbufp->dstadr->flags & INT_MCASTOPEN) {
-		if (!sys_manycastserver) {
 			sys_restricted++;
-			return;
-		}
-
-		/* Do not bother responding to manycast requests if we
-		 * are not synchronized. */
-		if (sys_leap == LEAP_NOTINSYNC) {
-			sys_declined++;
-			return;
-		}
 	}
 
 	/* To prevent exposing an authentication oracle, only MAC
@@ -746,7 +735,7 @@ handle_manycast(
 	mctl.flags = FLAG_PREEMPT | (FLAG_IBURST & mpeer->cfg.flags);
 	mctl.minpoll = mpeer->cfg.minpoll;
 	mctl.maxpoll = mpeer->cfg.maxpoll;
-	mctl.ttl = 0;
+	mctl.mode = 0;
 	mctl.peerkey = mpeer->cfg.peerkey;
 	newpeer(&rbufp->recv_srcadr, NULL, rbufp->dstadr,
 		MODE_CLIENT, &mctl, MDF_UCAST | MDF_UCLNT, false);
@@ -851,6 +840,11 @@ receive(
 		}
 	}
 
+	if (peer != NULL) {
+	    	peer->received++;
+		peer->timereceived = current_time;
+	}
+
 	switch(match) {
 	    case AM_FXMIT:
             case AM_NEWPASS:
@@ -930,8 +924,7 @@ transmit(
 		if ((peer_associations <= 2 * sys_maxclock) &&
 		    (peer_associations < sys_maxclock ||
 		     sys_survivors < sys_minclock))
-			dns_probe(peer);
-		/* FIXME-DNS - need proper backoff */
+			if (!dns_probe(peer)) return;
 		poll_update(peer, hpoll);
 		return;
 	}
@@ -939,8 +932,7 @@ transmit(
 	/* Does server need DNS lookup? */
 	if (peer->cfg.flags & FLAG_DNS) {
 		peer->outdate = current_time;
-		dns_probe(peer);
-		/* FIXME-DNS - need proper backoff */
+		if (!dns_probe(peer)) return;
 		poll_update(peer, hpoll);
 		return;
         }
@@ -1112,7 +1104,7 @@ clock_update(
 	sys_rootdelay = peer->delay + peer->rootdelay;
 	sys_reftime = peer->dst;
 
-	DPRINT(1, ("clock_update: at %lu sample %lu associd %d\n",
+	DPRINT(1, ("clock_update: at %u sample %u associd %d\n",
 		   current_time, peer->epoch, peer->associd));
 
 	/*
@@ -1228,7 +1220,7 @@ poll_update(
 	uint8_t	mpoll
 	)
 {
-	unsigned long	next, utemp;
+	uptime_t	next, utemp;
 	uint8_t	hpoll;
 
 	/*
@@ -1303,7 +1295,7 @@ poll_update(
 		if (peer->throttle > (1 << peer->cfg.minpoll))
 			peer->nextdate += (unsigned long)ntp_minpkt;
 	}
-	DPRINT(2, ("poll_update: at %lu %s poll %d burst %d retry %d head %d early %lu next %lu\n",
+	DPRINT(2, ("poll_update: at %u %s poll %d burst %d retry %d head %d early %u next %u\n",
 		   current_time, socktoa(&peer->srcadr), peer->hpoll,
 		   peer->burst, peer->retry, peer->throttle,
 		   utemp - current_time, peer->nextdate -
@@ -1375,7 +1367,7 @@ peer_clear(
 	    int pseudorandom = peer->associd ^ sock_hash(&peer->srcadr);
 	    peer->nextdate += (unsigned long)(pseudorandom % (1 << peer->cfg.minpoll));
 	}
-	DPRINT(1, ("peer_clear: at %lu next %lu associd %d refid %s\n",
+	DPRINT(1, ("peer_clear: at %u next %u associd %d refid %s\n",
 		   current_time, peer->nextdate, peer->associd,
 		   ident));
 }
@@ -1541,7 +1533,7 @@ clock_filter(
 	 * packets.
 	 */
 	if (peer->filter_epoch[k] <= peer->epoch) {
-	  DPRINT(2, ("clock_filter: old sample %lu\n", current_time -
+	  DPRINT(2, ("clock_filter: old sample %u\n", current_time -
 		     peer->filter_epoch[k]));
 		return;
 	}
@@ -1895,10 +1887,10 @@ clock_select(void)
 	 * peer, who of course have the immunity idol.
 	 */
 	while (1) {
-		d = 1e9;
-		e = -1e9;
-		g = 0;
-		k = 0;
+		d = 1e9; // Minimum peer jitter
+		e = -1e9; // Worst peer select jitter * synch
+		g = 0; // Worst peer select jitter
+		k = 0; // Index of the worst peer
 		for (i = 0; i < nlist; i++) {
 			if (peers[i].error < d)
 				d = peers[i].error;
@@ -2018,7 +2010,7 @@ clock_select(void)
 	 * Mitigation rules of the game. We have the pick of the
 	 * litter in typesystem if any survivors are left. If
 	 * there is a prefer peer, use its offset and jitter.
-	 * Otherwise, use the combined offset and jitter of all kitters.
+	 * Otherwise, use the combined offset and jitter of all kittens.
 	 */
 	if (typesystem != NULL) {
 		if (sys_prefer == NULL) {
@@ -2030,6 +2022,7 @@ clock_select(void)
 			typesystem->new_status = CTL_PST_SEL_SYSPEER;
 			sys_offset = typesystem->offset;
 			sys_jitter = typesystem->jitter;
+			sys_rootdist = root_distance(typesystem);
 		}
 		DPRINT(1, ("select: combine offset %.9f jitter %.9f\n",
 			   sys_offset, sys_jitter));
@@ -2051,6 +2044,7 @@ clock_select(void)
 		typesystem->new_status = CTL_PST_SEL_PPS;
 		sys_offset = typesystem->offset;
 		sys_jitter = typesystem->jitter;
+		sys_rootdist = root_distance(typesystem);
 		DPRINT(1, ("select: pps offset %.9f jitter %.9f\n",
 			   sys_offset, sys_jitter));
 	} else if ( typepps &&
@@ -2115,6 +2109,7 @@ clock_combine(
 	}
 	sys_offset = z / y;
 	sys_jitter = SQRT(w / y + SQUARE(peers[syspeer].seljit));
+	sys_rootdist = peers[syspeer].synch;
 }
 
 
@@ -2190,7 +2185,7 @@ peer_xmit(
 	xpkt.rootdelay = HTONS_FP(DTOUFP(sys_rootdelay));
 	xpkt.rootdisp =	 HTONS_FP(DTOUFP(sys_rootdisp));
 	xpkt.reftime = htonl_fp(sys_reftime);
-	xpkt.org = htonl_fp(peer->rec);
+	xpkt.org = htonl_fp(peer->xmt);
 	xpkt.rec = htonl_fp(peer->dst);
 
 	/*
@@ -2213,7 +2208,7 @@ peer_xmit(
 		peer->outcount++;
 		peer->throttle += (1 << peer->cfg.minpoll) - 2;
 
-		DPRINT(1, ("transmit: at %lu %s->%s mode %d len %zu\n",
+		DPRINT(1, ("transmit: at %u %s->%s mode %d len %zu\n",
 			   current_time, peer->dstadr ?
 			   socktoa(&peer->dstadr->sin) : "-",
 			   socktoa(&peer->srcadr), peer->hmode, sendlen));
@@ -2249,7 +2244,7 @@ peer_xmit(
 	peer->sent++;
         peer->outcount++;
 	peer->throttle += (1 << peer->cfg.minpoll) - 2;
-	DPRINT(1, ("transmit: at %lu %s->%s mode %d keyid %08x len %zu\n",
+	DPRINT(1, ("transmit: at %u %s->%s mode %d keyid %08x len %zu\n",
 		   current_time, peer->dstadr ?
 		   socktoa(&peer->dstadr->sin) : "-",
 		   socktoa(&peer->srcadr), peer->hmode, xkeyid, sendlen));
@@ -2392,7 +2387,7 @@ fast_xmit(
 	sendlen = LEN_PKT_NOMAC;
 	if (rbufp->recv_length == sendlen) {
 		sendpkt(&rbufp->recv_srcadr, rbufp->dstadr, &xpkt, (int)sendlen);
-		DPRINT(1, ("transmit: at %lu %s->%s mode %d len %zu\n",
+		DPRINT(1, ("transmit: at %u %s->%s mode %d len %zu\n",
 			   current_time, socktoa(&rbufp->dstadr->sin),
 			   socktoa(&rbufp->recv_srcadr), xmode, sendlen));
 		return;
@@ -2410,12 +2405,13 @@ fast_xmit(
 	get_systime(&xmt_ty);
 	xmt_ty -= xmt_tx;
 	sys_authdelay = xmt_ty;
-	DPRINT(1, ("transmit: at %lu %s->%s mode %d keyid %08x len %zu\n",
+	DPRINT(1, ("transmit: at %u %s->%s mode %d keyid %08x len %zu\n",
 		   current_time, socktoa(&rbufp->dstadr->sin),
 		   socktoa(&rbufp->recv_srcadr), xmode, xkeyid, sendlen));
 }
 
 
+#ifdef ENABLE_DNS_LOOKUP
 /*
  * dns_take_server - process DNS query for server.
  */
@@ -2435,11 +2431,11 @@ dns_take_server(
 	pp = findexistingpeer(rmtadr, NULL, NULL, MODE_CLIENT);
 	if (NULL != pp) {
 		/* Already in use. */
-		msyslog(LOG_INFO, "PROTO: Server skipping: %s", socktoa(rmtadr));
+		msyslog(LOG_INFO, "DNS: Server skipping: %s", socktoa(rmtadr));
 		return;
 	}
 
-	msyslog(LOG_INFO, "PROTO: Server taking: %s", socktoa(rmtadr));
+	msyslog(LOG_INFO, "DNS: Server taking: %s", socktoa(rmtadr));
 	server->cfg.flags &= (unsigned)~FLAG_DNS;
 		
 	server->srcadr = *rmtadr;
@@ -2447,7 +2443,7 @@ dns_take_server(
 
 	restrict_mask = restrictions(&server->srcadr);
 	if (RES_FLAGS & restrict_mask) {
-		msyslog(LOG_INFO, "PROTO: Server poking hole in restrictions for: %s",
+		msyslog(LOG_INFO, "DNS: Server poking hole in restrictions for: %s",
 			socktoa(&server->srcadr));
 		restrict_source(&server->srcadr, false, 0);
 	}
@@ -2479,11 +2475,11 @@ dns_take_pool(
 	peer = findexistingpeer(rmtadr, NULL, NULL, MODE_CLIENT);
 	if (NULL != peer) {
 		/* This address is already in use. */
-		msyslog(LOG_INFO, "PROTO: Pool skipping: %s", socktoa(rmtadr));
+		msyslog(LOG_INFO, "DNS: Pool skipping: %s", socktoa(rmtadr));
 		return;
 	}
 
-	msyslog(LOG_INFO, "PROTO: Pool taking: %s", socktoa(rmtadr));
+	msyslog(LOG_INFO, "DNS: Pool taking: %s", socktoa(rmtadr));
 
 	lcladr = findinterface(rmtadr);
 	memset(&pctl, '\0', sizeof(struct peer_ctl));
@@ -2491,7 +2487,7 @@ dns_take_pool(
 	pctl.minpoll = pool->cfg.minpoll;
 	pctl.maxpoll = pool->cfg.maxpoll;
 	pctl.flags = FLAG_PREEMPT | (FLAG_IBURST & pool->cfg.flags);
-	pctl.ttl = 0;
+	pctl.mode = 0;
 	pctl.peerkey = 0;
 	peer = newpeer(rmtadr, NULL, lcladr,
 		       MODE_CLIENT, &pctl, MDF_UCAST | MDF_UCLNT, false);
@@ -2503,13 +2499,13 @@ dns_take_pool(
 	restrict_mask = restrictions(&peer->srcadr);
 	/* FIXME-DNS: RES_FLAGS includes RES_DONTSERVE?? */
 	if (RES_FLAGS & restrict_mask) {
-		msyslog(LOG_INFO, "PROTO: Pool poking hole in restrictions for: %s",
+		msyslog(LOG_INFO, "DNS: Pool poking hole in restrictions for: %s",
 				socktoa(&peer->srcadr));
 		restrict_source(&peer->srcadr, false,
 				current_time + POOL_SOLICIT_WINDOW + 1);
 	}
 
-	DPRINT(1, ("transmit: at %lu %s->%s pool\n",
+	DPRINT(1, ("dns_take_pool: at %u %s->%s pool\n",
 		   current_time, latoa(lcladr), socktoa(rmtadr)));
 }
 
@@ -2553,13 +2549,30 @@ void dns_take_status(struct peer* peer, DNS_Status status) {
 	if ((DNS_good == status) &&
 		(MDF_UCAST & peer->cast_flags) && !(FLAG_DNS & peer->cfg.flags))
 		hpoll = 0;  /* server: no more */
-	msyslog(LOG_INFO, "PROTO: dns_take_status: %s=>%s, %d",
+	msyslog(LOG_INFO, "DNS: dns_take_status: %s=>%s, %d",
 		peer->hostname, txt, hpoll);
 	if (0 == hpoll)
 		return; /* hpoll already in use by new server */
 	peer->hpoll = hpoll;
 	peer->nextdate = current_time + (1U << hpoll);
 }
+
+/*
+ * dns_new_interface
+ *   A new interface is now active
+ *   retry danging DNS lookups
+ */
+void dns_new_interface(void) {
+    struct peer *p;
+    for (p = peer_list; p != NULL; p = p->p_link) {
+	if ((p->cfg.flags & FLAG_DNS) || (p->cast_flags & MDF_POOL)) {
+	    p->hpoll = p->cfg.minpoll;
+	    transmit(p);   /* does all the work */
+	}
+    }
+}
+
+#endif /* ENABLE_DNS_LOOKUP */
 
 
 
@@ -2690,10 +2703,10 @@ measure_precision(const bool verbose)
 	measured_tick = measure_tick_fuzz();
 	set_sys_tick_precision(measured_tick);
 	if (verbose) {
-		msyslog(LOG_INFO, "PROTO: precision = %.3f usec (%d)",
+		msyslog(LOG_INFO, "INIT: precision = %.3f usec (%d)",
 			sys_tick * US_PER_S, sys_precision);
 		if (sys_fuzz < sys_tick) {
-			msyslog(LOG_NOTICE, "PROTO: fuzz beneath %.3f usec",
+			msyslog(LOG_NOTICE, "INIT: fuzz beneath %.3f usec",
 				sys_fuzz * US_PER_S);
 		}
 	}
@@ -2766,18 +2779,18 @@ set_sys_tick_precision(
 
 	if (tick > 1.) {
 		msyslog(LOG_ERR,
-			"PROTO: unsupported tick %.3f > 1s ignored", tick);
+			"INIT: unsupported tick %.3f > 1s ignored", tick);
 		return;
 	}
 	if (tick < measured_tick) {
 		msyslog(LOG_ERR,
-			"PROTO: tick %.3f less than measured tick %.3f, ignored",
+			"INIT: tick %.3f less than measured tick %.3f, ignored",
 			tick, measured_tick);
 		return;
 	} else if (tick > measured_tick) {
 		trunc_os_clock = true;
 		msyslog(LOG_NOTICE,
-			"PROTO: truncating system clock to multiples of %.9f",
+			"INIT: truncating system clock to multiples of %.9f",
 			tick);
 	}
 	sys_tick = tick;
@@ -2817,7 +2830,6 @@ init_proto(const bool verbose)
 	measure_precision(verbose);
 	get_systime(&dummy);
 	sys_survivors = 0;
-	sys_manycastserver = 0;
 	sys_stattime = current_time;
 	orphwait = current_time + (unsigned long)sys_orphwait;
 	proto_clr_stats();

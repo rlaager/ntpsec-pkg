@@ -124,7 +124,6 @@ struct true_unit {
  * Function prototypes
  */
 static	bool	true_start	(int, struct peer *);
-static	void	true_shutdown	(int, struct peer *);
 static	void	true_receive	(struct recvbuf *);
 static	void	true_poll	(int, struct peer *);
 static	void	true_send	(struct peer *, const char *);
@@ -140,7 +139,7 @@ static	unsigned long	true_sample720	(void);
 struct	refclock refclock_true = {
 	NAME,			/* basename of driver */
 	true_start,		/* start up driver */
-	true_shutdown,		/* shut down driver */
+	NULL,			/* shut down driver in the stabdard way */
 	true_poll,		/* transmit poll message */
 	NULL,			/* not used (old true_control) */
 	NULL,			/* initialize driver (not used) */
@@ -254,29 +253,6 @@ true_start(
 	true_doevent(peer, e_Init);
 
 	return true;
-}
-
-
-/*
- * true_shutdown - shut down the clock
- */
-static void
-true_shutdown(
-	int unit,
-	struct peer *peer
-	)
-{
-	struct true_unit *up;
-	struct refclockproc *pp;
-
-	UNUSED_ARG(unit);
-
-	pp = peer->procptr;
-	up = pp->unitptr;
-	if (pp->io.fd != -1)
-		io_closeclock(&pp->io);
-	if (up != NULL)
-		free(up);
 }
 
 
@@ -426,7 +402,7 @@ true_receive(
 			 * the count from the PCL720
 			 */
 			if (!clocktime(pp->year, pp->day, pp->hour, pp->minute,
-				       pp->second, GMT, lfpuint(pp->lastrec),
+				       pp->second, lfpuint(pp->lastrec),
 				       &pp->yearstart, &sec)) {
 				refclock_report(peer, CEVNT_BADTIME);
 				return;

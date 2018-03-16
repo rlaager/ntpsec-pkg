@@ -176,9 +176,9 @@ extern	void	init_timer	(void);
 extern	void	reinit_timer	(void);
 extern	void	timer		(void);
 extern	void	timer_clr_stats (void);
-extern	void	timer_interfacetimeout (unsigned long);
-extern	volatile int interface_interval;
-extern	unsigned long	orphwait;		/* orphan wait time */
+extern	void	timer_interfacetimeout (uptime_t);
+extern	int	interface_interval;
+extern	uptime_t	orphwait;		/* orphan wait time */
 
 /* ntp_util.c */
 extern	void	init_util	(void);
@@ -232,15 +232,17 @@ extern	void	reset_auth_stats(void);
 /*
  * Other statistics of possible interest
  */
-extern unsigned long packets_dropped;	/* # packets dropped on reception */
-extern unsigned long packets_ignored;	/* received on wild card interface */
-extern unsigned long packets_received;	/* total number of packets received */
-extern unsigned long packets_sent;	/* total number of packets sent */
-extern unsigned long packets_notsent; 	/* total number of packets which couldn't be sent */
+extern uint64_t packets_dropped;	/* # packets dropped on reception */
+extern uint64_t packets_ignored;	/* received on wild card interface */
+extern uint64_t packets_received;	/* total number of packets received */
+extern uint64_t packets_sent;		/* total number of packets sent */
+extern uint64_t packets_notsent; 	/* total number of packets which couldn't be sent */
 
-extern volatile unsigned long handler_calls;	/* number of calls to interrupt handler */
-extern volatile unsigned long handler_pkts;	/* number of pkts received by handler */
-extern unsigned long	io_timereset;		/* time counters were reset */
+/* There used to be a signal handler for received packets. */
+/* It's not needed now that the kernel time stamps packets. */
+extern uint64_t handler_calls;	/* number of calls to interrupt handler */
+extern uint64_t handler_pkts;	/* number of pkts received by handler */
+extern uptime_t io_timereset;	/* time counters were reset */
 
 /* ntp_io.c */
 extern bool	disable_dynamic_updates;
@@ -286,19 +288,19 @@ extern uint8_t	mon_hash_bits;		/* log2 size of hash table */
 extern mon_entry ** mon_hash;		/* MRU hash table */
 extern mon_entry mon_mru_list;		/* mru listhead */
 extern unsigned int	mon_enabled;		/* MON_OFF (0) or other MON_* */
-extern unsigned int	mru_entries;		/* mru list count */
-extern unsigned int	mru_peakentries;	/* highest mru_entries */
-extern unsigned int	mru_initalloc;		/* entries to preallocate */
-extern unsigned int	mru_incalloc;		/* allocation batch factor */
-extern unsigned int	mru_mindepth;		/* preempt above this */
+extern uint64_t	mru_entries;		/* mru list count */
+extern uint64_t	mru_peakentries;	/* highest mru_entries */
+extern uint64_t	mru_initalloc;		/* entries to preallocate */
+extern uint64_t	mru_incalloc;		/* allocation batch factor */
+extern uint64_t	mru_mindepth;		/* preempt above this */
 extern int	mru_maxage;		/* recycle if older than this */
 extern int	mru_minage;		/* recycle if older than this & full */
-extern unsigned int	mru_maxdepth; 		/* MRU size hard limit */
-extern unsigned long	mru_exists;		/* slot already exists */
-extern unsigned long	mru_new;		/* allocated new slot */
-extern unsigned long	mru_recycleold;		/* recycle: age > maxage */
-extern unsigned long	mru_recyclefull;	/* recycle: full and age > minage */
-extern unsigned long	mru_none;		/* couldn't allocate slot */
+extern uint64_t	mru_maxdepth; 		/* MRU size hard limit */
+extern uint64_t	mru_exists;		/* slot already exists */
+extern uint64_t	mru_new;		/* allocated new slot */
+extern uint64_t	mru_recycleold;		/* recycle: age > maxage */
+extern uint64_t	mru_recyclefull;	/* recycle: full and age > minage */
+extern uint64_t	mru_none;		/* couldn't allocate slot */
 extern int	mon_age;		/* preemption limit */
 
 /* ntp_peer.c */
@@ -319,6 +321,7 @@ extern uint8_t	sys_stratum;		/* system stratum */
 extern int8_t	sys_precision;		/* local clock precision */
 extern double	sys_rootdelay;		/* roundtrip delay to primary source */
 extern double	sys_rootdisp;		/* dispersion to primary source */
+extern double	sys_rootdist;		/* distance to primary source */
 extern uint32_t	sys_refid;		/* reference id */
 extern l_fp	sys_reftime;		/* last update time */
 extern struct peer *sys_peer;		/* current peer */
@@ -333,20 +336,20 @@ extern int	sys_minsane;		/* minimum candidates */
 /*
  * Statistics counters
  */
-extern unsigned long	sys_stattime;		/* time since reset */
-extern unsigned long	sys_received;		/* packets received */
-extern unsigned long	sys_processed;		/* packets for this host */
-extern unsigned long	sys_restricted;	 	/* restricted packets */
-extern unsigned long	sys_newversion;		/* current version  */
-extern unsigned long	sys_oldversion;		/* old version */
-extern unsigned long	sys_badlength;		/* bad length or format */
-extern unsigned long	sys_badauth;		/* bad authentication */
-extern unsigned long	sys_declined;		/* declined */
-extern unsigned long	sys_limitrejected;	/* rate exceeded */
-extern unsigned long	sys_kodsent;		/* KoD sent */
-extern unsigned long	use_stattime;		/* time since reset */
+extern uptime_t	sys_stattime;		/* time since sysstats reset */
+extern uint64_t	sys_received;		/* packets received */
+extern uint64_t	sys_processed;		/* packets for this host */
+extern uint64_t	sys_restricted;	 	/* restricted packets */
+extern uint64_t	sys_newversion;		/* current version  */
+extern uint64_t	sys_oldversion;		/* old version */
+extern uint64_t	sys_badlength;		/* bad length or format */
+extern uint64_t	sys_badauth;		/* bad authentication */
+extern uint64_t	sys_declined;		/* declined */
+extern uint64_t	sys_limitrejected;	/* rate exceeded */
+extern uint64_t	sys_kodsent;		/* KoD sent */
+extern uptime_t	use_stattime;		/* time since usestats reset */
 
-/* Signalling */
+/* Signalling: Set by signal handlers */
 extern volatile bool sawALRM;
 extern volatile bool sawHUP;
 extern volatile bool sawDNS;
@@ -367,9 +370,9 @@ extern void send_via_ntp_signd(struct recvbuf *, int, keyid_t, int,
 #endif
 
 /* ntp_timer.c */
-extern volatile unsigned long alarm_overflow;
-extern unsigned long	current_time;		/* seconds since startup */
-extern unsigned long	timer_timereset;
+extern unsigned long alarm_overflow;
+extern uptime_t	current_time;		/* seconds since startup */
+extern uptime_t	timer_timereset;
 extern unsigned long	timer_xmtcalls;
 extern bool		leap_sec_in_progress;
 #ifdef ENABLE_LEAP_SMEAR

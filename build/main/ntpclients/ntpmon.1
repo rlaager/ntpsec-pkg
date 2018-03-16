@@ -2,12 +2,12 @@
 .\"     Title: ntpmon
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/10/2017
-.\"    Manual: \ \&
-.\"    Source: \ \&
+.\"      Date: 03/15/2018
+.\"    Manual: NTPsec
+.\"    Source: NTPsec 1.1.0
 .\"  Language: English
 .\"
-.TH "NTPMON" "1" "10/10/2017" "\ \&" "\ \&"
+.TH "NTPMON" "1" "03/15/2018" "NTPsec 1\&.1\&.0" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -419,7 +419,7 @@ Display version and exit\&.
 .RE
 .SH "KNOWN BUGS"
 .sp
-When run in a terminal that does not allow UTF\-8 ntpmon will downgrade its unit display to a non\-unicode version\&. ntpmon has to interact with the curses and locale libraries, which prevents it from forcing the use of UTF\-8 the way ntpq can\&.
+When run in a terminal that does not allow UTF\-8 ntpmon will downgrade its unit display to a non\-unicode version\&. ntpmon has to interact with the curses and locale libraries, which prevents it from forcing the use of UTF\-8\&.
 .sp
 When querying a version of ntpd older than NTPsec 0\&.9\&.6, ntpmon will appear to hang when monitoring hosts with extremely long MRU lists \- in particular, public pool hosts\&. Correct behavior requires a Mode 6 protocol extension not yet present in those versions\&.
 .sp

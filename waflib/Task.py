@@ -399,10 +399,11 @@ class Task(TaskBase):
 				except KeyError:
 					continue
 				for v in d:
-					if isinstance(v,bld.root.__class__):
+					try:
 						v=v.get_bld_sig()
-					elif hasattr(v,'__call__'):
-						v=v()
+					except AttributeError:
+						if hasattr(v,'__call__'):
+							v=v()
 					upd(v)
 	def sig_vars(self):
 		sig=self.generator.bld.hash_env_vars(self.env,self.vars)

@@ -97,13 +97,13 @@ struct refclockbug {
 #define MAXSTAGE	60	/* max median filter stages  */
 #define NSTAGE		5	/* default median filter stages */
 #define BMAX		128	/* max timecode length */
-#define GMT		0	/* I hope nobody sees this */
 #define MAXDIAL		60	/* max length of modem dial strings */
 
 struct refclockproc {
 	void *	unitptr;	/* pointer to unit structure */
 	struct refclock * conf;	/* pointer to driver method table */
 	struct refclockio io;	/* I/O handler structure */
+	uint8_t	refclkunit;	/* reference clock unit number */
 	uint8_t	leap;		/* leap/synchronization code */
 	uint8_t	currentstatus;	/* clock status */
 	uint8_t	lastevent;	/* last exception event */
@@ -143,7 +143,7 @@ struct refclockproc {
 	/*
 	 * Status tallies
  	 */
-	unsigned long	timestarted;	/* time we started this */
+	uptime_t		timestarted;	/* time we started this */
 	unsigned long	polls;		/* polls sent */
 	unsigned long	noreply;	/* no replies to polls */
 	unsigned long	badformat;	/* bad format reply */
@@ -159,7 +159,7 @@ struct refclockproc {
 struct refclock {
 	const char *basename;
 	bool (*clock_start)	(int, struct peer *);
-	void (*clock_shutdown)	(int, struct peer *);
+	void (*clock_shutdown)	(struct refclockproc *);
 	void (*clock_poll)	(int, struct peer *);
 	void (*clock_control)	(int, const struct refclockstat *,
 				 struct refclockstat *, struct peer *);

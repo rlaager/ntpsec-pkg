@@ -72,6 +72,7 @@ def build(ctx):
         includes=ctx.env.PLATFORM_INCLUDES,
         source=libntpd_source,
         target="libntpd_obj",
+        use="CRYPTO",
     )
 
     ctx(
@@ -129,7 +130,7 @@ def build(ctx):
         install_path='${SBINDIR}',
         source=ntpd_source,
         target="ntpd",
-        use="libntpd_obj isc ntp M parse RT CAP SECCOMP PTHREAD NTPD "
+        use="libntpd_obj ntp M parse RT CAP SECCOMP PTHREAD NTPD "
             "CRYPTO DNS_SD DNS_SD_INCLUDES %s SOCKET NSL SCF" % use_refclock,
     )
 

@@ -139,7 +139,7 @@ show the offset, delay, dispersion and RMS jitter, all in seconds.
 |3565350575.154505763|NTP s                             |destination timestamp
 |0                   |0: OK, 1: insert pending, 2: delete pending, 3: not synced  |leap warning indicator
 |4                   |4 was current in 2012             |NTP version
-|4                   |3: client, 4: server, 5: broadcast|mode
+|4                   |3: client, 4: server, 6: ntpq     |mode
 |1                   |1-15, 16: not synced              |stratum
 |8                   |log~2~ seconds                    |poll
 |-21                 |log~2~ seconds                    |precision
@@ -226,7 +226,7 @@ The remaining fields show the values used since the last report.
 
   +timingstats+;;
    (Only available when the daemon is compiled with process time
-   debugging support (--enable-debug-timing - costs performance). Record
+   debugging support (+--enable-debug-timing+ - costs performance). Record
    processing time statistics for various selected code paths.
 +
 +53876 36.920 10.0.3.5 1 0.000014592 input processing delay+
@@ -336,10 +336,10 @@ Note that this command can be sent from the
         This number is taken to be the number of seconds the server is
         running at the start of the corresponding 24-hour period.
 
-   _link_ | _nolink_::
+   +link+ | +nolink+::
       It is convenient to be able to access the current element of a
       file generation set by a fixed name. This feature is enabled by
-      specifying _link_ and disabled using _nolink_. If link is
+      specifying +link+ and disabled using +nolink+. If link is
       specified, a hard link from the current file set element to a file
       without suffix is created. When there is already a file with this
       name and the number of links of this file is one, it is renamed

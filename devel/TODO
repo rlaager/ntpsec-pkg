@@ -1,14 +1,5 @@
 = TO DO =
 
-== Checklist for a quality 1.0 release ==
-
-* Package metadata for Ubuntu, Raspbian, Red Hat, Gentoo, and SuSe.
-
-* Add .tar.xz tarball.
-
-* Fix ntpq retransmissions.
-  Too many cases don't work well enough (may be inherited from ntp classic).
-
 === Testing ===
 
 * We need to live-test various refclocks.  It would be nice
@@ -17,14 +8,12 @@
   on at least one platform and test the NMEA, PPS, and SHM drivers
   on most platforms.
 
-== After 1.0 release ==
-
 === Slow convergence ===
 
 [quote, Gary Miller]
 __________
 ntpd takes way, way, way longer to converge than chronyd.  Which is
-why on the fly reconfiguation in ntpd is SO important.  Last thing you
+why on the fly reconfiguration in ntpd is SO important.  Last thing you
 ever want to do is restart ntpd.
 
 Right now, after 10 mins, ntpd has 2,000 times the jitter as chronyd had
@@ -36,27 +25,20 @@ of the current startup logic gets discussed.
 
 === Future plans ===
 
+* Add .tar.xz tarball.
+
+* Fix ntpq retransmissions.
+  Too many cases don't work well enough (may be inherited from ntp classic).
+
 * Test that the pool code properly replaces a server if it goes dark. (Not
   clear how to arrange this.)
 
-* ntpd is remarkably bad at standalone Stratum 1 - requires multiple chimers
-  (and multiple inbound NTP connections, and a hole in your firewall) even when
-  it has a known-good local timesource like a GPS.  This should be fixed.
-
 * Full support for NTS, once IETF has the spec ready
-
-* All the code relating to iteration over interfaces can and should be removed
-  in favor of binding to wildcard addresses.  Information on how to do this
-  us here: https://blog.powerdns.com/2012/10/08/on-binding-datagram-udp-sockets-to-the-any-addresses/
 
 * We could open only IPv6 sockets and allow them to handle mapped IPv4 addresses,
   as described at http://man7.org/linux/man-pages/man7/ipv6.7.html
 
 * A clock driver or auxiliary daemon for PTP.
-
-* Invent a syntax for type/unit pairs: use it in the refclock and unpeer
-  directives. Presently it's only possible to unpeer using the deprecated
-  magic address of the driver.
 
 * Hal says "We need a way to inspect/debug bits on the wire. `ntpdate
   -du' is the traditional approach."  Hal's straw man is a new program
@@ -112,21 +94,10 @@ Remove clock fuzzing:
   implement fine grained clocks.  We should review this area to verify
   that fuzzing is still useful.
 
-Cleanup use of HAVE_SYS_SOCKIO_H
-  ntpd/ntp_packetstamp.c has:
-#ifdef HAVE_SYS_SOCKIO_H        /* UXPV: SIOC* #defines (Frank Vance <fvance@waii.com>) */
-# include <sys/sockio.h>
-#endif
-  They are not referenced in ntpd/ntp_packetstamp.c but are referenced
-  in ntpd/ntp_io.c and libntp/isc_interfaceiter.c
-
 SIGHUP should do more:
   reload keys file (easy, it already reloads the leap file)
   reload ntp.conf (hard, but needed to add new keys,
     we could kludge a partial reload to add/delete servers)
-
-Endian:
-  Investigate using endian.h rather than libntp/ntp_endian.c
 
 Waf detect need configure:
   There are problems with people forgetting to run configure or clean
@@ -148,7 +119,7 @@ Pivot cleanup:
   of seconds in l_fp.  We can clean up a lot of code if l_fp is
   only used for offsets except when used in packets.  That requires
   pushing the pivot logic down close to the packet processing.
-  
+
   There may be interactions with ntpq.
 
 Recvbuff cleanup:
@@ -175,11 +146,6 @@ know things well enough to be sure that this sort of logic won't pick one
 back up.
 __________
 
-
-== Potential device removals ==
-
-* Modes 9 and 10 in the parse driver support hardware that was discontinued
-  before 2003.
 
 == Old, sometime ancient stuff ==
 

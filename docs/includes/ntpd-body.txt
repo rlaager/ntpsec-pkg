@@ -108,11 +108,8 @@ this can happen only once. If the threshold is exceeded after that,
 used with the +-q+ and +-x+ options. See the _tinker_ configuration
 file directive for other options.
 
-+-h+, +--help+::
-  Print a usage message summarizing options and exit.
-
 +-G+, +--force-step-once+::
-  Step any initial offset correction..
+  Step any initial offset correction.
 +
 Normally, +ntpd+ steps the time if the time offset exceeds the step
 threshold, which is 128 ms by default, and otherwise slews the time.
@@ -121,6 +118,9 @@ highest time accuracy can be achieved quickly. However, this may also
 cause the time to be stepped back so this option must not be used if
 applications requiring monotonic time are running. See the _tinker_
 configuration file directive for other options.
+
++-h+, +--help+::
+  Print a usage message summarizing options and exit.
 
 +-i+ _string_, +--jaildir+=_string_::
   Jail directory.
@@ -547,10 +547,10 @@ On most systems, you can send SIGHUP to +ntpd+ with
   # sigkill -HUP ntpd
 -----
 
-If built with debugging enabled (waf configured without --disable-debug)
+If built with debugging enabled (waf configured with +--enable-debug+)
 SIGUSR1 will increase the debug level by 1 and
 SIGUSR2 will decrease it by 1.  This may be helpful if you are
-running without -n, either just to see the logging on your screen
+running with +-n+, either just to see the logging on your screen
 or with gdb.
 
 [[bugs]]

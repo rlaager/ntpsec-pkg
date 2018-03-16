@@ -11,7 +11,7 @@ LINE_CACHE_SIZE=100000
 POPFILE='-'
 recursion_limit=150
 go_absolute=False
-standard_includes=['/usr/include']
+standard_includes=['/usr/local/include','/usr/include']
 if Utils.is_win32:
 	standard_includes=[]
 use_trigraphs=0
@@ -525,16 +525,25 @@ class c_parser(object):
 						ret=None
 			cache[key]=ret
 			return ret
-	def tryfind(self,filename):
+	def tryfind(self,filename,kind='"',env=None):
 		if filename.endswith('.moc'):
 			self.names.append(filename)
 			return None
 		self.curfile=filename
-		found=self.cached_find_resource(self.currentnode_stack[-1],filename)
-		for n in self.nodepaths:
-			if found:
-				break
-			found=self.cached_find_resource(n,filename)
+		found=None
+		if kind=='"':
+			if env.MSVC_VERSION:
+				for n in reversed(self.currentnode_stack):
+					found=self.cached_find_resource(n,filename)
+					if found:
+						break
+			else:
+				found=self.cached_find_resource(self.currentnode_stack[-1],filename)
+		if not found:
+			for n in self.nodepaths:
+				found=self.cached_find_resource(n,filename)
+				if found:
+					break
 		if found and not found in self.ban_includes:
 			self.nodes.append(found)
 			self.addlines(found)
@@ -623,10 +632,9 @@ class c_parser(object):
 						state[-1]=accepted
 				elif token=='include'or token=='import':
 					(kind,inc)=extract_include(line,self.defs)
-					if kind=='"'or not strict_quotes:
-						self.current_file=self.tryfind(inc)
-						if token=='import':
-							self.ban_includes.add(self.current_file)
+					self.current_file=self.tryfind(inc,kind,env)
+					if token=='import':
+						self.ban_includes.add(self.current_file)
 				elif token=='elif':
 					if state[-1]==accepted:
 						state[-1]=skipped

@@ -12,10 +12,6 @@
 #include "timespecops.h"
 #include "ntp_calendar.h"
 
-#ifdef HAVE_UTMPX_H
-#include <utmpx.h>
-#endif
-
 #ifndef USE_COMPILETIME_PIVOT
 # define USE_COMPILETIME_PIVOT 1
 #endif
@@ -187,14 +183,14 @@ normalize_time(
 	if (lfp_prev != 0 && !lamport_violated) {
 		if (!L_ISGTU(result, lfp_prev) &&
 		    sys_fuzz > 0.) {
-			msyslog(LOG_ERR, "CLOCK: ts_prev %s ts_min %s",
-				tspectoa(ts_prev_log),
-				tspectoa(ts_min));
-			msyslog(LOG_ERR, "CLOCK: ts %s", tspectoa(ts));
+			msyslog(LOG_ERR, "CLOCK: ts_prev %ld s + %ld ns, ts_min %ld s + %ld ns",
+				(long)ts_prev_log.tv_sec, ts_prev.tv_nsec,
+				(long)ts_min.tv_sec, ts_min.tv_nsec);
+			msyslog(LOG_ERR, "CLOCK: ts %ld s + %ld ns",
+				(long)ts.tv_sec, ts.tv_nsec);
 			msyslog(LOG_ERR, "CLOCK: sys_fuzz %ld nsec, prior fuzz %.9f",
 				sys_fuzz_nsec, dfuzz_prev);
-			msyslog(LOG_ERR, "CLOCK: this fuzz %.9f",
-				dfuzz);
+			msyslog(LOG_ERR, "CLOCK: this fuzz %.9f", dfuzz);
 			lfpdelta = lfp_prev;
 			lfpdelta -= result;
 			ddelta = lfptod(lfpdelta);
@@ -320,7 +316,7 @@ step_systime(
 	)
 {
 	time_t pivot; /* for ntp era unfolding */
-	struct timespec timets, tslast, tsdiff;
+	struct timespec timets;
 	struct calendar jd;
 	l_fp fp_ofs, fp_sys; /* offset and target system time in FP */
 
@@ -380,7 +376,7 @@ step_systime(
 	fp_sys += fp_ofs;
 
 	/* unfold the new system time */
-	timets = lfp_stamp_to_tspec(fp_sys, &pivot);
+	timets = lfp_stamp_to_tspec(fp_sys, pivot);
 
 	/* now set new system time */
 	if (settime(&timets) != 0) {
@@ -392,77 +388,9 @@ step_systime(
 
 	msyslog(LOG_WARNING, "CLOCK: time stepped by %Lf", step);
 
-	/* only used for utmp/wtmpx time-step recording */
-	tslast.tv_sec = timets.tv_sec;
-	tslast.tv_nsec = timets.tv_nsec;
-
 	sys_residual = 0;
 	lamport_violated = (step < 0);
 	if (step_callback)
 		(*step_callback)();
-
-	/*
-	 * FreeBSD, for example, has:
-	 * struct utmp {
-	 *	   char    ut_line[UT_LINESIZE];
-	 *	   char    ut_name[UT_NAMESIZE];
-	 *	   char    ut_host[UT_HOSTSIZE];
-	 *	   long    ut_time;
-	 * };
-	 * and appends line="|", name="date", host="", time for the OLD
-	 * and appends line="{", name="date", host="", time for the NEW
-	 * to _PATH_WTMP .
-	 *
-	 * Some OSes have utmp, some have utmpx. POSIX.1-2001 standardizes
-	 * utmpx, so we'll support that.
-	 */
-
-	/*
-	 * Write old and new time entries in utmp and wtmp if step
-	 * adjustment is greater than one second.
-	 *
-	 * This might become even uglier...
-	 */
-	tsdiff = abs_tspec(sub_tspec(timets, tslast));
-	if (tsdiff.tv_sec > 0) {
-#ifdef HAVE_UTMPX_H
-# ifdef OVERRIDE_OTIME_MSG
-#  define OTIME_MSG OVERRIDE_OTIME_MSG
-# else
-/* Already defined on NetBSD */
-#  ifndef OTIME_MSG
-#   define OTIME_MSG	"Old NTP time"
-#  endif
-# endif
-# ifdef OVERRIDE_NTIME_MSG
-#  define NTIME_MSG OVERRIDE_NTIME_MSG
-# else
-#  ifndef NTIME_MSG
-#   define NTIME_MSG	"New NTP time"
-#  endif
-# endif
-		struct utmpx utx;
-
-		ZERO(utx);
-
-		/* UTMPX - this is POSIX-conformant */
-		utx.ut_type = OLD_TIME;
-		strlcpy(utx.ut_line, OTIME_MSG, sizeof(utx.ut_line));
-		utx.ut_tv.tv_sec = tslast.tv_sec;
-		utx.ut_tv.tv_usec = (tslast.tv_nsec + 500) / 1000;
-		setutxent();
-		pututxline(&utx);
-		utx.ut_type = NEW_TIME;
-		strlcpy(utx.ut_line, NTIME_MSG, sizeof(utx.ut_line));
-		utx.ut_tv.tv_sec = timets.tv_sec;
-		utx.ut_tv.tv_usec = (timets.tv_nsec + 500) / 1000;
-		setutxent();
-		pututxline(&utx);
-		endutxent();
-
-# undef OTIME_MSG
-# undef NTIME_MSG
-#endif
-	}
 	return true;
 }

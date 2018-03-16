@@ -2,12 +2,12 @@
 .\"     Title: ntp.conf
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/10/2017
-.\"    Manual: \ \&
-.\"    Source: \ \&
+.\"      Date: 03/15/2018
+.\"    Manual: NTPsec
+.\"    Source: NTPsec 1.1.0
 .\"  Language: English
 .\"
-.TH "NTP\&.CONF" "5" "10/10/2017" "\ \&" "\ \&"
+.TH "NTP\&.CONF" "5" "03/15/2018" "NTPsec 1\&.1\&.0" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -38,7 +38,7 @@ The ntp\&.conf configuration file is read at initial startup by the ntpd(8) daem
 .sp
 The file format is similar to other UNIX configuration files\&. Comments begin with a \(oq#\(cq character and extend to the end of the line; blank lines are ignored\&. Configuration commands consist of an initial keyword followed by a list of arguments, some of which may be optional, separated by whitespace\&. Commands may not be continued over multiple lines\&. Arguments may be host names, host addresses written in numeric, dotted\-quad form, integers, floating point numbers (when specifying times in seconds) and text strings\&.
 .sp
-Configuration files may have inclusion lines\&. The syntax is "include" followed by whitespace followed by a file or directory name\&. The configuation is evaluated as though the text of the file \- or all files of the directory with the extension "\&.ntpd" \- were textually spliced in at the point of the include\&. Relative paths will work, even when the \-c option changes the config directory root\&.
+Configuration files may have inclusion lines\&. The syntax is include followed by whitespace followed by a file or directory name\&. The configuration is evaluated as though the text of the file \- or all files of the directory with the extension "\&.conf" \- were textually spliced in at the point of the include\&. Relative paths will work, even when the \-c option changes the config directory root\&.
 .sp
 The rest of this page describes the configuration and control options\&. The "Notes on Configuring NTP and Setting up an NTP Subnet" page (available as part of the HTML documentation provided under /usr/share/doc/ntp) contains an extended discussion of these options\&. In addition to the discussion of general \fIConfiguration Options\fR, there are sections describing the following supported functionality and the options used to control it:
 .sp
@@ -116,7 +116,7 @@ Following is a description of the configuration commands in NTPv4\&. There are t
 .sp
 Only those options applicable to each command are listed below\&. Use of options not listed may not be caught as an error, but may result in some weird and even destructive behavior\&.
 .sp
-In contexts where a host name is expected, a \(oq\-4`or `\-\-ipv4` qualifier preceding the host name forces DNS resolution to the IPv4 namespace, while a \-6 or `\-\-ipv6\(cq qualifier forces DNS resolution to the IPv6 namespace\&.
+In contexts where a host name is expected, a \-4 or \-\-ipv4 qualifier preceding the host name forces DNS resolution to the IPv4 namespace, while a \-6 or \-\-ipv6 qualifier forces DNS resolution to the IPv6 namespace\&.
 .sp
 In these commands, an \fIaddress\fR can be any of (a) an IPV4 address in a\&.b\&.c\&.d format, (b) an IPV6 address in [a:b:c:d:e:f:g] format, (c) a link\-local IPV6 address with an interface specified in [a:b:c:d:e:f:g]%device format, or (d) a DNS hostname\&.
 .sp
@@ -125,14 +125,16 @@ pool \fIaddress\fR [burst] [iburst] [version \fIversion\fR] [prefer] [minpoll \f
 server \fIaddress\fR [key \fIkey\fR] [burst] [iburst] [version \fIversion\fR] [prefer] [minpoll \fIminpoll\fR] [maxpoll \fImaxpoll\fR]
 .sp
 peer \fIaddress\fR [key \fIkey\fR] [version \fIversion\fR] [prefer] [minpoll \fIminpoll\fR] [maxpoll \fImaxpoll\fR]
-.sp
-broadcast \fIaddress\fR [key \fIkey\fR] [version \fIversion\fR] [prefer] [minpoll \fIminpoll\fR] [ttl \fIttl\fR]
 .PP
-unpeer [\fIaddress\fR | \fIassocid\fR]
+unpeer [\fIaddress\fR | \fIassocid\fR | clock \fIclocktype\fR [ unit \fIunitnum\fR]]
 .RS 4
 These six commands specify the time server name or address to be used and the mode in which to operate\&. The
 \fIaddress\fR
-can be either a DNS name or an IP address in dotted\-quad notation\&.
+can be either a DNS name or an IP address in dotted\-quad notation\&. If it is a refclock, it can be
+clock
+followed by a type\-unit pair as in the
+refclock
+directive; a missing unit clause is interpreted as unit 0\&.
 .RE
 .PP
 pool
@@ -148,15 +150,6 @@ For server addresses, this command mobilizes a persistent client mode associatio
 peer
 .RS 4
 NTP peer mode has been removed for security reasons\&. peer is now just an alias for the server keyword\&. See above\&.
-.RE
-.PP
-broadcast
-.RS 4
-Note: This mode of server operation is deprecated, as broadcast associations cannot be secured\&. Broadcast\-client mode has been completely removed\&.
-.sp
-For broadcast addresses (only), this command mobilizes a persistent broadcast mode association\&. Multiple commands can be used to specify multiple local broadcast interfaces (subnets) In broadcast mode the local server sends periodic broadcast messages to a client population at the
-\fIaddress\fR
-specified, which is usually the broadcast address on (one of) the local network(s)\&.
 .RE
 .PP
 unpeer
@@ -213,9 +206,7 @@ mode \fIoption\fR
 .RS 4
 Pass the
 option
-to a reference clock driver, where
-option
-is an integer in the range from 0 to 255, inclusive\&. This option is valid only with refclock addresses\&.
+to a reference clock driver\&. This option is valid only with refclock addresses\&.
 .RE
 .PP
 noselect
@@ -223,36 +214,16 @@ noselect
 Marks the server as unused, except for display purposes\&. The server is discarded by the selection algorithm\&.
 .RE
 .PP
-preempt
-.RS 4
-Specifies the association as preemptable rather than the default persistent\&. This option is ignored with the
-broadcast
-command and is most useful with the
-pool
-command\&.
-.RE
-.PP
 prefer
 .RS 4
 Marks the server as preferred\&. All other things being equal, this host will be chosen for synchronization among a set of correctly operating hosts\&. See the "Mitigation Rules and the prefer Keyword" page for further information\&.
-.RE
-.PP
-ttl \fIttl\fR
-.RS 4
-This option is used only with broadcast server mode\&. It specifies the time\-to\-live
-\fIttl\fR
-to use on broadcast server and the maximum
-\fIttl\fR
-for the expanding ring search with manycast client packets\&. Selection of the proper value, which defaults to 127, is something of a black art and should be coordinated with the network administrator\&.
 .RE
 .PP
 true
 .RS 4
 Mark the association to assume truechimer status; that is, always survive the selection and clustering algorithms\&. This option can be used with any association, but is most useful for reference clocks with large jitter on the serial port and precision pulse\-per\-second (PPS) signals\&. Caution: this option defeats the algorithms designed to cast out falsetickers and can allow these sources to set the system clock\&. This option is valid only with the
 server
-and
-peer
-commands\&.
+command\&.
 .RE
 .PP
 version \fIversion\fR
@@ -289,10 +260,12 @@ command line option\&.
 .PP
 trustedkey \fIkey\&...\fR
 .RS 4
-Specifies the key identifiers which are trusted for the purposes of authenticating peers with symmetric key cryptography, as well as keys used by the ntpq(1) program\&. The authentication procedures require that both the local and remote servers share the same key and key identifier for this purpose, although different keys can be used with different servers\&. The
-\fIkey\fR
-arguments are 32\-bit unsigned integers with values from 1 to 65,534\&.
+Specifies the key identifiers which are trusted for the purposes of authenticating peers with symmetric key cryptography, as well as keys used by the ntpq(1) program\&. Multiple keys on the same line should be separated by spaces\&. Key ranges can be specified as (first \&... last)\&. The spaces around the \&... are necessary\&. Multiple
+trustedkey
+lines are supported and trusted keys can also be specified on the command line\&.
 .RE
+.sp
+The authentication procedures require that both the local and remote servers share the same key and key identifier for this purpose, although different keys can be used with different servers\&. The \fIkey\fR arguments are 32\-bit unsigned integers with values from 1 to 65,534\&.
 .SH "MONITORING SUPPORT"
 .sp
 ntpd(8) includes a comprehensive monitoring facility suitable for continuous, long term recording of server and client timekeeping performance\&. See the statistics command below for a listing and example of each type of statistics currently supported\&. Statistic files are managed using file generation sets and scripts in the \&./scripts directory of this distribution\&. Using these facilities and UNIX cron(8) jobs, the data can be automatically summarized and archived for retrospective analysis\&.
@@ -741,7 +714,7 @@ T}
 T{
 4
 T}:T{
-3: client, 4: server, 5: broadcast
+3: client, 4: server, 6: ntpq
 T}:T{
 mode
 T}
@@ -1081,7 +1054,8 @@ for details\&. (The NetBSD and FreeBSD man pages have more details\&.) The maxrs
 .PP
 timingstats
 .RS 4
-(Only available when the daemon is compiled with process time debugging support (\-\-enable\-debug\-timing \- costs performance)\&. Record processing time statistics for various selected code paths\&.
+(Only available when the daemon is compiled with process time debugging support (\-\-enable\-debug\-timing
+\- costs performance)\&. Record processing time statistics for various selected code paths\&.
 .sp
 53876 36\&.920 10\&.0\&.3\&.5 1 0\&.000014592 input processing delay
 .TS
@@ -1254,12 +1228,12 @@ age
 This type of file generation sets changes to a new element of the file set every 24 hours of server operation\&. The filename suffix consists of a dot, the letter
 \fIa\fR, and an 8\-digit number\&. This number is taken to be the number of seconds the server is running at the start of the corresponding 24\-hour period\&.
 .PP
-\fIlink\fR | \fInolink\fR
+link | nolink
 .RS 4
 It is convenient to be able to access the current element of a file generation set by a fixed name\&. This feature is enabled by specifying
-\fIlink\fR
+link
 and disabled using
-\fInolink\fR\&. If link is specified, a hard link from the current file set element to a file without suffix is created\&. When there is already a file with this name and the number of links of this file is one, it is renamed appending a dot, the letter
+nolink\&. If link is specified, a hard link from the current file set element to a file without suffix is created\&. When there is already a file with this name and the number of links of this file is one, it is renamed appending a dot, the letter
 \fIC\fR, and the pid of the ntpd server process\&. When the number of links is greater than one, the file is unlinked\&. This allows the current file to be accessed by a constant name\&.
 .RE
 .PP
@@ -1374,19 +1348,11 @@ Deny ntpq(1) queries\&. Time service is not affected\&.
 .PP
 nopeer
 .RS 4
-Deny packets which would result in mobilizing a new association\&. This includes symmetric active packets when a configured association does not exist\&. It also includes
+Deny packets which would result in mobilizing a new association\&. This includes symmetric active packets when a configured association does not exist\&. That used to happen when the remote client used the
+peer
+command in its config file\&. We don\(cqt support that mode\&. It used to include
 \fIpool\fR
-associations, so if you want to use servers from a
-pool
-directive and also want to use
-nopeer
-by default, you\(cqll want a
-restrict source \&...
-line as well that does
-\fInot\fR
-include the
-nopeer
-directive\&.
+servers but they now poke a hole in any restrictions\&.
 .RE
 .PP
 noserve
@@ -1724,7 +1690,7 @@ logconfig =syncstatus +sysevents
 .RE
 .\}
 .sp
-This would just list the synchronizations state of ntpd(8) and the major system events\&. For a simple reference server, the following minimum message configuration could be useful:_
+This would just list the synchronizations state of ntpd(8) and the major system events\&. For a simple reference server, the following minimum message configuration could be useful:
 .sp
 .if n \{\
 .RS 4
@@ -1957,7 +1923,9 @@ Ignored for backward compatibility\&.
 .PP
 stacksize \fI4kPages\fR
 .RS 4
-Specifies the maximum size of the process stack on systems with the mlockall()_function\&. Defaults to 50 4k pages\&.
+Specifies the maximum size of the process stack on systems with the
+mlockall()
+function\&. Defaults to 50 4k pages\&.
 .RE
 .PP
 filenum \fIfiledescriptors\fR
@@ -1972,9 +1940,9 @@ Specifies the maximum number of file descriptors ntpd may have open at once\&. D
 the default name of the configuration file
 .RE
 .PP
-\fIntp\&.keys\fR
+ntp\&.keys
 .RS 4
-private MD5 keys
+private keys
 .RE
 .sp
 One of the following exit values will be returned:
@@ -1992,7 +1960,9 @@ The operation failed or the command syntax was not valid\&.
 .sp
 ntpd(8), ntpq(1)\&.
 .sp
-In addition to the manual pages provided, comprehensive documentation is available on the world wide web at https://www\&.ntpsec\&.org\&. A snapshot of this documentation is available in HTML format in /usr/share/doc/ntp\&. David L\&. Mills, \fINetwork Time Protocol (Version 4)\fR, RFC 5905
+In addition to the manual pages provided, comprehensive documentation is available on the world wide web at https://www\&.ntpsec\&.org\&. A snapshot of this documentation is available in HTML format in /usr/share/doc/ntp\&.
+.sp
+David L\&. Mills, \fINetwork Time Protocol (Version 4)\fR, RFC 5905
 .SH "BUGS"
 .sp
 The syntax checking is not picky; some combinations of ridiculous and even hilarious options and modes may not be detected\&.

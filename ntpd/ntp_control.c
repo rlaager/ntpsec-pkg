@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <inttypes.h>
 
 #include <openssl/evp.h>	/* provides OpenSSL digest API */
 
@@ -59,8 +60,8 @@ static	void	ctl_putdblf	(const char *, int, int, double);
 #define	ctl_putdbl6(tag, d)	ctl_putdblf(tag, 1, 6, d)
 #define	ctl_putsfp(tag, sfp)	ctl_putdblf(tag, 0, -1, \
 					    FP_UNSCALE(sfp))
-static	void	ctl_putuint	(const char *, unsigned long);
-static	void	ctl_puthex	(const char *, unsigned long);
+static	void	ctl_putuint	(const char *, uint64_t);
+static	void	ctl_puthex	(const char *, uint64_t);
 static	void	ctl_putint	(const char *, long);
 static	void	ctl_putts	(const char *, l_fp *);
 static	void	ctl_putadr	(const char *, uint32_t,
@@ -222,7 +223,8 @@ static const struct ctl_proc control_codes[] = {
 #define	CS_LEAPSMEAROFFS	97
 #define	CS_TICK                 98
 #define	CS_NUMCTLREQ		99
-#define	CS_MAXCODE		CS_NUMCTLREQ
+#define CS_ROOTDISTANCE		100
+#define	CS_MAXCODE		CS_ROOTDISTANCE
 
 /*
  * Peer variables we understand
@@ -262,7 +264,7 @@ static const struct ctl_proc control_codes[] = {
 #define	CP_SENT			33
 #define	CP_FILTERROR		34
 #define	CP_FLASH		35
-#define	CP_TTL			36
+#define	CP_MODE			36
 #define	CP_VARLIST		37
 #define	CP_IN			38
 #define	CP_OUT			39
@@ -403,7 +405,8 @@ static const struct ctl_var sys_var[] = {
 	{ CS_TICK,		RO, "tick" },		/* 98 */
 	/* new in NTPsec */
 	{ CS_NUMCTLREQ,		RO, "ss_numctlreq" },	/* 99 */
-	{ 0,                    EOV, "" }		/* 99 */
+	{ CS_ROOTDISTANCE,	RO, "rootdist" },	/* 100 */
+	{ 0,                    EOV, "" }
 };
 
 static struct ctl_var *ext_sys_var = NULL;
@@ -481,7 +484,7 @@ static const struct ctl_var peer_var[] = {
 	{ CP_SENT,	RO, "sent" },		/* 33 */
 	{ CP_FILTERROR,	RO, "filtdisp" },	/* 34 */
 	{ CP_FLASH,	RO, "flash" },		/* 35 */
-	{ CP_TTL,	RO, "ttl" },		/* 36 */
+	{ CP_MODE,	RO, "mode" },		/* 36 */
 	{ CP_VARLIST,	RO, "peer_var_list" },	/* 37 */
 	{ CP_IN,	RO, "in" },		/* 38 */
 	{ CP_OUT,	RO, "out" },		/* 39 */
@@ -528,7 +531,7 @@ static const uint8_t def_peer_var[] = {
 	CP_RATE,
 	CP_FLASH,
 	CP_KEYID,
-	CP_TTL,
+	CP_MODE,
 	CP_OFFSET,
 	CP_DELAY,
 	CP_DISPERSION,
@@ -620,20 +623,20 @@ static	uint8_t ctl_sys_num_events;
  * Statistic counters to keep track of requests and responses.
  */
 static unsigned long ctltimereset;	/* time stats reset */
-static unsigned long numctlreq;		/* # of requests we've received */
-static unsigned long numctlbadpkts;	/* # of bad control packets */
-static unsigned long numctlresponses;	/* # of resp packets sent with data */
-static unsigned long numctlfrags;	/* # of fragments sent */
-static unsigned long numctlerrors;	/* # of error responses sent */
-static unsigned long numctltooshort;	/* # of too short input packets */
-static unsigned long numctlinputresp;	/* # of responses on input */
-static unsigned long numctlinputfrag;	/* # of fragments on input */
-static unsigned long numctlinputerr;	/* # of input pkts with err bit set */
-static unsigned long numctlbadoffset;	/* # of input pkts with nonzero offset */
-static unsigned long numctlbadversion;	/* # of input pkts with unknown version */
-static unsigned long numctldatatooshort;    /* data too short for count */
-static unsigned long numctlbadop;	/* bad op code found in packet */
-static unsigned long numasyncmsgs;	/* # of async messages we've sent */
+static uint64_t numctlreq;		/* # of requests we've received */
+static uint64_t numctlbadpkts;		/* # of bad control packets */
+static uint64_t numctlresponses;	/* # of resp packets sent with data */
+static uint64_t numctlfrags;		/* # of fragments sent */
+static uint64_t numctlerrors;		/* # of error responses sent */
+static uint64_t numctltooshort;		/* # of too short input packets */
+static uint64_t numctlinputresp;	/* # of responses on input */
+static uint64_t numctlinputfrag;	/* # of fragments on input */
+static uint64_t numctlinputerr;		/* # of input pkts with err bit set */
+static uint64_t numctlbadoffset;	/* # of input pkts with nonzero offset */
+static uint64_t numctlbadversion;	/* # of input pkts with unknown version */
+static uint64_t numctldatatooshort;	/* data too short for count */
+static uint64_t numctlbadop;		/* bad op code found in packet */
+static uint64_t numasyncmsgs;		/* # of async messages we've sent */
 
 /*
  * Response packet used by these routines. Also some state information
@@ -1186,7 +1189,7 @@ ctl_putdblf(
 static void
 ctl_putuint(
 	const char *tag,
-	unsigned long uval
+	uint64_t uval
 	)
 {
 	char *cp;
@@ -1200,7 +1203,7 @@ ctl_putuint(
 
 	*cp++ = '=';
 	INSIST((cp - buffer) < (int)sizeof(buffer));
-	snprintf(cp, sizeof(buffer) - (size_t)(cp - buffer), "%lu", uval);
+	snprintf(cp, sizeof(buffer) - (size_t)(cp - buffer), "%" PRIu64, uval);
 	cp += strlen(cp);
 	ctl_putdata(buffer, (unsigned)( cp - buffer ), false);
 }
@@ -1245,7 +1248,7 @@ ctl_puttime(
 static void
 ctl_puthex(
 	const char *tag,
-	unsigned long uval
+	uint64_t uval
 	)
 {
 	char *cp;
@@ -1259,7 +1262,7 @@ ctl_puthex(
 
 	*cp++ = '=';
 	INSIST((cp - buffer) < (int)sizeof(buffer));
-	snprintf(cp, sizeof(buffer) - (size_t)(cp - buffer), "0x%lx", uval);
+	snprintf(cp, sizeof(buffer) - (size_t)(cp - buffer), "0x%" PRIx64, uval);
 	cp += strlen(cp);
 	ctl_putdata(buffer,(unsigned)( cp - buffer ), false);
 }
@@ -1432,11 +1435,8 @@ ctl_putsys(
 {
 	l_fp tmp;
 	char str[256];
-	unsigned int u;
-	double kb;
 	double dtemp;
 	const char *ss;
-#ifdef HAVE_KERNEL_PLL
 	static struct timex ntx;
 	static unsigned long ntp_adjtime_time;
 
@@ -1451,7 +1451,6 @@ ctl_putsys(
 		else
 			ntp_adjtime_time = current_time;
 	}
-#endif	/* HAVE_KERNEL_PLL */
 
 	switch (varid) {
 
@@ -1507,12 +1506,14 @@ ctl_putsys(
 		ctl_putunqstr(sys_var[CS_PEERADR].text, ss, strlen(ss));
 		break;
 
-	case CS_PEERMODE:
+	case CS_PEERMODE: {
+		uint64_t u;
 		u = (sys_peer != NULL)
 			? sys_peer->hmode
 			: MODE_UNSPEC;
 		ctl_putuint(sys_var[CS_PEERMODE].text, u);
 		break;
+		}
 
 	case CS_OFFSET:
 		ctl_putdbl6(sys_var[CS_OFFSET].text, last_offset * MS_PER_S);
@@ -1667,13 +1668,13 @@ ctl_putsys(
 		ctl_putuint(sys_var[varid].text, mru_entries);
 		break;
 
-	case CS_MRU_MEM:
-		kb = mru_entries * (sizeof(mon_entry) / 1024.);
-		u = (unsigned int)kb;
-		if (kb - u >= 0.5)
-			u++;
+	case CS_MRU_MEM: {
+		uint64_t u;
+		u = mru_entries * sizeof(mon_entry);
+		u = (u+512)/1024;
 		ctl_putuint(sys_var[varid].text, u);
 		break;
+		}
 
 	case CS_MRU_DEEPEST:
 		ctl_putuint(sys_var[varid].text, mru_peakentries);
@@ -1695,13 +1696,13 @@ ctl_putsys(
 		ctl_putuint(sys_var[varid].text, mru_maxdepth);
 		break;
 
-	case CS_MRU_MAXMEM:
-		kb = mru_maxdepth * (sizeof(mon_entry) / 1024.);
-		u = (unsigned int)kb;
-		if (kb - u >= 0.5)
-			u++;
+	case CS_MRU_MAXMEM: {
+		uint64_t u;
+		u = mru_maxdepth * sizeof(mon_entry);
+		u = (u+512)/1024;
 		ctl_putuint(sys_var[varid].text, u);
 		break;
+		}
 
 	case CS_MRU_EXISTS:
 		ctl_putuint(sys_var[varid].text, mru_exists);
@@ -1726,8 +1727,7 @@ ctl_putsys(
 	case CS_MRU_OLDEST_AGE: {
 		l_fp now;
 		get_systime(&now);
-		ctl_putuint(sys_var[varid].text,
-                            (unsigned long)mon_get_oldest_age(now));
+		ctl_putuint(sys_var[varid].text, mon_get_oldest_age(now));
 		break;
 		}
 
@@ -1736,8 +1736,7 @@ ctl_putsys(
 		break;
 
 	case CS_SS_RESET:
-		ctl_putuint(sys_var[varid].text,
-			    current_time - sys_stattime);
+		ctl_putuint(sys_var[varid].text, current_time - sys_stattime);
 		break;
 
 	case CS_SS_RECEIVED:
@@ -1824,93 +1823,50 @@ ctl_putsys(
 		break;
 
 		/*
-		 * CTL_IF_KERNLOOP() puts a zero if the kernel loop is
-		 * unavailable, otherwise calls putfunc with args.
-		 */
-#ifndef HAVE_KERNEL_PLL
-# define	CTL_IF_KERNLOOP(putfunc, args)	\
-		ctl_putint(sys_var[varid].text, 0)
-#else
-# define	CTL_IF_KERNLOOP(putfunc, args)	\
-		putfunc args
-#endif
-
-		/*
-		 * CTL_IF_KERNPPS() puts a zero if either the kernel
-		 * loop is unavailable, or kernel hard PPS is not
+		 * CTL_IF_KERNPPS() puts a zero if kernel hard PPS is not
 		 * active, otherwise calls putfunc with args.
 		 */
-#ifndef HAVE_KERNEL_PLL
-# define	CTL_IF_KERNPPS(putfunc, args)	\
-		ctl_putint(sys_var[varid].text, 0)
-#else
 # define	CTL_IF_KERNPPS(putfunc, args)			\
 		if (0 == ntx.shift)				\
 			ctl_putint(sys_var[varid].text, 0);	\
 		else						\
 			putfunc args	/* no trailing ; */
-#endif
 
 	case CS_K_OFFSET:
-		CTL_IF_KERNLOOP(
-			ctl_putdblf,
-			(sys_var[varid].text, 0, -1,
-			 ntp_error_in_seconds(ntx.offset) * MS_PER_S)
-		);
+		ctl_putdblf(sys_var[varid].text, 0, -1,
+			ntp_error_in_seconds(ntx.offset) * MS_PER_S);
 		break;
 
 	case CS_K_FREQ:
-		CTL_IF_KERNLOOP(
-			ctl_putsfp,
-			(sys_var[varid].text, ntx.freq)
-		);
+		ctl_putsfp(sys_var[varid].text, ntx.freq);
 		break;
 
 	case CS_K_MAXERR:
-		CTL_IF_KERNLOOP(
-			ctl_putdblf,
-			(sys_var[varid].text, 0, 6,
-			 ntp_error_in_seconds(ntx.maxerror) * MS_PER_S)
-		);
+		ctl_putdblf(sys_var[varid].text, 0, 6,
+			    ntp_error_in_seconds(ntx.maxerror) * MS_PER_S);
 		break;
 
 	case CS_K_ESTERR:
-		CTL_IF_KERNLOOP(
-			ctl_putdblf,
-			(sys_var[varid].text, 0, 6,
-			 ntp_error_in_seconds(ntx.esterror) * MS_PER_S)
-		);
+		ctl_putdblf(sys_var[varid].text, 0, 6,
+			 ntp_error_in_seconds(ntx.esterror) * MS_PER_S);
 		break;
 
 	case CS_K_STFLAGS:
-#ifndef HAVE_KERNEL_PLL
-		ss = "";
-#else
 		ss = k_st_flags((uint32_t)ntx.status);
-#endif
 		ctl_putstr(sys_var[varid].text, ss, strlen(ss));
 		break;
 
 	case CS_K_TIMECONST:
-		CTL_IF_KERNLOOP(
-			ctl_putint,
-			(sys_var[varid].text, ntx.constant)
-		);
+		ctl_putint(sys_var[varid].text, ntx.constant);
 		break;
 
 	case CS_K_PRECISION:
-		CTL_IF_KERNLOOP(
-			ctl_putdblf,
-			(sys_var[varid].text, 0, 6,
-			 ntp_error_in_seconds(ntx.precision) * MS_PER_S)
-		);
+		ctl_putdblf(sys_var[varid].text, 0, 6,
+			    ntp_error_in_seconds(ntx.precision) * MS_PER_S);
 		break;
 
 	case CS_K_FREQTOL:
-		CTL_IF_KERNLOOP(
-			ctl_putsfp,
-			(sys_var[varid].text, ntx.tolerance)
-		);
+	    ctl_putsfp(sys_var[varid].text, ntx.tolerance);
 		break;
 
 	case CS_K_PPS_FREQ:
@@ -2050,6 +2006,11 @@ ctl_putsys(
 		ctl_putuint(sys_var[varid].text, numctlreq);
 		break;
 
+	case CS_ROOTDISTANCE:
+		ctl_putdbl(sys_var[CS_ROOTDISTANCE].text,
+			   sys_rootdist * MS_PER_S);
+		break;
+
         default:
                 /* huh? */
                 break;
@@ -2135,7 +2096,7 @@ ctl_putpeer(
 		break;
 
 	case CP_RATE:
-		ctl_putuint(peer_var[id].text, (unsigned long)p->throttle);
+		ctl_putuint(peer_var[id].text, p->throttle);
 		break;
 
 	case CP_LEAP:
@@ -2206,13 +2167,13 @@ ctl_putpeer(
 		break;
 
 	case CP_FLASH:
-		ctl_puthex(peer_var[id].text, (unsigned long)p->flash);
+		ctl_puthex(peer_var[id].text, p->flash);
 		break;
 
-	case CP_TTL:
+	case CP_MODE:
 #ifdef REFCLOCK
 		if (p->cfg.flags & FLAG_REFCLOCK) {
-			ctl_putuint(peer_var[id].text, p->cfg.ttl);
+			ctl_putuint(peer_var[id].text, p->cfg.mode);
 			break;
 		}
 #endif
@@ -2508,7 +2469,6 @@ ctl_putclock(
 #endif
 
 
-
 /*
  * ctl_getitem - get the next data item from the incoming packet
  */
@@ -2518,84 +2478,125 @@ ctl_getitem(
 	char **data
 	)
 {
+	/* [Bug 3008] First check the packet data sanity, then search
+	 * the key. This improves the consistency of result values: If
+	 * the result is NULL once, it will never be EOV again for this
+	 * packet; If it's EOV, it will never be NULL again until the
+	 * variable is found and processed in a given 'var_list'. (That
+	 * is, a result is returned that is neither NULL nor EOV).
+	 */ 
 	static const struct ctl_var eol = { 0, EOV, NULL };
 	static char buf[128];
-	static unsigned long quiet_until;
+	static u_long quiet_until;
 	const struct ctl_var *v;
-	const char *pch;
 	char *cp;
 	char *tp;
 
 	/*
-	 * Delete leading commas and white space
+	 * Part One: Validate the packet state
 	 */
+
+	/* Delete leading commas and white space */
 	while (reqpt < reqend && (*reqpt == ',' ||
 				  isspace((unsigned char)*reqpt)))
 		reqpt++;
 	if (reqpt >= reqend)
 		return NULL;
 
+	/* Scan the string in the packet until we hit comma or
+	 * EoB. Register position of first '=' on the fly. */
+	for (tp = NULL, cp = reqpt; cp != reqend; ++cp) {
+		if (*cp == '=' && tp == NULL)
+			tp = cp;
+		if (*cp == ',')
+			break;
+	}
+
+	/* Process payload, if any. */
+	*data = NULL;
+	if (NULL != tp) {
+		/* eventually strip white space from argument. */
+		const char *plhead = tp + 1; /* skip the '=' */
+		const char *pltail = cp;
+		size_t      plsize;
+
+		while (plhead != pltail && isspace((u_char)plhead[0]))
+			++plhead;
+		while (plhead != pltail && isspace((u_char)pltail[-1]))
+			--pltail;
+		
+		/* check payload size, terminate packet on overflow */
+		plsize = (size_t)(pltail - plhead);
+		if (plsize >= sizeof(buf))
+			goto badpacket;
+
+		/* copy data, NUL terminate, and set result data ptr */
+		memcpy(buf, plhead, plsize);
+		buf[plsize] = '\0';
+		*data = buf;
+	} else {
+		/* no payload, current end --> current name termination */
+		tp = cp;
+	}
+
+	/* Part Two
+	 *
+	 * Now we're sure that the packet data itself is sane. Scan the
+	 * list now. Make sure a NULL list is properly treated by
+	 * returning a synthetic End-Of-Values record. We must not
+	 * return NULL pointers after this point, or the behaviour would
+	 * become inconsistent if called several times with different
+	 * variable lists after an EoV was returned.  (Such a behavior
+	 * actually caused Bug 3008.)
+	 */
+	
 	if (NULL == var_list)
 		return &eol;
 
-	/*
-	 * Look for a first character match on the tag.  If we find
-	 * one, see if it is a full match.
-	 */
-	v = var_list;
-	cp = reqpt;
-	for (v = var_list; !(EOV & v->flags); v++) {
-		if (!(PADDING & v->flags) && *cp == *(v->text)) {
-			pch = v->text;
-			while ('\0' != *pch && '=' != *pch && cp < reqend
-			       && *cp == *pch) {
-				cp++;
-				pch++;
+	for (v = var_list; !(EOV & v->flags); ++v)
+		if (!(PADDING & v->flags)) {
+			/* Check if the var name matches the buffer. The
+			 * name is bracketed by [reqpt..tp] and not NUL
+			 * terminated, and it contains no '=' char. The
+			 * lookup value IS NUL-terminated but might
+			 * include a '='... We have to look out for
+			 * that!
+			 */
+			const char *sp1 = reqpt;
+			const char *sp2 = v->text;
+
+			/* [Bug 3412] do not compare past NUL byte in name */
+			while (   (sp1 != tp)
+			       && ('\0' != *sp2) && (*sp1 == *sp2)) {
+				++sp1;
+				++sp2;
 			}
-			if ('\0' == *pch || '=' == *pch) {
-				while (cp < reqend && isspace((uint8_t)*cp))
-					cp++;
-				if (cp == reqend || ',' == *cp) {
-					buf[0] = '\0';
-					*data = buf;
-					if (cp < reqend)
-						cp++;
-					reqpt = cp;
-					return v;
-				}
-				if ('=' == *cp) {
-					cp++;
-					tp = buf;
-					while (cp < reqend && isspace((uint8_t)*cp))
-						cp++;
-					while (cp < reqend && *cp != ',') {
-						*tp++ = *cp++;
-						if ((size_t)(tp - buf) >= sizeof(buf)) {
-							ctl_error(CERR_BADFMT);
-							numctlbadpkts++;
-							NLOG(NLOG_SYSEVENT)
-								if (quiet_until <= current_time) {
-									quiet_until = current_time + 300;
-									msyslog(LOG_WARNING,
-"MODE6: Possible 'ntpdx' exploit from %s#%u (possibly spoofed)", socktoa(rmt_addr), SRCPORT(rmt_addr));
-								}
-							return NULL;
-						}
-					}
-					if (cp < reqend)
-						cp++;
-					*tp-- = '\0';
-					while (tp >= buf && isspace((uint8_t)*tp))
-						*tp-- = '\0';
-					reqpt = cp;
-					*data = buf;
-					return v;
-				}
-			}
-			cp = reqpt;
+			if (sp1 == tp && (*sp2 == '\0' || *sp2 == '='))
+				break;
 		}
-	}
+
+	/* See if we have found a valid entry or not. If found, advance
+	 * the request pointer for the next round; if not, clear the
+	 * data pointer so we have no dangling garbage here.
+	 */
+	if (EOV & v->flags)
+		*data = NULL;
+	else
+		reqpt = cp + (cp != reqend);
 	return v;
+
+  badpacket:
+	/*TODO? somehow indicate this packet was bad, apart from syslog? */
+	numctlbadpkts++;
+	NLOG(NLOG_SYSEVENT)
+	    if (quiet_until <= current_time) {
+		    quiet_until = current_time + 300;
+		    msyslog(LOG_WARNING,
+			    "Possible 'ntpdx' exploit from %s#%u (possibly spoofed)",
+			    socktoa(rmt_addr), SRCPORT(rmt_addr));
+	    }
+	reqpt = reqend; /* never again for this packet! */
+	return NULL;
 }
 
 
@@ -3720,7 +3721,7 @@ send_ifstats_entry(
 
 		case 4:
 			snprintf(tag, sizeof(tag), flags_fmt, ifnum);
-			ctl_puthex(tag, (unsigned int)la->flags);
+			ctl_puthex(tag, la->flags);
 			break;
 
 		case 5:
@@ -4188,7 +4189,7 @@ report_event(
 			    " %s", str);
 		}
 		NLOG(NLOG_SYSEVENT)
-			msyslog(LOG_INFO, "MODE6: %s", statstr);
+			msyslog(LOG_INFO, "PROTO: %s", statstr);
 	} else {
 
 		/*
@@ -4222,10 +4223,10 @@ report_event(
 			    " %s", str);
 		}
 		NLOG(NLOG_PEEREVENT)
-			msyslog(LOG_INFO, "MODE6: %s", statstr);
+			msyslog(LOG_INFO, "PROTO: %s", statstr);
 	}
 	record_proto_stats(statstr);
-	DPRINT(1, ("event at %lu %s\n", current_time, statstr));
+	DPRINT(1, ("event at %u %s\n", current_time, statstr));
 
 }
 

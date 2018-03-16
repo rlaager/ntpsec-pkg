@@ -97,8 +97,8 @@
 #define MAXSTA		40		/* max length of status string */
 #define MAXPOS		80		/* max length of position string */
 
-#define COMMAND_HALT_BCAST ( (peer->cfg.ttl % 2) ? "O0" : "B0" )
-#define COMMAND_START_BCAST ( (peer->cfg.ttl % 2) ? "O5" : "B5" )
+#define COMMAND_HALT_BCAST ( (peer->cfg.mode % 2) ? "O0" : "B0" )
+#define COMMAND_START_BCAST ( (peer->cfg.mode % 2) ? "O5" : "B5" )
 
 /*
  * ARB unit control structure
@@ -115,7 +115,6 @@ struct arbunit {
  * Function prototypes
  */
 static	bool	arb_start	(int, struct peer *);
-static	void	arb_shutdown	(int, struct peer *);
 static	void	arb_receive	(struct recvbuf *);
 static	void	arb_poll	(int, struct peer *);
 
@@ -125,7 +124,7 @@ static	void	arb_poll	(int, struct peer *);
 struct	refclock refclock_arbiter = {
 	NAME,			/* basename of driver */
 	arb_start,		/* start up driver */
-	arb_shutdown,		/* shut down driver */
+	NULL,			/* shut down driver in standard way */
 	arb_poll,		/* transmit poll message */
 	NULL,			/* not used (old arb_control) */
 	NULL,			/* initialize driver (not used) */
@@ -182,39 +181,16 @@ arb_start(
 	pp->clockdesc = DESCRIPTION;
 	memcpy((char *)&pp->refid, REFID, REFIDLEN);
 	peer->sstclktype = CTL_SST_TS_UHF;
-	if (peer->cfg.ttl > 1) {
-		msyslog(LOG_NOTICE, "REFCLOCK ARBITER: Invalid mode %u", peer->cfg.ttl);
+	if (peer->cfg.mode > 1) {
+		msyslog(LOG_NOTICE, "REFCLOCK ARBITER: Invalid mode %u", peer->cfg.mode);
 		close(fd);
 		pp->io.fd = -1;
 		free(up);
 		return false;
 	}
-	DPRINT(1, ("arbiter: mode = %u.\n", peer->cfg.ttl));
+	DPRINT(1, ("arbiter: mode = %u.\n", peer->cfg.mode));
 	IGNORE(write(pp->io.fd, COMMAND_HALT_BCAST, 2));
 	return true;
-}
-
-
-/*
- * arb_shutdown - shut down the clock
- */
-static void
-arb_shutdown(
-	int unit,
-	struct peer *peer
-	)
-{
-	struct arbunit *up;
-	struct refclockproc *pp;
-
-	UNUSED_ARG(unit);
-
-	pp = peer->procptr;
-	up = pp->unitptr;
-	if (-1 != pp->io.fd)
-		io_closeclock(&pp->io);
-	if (NULL != up)
-		free(up);
 }
 
 

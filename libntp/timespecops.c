@@ -37,6 +37,8 @@
  * Copyright 2015 by the NTPsec project contributors
  * SPDX-License-Identifier: NTP
  */
+#include "config.h"
+
 #include <stdio.h>
 #include <math.h>
 
@@ -263,15 +265,6 @@ test_tspec_denorm(
 	return test_tspec(normalize_tspec(a));
 }
 
-/* return LIB buffer ptr to string rep */
-const char *
-tspectoa(
-	struct timespec	x
-	)
-{
-	return format_time_fraction(x.tv_sec, x.tv_nsec, 9);
-}
-
 /*
  *  convert to l_fp type, relative and absolute
  */
@@ -342,12 +335,12 @@ lfp_uintv_to_tspec(
 /*
  * absolute (timestamp) conversion. Input is time in NTP epoch, output
  * is in UN*X epoch. The NTP time stamp will be expanded around the
- * pivot time *p or the current time, if p is NULL.
+ * pivot time p.
  */
 struct timespec
 lfp_stamp_to_tspec(
 	l_fp		x,
-	const time_t *	p
+	time_t	 	p
 	)
 {
 	struct timespec	out;

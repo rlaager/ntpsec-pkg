@@ -3,7 +3,8 @@
 // tree, and once to make an individual man page.
 
 == Synopsis ==
-+ntpsweep+ [+-l+ 'host']... [-p] [+-m+ 'number'] [+-s+ 'prefix'] [+-h+ 'string']
++ntpsweep+ [+-l+ 'host']... [-p] [+-m+ 'number'] [+-s+ 'prefix'] [+-h+ 'string'] [hostfile...]
+
 
 == Description ==
 
@@ -26,7 +27,8 @@ configured timeservers on a LAN.
   of times.
 +
 Use this option to specify the host on which this script operates. May
-appear multiple times.
+appear multiple times.  Multiple hosts may be specified, delimited
+by commas.
 
 +-p+, +--peers+::
   Recursively list all peers a host synchronizes to.
@@ -40,5 +42,8 @@ appear multiple times.
 
 +-h+ string, +--host+=_string_::
   Specify a single host.  Deprecated option for backwards compatibility.
+
+If hostfiles are specified, they are treated as lists of hostnames
+to be swept, one per line.
 
 // end

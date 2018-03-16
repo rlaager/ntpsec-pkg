@@ -129,7 +129,7 @@ class NTPStats:
             # boring, use hostname
             self.sitename = socket.getfqdn()
 
-        if not os.path.isdir(statsdir):
+        if not os.path.isdir(statsdir):  # pragma: no cover
             sys.stderr.write("ntpviz: ERROR: %s is not a directory\n"
                              % statsdir)
             raise SystemExit(1)
@@ -161,7 +161,7 @@ class NTPStats:
                     lines += gzip.open(logpart, 'rt').readlines()
                 else:
                     lines += open(logpart, 'r').readlines()
-        except IOError:
+        except IOError:  # pragma: no cover
             sys.stderr.write("ntpviz: WARNING: could not read %s\n"
                              % logpart)
             pass
@@ -192,14 +192,13 @@ class NTPStats:
             # Morph first fields into Unix time with fractional seconds
             # ut into nice dictionary of dictionary rows
             lines1 = NTPStats.unixize(lines, self.starttime, self.endtime)
-            
+
         # Sort by datestamp
         # by default, a tuple sort()s on the 1st item, which is a nice
         # integer of milli seconds.  This is faster than using
         # cmp= or key=
         lines1.sort()
         return lines1
-
 
     def peersplit(self):
         "Return a dictionary mapping peerstats IPs to entry subsets."
@@ -213,7 +212,7 @@ class NTPStats:
                 if ip not in self.peermap:
                     self.peermap[ip] = []
                 self.peermap[ip].append(row)
-            except IndexError:
+            except IndexError:  # pragma: no cover
                 # ignore corrupted rows
                 pass
         return self.peermap
@@ -227,7 +226,7 @@ class NTPStats:
                 if source not in gpsmap:
                     gpsmap[source] = []
                 gpsmap[source].append(row)
-            except IndexError:
+            except IndexError:  # pragma: no cover
                 # ignore corrupted rows
                 pass
         return gpsmap
@@ -241,7 +240,7 @@ class NTPStats:
                 if source not in tempsmap:
                     tempsmap[source] = []
                 tempsmap[source].append(row)
-            except IndexError:
+            except IndexError:  # pragma: no cover
                 # ignore corrupted rows
                 pass
         return tempsmap

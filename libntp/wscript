@@ -30,7 +30,6 @@ def build(ctx):
         "clockwork.c",
         "emalloc.c",
         "hextolfp.c",
-        "humandate.c",
         "lib_strbuf.c",
         "msyslog.c",
         "ntp_calendar.c",
@@ -38,7 +37,6 @@ def build(ctx):
         "statestr.c",
         "systime.c",
         "timespecops.c",
-        "timetoa.c",
     ]
 
     if not ctx.env.HAVE_STRLCAT or not ctx.env.HAVE_STRLCPY:
@@ -52,6 +50,7 @@ def build(ctx):
         includes=includes,
         source=libntp_source + libntp_source_sharable,
         target="ntp",
+        use="CRYPTO",
     )
 
     # Loadable Python extension

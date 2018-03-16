@@ -1,8 +1,11 @@
+import os
 from waflib import Utils  # pylint: disable=import-error
+
 
 def build(ctx):
     srcnode = ctx.srcnode.abspath()
     testsrc = ctx.srcnode.make_node('tests')
+    pylib = ctx.srcnode.make_node('pylib')
     testpylib = testsrc.make_node('pylib')
     testpysrc = testpylib.ant_glob('*.py')
 
@@ -26,7 +29,6 @@ def build(ctx):
         "common/tests_main.c",
         "common/caltime.c",
         "common/sockaddrtest.c",
-        "common/file_handling.c"
     ]
 
     # libntp/
@@ -36,7 +38,6 @@ def build(ctx):
         "libntp/clocktime.c",
         "libntp/decodenetnum.c",
         "libntp/hextolfp.c",
-        "libntp/humandate.c",
         "libntp/lfpfunc.c",
         "libntp/lfptostr.c",
         "libntp/macencrypt.c",
@@ -64,7 +65,7 @@ def build(ctx):
                   "%s/tests/ntpdig/" % srcnode,
                   "%s/tests/common/" % srcnode
                   ] + ctx.env.PLATFORM_INCLUDES,
-        use="unity ntp isc parse M PTHREAD CRYPTO RT SOCKET NSL",
+        use="unity ntp parse M PTHREAD CRYPTO RT SOCKET NSL",
         source=libntp_source,
     )
 
@@ -90,7 +91,7 @@ def build(ctx):
             libpath=["libparse"],
             source=libparse_source,
             target="test_libparse",
-            use="unity ntp isc parse M PTHREAD CRYPTO RT SOCKET NSL",
+            use="unity ntp parse M PTHREAD CRYPTO RT SOCKET NSL",
         )
 
     ntpd_source = [
@@ -110,11 +111,32 @@ def build(ctx):
         install_path=None,
         source=ntpd_source,
         target="test_ntpd",
-        use="ntpd_lib libntpd_obj unity ntp isc "
+        use="ntpd_lib libntpd_obj unity ntp "
             "M PTHREAD CRYPTO RT SOCKET NSL",
     )
 
     testpylib.get_bld().mkdir()
+
+    pypath = pylib.get_bld()
+    linkpath = ctx.bldnode.make_node("tests/pylib/ntp")
+    if (not linkpath.exists()) or os.readlink(linkpath.abspath()):
+        try:
+            os.remove(linkpath.abspath())
+        except OSError:
+            pass
+        os.symlink(pypath.abspath(), linkpath.abspath())
+
+    pytests = ["pylib/test_util.py",
+               "pylib/test_agentx_packet.py",
+               "pylib/test_packet.py",
+               "pylib/test_statfiles.py"]
+
+    for path in pytests:
+        ctx(
+            features="pytest",
+            pytest_source=path,
+            ut_str="${PYTHON} ${SRC}"
+        )
 
     ctx(
         features="subst",
@@ -122,6 +144,3 @@ def build(ctx):
         target=[x.get_bld() for x in testpysrc],
         chmod=Utils.O755,
     )
-
-    # ctx.exec_command("%s/tests/pylib/test_statfiles.py" % srcnode)
-    # ctx.exec_command("%s/tests/pylib/test_util.py" % srcnode)

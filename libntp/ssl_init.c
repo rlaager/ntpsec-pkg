@@ -11,11 +11,18 @@
 #include <stdbool.h>
 #include <openssl/evp.h>
 
+#ifndef EVP_MD_CTX_new
+/* Slightly older version of OpenSSL */
+/* Similar hack in macencrypt.c and attic/digest-timing.c */
+#define EVP_MD_CTX_new() EVP_MD_CTX_create()
+#endif
+
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 static void	atexit_ssl_cleanup(void);
 #endif
 
 static bool ssl_init_done;
+EVP_MD_CTX *digest_ctx;
 
 void
 ssl_init(void)
@@ -28,6 +35,7 @@ ssl_init(void)
 	atexit(&atexit_ssl_cleanup);
 #endif
 
+	digest_ctx = EVP_MD_CTX_new();
 	ssl_init_done = true;
 }
 

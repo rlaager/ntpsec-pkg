@@ -44,7 +44,7 @@ def feature_py(self):
 		self.install_32=True
 @extension('.py')
 def process_py(self,node):
-	assert(getattr(self,'install_path')),'add features="py"'
+	assert(hasattr(self,'install_path')),'add features="py"'
 	if self.install_path:
 		if self.install_from:
 			self.add_install_files(install_to=self.install_path,install_from=node,cwd=self.install_from,relative_trick=True)

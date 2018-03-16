@@ -122,7 +122,6 @@ struct hpgpsunit {
  * Function prototypes
  */
 static	bool	hpgps_start	(int, struct peer *);
-static	void	hpgps_shutdown	(int, struct peer *);
 static	void	hpgps_receive	(struct recvbuf *);
 static	void	hpgps_poll	(int, struct peer *);
 
@@ -132,7 +131,7 @@ static	void	hpgps_poll	(int, struct peer *);
 struct	refclock refclock_hpgps = {
 	NAME,			/* basename of driver */
 	hpgps_start,		/* start up driver */
-	hpgps_shutdown,		/* shut down driver */
+	NULL,			/* shut down driver in the standard way */
 	hpgps_poll,		/* transmit poll message */
 	NULL,			/* not used (old hpgps_control) */
 	NULL,			/* initialize driver */
@@ -163,8 +162,8 @@ hpgps_start(
 	snprintf(device, sizeof(device), DEVICE, unit);
 	ldisc = LDISC_CLK;
 	speed = SPEED232;
-	/* subtype parameter to server config line shares ttl slot */
-	if (1 == peer->cfg.ttl) {
+	/* subtype parameter to server config line shares mode slot */
+	if (1 == peer->cfg.mode) {
 		ldisc |= LDISC_7O1;
 		speed = SPEED232Z;
 	}
@@ -214,29 +213,6 @@ hpgps_start(
 	    refclock_report(peer, CEVNT_FAULT);
 
 	return true;
-}
-
-
-/*
- * hpgps_shutdown - shut down the clock
- */
-static void
-hpgps_shutdown(
-	int unit,
-	struct peer *peer
-	)
-{
-	struct hpgpsunit *up;
-	struct refclockproc *pp;
-
-	UNUSED_ARG(unit);
-
-	pp = peer->procptr;
-	up = pp->unitptr;
-	if (-1 != pp->io.fd)
-		io_closeclock(&pp->io);
-	if (NULL != up)
-		free(up);
 }
 
 

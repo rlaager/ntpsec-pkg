@@ -92,7 +92,7 @@ struct ppsunit {struct refclock_ppsctl ppsctl; /* PPS context structure pointer 
  * Function prototypes
  */
 static	bool	pps_start	(int, struct peer *);
-static	void	pps_shutdown	(int, struct peer *);
+static	void	pps_shutdown	(struct refclockproc *);
 static	void	pps_poll	(int, struct peer *);
 static	void	pps_timer	(int, struct peer *);
 
@@ -143,10 +143,9 @@ pps_start(
 	 */
 	snprintf(device, sizeof(device), DEVICE, unit);
 	up->fddev = open(peer->cfg.ppspath ? peer->cfg.ppspath : device,
-			     O_RDWR, 0777);
+		O_RDWR);
 	if (up->fddev <= 0) {
-		msyslog(LOG_ERR,
-			"REFCLOCK: refclock_pps: %m");
+		msyslog(LOG_ERR, "REFCLOCK: refclock_pps: %m");
 		return false;
 	}
 
@@ -162,16 +161,11 @@ pps_start(
  */
 static void
 pps_shutdown(
-	int unit,		/* unit number (not used) */
-	struct peer *peer	/* peer structure pointer */
+	struct refclockproc *pp	/* refclock structure pointer */
 	)
 {
-	struct refclockproc *pp;
 	struct ppsunit *up;
 
-	UNUSED_ARG(unit);
-
-	pp = peer->procptr;
 	up = pp->unitptr;
 	if (up->fddev > 0)
 		close(up->fddev);

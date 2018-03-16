@@ -10,6 +10,47 @@ Much of the traditional function of a news file is now better addressed
 by browsing the comments in the revision history.  This file will focus
 on user-visible changes.
 
+== 2018-03-14: 1.1.0 ==
+
+RIP Stephen William Hawking, CH CBE FRS FRSA. 1942-01-08 - 2018-03-14
+You gave us a Brief History of Time.  We will just count it.
+
+Enough user visible changes have been made that this is the 1.1.0 release
+instead of a 1.0.1.
+
+The code size is now 55KLOC in C, 15KLOC in Python.
+
+Digests longer then 20 bytes will be truncated.
+
+We have merged NTP Classic's fix for CVE-2018-7182.
+
+The following NTP Classic CVEs announced in February 2018 do not affect NTPsec:
+
+* CVE-2016-1549: Sybil vulnerability: ephemeral association attack
+* CVE-2018-7170: Multiple authenticated ephemeral associations
+* CVE-2018-7184: Interleaved symmetric mode cannot recover from bad state
+* CVE-2018-7185: Unauthenticated packet can reset authenticated interleaved association
+* CVE-2018-7183: ntpq:decodearr() can write beyond its buffer limit
+
+We have dropped support for Broadcast servers.  We had kept it for
+older desktop operating systems listening on the local network
+broadcast domain, a use case that is now no longer in use at sane
+enviroments, and no longer necessary for modern desktop OSs.
+
+It is now possible to unpeer refclocks using a type/unit specification
+rather than a magic IP address.  This was the last obligatory use of
+magic IP addresses in the configuration grammar.
+
+OpenBSD has been removed from the list of supported platforms for
+ntpd. It will be restored if and when its clock API supports drift
+adjustment via ntp_adjtime() or equivalent facility.
+
+Mac OS X support has been dropped pending the implementation of
+ntp_adjtime(2).
+
+A bug that caused the rejection of 33% of packets from Amazon time
+service has been fixed.
+
 == 2017-10-10: 1.0.0 ==
 
 This is the 1.0 release.
@@ -23,7 +64,7 @@ been fixed.
 
 The dependency of local refclocks returning 4-digit years on
 pre-synchronization to a network peer has been removed.  It is
-this possible to run in a fully-autonomous mode using multiple
+thus possible to run in a fully-autonomous mode using multiple
 refclocks and no network peers.
 
 ntpmon now reports units on time figures.

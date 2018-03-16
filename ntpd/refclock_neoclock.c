@@ -102,7 +102,7 @@ struct neoclock4x_unit {
 };
 
 static	bool	neoclock4x_start	(int, struct peer *);
-static	void	neoclock4x_shutdown	(int, struct peer *);
+static	void	neoclock4x_shutdown	(struct refclockproc *);
 static	void	neoclock4x_receive	(struct recvbuf *);
 static	void	neoclock4x_poll		(int, struct peer *);
 static	void	neoclock4x_control	(int, const struct refclockstat *, struct refclockstat *, struct peer *);
@@ -137,9 +137,6 @@ neoclock4x_start(int unit,
   char dev[20];
   int sl232;
   struct termios termsettings;
-#if !defined(NEOCLOCK4X_FIRMWARE)
-  int tries;
-#endif
 
   (void) snprintf(dev, sizeof(dev)-1, "/dev/neoclock4x-%d", unit);
 
@@ -293,7 +290,7 @@ neoclock4x_start(int unit,
   return false;
 #endif
 #else
-  for(tries=0; tries < 5; tries++)
+  for(int tries = 0; tries < 5; tries++)
     {
       NLOG(NLOG_CLOCKINFO)
 	msyslog(LOG_INFO, "REFCLOCK: NeoClock4X(%d): checking NeoClock4X firmware version (%d/5)", unit, tries);
@@ -333,56 +330,51 @@ neoclock4x_start(int unit,
 }
 
 static void
-neoclock4x_shutdown(int unit,
-		   struct peer *peer)
+neoclock4x_shutdown(
+		   struct refclockproc *pp)
 {
-  struct neoclock4x_unit *up;
-  struct refclockproc *pp;
-  int sl232;
+    struct neoclock4x_unit *up;
+    int sl232;
 
-  if(NULL != peer)
+    if (pp != NULL)
     {
-      pp = peer->procptr;
-      if(pp != NULL)
-        {
-          up = pp->unitptr;
-          if(up != NULL)
-            {
-              if(-1 !=  pp->io.fd)
-                {
+	up = pp->unitptr;
+	if(up != NULL)
+	{
+	    if(-1 !=  pp->io.fd)
+	    {
 #if defined(TIOCMSET) && (defined(TIOCM_RTS) || defined(CIOCM_RTS))
-                  /* turn on RTS, and DTR for power supply */
-                  /* NeoClock4x is powered from serial line */
-                  if(ioctl(pp->io.fd, TIOCMGET, (void *)&sl232) == -1)
-                    {
-                      msyslog(LOG_CRIT, "REFCLOCK: NeoClock4X(%d): can't query RTS/DTR state: %m",
-                              unit);
-                    }
+		/* turn on RTS, and DTR for power supply */
+		/* NeoClock4x is powered from serial line */
+		if(ioctl(pp->io.fd, TIOCMGET, (void *)&sl232) == -1)
+		{
+		    msyslog(LOG_CRIT, "REFCLOCK: NeoClock4X(%d): can't query RTS/DTR state: %m",
+			    pp->refclkunit);
+		}
 #ifdef TIOCM_RTS
-                  /* turn on RTS, and DTR for power supply */
-                  sl232 &= ~(TIOCM_DTR | TIOCM_RTS);
+		/* turn on RTS, and DTR for power supply */
+		sl232 &= ~(TIOCM_DTR | TIOCM_RTS);
 #else
-                  /* turn on RTS, and DTR for power supply */
-                  sl232 &= ~(CIOCM_DTR | CIOCM_RTS);
+		/* turn on RTS, and DTR for power supply */
+		sl232 &= ~(CIOCM_DTR | CIOCM_RTS);
 #endif
-                  if(ioctl(pp->io.fd, TIOCMSET, (void *)&sl232) == -1)
-                    {
-                      msyslog(LOG_CRIT, "REFCLOCK: NeoClock4X(%d): can't set RTS/DTR to power neoclock4x: %m",
-                              unit);
-                    }
+		if(ioctl(pp->io.fd, TIOCMSET, (void *)&sl232) == -1)
+		{
+		    msyslog(LOG_CRIT, "REFCLOCK: NeoClock4X(%d): can't set RTS/DTR to power neoclock4x: %m",
+			    pp->refclkunit);
+		}
 #endif
-                  io_closeclock(&pp->io);
-                }
-              free(up);
-              pp->unitptr = NULL;
-            }
-        }
+		io_closeclock(&pp->io);
+	    }
+	    free(up);
+	    pp->unitptr = NULL;
+	}
     }
 
-  msyslog(LOG_ERR, "REFCLOCK: NeoClock4X(%d): shutdown", unit);
+    msyslog(LOG_ERR, "REFCLOCK: NeoClock4X(%d): shutdown", pp->refclkunit);
 
-  NLOG(NLOG_CLOCKINFO)
-    msyslog(LOG_INFO, "REFCLOCK: NeoClock4X(%d): receiver shutdown done", unit);
+    NLOG(NLOG_CLOCKINFO)
+	msyslog(LOG_INFO, "REFCLOCK: NeoClock4X(%d): receiver shutdown done", pp->refclkunit);
 }
 
 static void
@@ -394,7 +386,6 @@ neoclock4x_receive(struct recvbuf *rbufp)
   unsigned long calc_utc;
   int day;
   int month;	/* ddd conversion */
-  int c;
   int dsec;
   unsigned char calc_chksum;
   int recv_chksum;
@@ -427,7 +418,7 @@ neoclock4x_receive(struct recvbuf *rbufp)
 
   /* calculate checksum */
   calc_chksum = 0;
-  for(c=0; c < NEOCLOCK4X_OFFSET_CRC; c++)
+  for(int c = 0; c < NEOCLOCK4X_OFFSET_CRC; c++)
     {
       calc_chksum += pp->a_lastcode[c];
     }
@@ -730,10 +721,9 @@ neol_hexatoi_len(const char str[],
 		 int maxlen)
 {
   int hexdigit;
-  int i;
   int n = 0;
 
-  for(i=0; isxdigit((unsigned char)str[i]) && i < maxlen; i++)
+  for(int i = 0; isxdigit((unsigned char)str[i]) && i < maxlen; i++)
     {
       hexdigit = isdigit((unsigned char)str[i]) ? toupper((unsigned char)str[i]) - '0' : toupper((unsigned char)str[i]) - 'A' + 10;
       n = 16 * n + hexdigit;
@@ -748,10 +738,9 @@ neol_atoi_len(const char str[],
 		  int maxlen)
 {
   int digit;
-  int i;
   int n = 0;
 
-  for(i=0; isdigit((unsigned char)str[i]) && i < maxlen; i++)
+  for(int i = 0; isdigit((unsigned char)str[i]) && i < maxlen; i++)
     {
       digit = str[i] - '0';
       n = 10 * n + digit;

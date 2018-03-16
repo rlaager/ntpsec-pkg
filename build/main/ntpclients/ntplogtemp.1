@@ -1,13 +1,13 @@
 '\" t
-.\"     Title: ntplogtemp-
+.\"     Title: ntplogtemp
 .\"    Author: [see the "AUTHORS" section]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 10/10/2017
-.\"    Manual: \ \&
-.\"    Source: \ \&
+.\"      Date: 03/15/2018
+.\"    Manual: NTPsec
+.\"    Source: NTPsec 1.1.0
 .\"  Language: English
 .\"
-.TH "NTPLOGTEMP\-" "1" "10/10/2017" "\ \&" "\ \&"
+.TH "NTPLOGTEMP" "1" "03/15/2018" "NTPsec 1\&.1\&.0" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -113,7 +113,7 @@ ntplogtemp
 This the simplest use of this program\&. It can be used to check the temperature readings of Zones, CPU, and disk drives every minute\&.
 .RE
 .PP
-+ntplogtemp \-l /var/log/ntpstats/temperature \-w 60 &
+ntplogtemp \-l /var/log/ntpstats/temperature \-w 60 &
 .RS 4
 This will continuously log the temperature data in the background to the file /var/log/ntpstats/temperature\&. Only log every 60 seconds\&.
 .RE
@@ -132,7 +132,9 @@ The operation failed or the command syntax was not valid\&.
 .RE
 .SH "AUTHORS"
 .sp
-Gary E\&. Miller Keane S\&. Wolter
+Gary E\&. Miller
+.sp
+Keane S\&. Wolter
 .SH "EXIT STATUS"
 .sp
 One of the following exit values will be returned:

@@ -211,6 +211,9 @@ struct config_tree_tag {
 	sim_fifo *	sim_details;
 	int		mdnstries;
 };
+extern void init_readconfig(void);
+extern void set_keys_file(char*);
+extern void set_trustedkey(keyid_t);
 extern int mdnstries;
 
 
@@ -239,6 +242,7 @@ void *	concat_gen_fifos(void *first, void *second);
 	      ? HEAD_FIFO(*(pf))	\
 	      : NULL)
 
+address_node *addr_from_typeunit(char *type, int unit);
 peer_node *create_peer_node(int hmode, address_node *addr,
 			    attr_val_fifo *options);
 unpeer_node *create_unpeer_node(address_node *addr);

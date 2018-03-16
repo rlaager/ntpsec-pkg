@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-import ntp.agentx
+import ntp.agentx_packet as AX
 
-from ntp.agentx import slicedata, decode_pduheader, makeflags
+from ntp.agentx_packet import slicedata, decode_pduheader, makeflags
 
 extraData = b"Would you kindly ignore this?"
 
@@ -71,14 +71,15 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
     # PDU tests
     #
     def test_AgentXPDU(self):
+        cls = AX.AgentXPDU
         # Test these so we don't need a bunch of redundant tests
         # Test basic, without context
-        test = ntp.agentx.AgentXPDU(0, True, 1, 2, 3, context=extraData)
+        test = cls(0, True, 1, 2, 3, context=extraData)
         self.assertEqual(repr(test),
                          "AgentXPDU(bigEndian=True, packetID=3, "
                          "pduType=0, sessionID=1, transactionID=2)")
         # Test basic, with context
-        test = ntp.agentx.AgentXPDU(0, True, 1, 2, 3, hascontext=True)
+        test = cls(0, True, 1, 2, 3, hascontext=True)
         self.assertEqual(repr(test),
                          "AgentXPDU(bigEndian=True, context=None, packetID=3, "
                          "pduType=0, sessionID=1, transactionID=2)")
@@ -91,23 +92,55 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                          "context='jabber jabber jabber', "
                          "foo=42, packetID=3, "
                          "pduType=0, sessionID=1, transactionID=2)")
+        # Test __eq__
+        a = cls(0, True, 1, 2, 3)
+        b = cls(0, True, 1, 2, 3)
+        # Test all equal
+        self.assertEqual(a == b, True)
+        # Test same class, false
+        b = "blah blah"
+        self.assertEqual(a == b, False)
+        # Test different pdu
+        b = cls(1, True, 1, 2, 3)
+        self.assertEqual(a == b, False)
+        # Test different endianness
+        b = cls(0, False, 1, 2, 3)
+        self.assertEqual(a == b, False)
+        # Test different session ID
+        b = cls(0, True, 42, 2, 3)
+        self.assertEqual(a == b, False)
+        # Test different transaction ID
+        b = cls(0, True, 1, 23, 3)
+        self.assertEqual(a == b, False)
+        # Test different packet ID
+        b = cls(0, True, 1, 2, 13)
+        self.assertEqual(a == b, False)
+        # Test different _hascontext
+        b = cls(0, True, 1, 2, 3, hascontext=True)
+        self.assertEqual(a == b, False)
+        # Test with context, equal
+        a = cls(0, True, 1, 2, 3, True, "foo")
+        b = cls(0, True, 1, 2, 3, True, "foo")
+        self.assertEqual(a == b, True)
+        # Test with context, not equal
+        b = cls(0, True, 1, 2, 3, True, "bar")
+        self.assertEqual(a == b, False)
 
     def test_OpenPDU(self):
-        dec = ntp.agentx.decode_OpenPDU
-        cls = ntp.agentx.OpenPDU
-        x = ntp.agentx
+        dec = AX.decode_OpenPDU
+        cls = AX.OpenPDU
 
         # Test PDU init, null packet
         nullPkt = cls(True, 1, 2, 3, 4, (), "")
-        test_pducore(self, nullPkt, x.PDU_OPEN, True, 1, 2, 3)
+        test_pducore(self, nullPkt, AX.PDU_OPEN, True, 1, 2, 3)
         self.assertEqual(nullPkt.timeout, 4)
-        self.assertEqual(nullPkt.oid, x.OID((), False))
+        self.assertEqual(nullPkt.oid, AX.OID((), False))
         self.assertEqual(nullPkt.description, "")
         # Test PDU init, basic packet
         basicPkt = cls(False, 1, 2, 3, 4, (1, 2, 3, 4), "foo")
-        test_pducore(self, basicPkt, x.PDU_OPEN, False, 1, 2, 3)
+        test_pducore(self, basicPkt, AX.PDU_OPEN, False, 1, 2, 3)
         self.assertEqual(basicPkt.timeout, 4)
-        self.assertEqual(basicPkt.oid, x.OID((1, 2, 3, 4), False))
+        self.assertEqual(basicPkt.oid, AX.OID((1, 2, 3, 4), False))
         self.assertEqual(basicPkt.description, "foo")
         # Test encoding, null packet
         nullPkt_str = nullPkt.encode()
@@ -131,17 +164,17 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(nullPkt_str, 20)
         header = decode_pduheader(header)
         nullPkt_new = dec(body, header)
-        test_pducore(self, nullPkt_new, x.PDU_OPEN, True, 1, 2, 3)
+        test_pducore(self, nullPkt_new, AX.PDU_OPEN, True, 1, 2, 3)
         self.assertEqual(nullPkt_new.timeout, 4)
-        self.assertEqual(nullPkt_new.oid, x.OID((), False))
+        self.assertEqual(nullPkt_new.oid, AX.OID((), False))
         self.assertEqual(nullPkt_new.description, "")
         # Test decoding, basic packet
         header, body = slicedata(basicPkt_str, 20)
         header = decode_pduheader(header)
         basicPkt_new = dec(body, header)
-        test_pducore(self, basicPkt_new, x.PDU_OPEN, False, 1, 2, 3)
+        test_pducore(self, basicPkt_new, AX.PDU_OPEN, False, 1, 2, 3)
         self.assertEqual(basicPkt_new.timeout, 4)
-        self.assertEqual(basicPkt_new.oid, x.OID((1, 2, 3, 4), False))
+        self.assertEqual(basicPkt_new.oid, AX.OID((1, 2, 3, 4), False))
         self.assertEqual(basicPkt_new.description, "foo")
         # Test packetVars
         self.assertEqual(basicPkt_new.packetVars(),
@@ -151,22 +184,21 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "transactionID": 2,
                           "packetID": 3,
                           "timeout": 4,
-                          "oid": x.OID((1, 2, 3, 4), False),
+                          "oid": AX.OID((1, 2, 3, 4), False),
                           "description": "foo"})
 
     def test_ClosePDU(self):
-        dec = ntp.agentx.decode_ClosePDU
-        cls = ntp.agentx.ClosePDU
-        x = ntp.agentx
+        dec = AX.decode_ClosePDU
+        cls = AX.ClosePDU
 
         # Test init
-        pkt = cls(True, 1, 2, 3, x.RSN_OTHER)
-        test_pducore(self, pkt, x.PDU_CLOSE, True, 1, 2, 3)
-        self.assertEqual(pkt.reason, x.RSN_OTHER)
+        pkt = cls(True, 1, 2, 3, AX.RSN_OTHER)
+        test_pducore(self, pkt, AX.PDU_CLOSE, True, 1, 2, 3)
+        self.assertEqual(pkt.reason, AX.RSN_OTHER)
         # Test init, little endian
-        pkt_LE = cls(False, 1, 2, 3, x.RSN_OTHER)
-        test_pducore(self, pkt_LE, x.PDU_CLOSE, False, 1, 2, 3)
-        self.assertEqual(pkt_LE.reason, x.RSN_OTHER)
+        pkt_LE = cls(False, 1, 2, 3, AX.RSN_OTHER)
+        test_pducore(self, pkt_LE, AX.PDU_CLOSE, False, 1, 2, 3)
+        self.assertEqual(pkt_LE.reason, AX.RSN_OTHER)
         # Test encoding
         pkt_str = pkt.encode()
         self.assertEqual(pkt_str,
@@ -185,14 +217,14 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_CLOSE, True, 1, 2, 3)
-        self.assertEqual(pkt_new.reason, x.RSN_OTHER)
+        test_pducore(self, pkt_new, AX.PDU_CLOSE, True, 1, 2, 3)
+        self.assertEqual(pkt_new.reason, AX.RSN_OTHER)
         # Test decoding, little endian
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_CLOSE, False, 1, 2, 3)
-        self.assertEqual(pkt_LE_new.reason, x.RSN_OTHER)
+        test_pducore(self, pkt_LE_new, AX.PDU_CLOSE, False, 1, 2, 3)
+        self.assertEqual(pkt_LE_new.reason, AX.RSN_OTHER)
         # Test packetVars
         self.assertEqual(pkt_new.packetVars(),
                          {"pduType": 2,
@@ -200,38 +232,37 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "sessionID": 1,
                           "transactionID": 2,
                           "packetID": 3,
-                          "reason": x.RSN_OTHER})
+                          "reason": AX.RSN_OTHER})
 
     def test_RegisterPDU(self):
-        dec = ntp.agentx.decode_xRegisterPDU
-        cls = ntp.agentx.RegisterPDU
-        x = ntp.agentx
+        dec = AX.decode_xRegisterPDU
+        cls = AX.RegisterPDU
 
         # Test init, basic packet
         basicPkt = cls(True, 1, 2, 3, 4, 5, (1, 2, 3))
-        test_pducore(self, basicPkt, x.PDU_REGISTER, True, 1, 2, 3)
+        test_pducore(self, basicPkt, AX.PDU_REGISTER, True, 1, 2, 3)
         self.assertEqual(basicPkt.timeout, 4)
         self.assertEqual(basicPkt.priority, 5)
-        self.assertEqual(basicPkt.subtree, x.OID((1, 2, 3), False))
+        self.assertEqual(basicPkt.subtree, AX.OID((1, 2, 3), False))
         self.assertEqual(basicPkt.rangeSubid, 0)
         self.assertEqual(basicPkt.upperBound, None)
         self.assertEqual(basicPkt.context, None)
         # Test init, basic packet, little endian
         basicPkt_LE = cls(False, 1, 2, 3, 4, 5, (1, 2, 3))
-        test_pducore(self, basicPkt_LE, x.PDU_REGISTER, False, 1, 2, 3)
+        test_pducore(self, basicPkt_LE, AX.PDU_REGISTER, False, 1, 2, 3)
         self.assertEqual(basicPkt_LE.timeout, 4)
         self.assertEqual(basicPkt_LE.priority, 5)
-        self.assertEqual(basicPkt_LE.subtree, x.OID((1, 2, 3), False))
+        self.assertEqual(basicPkt_LE.subtree, AX.OID((1, 2, 3), False))
         self.assertEqual(basicPkt_LE.rangeSubid, 0)
         self.assertEqual(basicPkt_LE.upperBound, None)
         self.assertEqual(basicPkt_LE.context, None)
         # Test init, fancy packet
         fancyPkt = cls(True, 1, 2, 3, 4, 5, (1, 2, 3),
                        rangeSubid=5, upperBound=23, context="blah")
-        test_pducore(self, fancyPkt, x.PDU_REGISTER, True, 1, 2, 3)
+        test_pducore(self, fancyPkt, AX.PDU_REGISTER, True, 1, 2, 3)
         self.assertEqual(fancyPkt.timeout, 4)
         self.assertEqual(fancyPkt.priority, 5)
-        self.assertEqual(fancyPkt.subtree, x.OID((1, 2, 3), False))
+        self.assertEqual(fancyPkt.subtree, AX.OID((1, 2, 3), False))
         self.assertEqual(fancyPkt.rangeSubid, 5)
         self.assertEqual(fancyPkt.upperBound, 23)
         self.assertEqual(fancyPkt.context, "blah")
@@ -268,10 +299,10 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(basicPkt_str, 20)
         header = decode_pduheader(header)
         basicPkt_new = dec(body, header)
-        test_pducore(self, basicPkt_new, x.PDU_REGISTER, True, 1, 2, 3)
+        test_pducore(self, basicPkt_new, AX.PDU_REGISTER, True, 1, 2, 3)
         self.assertEqual(basicPkt_new.timeout, 4)
         self.assertEqual(basicPkt_new.priority, 5)
-        self.assertEqual(basicPkt_new.subtree, x.OID((1, 2, 3), False))
+        self.assertEqual(basicPkt_new.subtree, AX.OID((1, 2, 3), False))
         self.assertEqual(basicPkt_new.rangeSubid, 0)
         self.assertEqual(basicPkt_new.upperBound, None)
         self.assertEqual(basicPkt_new.context, None)
@@ -279,10 +310,10 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(basicPkt_LE_str, 20)
         header = decode_pduheader(header)
         basicPkt_LE_new = dec(body, header)
-        test_pducore(self, basicPkt_LE_new, x.PDU_REGISTER, False, 1, 2, 3)
+        test_pducore(self, basicPkt_LE_new, AX.PDU_REGISTER, False, 1, 2, 3)
         self.assertEqual(basicPkt_LE_new.timeout, 4)
         self.assertEqual(basicPkt_LE_new.priority, 5)
-        self.assertEqual(basicPkt_LE_new.subtree, x.OID((1, 2, 3), False))
+        self.assertEqual(basicPkt_LE_new.subtree, AX.OID((1, 2, 3), False))
         self.assertEqual(basicPkt_LE_new.rangeSubid, 0)
         self.assertEqual(basicPkt_LE_new.upperBound, None)
         self.assertEqual(basicPkt_LE_new.context, None)
@@ -290,10 +321,10 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(fancyPkt_str, 20)
         header = decode_pduheader(header)
         fancyPkt_new = dec(body, header)
-        test_pducore(self, fancyPkt_new, x.PDU_REGISTER, True, 1, 2, 3)
+        test_pducore(self, fancyPkt_new, AX.PDU_REGISTER, True, 1, 2, 3)
         self.assertEqual(fancyPkt_new.timeout, 4)
         self.assertEqual(fancyPkt_new.priority, 5)
-        self.assertEqual(fancyPkt_new.subtree, x.OID((1, 2, 3), False))
+        self.assertEqual(fancyPkt_new.subtree, AX.OID((1, 2, 3), False))
         self.assertEqual(fancyPkt_new.rangeSubid, 5)
         self.assertEqual(fancyPkt_new.upperBound, 23)
         self.assertEqual(fancyPkt_new.context, "blah")
@@ -306,38 +337,44 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "packetID": 3,
                           "timeout": 4,
                           "priority": 5,
-                          "subtree": x.OID((1, 2, 3), False),
+                          "subtree": AX.OID((1, 2, 3), False),
                           "rangeSubid": 0,
                           "upperBound": None,
                           "context": None})
+        # Test __eq__ gap, equal
+        a = cls(True, 1, 2, 3, 4, 5, ())
+        b = cls(True, 1, 2, 3, 4, 5, ())
+        self.assertEqual(a == b, True)
+        # Test __eq__ gap, unequal
+        b = cls(False, 1, 2, 3, 4, 5, ())
+        self.assertEqual(a == b, False)
 
     def test_UnregisterPDU(self):
-        dec = ntp.agentx.decode_xRegisterPDU
-        cls = ntp.agentx.UnregisterPDU
-        x = ntp.agentx
+        dec = AX.decode_xRegisterPDU
+        cls = AX.UnregisterPDU
 
         # Test init, basic packet
         basicPkt = cls(True, 1, 2, 3, 5, (1, 2, 3))
-        test_pducore(self, basicPkt, x.PDU_UNREGISTER, True, 1, 2, 3)
+        test_pducore(self, basicPkt, AX.PDU_UNREGISTER, True, 1, 2, 3)
         self.assertEqual(basicPkt.priority, 5)
-        self.assertEqual(basicPkt.subtree, x.OID((1, 2, 3), False))
+        self.assertEqual(basicPkt.subtree, AX.OID((1, 2, 3), False))
         self.assertEqual(basicPkt.rangeSubid, 0)
         self.assertEqual(basicPkt.upperBound, None)
         self.assertEqual(basicPkt.context, None)
         # Test init, basic packet, little endian
         basicPkt_LE = cls(False, 1, 2, 3, 5, (1, 2, 3))
-        test_pducore(self, basicPkt_LE, x.PDU_UNREGISTER, False, 1, 2, 3)
+        test_pducore(self, basicPkt_LE, AX.PDU_UNREGISTER, False, 1, 2, 3)
         self.assertEqual(basicPkt_LE.priority, 5)
-        self.assertEqual(basicPkt_LE.subtree, x.OID((1, 2, 3), False))
+        self.assertEqual(basicPkt_LE.subtree, AX.OID((1, 2, 3), False))
         self.assertEqual(basicPkt_LE.rangeSubid, 0)
         self.assertEqual(basicPkt_LE.upperBound, None)
         self.assertEqual(basicPkt_LE.context, None)
         # Test init, fancy packet
         fancyPkt = cls(True, 1, 2, 3, 5, (1, 2, 3),
                        rangeSubid=5, upperBound=23, context="blah")
-        test_pducore(self, fancyPkt, x.PDU_UNREGISTER, True, 1, 2, 3)
+        test_pducore(self, fancyPkt, AX.PDU_UNREGISTER, True, 1, 2, 3)
         self.assertEqual(fancyPkt.priority, 5)
-        self.assertEqual(fancyPkt.subtree, x.OID((1, 2, 3), False))
+        self.assertEqual(fancyPkt.subtree, AX.OID((1, 2, 3), False))
         self.assertEqual(fancyPkt.rangeSubid, 5)
         self.assertEqual(fancyPkt.upperBound, 23)
         self.assertEqual(fancyPkt.context, "blah")
@@ -374,9 +411,9 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(basicPkt_str, 20)
         header = decode_pduheader(header)
         basicPkt_new = dec(body, header)
-        test_pducore(self, basicPkt, x.PDU_UNREGISTER, True, 1, 2, 3)
+        test_pducore(self, basicPkt, AX.PDU_UNREGISTER, True, 1, 2, 3)
         self.assertEqual(basicPkt_new.priority, 5)
-        self.assertEqual(basicPkt_new.subtree, x.OID((1, 2, 3), False))
+        self.assertEqual(basicPkt_new.subtree, AX.OID((1, 2, 3), False))
         self.assertEqual(basicPkt_new.rangeSubid, 0)
         self.assertEqual(basicPkt_new.upperBound, None)
         self.assertEqual(basicPkt_new.context, None)
@@ -384,9 +421,9 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(basicPkt_LE_str, 20)
         header = decode_pduheader(header)
         basicPkt_LE_new = dec(body, header)
-        test_pducore(self, basicPkt_LE, x.PDU_UNREGISTER, False, 1, 2, 3)
+        test_pducore(self, basicPkt_LE, AX.PDU_UNREGISTER, False, 1, 2, 3)
         self.assertEqual(basicPkt_LE_new.priority, 5)
-        self.assertEqual(basicPkt_LE_new.subtree, x.OID((1, 2, 3), False))
+        self.assertEqual(basicPkt_LE_new.subtree, AX.OID((1, 2, 3), False))
         self.assertEqual(basicPkt_LE_new.rangeSubid, 0)
         self.assertEqual(basicPkt_LE_new.upperBound, None)
         self.assertEqual(basicPkt_LE_new.context, None)
@@ -394,9 +431,9 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(fancyPkt_str, 20)
         header = decode_pduheader(header)
         fancyPkt_new = dec(body, header)
-        test_pducore(self, fancyPkt_new, x.PDU_UNREGISTER, True, 1, 2, 3)
+        test_pducore(self, fancyPkt_new, AX.PDU_UNREGISTER, True, 1, 2, 3)
         self.assertEqual(fancyPkt_new.priority, 5)
-        self.assertEqual(fancyPkt_new.subtree, x.OID((1, 2, 3), False))
+        self.assertEqual(fancyPkt_new.subtree, AX.OID((1, 2, 3), False))
         self.assertEqual(fancyPkt_new.rangeSubid, 5)
         self.assertEqual(fancyPkt_new.upperBound, 23)
         self.assertEqual(fancyPkt_new.context, "blah")
@@ -408,20 +445,19 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "transactionID": 2,
                           "packetID": 3,
                           "priority": 5,
-                          "subtree": x.OID((1, 2, 3), False),
+                          "subtree": AX.OID((1, 2, 3), False),
                           "rangeSubid": 0,
                           "upperBound": None,
                           "context": None})
 
     def test_GetPDU(self):
-        dec = ntp.agentx.decode_xGetPDU
-        cls = ntp.agentx.GetPDU
-        x = ntp.agentx
-        srch = x.SearchRange
+        dec = AX.decode_xGetPDU
+        cls = AX.GetPDU
+        srch = AX.SearchRange
 
         # Test init, null packet
         nullPkt = cls(True, 1, 2, 3, ())
-        test_pducore(self, nullPkt, x.PDU_GET, True, 1, 2, 3)
+        test_pducore(self, nullPkt, AX.PDU_GET, True, 1, 2, 3)
         self.assertEqual(nullPkt.oidranges, ())
         self.assertEqual(nullPkt.context, None)
         # Test init, full packet
@@ -429,7 +465,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                       (srch((1, 2, 3), (1, 2, 5), False),
                        srch((10, 20), (30, 40), True)),
                       context="blah")
-        test_pducore(self, fullPkt, x.PDU_GET, True, 1, 2, 3)
+        test_pducore(self, fullPkt, AX.PDU_GET, True, 1, 2, 3)
         self.assertEqual(fullPkt.oidranges,
                          (srch((1, 2, 3), (1, 2, 5), False),
                           srch((10, 20), (30, 40), True)))
@@ -439,7 +475,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                          (srch((1, 2, 3), (1, 2, 5), False),
                           srch((10, 20), (30, 40), True)),
                          context="blah")
-        test_pducore(self, fullPkt_LE, x.PDU_GET, False, 1, 2, 3)
+        test_pducore(self, fullPkt_LE, AX.PDU_GET, False, 1, 2, 3)
         self.assertEqual(fullPkt_LE.oidranges,
                          (srch((1, 2, 3), (1, 2, 5), False),
                           srch((10, 20), (30, 40), True)))
@@ -449,48 +485,45 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         self.assertEqual(nullPkt_str,
                          b"\x01\x05\x10\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02"
-                         b"\x00\x00\x00\x03\x00\x00\x00\x04"
-                         b"\x00\x00\x00\x00")
+                         b"\x00\x00\x00\x03\x00\x00\x00\x00")
         # Test encode, full packet
         fullPkt_str = fullPkt.encode()
         self.assertEqual(fullPkt_str,
                          b"\x01\x05\x18\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02"
-                         b"\x00\x00\x00\x03\x00\x00\x00\x44"
+                         b"\x00\x00\x00\x03\x00\x00\x00\x40"
                          b"\x00\x00\x00\x04blah"
                          b"\x03\x00\x00\x00\x00\x00\x00\x01"
                          b"\x00\x00\x00\x02\x00\x00\x00\x03"
                          b"\x03\x00\x00\x00\x00\x00\x00\x01"
                          b"\x00\x00\x00\x02\x00\x00\x00\x05"
                          b"\x02\x00\x01\x00\x00\x00\x00\x0A\x00\x00\x00\x14"
-                         b"\x02\x00\x00\x00\x00\x00\x00\x1E\x00\x00\x00\x28"
-                         b"\x00\x00\x00\x00")
+                         b"\x02\x00\x00\x00\x00\x00\x00\x1E\x00\x00\x00\x28")
         # Test encode, full packet, little endian
         fullPkt_LE_str = fullPkt_LE.encode()
         self.assertEqual(fullPkt_LE_str,
                          b"\x01\x05\x08\x00"
                          b"\x01\x00\x00\x00\x02\x00\x00\x00"
-                         b"\x03\x00\x00\x00\x44\x00\x00\x00"
+                         b"\x03\x00\x00\x00\x40\x00\x00\x00"
                          b"\x04\x00\x00\x00blah"
                          b"\x03\x00\x00\x00\x01\x00\x00\x00"
                          b"\x02\x00\x00\x00\x03\x00\x00\x00"
                          b"\x03\x00\x00\x00\x01\x00\x00\x00"
                          b"\x02\x00\x00\x00\x05\x00\x00\x00"
                          b"\x02\x00\x01\x00\x0A\x00\x00\x00\x14\x00\x00\x00"
-                         b"\x02\x00\x00\x00\x1E\x00\x00\x00\x28\x00\x00\x00"
-                         b"\x00\x00\x00\x00")
+                         b"\x02\x00\x00\x00\x1E\x00\x00\x00\x28\x00\x00\x00")
         # Test decoding, null packet
         header, body = slicedata(nullPkt_str, 20)
         header = decode_pduheader(header)
         nullPkt_new = dec(body, header)
-        test_pducore(self, nullPkt_new, x.PDU_GET, True, 1, 2, 3)
+        test_pducore(self, nullPkt_new, AX.PDU_GET, True, 1, 2, 3)
         self.assertEqual(nullPkt_new.oidranges, ())
         self.assertEqual(nullPkt_new.context, None)
         # Test decoding, full packet
         header, body = slicedata(fullPkt_str, 20)
         header = decode_pduheader(header)
         fullPkt_new = dec(body, header)
-        test_pducore(self, fullPkt_new, x.PDU_GET, True, 1, 2, 3)
+        test_pducore(self, fullPkt_new, AX.PDU_GET, True, 1, 2, 3)
         self.assertEqual(fullPkt_new.oidranges,
                          (srch((1, 2, 3), (1, 2, 5), False),
                           srch((10, 20), (30, 40), True)))
@@ -499,7 +532,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(fullPkt_LE_str, 20)
         header = decode_pduheader(header)
         fullPkt_LE_new = dec(body, header)
-        test_pducore(self, fullPkt_LE_new, x.PDU_GET, False, 1, 2, 3)
+        test_pducore(self, fullPkt_LE_new, AX.PDU_GET, False, 1, 2, 3)
         self.assertEqual(fullPkt_LE_new.oidranges,
                          (srch((1, 2, 3), (1, 2, 5), False),
                           srch((10, 20), (30, 40), True)))
@@ -515,14 +548,13 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "context": None})
 
     def test_GetNextPDU(self):
-        dec = ntp.agentx.decode_xGetPDU
-        cls = ntp.agentx.GetNextPDU
-        x = ntp.agentx
-        srch = x.SearchRange
+        dec = AX.decode_xGetPDU
+        cls = AX.GetNextPDU
+        srch = AX.SearchRange
 
         # Test init, null packet
         nullPkt = cls(True, 1, 2, 3, ())
-        test_pducore(self, nullPkt, x.PDU_GET_NEXT, True, 1, 2, 3)
+        test_pducore(self, nullPkt, AX.PDU_GET_NEXT, True, 1, 2, 3)
         self.assertEqual(nullPkt.oidranges, ())
         self.assertEqual(nullPkt.context, None)
         # Test init, full packet
@@ -530,7 +562,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                       (srch((1, 2, 3), (1, 2, 5), False),
                        srch((10, 20), (30, 40), True)),
                       context="blah")
-        test_pducore(self, fullPkt, x.PDU_GET_NEXT, True, 1, 2, 3)
+        test_pducore(self, fullPkt, AX.PDU_GET_NEXT, True, 1, 2, 3)
         self.assertEqual(fullPkt.oidranges,
                          (srch((1, 2, 3), (1, 2, 5), False),
                           srch((10, 20), (30, 40), True)))
@@ -540,7 +572,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                          (srch((1, 2, 3), (1, 2, 5), False),
                           srch((10, 20), (30, 40), True)),
                          context="blah")
-        test_pducore(self, fullPkt_LE, x.PDU_GET_NEXT, False, 1, 2, 3)
+        test_pducore(self, fullPkt_LE, AX.PDU_GET_NEXT, False, 1, 2, 3)
         self.assertEqual(fullPkt_LE.oidranges,
                          (srch((1, 2, 3), (1, 2, 5), False),
                           srch((10, 20), (30, 40), True)))
@@ -581,14 +613,14 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(nullPkt_str, 20)
         header = decode_pduheader(header)
         nullPkt_new = dec(body, header)
-        test_pducore(self, nullPkt_new, x.PDU_GET_NEXT, True, 1, 2, 3)
+        test_pducore(self, nullPkt_new, AX.PDU_GET_NEXT, True, 1, 2, 3)
         self.assertEqual(nullPkt_new.oidranges, ())
         self.assertEqual(nullPkt_new.context, None)
         # Test decoding, full packet
         header, body = slicedata(fullPkt_str, 20)
         header = decode_pduheader(header)
         fullPkt_new = dec(body, header)
-        test_pducore(self, fullPkt_new, x.PDU_GET_NEXT, True, 1, 2, 3)
+        test_pducore(self, fullPkt_new, AX.PDU_GET_NEXT, True, 1, 2, 3)
         self.assertEqual(fullPkt_new.oidranges,
                          (srch((1, 2, 3), (1, 2, 5), False),
                           srch((10, 20), (30, 40), True)))
@@ -597,7 +629,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(fullPkt_LE_str, 20)
         header = decode_pduheader(header)
         fullPkt_LE_new = dec(body, header)
-        test_pducore(self, fullPkt_LE_new, x.PDU_GET_NEXT, False, 1, 2, 3)
+        test_pducore(self, fullPkt_LE_new, AX.PDU_GET_NEXT, False, 1, 2, 3)
         self.assertEqual(fullPkt_LE_new.oidranges,
                          (srch((1, 2, 3), (1, 2, 5), False),
                           srch((10, 20), (30, 40), True)))
@@ -613,17 +645,16 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "context": None})
 
     def test_GetBulkPDU(self):
-        dec = ntp.agentx.decode_GetBulkPDU
-        cls = ntp.agentx.GetBulkPDU
-        x = ntp.agentx
-        srch = x.SearchRange
+        dec = AX.decode_GetBulkPDU
+        cls = AX.GetBulkPDU
+        srch = AX.SearchRange
 
         # Test init
         pkt = cls(True, 1, 2, 3, 1, 5,
                   (srch((1, 2), (3, 4), False),
                    srch((6, 7), (8, 9), True)),
                   context="blah")
-        test_pducore(self, pkt, x.PDU_GET_BULK, True, 1, 2, 3)
+        test_pducore(self, pkt, AX.PDU_GET_BULK, True, 1, 2, 3)
         self.assertEqual(pkt.nonReps, 1)
         self.assertEqual(pkt.maxReps, 5)
         self.assertEqual(pkt.oidranges,
@@ -635,7 +666,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                      (srch((1, 2), (3, 4), False),
                       srch((6, 7), (8, 9), True)),
                      context="blah")
-        test_pducore(self, pkt_LE, x.PDU_GET_BULK, False, 1, 2, 3)
+        test_pducore(self, pkt_LE, AX.PDU_GET_BULK, False, 1, 2, 3)
         self.assertEqual(pkt_LE.nonReps, 1)
         self.assertEqual(pkt_LE.maxReps, 5)
         self.assertEqual(pkt_LE.oidranges,
@@ -670,7 +701,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_GET_BULK, True, 1, 2, 3)
+        test_pducore(self, pkt_new, AX.PDU_GET_BULK, True, 1, 2, 3)
         self.assertEqual(pkt_new.nonReps, 1)
         self.assertEqual(pkt_new.maxReps, 5)
         self.assertEqual(pkt_new.oidranges,
@@ -681,7 +712,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_GET_BULK, False, 1, 2, 3)
+        test_pducore(self, pkt_LE_new, AX.PDU_GET_BULK, False, 1, 2, 3)
         self.assertEqual(pkt_LE_new.nonReps, 1)
         self.assertEqual(pkt_LE_new.maxReps, 5)
         self.assertEqual(pkt_LE_new.oidranges,
@@ -702,32 +733,31 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "context": "blah"})
 
     def test_TestSetPDU(self):
-        dec = ntp.agentx.decode_TestSetPDU
-        cls = ntp.agentx.TestSetPDU
-        x = ntp.agentx
+        dec = AX.decode_TestSetPDU
+        cls = AX.TestSetPDU
 
         # Test init
         pkt = cls(True, 1, 2, 3,
-                  (x.Varbind(x.VALUE_OID, (1, 2, 3), x.OID((4, 5, 6), False)),
-                   x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")),
+                  (AX.Varbind(AX.VALUE_OID, (1, 2, 3), AX.OID((4, 5, 6), False)),
+                   AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")),
                   context="blah")
-        test_pducore(self, pkt, x.PDU_TEST_SET, True, 1, 2, 3)
+        test_pducore(self, pkt, AX.PDU_TEST_SET, True, 1, 2, 3)
         self.assertEqual(pkt.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt.context, "blah")
         # Test init, little endian
         pkt_LE = cls(False, 1, 2, 3,
-                     (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                x.OID((4, 5, 6), False)),
-                      x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")),
+                     (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                 AX.OID((4, 5, 6), False)),
+                      AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")),
                      context="blah")
-        test_pducore(self, pkt_LE, x.PDU_TEST_SET, False, 1, 2, 3)
+        test_pducore(self, pkt_LE, AX.PDU_TEST_SET, False, 1, 2, 3)
         self.assertEqual(pkt_LE.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt_LE.context, "blah")
         # Test encoding
         pkt_str = pkt.encode()
@@ -765,27 +795,27 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_TEST_SET, True, 1, 2, 3)
+        test_pducore(self, pkt_new, AX.PDU_TEST_SET, True, 1, 2, 3)
         self.assertEqual(pkt_new.varbinds,
-                         (x.Varbind(x.VALUE_OID,
-                                    x.OID((1, 2, 3), False),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR,
-                                    x.OID((1, 2, 4), False),
-                                    "blah")))
+                         (AX.Varbind(AX.VALUE_OID,
+                                     AX.OID((1, 2, 3), False),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR,
+                                     AX.OID((1, 2, 4), False),
+                                     "blah")))
         self.assertEqual(pkt_new.context, "blah")
         # Test decoding, little endian
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_TEST_SET, False, 1, 2, 3)
+        test_pducore(self, pkt_LE_new, AX.PDU_TEST_SET, False, 1, 2, 3)
         self.assertEqual(pkt_LE_new.varbinds,
-                         (x.Varbind(x.VALUE_OID,
-                                    x.OID((1, 2, 3), False),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR,
-                                    x.OID((1, 2, 4), False),
-                                    "blah")))
+                         (AX.Varbind(AX.VALUE_OID,
+                                     AX.OID((1, 2, 3), False),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR,
+                                     AX.OID((1, 2, 4), False),
+                                     "blah")))
         self.assertEqual(pkt_LE_new.context, "blah")
         # Test packetVars
         self.assertEqual(pkt_new.packetVars(),
@@ -794,25 +824,24 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "sessionID": 1,
                           "transactionID": 2,
                           "packetID": 3,
-                          "varbinds": (x.Varbind(x.VALUE_OID,
-                                                 x.OID((1, 2, 3), False),
-                                                 x.OID((4, 5, 6), False)),
-                                       x.Varbind(x.VALUE_OCTET_STR,
-                                                 x.OID((1, 2, 4), False),
-                                                 "blah")),
+                          "varbinds": (AX.Varbind(AX.VALUE_OID,
+                                                  AX.OID((1, 2, 3), False),
+                                                  AX.OID((4, 5, 6), False)),
+                                       AX.Varbind(AX.VALUE_OCTET_STR,
+                                                  AX.OID((1, 2, 4), False),
+                                                  "blah")),
                           "context": "blah"})
 
     def test_CommitSetPDU(self):
-        dec = ntp.agentx.decode_CommitSetPDU
-        cls = ntp.agentx.CommitSetPDU
-        x = ntp.agentx
+        dec = AX.decode_CommitSetPDU
+        cls = AX.CommitSetPDU
 
         # Test init
         pkt = cls(True, 1, 2, 3)
-        test_pducore(self, pkt, x.PDU_COMMIT_SET, True, 1, 2, 3)
+        test_pducore(self, pkt, AX.PDU_COMMIT_SET, True, 1, 2, 3)
         # Test init, little endian
         pkt_LE = cls(False, 1, 2, 3)
-        test_pducore(self, pkt_LE, x.PDU_COMMIT_SET, False, 1, 2, 3)
+        test_pducore(self, pkt_LE, AX.PDU_COMMIT_SET, False, 1, 2, 3)
         # Test encode
         pkt_str = pkt.encode()
         self.assertEqual(pkt_str,
@@ -829,12 +858,12 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_COMMIT_SET, True, 1, 2, 3)
+        test_pducore(self, pkt_new, AX.PDU_COMMIT_SET, True, 1, 2, 3)
         # Test decode, little endian
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_COMMIT_SET, False, 1, 2, 3)
+        test_pducore(self, pkt_LE_new, AX.PDU_COMMIT_SET, False, 1, 2, 3)
         # Test packetVars
         self.assertEqual(pkt_new.packetVars(),
                          {"pduType": 9,
@@ -844,16 +873,15 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "packetID": 3})
 
     def test_UndoSetPDU(self):
-        dec = ntp.agentx.decode_UndoSetPDU
-        cls = ntp.agentx.UndoSetPDU
-        x = ntp.agentx
+        dec = AX.decode_UndoSetPDU
+        cls = AX.UndoSetPDU
 
         # Test init
         pkt = cls(True, 1, 2, 3)
-        test_pducore(self, pkt, x.PDU_UNDO_SET, True, 1, 2, 3)
+        test_pducore(self, pkt, AX.PDU_UNDO_SET, True, 1, 2, 3)
         # Test init, little endian
         pkt_LE = cls(False, 1, 2, 3)
-        test_pducore(self, pkt_LE, x.PDU_UNDO_SET, False, 1, 2, 3)
+        test_pducore(self, pkt_LE, AX.PDU_UNDO_SET, False, 1, 2, 3)
         # Test encode
         pkt_str = pkt.encode()
         self.assertEqual(pkt_str,
@@ -870,12 +898,12 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_UNDO_SET, True, 1, 2, 3)
+        test_pducore(self, pkt_new, AX.PDU_UNDO_SET, True, 1, 2, 3)
         # Test decode, little endian
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_UNDO_SET, False, 1, 2, 3)
+        test_pducore(self, pkt_LE_new, AX.PDU_UNDO_SET, False, 1, 2, 3)
         # Test packetVars
         self.assertEqual(pkt_new.packetVars(),
                          {"pduType": 10,
@@ -885,16 +913,15 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "packetID": 3})
 
     def test_CleanupSetPDU(self):
-        dec = ntp.agentx.decode_CleanupSetPDU
-        cls = ntp.agentx.CleanupSetPDU
-        x = ntp.agentx
+        dec = AX.decode_CleanupSetPDU
+        cls = AX.CleanupSetPDU
 
         # Test init
         pkt = cls(True, 1, 2, 3)
-        test_pducore(self, pkt, x.PDU_CLEANUP_SET, True, 1, 2, 3)
+        test_pducore(self, pkt, AX.PDU_CLEANUP_SET, True, 1, 2, 3)
         # Test init, little endian
         pkt_LE = cls(False, 1, 2, 3)
-        test_pducore(self, pkt_LE, x.PDU_CLEANUP_SET, False, 1, 2, 3)
+        test_pducore(self, pkt_LE, AX.PDU_CLEANUP_SET, False, 1, 2, 3)
         # Test encode
         pkt_str = pkt.encode()
         self.assertEqual(pkt_str,
@@ -911,12 +938,12 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_CLEANUP_SET, True, 1, 2, 3)
+        test_pducore(self, pkt_new, AX.PDU_CLEANUP_SET, True, 1, 2, 3)
         # Test decode, little endian
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_CLEANUP_SET, False, 1, 2, 3)
+        test_pducore(self, pkt_LE_new, AX.PDU_CLEANUP_SET, False, 1, 2, 3)
         # Test packetVars
         self.assertEqual(pkt_new.packetVars(),
                          {"pduType": 11,
@@ -926,17 +953,16 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "packetID": 3})
 
     def test_PingPDU(self):
-        dec = ntp.agentx.decode_PingPDU
-        cls = ntp.agentx.PingPDU
-        x = ntp.agentx
+        dec = AX.decode_PingPDU
+        cls = AX.PingPDU
 
         # Test init
         pkt = cls(True, 1, 2, 3, "blah")
-        test_pducore(self, pkt, x.PDU_PING, True, 1, 2, 3)
+        test_pducore(self, pkt, AX.PDU_PING, True, 1, 2, 3)
         self.assertEqual(pkt.context, "blah")
         # Test init, little endian
         pkt_LE = cls(False, 1, 2, 3, "blah")
-        test_pducore(self, pkt_LE, x.PDU_PING, False, 1, 2, 3)
+        test_pducore(self, pkt_LE, AX.PDU_PING, False, 1, 2, 3)
         self.assertEqual(pkt_LE.context, "blah")
         # Test encode
         pkt_str = pkt.encode()
@@ -956,13 +982,13 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_PING, True, 1, 2, 3)
+        test_pducore(self, pkt_new, AX.PDU_PING, True, 1, 2, 3)
         self.assertEqual(pkt_new.context, "blah")
         # Test decode, little endian
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_PING, False, 1, 2, 3)
+        test_pducore(self, pkt_LE_new, AX.PDU_PING, False, 1, 2, 3)
         self.assertEqual(pkt_LE_new.context, "blah")
         # Test packetVars
         self.assertEqual(pkt_new.packetVars(),
@@ -974,32 +1000,31 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "context": "blah"})
 
     def test_NotifyPDU(self):
-        dec = ntp.agentx.decode_NotifyPDU
-        cls = ntp.agentx.NotifyPDU
-        x = ntp.agentx
+        dec = AX.decode_NotifyPDU
+        cls = AX.NotifyPDU
 
         # Test init
         pkt = cls(True, 1, 2, 3,
-                  (x.Varbind(x.VALUE_OID, (1, 2, 3), x.OID((4, 5, 6), False)),
-                   x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")),
+                  (AX.Varbind(AX.VALUE_OID, (1, 2, 3), AX.OID((4, 5, 6), False)),
+                   AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")),
                   context="blah")
-        test_pducore(self, pkt, x.PDU_NOTIFY, True, 1, 2, 3)
+        test_pducore(self, pkt, AX.PDU_NOTIFY, True, 1, 2, 3)
         self.assertEqual(pkt.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt.context, "blah")
         # Test init, little endian
         pkt_LE = cls(False, 1, 2, 3,
-                     (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                x.OID((4, 5, 6), False)),
-                      x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")),
+                     (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                 AX.OID((4, 5, 6), False)),
+                      AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")),
                      context="blah")
-        test_pducore(self, pkt_LE, x.PDU_NOTIFY, False, 1, 2, 3)
+        test_pducore(self, pkt_LE, AX.PDU_NOTIFY, False, 1, 2, 3)
         self.assertEqual(pkt_LE.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt_LE.context, "blah")
         # Test encode
         pkt_str = pkt.encode()
@@ -1037,21 +1062,21 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_NOTIFY, True, 1, 2, 3)
+        test_pducore(self, pkt_new, AX.PDU_NOTIFY, True, 1, 2, 3)
         self.assertEqual(pkt_new.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt_new.context, "blah")
         # Test decode, little endian
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_NOTIFY, False, 1, 2, 3)
+        test_pducore(self, pkt_LE_new, AX.PDU_NOTIFY, False, 1, 2, 3)
         self.assertEqual(pkt_LE_new.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt_LE_new.context, "blah")
         # Test packetVars
         self.assertEqual(pkt_new.packetVars(),
@@ -1060,43 +1085,42 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "sessionID": 1,
                           "transactionID": 2,
                           "packetID": 3,
-                          "varbinds": (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                                 x.OID((4, 5, 6), False)),
-                                       x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4),
+                          "varbinds": (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                                  AX.OID((4, 5, 6), False)),
+                                       AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4),
                                                  "blah")),
                           "context": "blah"})
 
     def test_IndexAllocPDU(self):
-        dec = ntp.agentx.decode_xIndexAllocPDU
-        cls = ntp.agentx.IndexAllocPDU
-        x = ntp.agentx
+        dec = AX.decode_xIndexAllocPDU
+        cls = AX.IndexAllocPDU
 
         # Test init
         pkt = cls(True, 1, 2, 3, True, True,
-                  (x.Varbind(x.VALUE_OID, (1, 2, 3), x.OID((4, 5, 6), False)),
-                   x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")),
+                  (AX.Varbind(AX.VALUE_OID, (1, 2, 3), AX.OID((4, 5, 6), False)),
+                   AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")),
                   context="blah")
-        test_pducore(self, pkt, x.PDU_INDEX_ALLOC, True, 1, 2, 3)
+        test_pducore(self, pkt, AX.PDU_INDEX_ALLOC, True, 1, 2, 3)
         self.assertEqual(pkt.newIndex, True)
         self.assertEqual(pkt.anyIndex, True)
         self.assertEqual(pkt.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt.context, "blah")
         # Test init, little endian
         pkt_LE = cls(False, 1, 2, 3, True, True,
-                     (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                x.OID((4, 5, 6), False)),
-                      x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")),
+                     (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                 AX.OID((4, 5, 6), False)),
+                      AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")),
                      context="blah")
-        test_pducore(self, pkt_LE, x.PDU_INDEX_ALLOC, False, 1, 2, 3)
+        test_pducore(self, pkt_LE, AX.PDU_INDEX_ALLOC, False, 1, 2, 3)
         self.assertEqual(pkt_LE.newIndex, True)
         self.assertEqual(pkt_LE.anyIndex, True)
         self.assertEqual(pkt_LE.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt_LE.context, "blah")
         # Test encode
         pkt_str = pkt.encode()
@@ -1134,24 +1158,24 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_INDEX_ALLOC, True, 1, 2, 3)
+        test_pducore(self, pkt_new, AX.PDU_INDEX_ALLOC, True, 1, 2, 3)
         self.assertEqual(pkt_new.newIndex, True)
         self.assertEqual(pkt_new.anyIndex, True)
         self.assertEqual(pkt_new.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         # Test decode, little endian
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_INDEX_ALLOC, False, 1, 2, 3)
+        test_pducore(self, pkt_LE_new, AX.PDU_INDEX_ALLOC, False, 1, 2, 3)
         self.assertEqual(pkt_LE_new.newIndex, True)
         self.assertEqual(pkt_LE_new.anyIndex, True)
         self.assertEqual(pkt_LE_new.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt_LE_new.context, "blah")
         # Test packetVars
         self.assertEqual(pkt_new.packetVars(),
@@ -1162,43 +1186,42 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "packetID": 3,
                           "newIndex": True,
                           "anyIndex": True,
-                          "varbinds": (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                                 x.OID((4, 5, 6), False)),
-                                       x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4),
+                          "varbinds": (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                                  AX.OID((4, 5, 6), False)),
+                                       AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4),
                                                  "blah")),
                           "context": "blah"})
 
     def test_IndexDeallocPDU(self):
-        dec = ntp.agentx.decode_xIndexAllocPDU
-        cls = ntp.agentx.IndexDeallocPDU
-        x = ntp.agentx
+        dec = AX.decode_xIndexAllocPDU
+        cls = AX.IndexDeallocPDU
 
         # Test init
         pkt = cls(True, 1, 2, 3, True, True,
-                  (x.Varbind(x.VALUE_OID, (1, 2, 3), x.OID((4, 5, 6), False)),
-                   x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")),
+                  (AX.Varbind(AX.VALUE_OID, (1, 2, 3), AX.OID((4, 5, 6), False)),
+                   AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")),
                   context="blah")
-        test_pducore(self, pkt, x.PDU_INDEX_DEALLOC, True, 1, 2, 3)
+        test_pducore(self, pkt, AX.PDU_INDEX_DEALLOC, True, 1, 2, 3)
         self.assertEqual(pkt.newIndex, True)
         self.assertEqual(pkt.anyIndex, True)
         self.assertEqual(pkt.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt.context, "blah")
         # Test init, little endian
         pkt_LE = cls(False, 1, 2, 3, True, True,
-                     (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                x.OID((4, 5, 6), False)),
-                      x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")),
+                     (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                 AX.OID((4, 5, 6), False)),
+                      AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")),
                      context="blah")
-        test_pducore(self, pkt_LE, x.PDU_INDEX_DEALLOC, False, 1, 2, 3)
+        test_pducore(self, pkt_LE, AX.PDU_INDEX_DEALLOC, False, 1, 2, 3)
         self.assertEqual(pkt_LE.newIndex, True)
         self.assertEqual(pkt_LE.anyIndex, True)
         self.assertEqual(pkt_LE.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt_LE.context, "blah")
         # Test encode
         pkt_str = pkt.encode()
@@ -1236,25 +1259,25 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_INDEX_DEALLOC, True, 1, 2, 3)
+        test_pducore(self, pkt_new, AX.PDU_INDEX_DEALLOC, True, 1, 2, 3)
         self.assertEqual(pkt_new.newIndex, True)
         self.assertEqual(pkt_new.anyIndex, True)
         self.assertEqual(pkt_new.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt_new.context, "blah")
         # Test decode, little endian
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_INDEX_DEALLOC, False, 1, 2, 3)
+        test_pducore(self, pkt_LE_new, AX.PDU_INDEX_DEALLOC, False, 1, 2, 3)
         self.assertEqual(pkt_LE_new.newIndex, True)
         self.assertEqual(pkt_LE_new.anyIndex, True)
         self.assertEqual(pkt_LE_new.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         self.assertEqual(pkt_LE_new.context, "blah")
         # Test packetVars
         self.assertEqual(pkt_new.packetVars(),
@@ -1265,27 +1288,26 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "packetID": 3,
                           "newIndex": True,
                           "anyIndex": True,
-                          "varbinds": (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                                 x.OID((4, 5, 6), False)),
-                                       x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4),
+                          "varbinds": (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                                  AX.OID((4, 5, 6), False)),
+                                       AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4),
                                                  "blah")),
                           "context": "blah"})
 
     def test_AddAgentCapsPDU(self):
-        dec = ntp.agentx.decode_AddAgentCapsPDU
-        cls = ntp.agentx.AddAgentCapsPDU
-        x = ntp.agentx
+        dec = AX.decode_AddAgentCapsPDU
+        cls = AX.AddAgentCapsPDU
 
         # Test init
         pkt = cls(True, 1, 2, 3, (4, 5, 6), "blah", context="bluh")
-        test_pducore(self, pkt, x.PDU_ADD_AGENT_CAPS, True, 1, 2, 3)
-        self.assertEqual(pkt.oid, x.OID((4, 5, 6), False))
+        test_pducore(self, pkt, AX.PDU_ADD_AGENT_CAPS, True, 1, 2, 3)
+        self.assertEqual(pkt.oid, AX.OID((4, 5, 6), False))
         self.assertEqual(pkt.description, "blah")
         self.assertEqual(pkt.context, "bluh")
         # Test init, little endian
         pkt_LE = cls(False, 1, 2, 3, (4, 5, 6), "blah", context="bluh")
-        test_pducore(self, pkt_LE, x.PDU_ADD_AGENT_CAPS, False, 1, 2, 3)
-        self.assertEqual(pkt_LE.oid, x.OID((4, 5, 6), False))
+        test_pducore(self, pkt_LE, AX.PDU_ADD_AGENT_CAPS, False, 1, 2, 3)
+        self.assertEqual(pkt_LE.oid, AX.OID((4, 5, 6), False))
         self.assertEqual(pkt_LE.description, "blah")
         self.assertEqual(pkt_LE.context, "bluh")
         # Test encode
@@ -1312,16 +1334,16 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_ADD_AGENT_CAPS, True, 1, 2, 3)
-        self.assertEqual(pkt_new.oid, x.OID((4, 5, 6), False))
+        test_pducore(self, pkt_new, AX.PDU_ADD_AGENT_CAPS, True, 1, 2, 3)
+        self.assertEqual(pkt_new.oid, AX.OID((4, 5, 6), False))
         self.assertEqual(pkt_new.description, "blah")
         self.assertEqual(pkt_new.context, "bluh")
         # Test decode, little endian
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_ADD_AGENT_CAPS, False, 1, 2, 3)
-        self.assertEqual(pkt_LE_new.oid, x.OID((4, 5, 6), False))
+        test_pducore(self, pkt_LE_new, AX.PDU_ADD_AGENT_CAPS, False, 1, 2, 3)
+        self.assertEqual(pkt_LE_new.oid, AX.OID((4, 5, 6), False))
         self.assertEqual(pkt_LE_new.description, "blah")
         self.assertEqual(pkt_LE_new.context, "bluh")
         # Test packetVars
@@ -1331,24 +1353,23 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "sessionID": 1,
                           "transactionID": 2,
                           "packetID": 3,
-                          "oid": x.OID((4, 5, 6), False),
+                          "oid": AX.OID((4, 5, 6), False),
                           "description": "blah",
                           "context": "bluh"})
 
     def test_RMAgentCapsPDU(self):
-        dec = ntp.agentx.decode_RMAgentCapsPDU
-        cls = ntp.agentx.RMAgentCapsPDU
-        x = ntp.agentx
+        dec = AX.decode_RMAgentCapsPDU
+        cls = AX.RMAgentCapsPDU
 
         # Test init
         pkt = cls(True, 1, 2, 3, (4, 5, 6), context="bluh")
-        test_pducore(self, pkt, x.PDU_RM_AGENT_CAPS, True, 1, 2, 3)
-        self.assertEqual(pkt.oid, x.OID((4, 5, 6), False))
+        test_pducore(self, pkt, AX.PDU_RM_AGENT_CAPS, True, 1, 2, 3)
+        self.assertEqual(pkt.oid, AX.OID((4, 5, 6), False))
         self.assertEqual(pkt.context, "bluh")
         # Test init, little endian
         pkt_LE = cls(False, 1, 2, 3, (4, 5, 6), context="bluh")
-        test_pducore(self, pkt_LE, x.PDU_RM_AGENT_CAPS, False, 1, 2, 3)
-        self.assertEqual(pkt_LE.oid, x.OID((4, 5, 6), False))
+        test_pducore(self, pkt_LE, AX.PDU_RM_AGENT_CAPS, False, 1, 2, 3)
+        self.assertEqual(pkt_LE.oid, AX.OID((4, 5, 6), False))
         self.assertEqual(pkt_LE.context, "bluh")
         # Test encode
         pkt_str = pkt.encode()
@@ -1372,15 +1393,15 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_RM_AGENT_CAPS, True, 1, 2, 3)
-        self.assertEqual(pkt_new.oid, x.OID((4, 5, 6), False))
+        test_pducore(self, pkt_new, AX.PDU_RM_AGENT_CAPS, True, 1, 2, 3)
+        self.assertEqual(pkt_new.oid, AX.OID((4, 5, 6), False))
         self.assertEqual(pkt_new.context, "bluh")
         # Test decode, little endian
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_RM_AGENT_CAPS, False, 1, 2, 3)
-        self.assertEqual(pkt_LE_new.oid, x.OID((4, 5, 6), False))
+        test_pducore(self, pkt_LE_new, AX.PDU_RM_AGENT_CAPS, False, 1, 2, 3)
+        self.assertEqual(pkt_LE_new.oid, AX.OID((4, 5, 6), False))
         self.assertEqual(pkt_LE_new.context, "bluh")
         # Test packetVars
         self.assertEqual(pkt_new.packetVars(),
@@ -1389,39 +1410,38 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "sessionID": 1,
                           "transactionID": 2,
                           "packetID": 3,
-                          "oid": x.OID((4, 5, 6), False),
+                          "oid": AX.OID((4, 5, 6), False),
                           "context": "bluh"})
 
     def test_ResponsePDU(self):
-        dec = ntp.agentx.decode_ResponsePDU
-        cls = ntp.agentx.ResponsePDU
-        x = ntp.agentx
+        dec = AX.decode_ResponsePDU
+        cls = AX.ResponsePDU
 
         # Test init
         pkt = cls(True, 1, 2, 3, 4, 5, 6,
-                  (x.Varbind(x.VALUE_OID, (1, 2, 3), x.OID((4, 5, 6), False)),
-                   x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
-        test_pducore(self, pkt, x.PDU_RESPONSE, True, 1, 2, 3)
+                  (AX.Varbind(AX.VALUE_OID, (1, 2, 3), AX.OID((4, 5, 6), False)),
+                   AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+        test_pducore(self, pkt, AX.PDU_RESPONSE, True, 1, 2, 3)
         self.assertEqual(pkt.sysUptime, 4)
         self.assertEqual(pkt.resError, 5)
         self.assertEqual(pkt.resIndex, 6)
         self.assertEqual(pkt.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         # Test init, little endian
         pkt_LE = cls(False, 1, 2, 3, 4, 5, 6,
-                     (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                x.OID((4, 5, 6), False)),
-                      x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
-        test_pducore(self, pkt_LE, x.PDU_RESPONSE, False, 1, 2, 3)
+                     (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                 AX.OID((4, 5, 6), False)),
+                      AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+        test_pducore(self, pkt_LE, AX.PDU_RESPONSE, False, 1, 2, 3)
         self.assertEqual(pkt_LE.sysUptime, 4)
         self.assertEqual(pkt_LE.resError, 5)
         self.assertEqual(pkt_LE.resIndex, 6)
         self.assertEqual(pkt_LE.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         # Test encode
         pkt_str = pkt.encode()
         self.assertEqual(pkt_str,
@@ -1458,26 +1478,26 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         header, body = slicedata(pkt_str, 20)
         header = decode_pduheader(header)
         pkt_new = dec(body, header)
-        test_pducore(self, pkt_new, x.PDU_RESPONSE, True, 1, 2, 3)
+        test_pducore(self, pkt_new, AX.PDU_RESPONSE, True, 1, 2, 3)
         self.assertEqual(pkt_new.sysUptime, 4)
         self.assertEqual(pkt_new.resError, 5)
         self.assertEqual(pkt_new.resIndex, 6)
         self.assertEqual(pkt_new.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         # Test decode, little endian
         header, body = slicedata(pkt_LE_str, 20)
         header = decode_pduheader(header)
         pkt_LE_new = dec(body, header)
-        test_pducore(self, pkt_LE_new, x.PDU_RESPONSE, False, 1, 2, 3)
+        test_pducore(self, pkt_LE_new, AX.PDU_RESPONSE, False, 1, 2, 3)
         self.assertEqual(pkt_LE_new.sysUptime, 4)
         self.assertEqual(pkt_LE_new.resError, 5)
         self.assertEqual(pkt_LE_new.resIndex, 6)
         self.assertEqual(pkt_LE_new.varbinds,
-                         (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                    x.OID((4, 5, 6), False)),
-                          x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4), "blah")))
+                         (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                     AX.OID((4, 5, 6), False)),
+                          AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4), "blah")))
         # Test packetVars
         self.assertEqual(pkt_new.packetVars(),
                          {"pduType": 18,
@@ -1488,17 +1508,17 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "sysUptime": 4,
                           "resError": 5,
                           "resIndex": 6,
-                          "varbinds": (x.Varbind(x.VALUE_OID, (1, 2, 3),
-                                                 x.OID((4, 5, 6), False)),
-                                       x.Varbind(x.VALUE_OCTET_STR, (1, 2, 4),
-                                                 "blah"))})
+                          "varbinds": (AX.Varbind(AX.VALUE_OID, (1, 2, 3),
+                                                  AX.OID((4, 5, 6), False)),
+                                       AX.Varbind(AX.VALUE_OCTET_STR, (1, 2, 4),
+                                                  "blah"))})
 
     #
     # Data type tests
     #
     def test_integer32(self):
-        enc = ntp.agentx.encode_integer32
-        dec = ntp.agentx.decode_integer32
+        enc = AX.encode_integer32
+        dec = AX.decode_integer32
 
         # Encode
         self.assertEqual(enc(True, 42), b"\x00\x00\x00\x2A")
@@ -1512,8 +1532,8 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                          (42, extraData))
 
     def test_nullvalue(self):
-        enc = ntp.agentx.encode_nullvalue
-        dec = ntp.agentx.decode_nullvalue
+        enc = AX.encode_nullvalue
+        dec = AX.decode_nullvalue
 
         # Encode
         self.assertEqual(enc(True, "this is ignored"), b"")
@@ -1521,8 +1541,8 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         self.assertEqual(dec(extraData, standardFlags), (None, extraData))
 
     def test_integer64(self):
-        enc = ntp.agentx.encode_integer64
-        dec = ntp.agentx.decode_integer64
+        enc = AX.encode_integer64
+        dec = AX.decode_integer64
 
         # Encode
         self.assertEqual(enc(True, 42), b"\x00\x00\x00\x00\x00\x00\x00\x2A")
@@ -1538,8 +1558,8 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                          (42, extraData))
 
     def test_ipaddr(self):
-        enc = ntp.agentx.encode_ipaddr
-        dec = ntp.agentx.decode_ipaddr
+        enc = AX.encode_ipaddr
+        dec = AX.decode_ipaddr
 
         # Encode correct
         self.assertEqual(enc(True, (1, 2, 3, 4)),
@@ -1564,8 +1584,8 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                          ((1, 2, 3, 4), extraData))
 
     def test_OID(self):
-        target = ntp.agentx.OID
-        dec = ntp.agentx.decode_OID
+        target = AX.OID
+        dec = AX.decode_OID
 
         # Encode empty OID
         cls = target((), False)
@@ -1706,11 +1726,35 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         a = target((1, 2, 2, 4))
         b = target((1, 2, 3))
         self.assertEqual(a.compareOID(b), -1)
+        # Test direct comparisons
+        # Test ==
+        self.assertEqual(target((1, 2, 3)) == target((1, 2, 3)), True)
+        # Test !=
+        self.assertEqual(target((1, 2, 3)) != target((1, 2)), True)
+        # Test <
+        self.assertEqual(target((1, 2)) < target((1, 2, 3)), True)
+        # Test >
+        self.assertEqual(target((1, 2, 3)) > target((1, 2)), True)
+        # Test <=
+        self.assertEqual(target((1, 2)) <= target((1, 2, 3)), True)
+        self.assertEqual(target((1, 2, 3)) <= target((1, 2, 3)), True)
+        # Test >=
+        self.assertEqual(target((1, 2, 3)) >= target((1, 2)), True)
+        self.assertEqual(target((1, 2, 3)) >= target((1, 2, 3)), True)
+        # Test insane subids type
+        try:
+            errored = target("foo")
+        except TypeError:
+            errored = True
+        self.assertEqual(errored, True)
+        # Test isNull
+        self.assertEqual(target((1, 2)).isNull(), False)
+        self.assertEqual(target(()).isNull(), True)
 
     def test_searchrange(self):
-        target = ntp.agentx.SearchRange
-        dec = ntp.agentx.decode_SearchRange
-        oid = ntp.agentx.OID
+        target = AX.SearchRange
+        dec = AX.decode_SearchRange
+        oid = AX.OID
 
         # Test init
         # Basic
@@ -1794,10 +1838,35 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                              b"\x07\x00\x00\x00\x08\x00\x00\x00",
                              lilEndianFlags),
                          (target((1, 2, 3, 4), (5, 6, 7, 8), True), b""))
+        # Test __eq__
+        # Test equal
+        a = target((1, 2, 3), (1, 2, 3))
+        b = target((1, 2, 3), (1, 2, 3))
+        self.assertEqual(a == b, True)
+        # Test start unequal
+        b = target((1, 2, 3), (1, 2, 3), True)
+        self.assertEqual(a == b, False)
+        # Test end unequal
+        b = target((1, 2, 3), (1, 2, 3, 4))
+        self.assertEqual(a == b, False)
+        # Test __ne__
+        # Test equal
+        a = target((1, 2, 3), (1, 2, 3))
+        b = target((1, 2, 3), (1, 2, 3))
+        self.assertEqual(a != b, False)
+        # Test start unequal
+        b = target((1, 2, 3), (1, 2, 3), True)
+        self.assertEqual(a != b, True)
+        # Test end unequal
+        b = target((1, 2, 3), (1, 2, 3, 4))
+        self.assertEqual(a != b, True)
+        # Test __repr__
+        self.assertEqual(repr(target((1, 2), (1, 3))),
+                         "SearchRange(OID((1, 2), False), OID((1, 3), False))")
 
     def test_encode_searchrange_list(self):
-        enc = ntp.agentx.encode_searchrange_list
-        srch = ntp.agentx.SearchRange
+        enc = AX.encode_searchrange_list
+        srch = AX.SearchRange
 
         # Encode
         self.assertEqual(enc(True, (srch((1, 2), (1, 2), True),
@@ -1813,19 +1882,10 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                          b"\x02\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00"
                          b"\x02\x00\x00\x00\x02\x00\x00\x00\x03\x00\x00\x00"
                          b"\x02\x00\x00\x00\x03\x00\x00\x00\x04\x00\x00\x00")
-        # Test, null terminated
-        self.assertEqual(enc(True, (srch((1, 2), (1, 2), True),
-                                    srch((2, 3), (3, 4))),
-                         nullTerminate=True),
-                         b"\x02\x00\x01\x00\x00\x00\x00\x01\x00\x00\x00\x02"
-                         b"\x02\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x02"
-                         b"\x02\x00\x00\x00\x00\x00\x00\x02\x00\x00\x00\x03"
-                         b"\x02\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00\x04"
-                         b"\x00\x00\x00\x00")
 
     def test_decode_searchrange_list(self):
-        dec = ntp.agentx.decode_searchrange_list
-        srch = ntp.agentx.SearchRange
+        dec = AX.decode_searchrange_list
+        srch = AX.SearchRange
 
         # Decode
         self.assertEqual(dec(b"\x02\x00\x01\x00"
@@ -1852,40 +1912,10 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                          (srch((1, 2), (1, 2), True),
                           srch((2, 3), (3, 4), False)))
 
-    def test_decode_searchrange_list_nullterm(self):
-        dec = ntp.agentx.decode_searchrange_list_nullterm
-        srch = ntp.agentx.SearchRange
-
-        # Decode
-        self.assertEqual(dec(b"\x02\x00\x01\x00"
-                             b"\x00\x00\x00\x01\x00\x00\x00\x02"
-                             b"\x02\x00\x00\x00"
-                             b"\x00\x00\x00\x01\x00\x00\x00\x02"
-                             b"\x02\x00\x00\x00"
-                             b"\x00\x00\x00\x02\x00\x00\x00\x03"
-                             b"\x02\x00\x00\x00"
-                             b"\x00\x00\x00\x03\x00\x00\x00\x04",
-                             standardFlags),
-                         ((srch((1, 2), (1, 2), True),
-                           srch((2, 3), (3, 4), False)),
-                          b""))
-        # Test, little endian
-        self.assertEqual(dec(b"\x02\x00\x01\x00"
-                             b"\x01\x00\x00\x00\x02\x00\x00\x00"
-                             b"\x02\x00\x00\x00"
-                             b"\x01\x00\x00\x00\x02\x00\x00\x00"
-                             b"\x02\x00\x00\x00"
-                             b"\x02\x00\x00\x00\x03\x00\x00\x00"
-                             b"\x02\x00\x00\x00"
-                             b"\x03\x00\x00\x00\x04\x00\x00\x00"
-                             b"\x00\x00\x00\x00" + extraData, lilEndianFlags),
-                         ((srch((1, 2), (1, 2), True),
-                           srch((2, 3), (3, 4), False)),
-                          extraData))
-
-    def test_encode_octetstr(self):
-        enc = ntp.agentx.encode_octetstr
-        dec = ntp.agentx.decode_octetstr
+    def test_xcode_octetstr(self):
+        enc = AX.encode_octetstr
+        dec = AX.decode_octetstr
+        san = AX.sanity_octetstr
 
         # Encode empty
         self.assertEqual(enc(True, ()), b"\x00\x00\x00\x00")
@@ -1913,197 +1943,286 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                              b"blarg\x00\x00\x00" + extraData,
                              standardFlags),
                          ("blarg", extraData))
+        # Test sanity
+        # Test str
+        try:
+            errored = san("foo")  # str is always sane
+        except Exception as e:
+            errored = e
+        self.assertEqual(errored, None)
+        # Test sane list
+        try:
+            errored = san([1, 2, 3])
+        except Exception as e:
+            errored = e
+        self.assertEqual(errored, None)
+        # Test sane tuple
+        try:
+            errored = san((1, 2, 3))
+        except Exception as e:
+            errored = e
+        self.assertEqual(errored, None)
+        # Test insane list
+        try:
+            errored = san([23, 300, 42])
+        except ValueError:
+            errored = True
+        self.assertEqual(errored, True)
+        # Test insane tuple
+        try:
+            errored = san((23, 300, 42))
+        except ValueError:
+            errored = True
+        self.assertEqual(errored, True)
+        # Test insane type
+        try:
+            errored = san(42.23)
+        except TypeError:
+            errored = True
+        self.assertEqual(errored, True)
 
     def test_Varbind(self):
-        target = ntp.agentx.Varbind
-        a = ntp.agentx
+        target = AX.Varbind
 
         # Test init
-        cls = target(a.VALUE_INTEGER, (1, 2, 3), 42)
-        self.assertEqual(cls.valueType, a.VALUE_INTEGER)
-        self.assertEqual(cls.oid, a.OID((1, 2, 3), False))
+        cls = target(AX.VALUE_INTEGER, (1, 2, 3), 42)
+        self.assertEqual(cls.valueType, AX.VALUE_INTEGER)
+        self.assertEqual(cls.oid, AX.OID((1, 2, 3), False))
         self.assertEqual(cls.payload, 42)
         # Test repr
         self.assertEqual(repr(cls),
                          "Varbind(vtype=2, oid=OID((1, 2, 3), False), "
                          "payload=42)")
         # Test payloadless types
-        cls = target(a.VALUE_NULL, (1, 2, 3))
+        cls = target(AX.VALUE_NULL, (1, 2, 3))
         self.assertEqual(cls.encode(True),
                          b"\x00\x05\x00\x00\x03\x00\x00\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03")
-        cls = target(a.VALUE_NO_SUCH_OBJECT, (1, 2, 3))
+        cls = target(AX.VALUE_NO_SUCH_OBJECT, (1, 2, 3))
         self.assertEqual(cls.encode(True),
                          b"\x00\x80\x00\x00\x03\x00\x00\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03")
-        cls = target(a.VALUE_NO_SUCH_INSTANCE, (1, 2, 3))
+        cls = target(AX.VALUE_NO_SUCH_INSTANCE, (1, 2, 3))
         self.assertEqual(cls.encode(True),
                          b"\x00\x81\x00\x00\x03\x00\x00\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03")
-        cls = target(a.VALUE_END_OF_MIB_VIEW, (1, 2, 3))
+        cls = target(AX.VALUE_END_OF_MIB_VIEW, (1, 2, 3))
         self.assertEqual(cls.encode(True),
                          b"\x00\x82\x00\x00\x03\x00\x00\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03")
         # Test octet based types
-        cls = target(a.VALUE_OCTET_STR, (1, 2, 3), (1, 2, 3, 4, 5))
+        cls = target(AX.VALUE_OCTET_STR, (1, 2, 3), (1, 2, 3, 4, 5))
         self.assertEqual(cls.encode(True),
                          b"\x00\x04\x00\x00\x03\x00\x00\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                          b"\x00\x00\x00\x05"
                          b"\x01\x02\x03\x04\x05\x00\x00\x00")
-        cls = target(a.VALUE_IP_ADDR, (1, 2, 3), (16, 32, 48, 64))
+        cls = target(AX.VALUE_IP_ADDR, (1, 2, 3), (16, 32, 48, 64))
         self.assertEqual(cls.encode(True),
                          b"\x00\x40\x00\x00\x03\x00\x00\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                          b"\x00\x00\x00\x04\x10\x20\x30\x40")
-        # Test integer32 types
-        cls = target(a.VALUE_INTEGER, (1, 2, 3), 42)
+        # Test integer32 type
+        cls = target(AX.VALUE_INTEGER, (1, 2, 3), -42)
         self.assertEqual(cls.encode(True),
                          b"\x00\x02\x00\x00\x03\x00\x00\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
-                         b"\x00\x00\x00\x2A")
-        cls = target(a.VALUE_COUNTER32, (1, 2, 3), 42)
+                         b"\xFF\xFF\xFF\xD6")
+        # Test unsigned32 types
+        cls = target(AX.VALUE_COUNTER32, (1, 2, 3), 42)
         self.assertEqual(cls.encode(True),
                          b"\x00\x41\x00\x00\x03\x00\x00\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                          b"\x00\x00\x00\x2A")
-        cls = target(a.VALUE_GAUGE32, (1, 2, 3), 42)
+        cls = target(AX.VALUE_GAUGE32, (1, 2, 3), 42)
         self.assertEqual(cls.encode(True),
                          b"\x00\x42\x00\x00\x03\x00\x00\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                          b"\x00\x00\x00\x2A")
-        cls = target(a.VALUE_TIME_TICKS, (1, 2, 3), 42)
+        cls = target(AX.VALUE_TIME_TICKS, (1, 2, 3), 42)
         self.assertEqual(cls.encode(True),
                          b"\x00\x43\x00\x00\x03\x00\x00\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                          b"\x00\x00\x00\x2A")
         # Test integer64 type
-        cls = target(a.VALUE_COUNTER64, (1, 2, 3), 42)
+        cls = target(AX.VALUE_COUNTER64, (1, 2, 3), 42)
         self.assertEqual(cls.encode(True),
                          b"\x00\x46\x00\x00\x03\x00\x00\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                          b"\x00\x00\x00\x00\x00\x00\x00\x2A")
         # Test oid type
-        cls = target(a.VALUE_OID, (1, 2, 3), a.OID((16, 42, 256), False))
+        cls = target(AX.VALUE_OID, (1, 2, 3), AX.OID((16, 42, 256), False))
         self.assertEqual(cls.encode(True),
                          b"\x00\x06\x00\x00\x03\x00\x00\x00"
                          b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                          b"\x03\x00\x00\x00\x00\x00\x00\x10"
                          b"\x00\x00\x00\x2A\x00\x00\x01\x00")
         # Test oid type, little endian
-        cls = target(a.VALUE_OID, (1, 2, 3), a.OID((16, 42, 256), False))
+        cls = target(AX.VALUE_OID, (1, 2, 3), AX.OID((16, 42, 256), False))
         self.assertEqual(cls.encode(False),
                          b"\x06\x00\x00\x00\x03\x00\x00\x00"
                          b"\x01\x00\x00\x00\x02\x00\x00\x00\x03\x00\x00\x00"
                          b"\x03\x00\x00\x00\x10\x00\x00\x00"
                          b"\x2A\x00\x00\x00\x00\x01\x00\x00")
+        # Test __eq__
+        one = target(AX.VALUE_INTEGER, (1, 2, 3), 1)
+        two = target(AX.VALUE_INTEGER, (1, 2, 3), 1)
+        # Test equal
+        self.assertEqual(one == two, True)
+        # Test different type
+        two = target(AX.VALUE_GAUGE32, (1, 2, 3), 1)
+        self.assertEqual(one == two, False)
+        # Test different OID
+        two = target(AX.VALUE_INTEGER, (1, 2, 3, 4), 1)
+        self.assertEqual(one == two, False)
+        # Test different payload
+        two = target(AX.VALUE_INTEGER, (1, 2, 3), 2)
+        self.assertEqual(one == two, False)
 
     def test_decode_varbind(self):
-        f = ntp.agentx.decode_Varbind
-        a = ntp.agentx
+        f = AX.decode_Varbind
 
         # Test payloadless types
         self.assertEqual(f(b"\x00\x05\x00\x00\x03\x00\x00\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03",
                            standardFlags),
-                         (a.Varbind(a.VALUE_NULL, a.OID((1, 2, 3), False)),
+                         (AX.Varbind(AX.VALUE_NULL, AX.OID((1, 2, 3), False)),
                           b""))
         self.assertEqual(f(b"\x00\x80\x00\x00\x03\x00\x00\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03",
                            standardFlags),
-                         (a.Varbind(a.VALUE_NO_SUCH_OBJECT,
-                                    a.OID((1, 2, 3), False)),
+                         (AX.Varbind(AX.VALUE_NO_SUCH_OBJECT,
+                                     AX.OID((1, 2, 3), False)),
                           b""))
         self.assertEqual(f(b"\x00\x81\x00\x00\x03\x00\x00\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03",
                            standardFlags),
-                         (a.Varbind(a.VALUE_NO_SUCH_INSTANCE,
-                                    a.OID((1, 2, 3), False)),
+                         (AX.Varbind(AX.VALUE_NO_SUCH_INSTANCE,
+                                     AX.OID((1, 2, 3), False)),
                           b""))
         self.assertEqual(f(b"\x00\x82\x00\x00\x03\x00\x00\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03",
                            standardFlags),
-                         (a.Varbind(a.VALUE_END_OF_MIB_VIEW,
-                                    a.OID((1, 2, 3), False)),
+                         (AX.Varbind(AX.VALUE_END_OF_MIB_VIEW,
+                                     AX.OID((1, 2, 3), False)),
                           b""))
         # Test octet based types
         self.assertEqual(f(b"\x00\x04\x00\x00\x03\x00\x00\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                            b"\x00\x00\x00\x0512345\x00\x00\x00",
                            standardFlags),
-                         (a.Varbind(a.VALUE_OCTET_STR,
-                                    a.OID((1, 2, 3), False),
-                                    "12345"),
+                         (AX.Varbind(AX.VALUE_OCTET_STR,
+                                     AX.OID((1, 2, 3), False),
+                                     "12345"),
                           b""))
         self.assertEqual(f(b"\x00\x40\x00\x00\x03\x00\x00\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                            b"\x00\x00\x00\x04\x10\x20\x30\x40", standardFlags),
-                         (a.Varbind(a.VALUE_IP_ADDR,
-                                    a.OID((1, 2, 3), False),
-                                    (16, 32, 48, 64)),
+                         (AX.Varbind(AX.VALUE_IP_ADDR,
+                                     AX.OID((1, 2, 3), False),
+                                     (16, 32, 48, 64)),
                           b""))
-        # Test integer32 types
+        # Test integer32 type
         self.assertEqual(f(b"\x00\x02\x00\x00\x03\x00\x00\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
-                           b"\x00\x00\x00\x2A", standardFlags),
-                         (a.Varbind(a.VALUE_INTEGER,
-                                    a.OID((1, 2, 3), False),
-                                    42),
+                           b"\xFF\xFF\xFF\xD6", standardFlags),
+                         (AX.Varbind(AX.VALUE_INTEGER,
+                                     AX.OID((1, 2, 3), False),
+                                     -42),
                           b""))
         self.assertEqual(f(b"\x00\x41\x00\x00\x03\x00\x00\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                            b"\x00\x00\x00\x2A", standardFlags),
-                         (a.Varbind(a.VALUE_COUNTER32,
-                                    a.OID((1, 2, 3), False),
-                                    42),
+                         (AX.Varbind(AX.VALUE_COUNTER32,
+                                     AX.OID((1, 2, 3), False),
+                                     42),
                           b""))
+        # Test unsigned32 types
         self.assertEqual(f(b"\x00\x42\x00\x00\x03\x00\x00\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                            b"\x00\x00\x00\x2A", standardFlags),
-                         (a.Varbind(a.VALUE_GAUGE32,
-                                    a.OID((1, 2, 3), False),
-                                    42),
+                         (AX.Varbind(AX.VALUE_GAUGE32,
+                                     AX.OID((1, 2, 3), False),
+                                     42),
                           b""))
         self.assertEqual(f(b"\x00\x43\x00\x00\x03\x00\x00\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                            b"\x00\x00\x00\x2A", standardFlags),
-                         (a.Varbind(a.VALUE_TIME_TICKS,
-                                    a.OID((1, 2, 3), False),
-                                    42),
+                         (AX.Varbind(AX.VALUE_TIME_TICKS,
+                                     AX.OID((1, 2, 3), False),
+                                     42),
                           b""))
         # Test integer64 type
         self.assertEqual(f(b"\x00\x46\x00\x00\x03\x00\x00\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                            b"\x00\x00\x00\x00\x00\x00\x00\x2A", standardFlags),
-                         (a.Varbind(a.VALUE_COUNTER64,
-                                    a.OID((1, 2, 3), False),
-                                    42),
+                         (AX.Varbind(AX.VALUE_COUNTER64,
+                                     AX.OID((1, 2, 3), False),
+                                     42),
                           b""))
         # Test oid type
         self.assertEqual(f(b"\x00\x06\x00\x00\x03\x00\x00\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03"
                            b"\x03\x00\x00\x00\x00\x00\x00\x10"
                            b"\x00\x00\x00\x2A\x00\x00\x01\x00", standardFlags),
-                         (a.Varbind(a.VALUE_OID,
-                                    a.OID((1, 2, 3), False),
-                                    a.OID((16, 42, 256), False)),
+                         (AX.Varbind(AX.VALUE_OID,
+                                     AX.OID((1, 2, 3), False),
+                                     AX.OID((16, 42, 256), False)),
                           b""))
         # Test integer32 with little endian
         self.assertEqual(f(b"\x43\x00\x00\x00\x03\x00\x00\x00"
                            b"\x01\x00\x00\x00\x02\x00\x00\x00\x03\x00\x00\x00"
                            b"\x2A\x00\x00\x00", lilEndianFlags),
-                         (a.Varbind(a.VALUE_TIME_TICKS,
-                                    a.OID((1, 2, 3), False),
-                                    42),
+                         (AX.Varbind(AX.VALUE_TIME_TICKS,
+                                     AX.OID((1, 2, 3), False),
+                                     42),
                           b""))
 
+    def test_xcode_varbindlist(self):
+        enc = AX.encode_varbindlist
+        dec = AX.decode_varbindlist
+        vb = AX.Varbind
+
+        # Test encode empty
+        self.assertEqual(enc(True, []), b"")
+        # Test encode big endian
+        big = enc(True,
+                  [vb(AX.VALUE_INTEGER, (1, 2), 1),
+                   vb(AX.VALUE_INTEGER, (3, 4), 2)])
+        self.assertEqual(big, b"\x00\x02\x00\x00"
+                         b"\x02\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x02"
+                         b"\x00\x00\x00\x01"
+                         b"\x00\x02\x00\x00"
+                         b"\x02\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00\x04"
+                         b"\x00\x00\x00\x02")
+        # Test encode little endian
+        little = enc(False,
+                     [vb(AX.VALUE_INTEGER, (1, 2), 1),
+                      vb(AX.VALUE_INTEGER, (3, 4), 2)])
+        self.assertEqual(little, b"\x02\x00\x00\x00"
+                         b"\x02\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00"
+                         b"\x01\x00\x00\x00"
+                         b"\x02\x00\x00\x00"
+                         b"\x02\x00\x00\x00\x03\x00\x00\x00\x04\x00\x00\x00"
+                         b"\x02\x00\x00\x00")
+        # Test decode empty
+        self.assertEqual(dec(b"", standardFlags), None)
+        # Test decode big endian
+        self.assertEqual(dec(big, standardFlags),
+                         (vb(AX.VALUE_INTEGER, (1, 2), 1),
+                          vb(AX.VALUE_INTEGER, (3, 4), 2)))
+        # Test decode little endian
+        self.assertEqual(dec(little, lilEndianFlags),
+                         (vb(AX.VALUE_INTEGER, (1, 2), 1),
+                          vb(AX.VALUE_INTEGER, (3, 4), 2)))
+
     def test_encode_flagbyte(self):
-        f = ntp.agentx.encode_flagbyte
+        f = AX.encode_flagbyte
         self.assertEqual(f(makeflags(False, True, False, True, False)), 0x0A)
         self.assertEqual(f(makeflags(True, False, True, False, True)), 0x15)
 
     def test_decode_flagbyte(self):
-        f = ntp.agentx.decode_flagbyte
+        f = AX.decode_flagbyte
         self.assertEqual(f(0x0A), makeflags(False, True, False, True, False))
         self.assertEqual(f(0x15), makeflags(True, False, True, False, True))
 
@@ -2111,7 +2230,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
     # Misc tests
     #
     def test_makeflags(self):
-        f = ntp.agentx.makeflags
+        f = AX.makeflags
         self.assertEqual(f(True, False, True, False, True),
                          {"instReg": True,
                           "newIndex": False,
@@ -2120,7 +2239,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "bigEndian": True})
 
     def test_getendian(self):
-        f = ntp.agentx.getendian
+        f = AX.getendian
 
         # Test big endian
         self.assertEqual(f(True), ">")
@@ -2128,18 +2247,17 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
         self.assertEqual(f(False), "<")
 
     def test_encode_pduheader(self):
-        f = ntp.agentx.encode_pduheader
-        a = ntp.agentx
+        f = AX.encode_pduheader
 
         # Test "empty" header
-        self.assertEqual(f(a.PDU_OPEN,
+        self.assertEqual(f(AX.PDU_OPEN,
                            False, False, False, False, False,
                            0xDEADBEEF, 0xCAFEBABE, 0xFACEF00D, 0),
                          b"\x01\x01\x00\x00"
                          b"\xEF\xBE\xAD\xDE\xBE\xBA\xFE\xCA"
                          b"\x0D\xF0\xCE\xFA\x00\x00\x00\x00")
         # Test flags
-        self.assertEqual(f(a.PDU_OPEN,
+        self.assertEqual(f(AX.PDU_OPEN,
                            True, True, True, True, True,
                            0xDEADBEEF, 0xCAFEBABE, 0xFACEF00D, 0),
                          b"\x01\x01\x1F\x00"
@@ -2147,15 +2265,14 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                          b"\xFA\xCE\xF0\x0D\x00\x00\x00\x00")
 
     def test_decode_pduheader(self):
-        f = ntp.agentx.decode_pduheader
-        a = ntp.agentx
+        f = AX.decode_pduheader
 
         # Test "empty" header
         self.assertEqual(f(b"\x01\x01\x10\x00"
                            b"\xDE\xAD\xBE\xEF\xCA\xFE\xBA\xBE"
                            b"\xFA\xCE\xF0\x0D\x00\x00\x00\x00"),
                          {"version": 1,
-                          "type": a.PDU_OPEN,
+                          "type": AX.PDU_OPEN,
                           "flags": {"instReg": False,
                                     "newIndex": False,
                                     "anyIndex": False,
@@ -2170,7 +2287,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\xEF\xBE\xAD\xDE\xBE\xBA\xFE\xCA"
                            b"\x0D\xF0\xCE\xFA\x00\x00\x00\x00"),
                          {"version": 1,
-                          "type": a.PDU_OPEN,
+                          "type": AX.PDU_OPEN,
                           "flags": {"instReg": False,
                                     "newIndex": False,
                                     "anyIndex": False,
@@ -2185,7 +2302,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\xDE\xAD\xBE\xEF\xCA\xFE\xBA\xBE"
                            b"\xFA\xCE\xF0\x0D\x00\x00\x00\x00" + extraData),
                          {"version": 1,
-                          "type": a.PDU_OPEN,
+                          "type": AX.PDU_OPEN,
                           "flags": {"instReg": False,
                                     "newIndex": False,
                                     "anyIndex": False,
@@ -2200,7 +2317,7 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\xDE\xAD\xBE\xEF\xCA\xFE\xBA\xBE"
                            b"\xFA\xCE\xF0\x0D\x00\x00\x00\x00"),
                          {"version": 1,
-                          "type": a.PDU_OPEN,
+                          "type": AX.PDU_OPEN,
                           "flags": {"instReg": True,
                                     "newIndex": True,
                                     "anyIndex": True,
@@ -2212,9 +2329,8 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                           "length": 0})
 
     def test_decode_packet(self):
-        f = ntp.agentx.decode_packet
-        x = ntp.agentx
-        srch = x.SearchRange
+        f = AX.decode_packet
+        srch = AX.SearchRange
         # Not testing all the variants of each packet type, that is
         # the job of the other tests.
         self.maxDiff = None
@@ -2228,9 +2344,9 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\x00\x00\x00\x01\x00\x00\x00\x02"
                            b"\x00\x00\x00\x03\x00\x00\x00\x04"
                            b"\x00\x00\x00\x03foo\x00"),
-                         (x.OpenPDU(True, 12, 34, 56, 78,
-                                    x.OID((1, 2, 3, 4), False),
-                                    "foo"),
+                         (AX.OpenPDU(True, 12, 34, 56, 78,
+                                     AX.OID((1, 2, 3, 4), False),
+                                     "foo"),
                           b""))
         # Test open, extraData
         self.assertEqual(f(b"\x01\x01\x10\x00"
@@ -2241,16 +2357,16 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\x00\x00\x00\x01\x00\x00\x00\x02"
                            b"\x00\x00\x00\x03\x00\x00\x00\x04"
                            b"\x00\x00\x00\x03foo\x00" + extraData),
-                         (x.OpenPDU(True, 12, 34, 56, 78,
-                                    x.OID((1, 2, 3, 4), False),
-                                    "foo"),
+                         (AX.OpenPDU(True, 12, 34, 56, 78,
+                                     AX.OID((1, 2, 3, 4), False),
+                                     "foo"),
                           extraData))
         # Test close
         self.assertEqual(f(b"\x01\x02\x10\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02"
                            b"\x00\x00\x00\x03\x00\x00\x00\x04"
                            b"\x01\x00\x00\x00"),
-                         (x.ClosePDU(True, 1, 2, 3, x.RSN_OTHER),
+                         (AX.ClosePDU(True, 1, 2, 3, AX.RSN_OTHER),
                           b""))
         # Test register
         self.assertEqual(f(b"\x01\x03\x11\x00"
@@ -2259,9 +2375,9 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\x04\x05\x00\x00"
                            b"\x03\x00\x00\x00\x00\x00\x00\x01"
                            b"\x00\x00\x00\x02\x00\x00\x00\x03"),
-                         (x.RegisterPDU(True, 1, 2, 3, 4, 5,
-                                        x.OID((1, 2, 3), False),
-                                        0, None, None),
+                         (AX.RegisterPDU(True, 1, 2, 3, 4, 5,
+                                         AX.OID((1, 2, 3), False),
+                                         0, None, None),
                           b""))
         # Test unregister
         self.assertEqual(f(b"\x01\x04\x10\x00"
@@ -2270,33 +2386,36 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\x00\x05\x00\x00"
                            b"\x03\x00\x00\x00\x00\x00\x00\x01"
                            b"\x00\x00\x00\x02\x00\x00\x00\x03"),
-                         (x.UnregisterPDU(True, 1, 2, 3, 5,
-                                          x.OID((1, 2, 3), False),
-                                          0, None, None),
+                         (AX.UnregisterPDU(True, 1, 2, 3, 5,
+                                           AX.OID((1, 2, 3), False),
+                                           0, None, None),
                           b""))
         # Test get
         self.assertEqual(f(b"\x01\x05\x10\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02"
-                           b"\x00\x00\x00\x03\x00\x00\x00\x04"
-                           b"\x00\x00\x00\x00"),
-                         (x.GetPDU(True, 1, 2, 3, ()),
+                           b"\x00\x00\x00\x03\x00\x00\x00\x00"),
+                         (AX.GetPDU(True, 1, 2, 3, ()),
                           b""))
         # Test get next
         self.assertEqual(f(b"\x01\x06\x10\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02"
                            b"\x00\x00\x00\x03\x00\x00\x00\x00"),
-                         (x.GetNextPDU(True, 1, 2, 3, ()),
+                         (AX.GetNextPDU(True, 1, 2, 3, ()),
                           b""))
         # Test get bulk
         self.assertEqual(f(b"\x01\x07\x10\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02"
                            b"\x00\x00\x00\x03\x00\x00\x00\x34"
                            b"\x00\x01\x00\x05"
-                           b"\x02\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x02"
-                           b"\x02\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00\x04"
-                           b"\x02\x00\x01\x00\x00\x00\x00\x06\x00\x00\x00\x07"
-                           b"\x02\x00\x00\x00\x00\x00\x00\x08\x00\x00\x00\x09"),
-                         (x.GetBulkPDU(True, 1, 2, 3, 1, 5,
+                           b"\x02\x00\x00\x00"
+                           b"\x00\x00\x00\x01\x00\x00\x00\x02"
+                           b"\x02\x00\x00\x00"
+                           b"\x00\x00\x00\x03\x00\x00\x00\x04"
+                           b"\x02\x00\x01\x00"
+                           b"\x00\x00\x00\x06\x00\x00\x00\x07"
+                           b"\x02\x00\x00\x00"
+                           b"\x00\x00\x00\x08\x00\x00\x00\x09"),
+                         (AX.GetBulkPDU(True, 1, 2, 3, 1, 5,
                                        (srch((1, 2), (3, 4), False),
                                         srch((6, 7), (8, 9), True))),
                           b""))
@@ -2313,31 +2432,31 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\x03\x00\x00\x00\x00\x00\x00\x01"
                            b"\x00\x00\x00\x02\x00\x00\x00\x04"
                            b"\x00\x00\x00\x04blah"),
-                         (x.TestSetPDU(True, 1, 2, 3,
-                                       (x.Varbind(x.VALUE_OID,
-                                                  x.OID((1, 2, 3), False),
-                                                  x.OID((4, 5, 6), False)),
-                                        x.Varbind(x.VALUE_OCTET_STR,
-                                                  x.OID((1, 2, 4), False),
-                                                  "blah"))),
+                         (AX.TestSetPDU(True, 1, 2, 3,
+                                        (AX.Varbind(AX.VALUE_OID,
+                                                    AX.OID((1, 2, 3), False),
+                                                    AX.OID((4, 5, 6), False)),
+                                         AX.Varbind(AX.VALUE_OCTET_STR,
+                                                    AX.OID((1, 2, 4), False),
+                                                    "blah"))),
                           b""))
         # Test commit set
         self.assertEqual(f(b"\x01\x09\x10\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02"
                            b"\x00\x00\x00\x03\x00\x00\x00\x00"),
-                         (x.CommitSetPDU(True, 1, 2, 3),
+                         (AX.CommitSetPDU(True, 1, 2, 3),
                           b""))
         # Test undo set
         self.assertEqual(f(b"\x01\x0A\x10\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02"
                            b"\x00\x00\x00\x03\x00\x00\x00\x00"),
-                         (x.UndoSetPDU(True, 1, 2, 3),
+                         (AX.UndoSetPDU(True, 1, 2, 3),
                           b""))
         # Test cleanup set
         self.assertEqual(f(b"\x01\x0B\x10\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02"
                            b"\x00\x00\x00\x03\x00\x00\x00\x00"),
-                         (x.CleanupSetPDU(True, 1, 2, 3),
+                         (AX.CleanupSetPDU(True, 1, 2, 3),
                           b""))
         # Test notify
         self.assertEqual(f(b"\x01\x0C\x10\x00"
@@ -2352,19 +2471,19 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\x03\x00\x00\x00\x00\x00\x00\x01"
                            b"\x00\x00\x00\x02\x00\x00\x00\x04"
                            b"\x00\x00\x00\x04blah"),
-                         (x.NotifyPDU(True, 1, 2, 3,
-                                      (x.Varbind(x.VALUE_OID,
-                                                 x.OID((1, 2, 3), False),
-                                                 x.OID((4, 5, 6), False)),
-                                       x.Varbind(x.VALUE_OCTET_STR,
-                                                 x.OID((1, 2, 4), False),
-                                                 "blah"))),
+                         (AX.NotifyPDU(True, 1, 2, 3,
+                                       (AX.Varbind(AX.VALUE_OID,
+                                                   AX.OID((1, 2, 3), False),
+                                                   AX.OID((4, 5, 6), False)),
+                                        AX.Varbind(AX.VALUE_OCTET_STR,
+                                                   AX.OID((1, 2, 4), False),
+                                                   "blah"))),
                           b""))
         # Test ping
         self.assertEqual(f(b"\x01\x0D\x10\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02"
                            b"\x00\x00\x00\x03\x00\x00\x00\x00"),
-                         (x.PingPDU(True, 1, 2, 3),
+                         (AX.PingPDU(True, 1, 2, 3),
                           b""))
         # Test index alloc
         self.assertEqual(f(b"\x01\x0E\x16\x00"
@@ -2379,13 +2498,13 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\x03\x00\x00\x00\x00\x00\x00\x01"
                            b"\x00\x00\x00\x02\x00\x00\x00\x04"
                            b"\x00\x00\x00\x04blah"),
-                         (x.IndexAllocPDU(True, 1, 2, 3, True, True,
-                                          (x.Varbind(x.VALUE_OID,
-                                                     x.OID((1, 2, 3), False),
-                                                     x.OID((4, 5, 6), False)),
-                                           x.Varbind(x.VALUE_OCTET_STR,
-                                                     x.OID((1, 2, 4), False),
-                                                     "blah"))),
+                         (AX.IndexAllocPDU(True, 1, 2, 3, True, True,
+                                           (AX.Varbind(AX.VALUE_OID,
+                                                       AX.OID((1, 2, 3), False),
+                                                       AX.OID((4, 5, 6), False)),
+                                            AX.Varbind(AX.VALUE_OCTET_STR,
+                                                       AX.OID((1, 2, 4), False),
+                                                       "blah"))),
                           b""))
         # Test index dealloc
         self.assertEqual(f(b"\x01\x0F\x16\x00"
@@ -2400,16 +2519,16 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\x03\x00\x00\x00\x00\x00\x00\x01"
                            b"\x00\x00\x00\x02\x00\x00\x00\x04"
                            b"\x00\x00\x00\x04blah"),
-                         (x.IndexDeallocPDU(True, 1, 2, 3, True, True,
-                                            (x.Varbind(x.VALUE_OID,
-                                                       x.OID((1, 2, 3),
-                                                             False),
-                                                       x.OID((4, 5, 6),
-                                                             False)),
-                                             x.Varbind(x.VALUE_OCTET_STR,
-                                                       x.OID((1, 2, 4),
-                                                             False),
-                                                       "blah"))),
+                         (AX.IndexDeallocPDU(True, 1, 2, 3, True, True,
+                                             (AX.Varbind(AX.VALUE_OID,
+                                                         AX.OID((1, 2, 3),
+                                                                False),
+                                                         AX.OID((4, 5, 6),
+                                                                False)),
+                                              AX.Varbind(AX.VALUE_OCTET_STR,
+                                                         AX.OID((1, 2, 4),
+                                                                False),
+                                                         "blah"))),
                           b""))
         # Test add agent caps
         self.assertEqual(f(b"\x01\x10\x10\x00"
@@ -2418,9 +2537,9 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\x03\x00\x00\x00\x00\x00\x00\x04"
                            b"\x00\x00\x00\x05\x00\x00\x00\x06"
                            b"\x00\x00\x00\x04blah"),
-                         (x.AddAgentCapsPDU(True, 1, 2, 3,
-                                            x.OID((4, 5, 6), False),
-                                            "blah"),
+                         (AX.AddAgentCapsPDU(True, 1, 2, 3,
+                                             AX.OID((4, 5, 6), False),
+                                             "blah"),
                           b""))
         # Test rm agent caps
         self.assertEqual(f(b"\x01\x11\x10\x00"
@@ -2428,26 +2547,187 @@ class TestNtpclientsNtpsnmpd(unittest.TestCase):
                            b"\x00\x00\x00\x03\x00\x00\x00\x10"
                            b"\x03\x00\x00\x00\x00\x00\x00\x04"
                            b"\x00\x00\x00\x05\x00\x00\x00\x06"),
-                         (x.RMAgentCapsPDU(True, 1, 2, 3,
-                                           x.OID((4, 5, 6), False)),
+                         (AX.RMAgentCapsPDU(True, 1, 2, 3,
+                                            AX.OID((4, 5, 6), False)),
                           b""))
         # Test response
         self.assertEqual(f(b"\x01\x12\x10\x00"
                            b"\x00\x00\x00\x01\x00\x00\x00\x02"
                            b"\x00\x00\x00\x03\x00\x00\x00\x08"
                            b"\x00\x00\x00\x04\x00\x05\x00\x06"),
-                         (x.ResponsePDU(True, 1, 2, 3, 4, 5, 6),
+                         (AX.ResponsePDU(True, 1, 2, 3, 4, 5, 6),
                           b""))
-        # Test insufficient data
+        # Test errors
+        # Test insufficient data for header
+        try:
+            self.assertEqual(f(b""), None)
+            errored = False
+        except AX.ParseError as e:
+            errored = e
+        self.assertEqual(errored.message, "Data too short for header")
+        # Test insufficient data for packet
         try:
             f(b"\x01\x11\x10\x00"
               b"\x00\x00\x00\x01\x00\x00\x00\x02"
               b"\x00\x00\x00\x03\x00\x00\x00\x10"
               b"\x03\x00\x00\x00\x00\x00\x00\x04")
-            fail = False
-        except IndexError:
-            fail = True
-        self.assertEqual(fail, True)
+            errored = False
+        except AX.ParseError as e:
+            errored = e
+        self.assertEqual(errored.message, "Packet data too short")
+        # Test wrong version
+        try:
+            f(b"\x02\x11\x10\x00"
+              b"\x00\x00\x00\x00\x00\x00\x00\x00"
+              b"\x00\x00\x00\x00\x00\x00\x00\x08"
+              b"blahblahjabber")
+            errored = False
+        except AX.ParseError as e:
+            errored = e
+        self.assertEqual(errored.message, "Unknown packet version 2")
+        self.assertEqual(errored.packetData, b"blahblah")
+        self.assertEqual(errored.remainingData, b"jabber")
+        # Test unrecognized packet type
+        try:
+            f(b"\x01\xFF\x10\x00"
+              b"\x00\x00\x00\x00\x00\x00\x00\x00"
+              b"\x00\x00\x00\x00\x00\x00\x00\x08"
+              b"blahblah")
+            errored = False
+        except AX.ParseError as e:
+            errored = e
+        self.assertEqual(errored.message, "PDU type 255 not in defined types")
+
+    def test_walkMIBTree(self):
+        f = AX.walkMIBTree
+
+        # Test empty tree
+        self.assertEqual(tuple(f({})), ())
+        # Test flat, fully static tree
+        self.assertEqual(tuple(f({0: {"reader": None, "writer": None,
+                                      "subids": None},
+                                  1: {},
+                                  2: {"reader": None, "writer": None,
+                                      "subids": None},
+                                  5: {"reader": None, "writer": None,
+                                      "subids": None}})),
+                         ((AX.OID((0,)), None, None),
+                          (AX.OID((1,)), None, None),
+                          (AX.OID((2,)), None, None),
+                          (AX.OID((5,)), None, None)))
+        # Test nested, fully static tree
+        self.assertEqual(tuple(f({0: {"reader": None, "writer": None,
+                                      "subids": None},
+                                  1: {"reader": None, "writer": None,
+                                      "subids":
+                                      {0: {"reader": None, "writer": None,
+                                           "subids": None},
+                                       1: {"reader": None, "writer": None,
+                                           "subids":
+                                           {42: {"reader": None,
+                                                 "writer": None,
+                                                 "subids": None}}}}},
+                                  5: {"reader": None, "writer": None,
+                                      "subids": None}})),
+                         ((AX.OID((0,)), None, None),
+                          (AX.OID((1,)), None, None),
+                          (AX.OID((1, 0)), None, None),
+                          (AX.OID((1, 1)), None, None),
+                          (AX.OID((1, 1, 42)), None, None),
+                          (AX.OID((5,)), None, None)))
+        # Test nested, fully static tree, with rootpath
+        self.assertEqual(tuple(f({0: {"reader": None, "writer": None,
+                                      "subids": None},
+                                  1: {"reader": None, "writer": None,
+                                      "subids":
+                                      {0: {"reader": None, "writer": None,
+                                           "subids": None},
+                                       1: {"reader": None, "writer": None,
+                                           "subids":
+                                           {42: {"reader": None,
+                                                 "writer": None,
+                                                 "subids": None}}}}},
+                                  5: {"reader": None, "writer": None,
+                                      "subids": None}},
+                                 (23,))),
+                         ((AX.OID((23, 0)), None, None),
+                          (AX.OID((23, 1)), None, None),
+                          (AX.OID((23, 1, 0)), None, None),
+                          (AX.OID((23, 1, 1)), None, None),
+                          (AX.OID((23, 1, 1, 42)), None, None),
+                          (AX.OID((23, 5)), None, None)))
+        # subid lambda for dynamic tree testing
+        submaker = (lambda: {0: {"reader": None, "writer": None,
+                                 "subids": None},
+                             1: {"reader": None, "writer": None,
+                                 "subids":
+                                 {0: {"reader": None, "writer": None,
+                                      "subids": None}}},
+                             2: {"reader": None, "writer": None,
+                                 "subids": None}})
+        # Test tree with dynamic nodes
+        self.assertEqual(tuple(f({0: {"reader": None, "writer": None,
+                                      "subids": None},
+                                  1: {"reader": None, "writer": None,
+                                      "subids": submaker},
+                                  2: {"reader": None, "writer": None,
+                                      "subids": None}})),
+                         ((AX.OID((0,)), None, None),
+                          (AX.OID((1,)), None, None),
+                          (AX.OID((1, 0)), None, None),
+                          (AX.OID((1, 1)), None, None),
+                          (AX.OID((1, 1, 0)), None, None),
+                          (AX.OID((1, 2)), None, None),
+                          (AX.OID((2,)), None, None)))
+        # Test tree with dynamic nodes and root path
+        self.assertEqual(tuple(f({0: {"reader": None, "writer": None,
+                                      "static": True, "subids": None},
+                                  1: {"reader": None, "writer": None,
+                                      "static": False, "subids": submaker},
+                                  2: {"reader": None, "writer": None,
+                                      "static": True, "subids": None}},
+                                 (23,))),
+                         ((AX.OID((23, 0)), None, None),
+                          (AX.OID((23, 1)), None, None),
+                          (AX.OID((23, 1, 0)), None, None),
+                          (AX.OID((23, 1, 1)), None, None),
+                          (AX.OID((23, 1, 1, 0)), None, None),
+                          (AX.OID((23, 1, 2)), None, None),
+                          (AX.OID((23, 2)), None, None)))
+
+    def test_bits2Bools(self):
+        bits2bool = AX.bits2Bools
+
+        # Test empty
+        self.assertEqual(bits2bool(""), [])
+        # Test round bytes
+        self.assertEqual(bits2bool("\xFA\xCE"),
+                         [True, True, True, True,
+                          True, False, True, False,
+                          True, True, False, False,
+                          True, True, True, False])
+        # Test partial bytes
+        self.assertEqual(bits2bool("\xFF\xE1", 12),  # The extra bit is to
+                         [True, True, True, True,  #   confirm crop
+                          True, True, True, True,
+                          True, True, True, False])
+
+    def test_bools2bits(self):
+        bool2bits = AX.bools2Bits
+
+        # Test empty
+        self.assertEqual(bool2bits([]), "")
+        # Test round bytes
+        self.assertEqual(bool2bits([True, True, True, True,
+                                    True, False, True, False,
+                                    True, True, False, False,
+                                    True, True, True, False]),
+                         "\xFA\xCE")
+        # Test partial bytes
+        self.assertEqual(bool2bits([True, True, True, True,
+                                    True, True, True, True,
+                                    True, True, True, False]),
+                         "\xFF\xE0")
 
 
 if __name__ == "__main__":

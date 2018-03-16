@@ -56,7 +56,6 @@
 /*
  * Selection algorithm tuning parameters
  */
-#define MAX_TTL		8	/* max ttl mapping vector size */
 
 /*
  * In the past, we told reference clocks from network peers by giving
@@ -628,10 +627,6 @@ create_peer_node(
 				my_node->ctl.flags |= FLAG_NOSELECT;
 				break;
 
-			case T_Preempt:
-				my_node->ctl.flags |= FLAG_PREEMPT;
-				break;
-
 			case T_Prefer:
 				my_node->ctl.flags |= FLAG_PREFER;
 				break;
@@ -680,22 +675,13 @@ create_peer_node(
 			}
 			break;
 
-		case T_Ttl:
-			if (option->value.u >= MAX_TTL) {
-				msyslog(LOG_ERR, "CONFIG: ttl: invalid argument");
-				errflag = true;
-			} else {
-				my_node->ctl.ttl = (uint8_t)option->value.u;
-			}
-			break;
-
 		case T_Subtype:
 		case T_Mode:
-			my_node->ctl.ttl = option->value.u;
+			my_node->ctl.mode = option->value.u;
 			break;
 
 		case T_Key:
-			if (option->value.u >= KEYID_T_MAX) {
+			if (option->value.u >= NTP_MAXKEY) {
 				msyslog(LOG_ERR, "CONFIG: key: invalid argument");
 				errflag = true;
 			} else {
@@ -1147,6 +1133,8 @@ config_auth(
 			}
 		}
 	}
+	if (0 < count)
+		msyslog(LOG_INFO, "Found %d trusted keys.", count);
 	auth_prealloc_symkeys(count);
 
 	/* Keys Command */
@@ -2595,10 +2583,6 @@ peer_config(
 	 * configure code is rebuilt. Note only one flag can be set.
 	 */
 	switch (htype) {
-	case T_Broadcast:
-		cast_flags = MDF_BCAST;
-		hmode = MODE_BROADCAST;
-		break;
 
 	case T_Pool:
 		cast_flags = MDF_POOL;
@@ -2656,7 +2640,7 @@ config_peers(
 	     client_ctl.minpoll = NTP_MINDPOLL;
 	     client_ctl.maxpoll = NTP_MAXPOLL_UNK;
 	     client_ctl.flags = FLAG_IBURST;
-	     client_ctl.ttl = 0;
+	     client_ctl.mode = 0;
 	     client_ctl.peerkey = 0;
 	     client_ctl.bias = 0;
 
@@ -3030,6 +3014,14 @@ getconfig(const char *explicit_config)
 }
 
 /*
+ * init_readconfig() - init for readconfig
+ */
+void init_readconfig(void)
+{
+	init_syntax_tree(&cfgt);
+}
+
+/*
  * readconfig() - process startup configuration file
  */
 void readconfig(const char *config_file)
@@ -3053,7 +3045,9 @@ void readconfig(const char *config_file)
 	yydebug = !!(debug >= 5);
 #endif
 
-	init_syntax_tree(&cfgt);
+	/* Moved to init_readconfig so command lines can contribute info
+	 * init_syntax_tree(&cfgt);
+	 */
 	srccount = 0;
 	
 	/* parse the plain config file if it exists */
@@ -3095,6 +3089,23 @@ void readconfig(const char *config_file)
 		free_netinfo_config(config_netinfo);
 #endif /* HAVE_NETINFO_NI_H */
 }
+
+
+/* hooks for ntpd.c */
+
+void set_keys_file(char* keys)
+{
+	cfgt.auth.keys = estrdup(keys);
+};
+
+void set_trustedkey(keyid_t tkey)
+{
+	attr_val *val = create_attr_ival('i', tkey);
+	attr_val *val2 = NULL;
+	APPEND_G_FIFO(val2, val);
+	CONCAT_G_FIFOS(cfgt.auth.trusted_key_list, val2);
+};
+
 
 
 void

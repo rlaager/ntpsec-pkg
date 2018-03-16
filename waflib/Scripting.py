@@ -18,13 +18,13 @@ def waf_entry_point(current_directory,version,wafdir):
 		ctx.curdir=current_directory
 		ctx.parse_args()
 		sys.exit(0)
+	Context.waf_dir=wafdir
+	Context.launch_dir=current_directory
 	if len(sys.argv)>1:
 		potential_wscript=os.path.join(current_directory,sys.argv[1])
 		if os.path.basename(potential_wscript)=='wscript'and os.path.isfile(potential_wscript):
 			current_directory=os.path.normpath(os.path.dirname(potential_wscript))
 			sys.argv.pop(1)
-	Context.waf_dir=wafdir
-	Context.launch_dir=current_directory
 	no_climb=os.environ.get('NOCLIMB')
 	if not no_climb:
 		for k in no_climb_commands:
@@ -203,33 +203,42 @@ def distclean_dir(dirname):
 		pass
 def distclean(ctx):
 	'''removes the build directory'''
-	lst=os.listdir('.')
-	for f in lst:
-		if f==Options.lockfile:
-			try:
-				proj=ConfigSet.ConfigSet(f)
-			except IOError:
-				Logs.warn('Could not read %r',f)
-				continue
-			if proj['out_dir']!=proj['top_dir']:
-				try:
-					shutil.rmtree(proj['out_dir'])
-				except EnvironmentError as e:
-					if e.errno!=errno.ENOENT:
-						Logs.warn('Could not remove %r',proj['out_dir'])
-			else:
-				distclean_dir(proj['out_dir'])
-			for k in(proj['out_dir'],proj['top_dir'],proj['run_dir']):
-				p=os.path.join(k,Options.lockfile)
-				try:
-					os.remove(p)
-				except OSError as e:
-					if e.errno!=errno.ENOENT:
-						Logs.warn('Could not remove %r',p)
-		if not Options.commands:
+	def remove_and_log(k,fun):
+		try:
+			fun(k)
+		except EnvironmentError as e:
+			if e.errno!=errno.ENOENT:
+				Logs.warn('Could not remove %r',k)
+	if not Options.commands:
+		for k in os.listdir('.'):
 			for x in'.waf-1. waf-1. .waf3-1. waf3-1.'.split():
-				if f.startswith(x):
-					shutil.rmtree(f,ignore_errors=True)
+				if k.startswith(x):
+					remove_and_log(k,shutil.rmtree)
+	cur='.'
+	if ctx.options.no_lock_in_top:
+		cur=ctx.options.out
+	try:
+		lst=os.listdir(cur)
+	except OSError:
+		Logs.warn('Could not read %r',cur)
+		return
+	if Options.lockfile in lst:
+		f=os.path.join(cur,Options.lockfile)
+		try:
+			env=ConfigSet.ConfigSet(f)
+		except EnvironmentError:
+			Logs.warn('Could not read %r',f)
+			return
+		if not env.out_dir or not env.top_dir:
+			Logs.warn('Invalid lock file %r',f)
+			return
+		if env.out_dir==env.top_dir:
+			distclean_dir(env.out_dir)
+		else:
+			remove_and_log(env.out_dir,shutil.rmtree)
+		for k in(env.out_dir,env.top_dir,env.run_dir):
+			p=os.path.join(k,Options.lockfile)
+			remove_and_log(p,os.remove)
 class Dist(Context.Context):
 	'''creates an archive containing the project source code'''
 	cmd='dist'
@@ -313,7 +322,7 @@ class Dist(Context.Context):
 		try:
 			return self.excl
 		except AttributeError:
-			self.excl=Node.exclude_regs+' **/waf-1.8.* **/.waf-1.8* **/waf3-1.8.* **/.waf3-1.8* **/*~ **/*.rej **/*.orig **/*.pyc **/*.pyo **/*.bak **/*.swp **/.lock-w*'
+			self.excl=Node.exclude_regs+' **/waf-1.* **/.waf-1.* **/waf3-1.* **/.waf3-1.* **/*~ **/*.rej **/*.orig **/*.pyc **/*.pyo **/*.bak **/*.swp **/.lock-w*'
 			if Context.out_dir:
 				nd=self.root.find_node(Context.out_dir)
 				if nd:
@@ -390,7 +399,8 @@ def autoconfigure(execute_method):
 			cmd=env.config_cmd or'configure'
 			if Configure.autoconfig=='clobber':
 				tmp=Options.options.__dict__
-				Options.options.__dict__=env.options
+				if env.options:
+					Options.options.__dict__=env.options
 				try:
 					run_command(cmd)
 				finally:

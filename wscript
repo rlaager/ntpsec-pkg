@@ -24,10 +24,11 @@ from wafhelpers.options import options_cmd
 from wafhelpers.probes \
     import probe_header_with_prerequisites, probe_function_with_prerequisites
 from wafhelpers.test import test_write_log, test_print_log
-from wafhelpers.fix_python_config import FixConfig
 
 
 pprint.__doc__ = None
+
+APPNAME='ntpsec'
 
 out = "build"
 
@@ -91,26 +92,11 @@ def configure(ctx):
     ctx.run_build_cls = 'check'
     ctx.load('waf', tooldir='wafhelpers/')
     ctx.load('waf_unit_test')
+    ctx.load('pytest')
     ctx.load('gnu_dirs')
 
     with open("VERSION", "r") as f:
-        version_string = f.read().split(" ")[0].strip()
-        [major, minor, rev] = version_string.split(".")
-        ctx.env.NTPSEC_VERSION_MAJOR = int(major)
-        ctx.env.NTPSEC_VERSION_MINOR = int(minor)
-        ctx.env.NTPSEC_VERSION_REV = int(rev)
-
-    ctx.env.NTPSEC_VERSION = "%s.%s.%s" % (ctx.env.NTPSEC_VERSION_MAJOR,
-                                           ctx.env.NTPSEC_VERSION_MINOR,
-                                           ctx.env.NTPSEC_VERSION_REV)
-# These are not currently used via config.h so remove clutter.
-# Leave as comments in case we want them tomorrow.
-#    ctx.define("NTPSEC_VERSION_MAJOR", ctx.env.NTPSEC_VERSION_MAJOR,
-#               comment="Major version number")
-#    ctx.define("NTPSEC_VERSION_MINOR", ctx.env.NTPSEC_VERSION_MINOR,
-#               comment="Minor version number")
-#    ctx.define("NTPSEC_VERSION_REV", ctx.env.NTPSEC_VERSION_REV,
-#               comment="Revision version number")
+        ctx.env.NTPSEC_VERSION = f.read().split(" ")[0].strip()
 
     ctx.env.OPT_STORE = config["OPT_STORE"]
 
@@ -137,6 +123,8 @@ def configure(ctx):
     ctx.load('compiler_c')
     ctx.start_msg('Checking compiler version')
     ctx.end_msg("%s" % ".".join(ctx.env.CC_VERSION))
+    # Ensure m4 is present, or bison will fail with SIGPIPE
+    ctx.find_program('m4')
     ctx.load('bison')
 
     for opt in opt_map:
@@ -211,16 +199,11 @@ def configure(ctx):
     if ctx.options.disable_manpage:
         ctx.env.DISABLE_MANPAGE = True
 
-    from waflib.Utils import subprocess
     if ((os.path.exists(".git") and
             ctx.find_program("git", var="BIN_GIT", mandatory=False))):
         ctx.start_msg("DEVEL: Getting revision")
-        cmd = ["git", "log", "-1", "--format=%H"]
-        p = subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE, universal_newlines=True)
-        ctx.env.NTPSEC_REVISION, stderr = p.communicate()
-        ctx.env.NTPSEC_REVISION = ctx.env.NTPSEC_REVISION.replace("\n", "")
+        cmd = shlex.split("git log -1 --format=%H")
+        ctx.env.NTPSEC_REVISION = ctx.cmd_and_log(cmd).strip()
         ctx.end_msg(ctx.env.NTPSEC_REVISION)
 
     ctx.start_msg("Building version")
@@ -541,6 +524,10 @@ int main(int argc, char **argv) {
                 ]
     # else:  # gcc, probably
 
+    # Exclude Unity's support for printing floating point numbers since it triggers warnings
+    # with -Wfloat-equal
+    ctx.env.CFLAGS = ['-DUNITY_EXCLUDE_FLOAT_PRINT'] + ctx.env.CFLAGS
+
     # XXX: hack
     if ctx.env.DEST_OS in ["freebsd", "openbsd"]:
         ctx.env.PLATFORM_INCLUDES = ["/usr/local/include"]
@@ -566,13 +553,13 @@ int main(int argc, char **argv) {
         ctx.define("__EXTENSIONS__", "1", quote=False)
 
     structures = (
-        ("struct if_laddrconf", ["sys/types.h", "net/if6.h"]),
-        ("struct if_laddrreq", ["sys/types.h", "net/if6.h"]),
-        ("struct timex", ["sys/time.h", "sys/timex.h"]),
-        ("struct ntptimeval", ["sys/time.h", "sys/timex.h"]),
+        ("struct if_laddrconf", ["sys/types.h", "net/if6.h"], False),
+        ("struct if_laddrreq", ["sys/types.h", "net/if6.h"], False),
+        ("struct timex", ["sys/time.h", "sys/timex.h"], True),
+        ("struct ntptimeval", ["sys/time.h", "sys/timex.h"], False),
     )
-    for (s, h) in structures:
-        ctx.check_cc(type_name=s, header_name=h, mandatory=False)
+    for (s, h, r) in structures:
+        ctx.check_cc(type_name=s, header_name=h, mandatory=r)
 
     # waf's SNIP_FIELD should likely include this header itself
     # This is needed on some systems to get size_t for following checks
@@ -604,32 +591,23 @@ int main(int argc, char **argv) {
     ctx.define("OPEN_BCAST_SOCKET", 1,
                comment="Whether to open a broadcast socket")
 
-    # Find OpenSSL. Must happen before function checks
-    # Versions older than 0.9.7d were deemed incompatible in NTP Classic.
-    SNIP_OPENSSL_VERSION_CHECK = """
-    #include <openssl/evp.h>
-    int main(void) {
-    #if OPENSSL_VERSION_NUMBER < 0x0090704fL
-    #error OpenSSL must be at least 0.9.7
-    #endif
-        return 0;
-    }
-    """
-
-    openssl_headers = (
-        "openssl/evp.h",
-        "openssl/rand.h",
-        "openssl/objects.h",
-    )
-    for hdr in openssl_headers:
-        ctx.check_cc(header_name=hdr, includes=ctx.env.PLATFORM_INCLUDES)
-    # FIXME! Ignoring the result...
-    ctx.check_cc(lib="crypto")
-    ctx.check_cc(comment="OpenSSL support",
-                 fragment=SNIP_OPENSSL_VERSION_CHECK,
-                 includes=ctx.env.PLATFORM_INCLUDES,
-                 msg="Checking OpenSSL >= 0.9.7",
-                 )
+    # Check via pkg-config first, then fall back to a direct search
+    if not ctx.check_cfg(
+        package='libcrypto', uselib_store='CRYPTO',
+        args=['libcrypto', '--cflags', '--libs'],
+        msg="Checking for OpenSSL (via pkg-config)",
+        define_name='', mandatory=False,
+    ):
+        openssl_headers = (
+            "openssl/evp.h",
+            "openssl/rand.h",
+            "openssl/objects.h",
+        )
+        for hdr in openssl_headers:
+            ctx.check_cc(header_name=hdr, includes=ctx.env.PLATFORM_INCLUDES)
+        # FIXME! Ignoring the result...
+        ctx.check_cc(msg="Checking for OpenSSL's crypto library",
+                     lib="crypto")
 
     # Optional functions.  Do all function checks here, otherwise
     # we're likely to duplicate them.
@@ -640,7 +618,6 @@ int main(int argc, char **argv) {
         ('closefrom', ["stdlib.h"]),
         ('clock_gettime', ["time.h"], "RT"),
         ('clock_settime', ["time.h"], "RT"),
-        ('getrusage', ["sys/time.h", "sys/resource.h"]),
         ('ntp_adjtime', ["sys/time.h", "sys/timex.h"]),     # BSD
         ('ntp_gettime', ["sys/time.h", "sys/timex.h"]),     # BSD
         ('res_init', ["netinet/in.h", "arpa/nameser.h", "resolv.h"]),
@@ -708,7 +685,6 @@ int main(int argc, char **argv) {
         ("sys/sysctl.h", ["sys/types.h"]),
         ("timepps.h", ["inttypes.h"]),
         ("sys/timepps.h", ["inttypes.h", "sys/time.h"]),
-        "utmpx.h",       # missing on RTEMS and OpenBSD
         ("sys/timex.h", ["sys/time.h"]),
     )
     for hdr in optional_headers:
@@ -786,21 +762,6 @@ int main(int argc, char **argv) {
     # This is true under every Unix-like OS.
     ctx.define("HAVE_WORKING_FORK", 1,
                comment="Whether a working fork() exists")
-
-    # Does the kernel implement a phase-locked loop for timing?
-    # All modern Unixes (in particular Linux and *BSD) have this.
-    #
-    # The README for the (now deleted) kernel directory says this:
-    # "If the precision-time kernel (KERNEL_PLL define) is
-    # configured, the installation process requires the header
-    # file /usr/include/sys/timex.h for the particular
-    # architecture to be in place."
-    #
-    if ((ctx.get_define("HAVE_SYS_TIMEX_H") and
-            not ctx.options.disable_kernel_pll)):
-        ctx.define("HAVE_KERNEL_PLL", 1,
-                   comment="Whether phase-locked loop for timing "
-                   "exists and is enabled")
 
     # SO_REUSEADDR socket option is needed to open a socket on an
     # interface when the port number is already in use on another
@@ -891,7 +852,7 @@ int main(int argc, char **argv) {
                 msg("WARNING: Your ntpd will fail on 2038-01-19T03:14:07Z.")
 
     source_date_epoch = os.getenv('SOURCE_DATE_EPOCH', None)
-    if ctx.options.build_epoch:
+    if ctx.options.build_epoch is not None:
         ctx.define("BUILD_EPOCH", ctx.options.build_epoch,
                    comment="Using --build-epoch")
     elif source_date_epoch:
@@ -903,8 +864,20 @@ int main(int argc, char **argv) {
     else:
         ctx.define("BUILD_EPOCH", int(time.time()), comment="Using default")
 
+    # before write_config()
+    droproot_type = ""
+    if ctx.is_defined("HAVE_LINUX_CAPABILITY"):
+        droproot_type = "Linux"
+    elif ctx.is_defined("HAVE_SOLARIS_PRIVS"):
+        droproot_type = "Solaris"
+    elif ctx.is_defined("HAVE_SYS_CLOCKCTL_H"):
+        droproot_type = "NetBSD"
+    else:
+        droproot_type = "None"
+
+    # write_config() removes symbols
     ctx.start_msg("Writing configuration header:")
-    ctx.write_config_header("config.h", remove=False)
+    ctx.write_config_header("config.h")
     ctx.end_msg("config.h", "PINK")
 
     def yesno(x):
@@ -919,15 +892,6 @@ int main(int argc, char **argv) {
     msg_setting("LDFLAGS", " ".join(ctx.env.LDFLAGS))
     msg_setting("LINKFLAGS_NTPD", " ".join(ctx.env.LINKFLAGS_NTPD))
     msg_setting("PREFIX", ctx.env.PREFIX)
-    droproot_type = ""
-    if ctx.is_defined("HAVE_LINUX_CAPABILITY"):
-        droproot_type = "Linux"
-    elif ctx.is_defined("HAVE_SOLARIS_PRIVS"):
-        droproot_type = "Solaris"
-    elif ctx.is_defined("HAVE_SYS_CLOCKCTL_H"):
-        droproot_type = "NetBSD"
-    else:
-        droproot_type = "None"
     msg_setting("Droproot Support", droproot_type)
     msg_setting("Debug Support", yesno(ctx.options.enable_debug))
     msg_setting("Refclocks", ", ".join(ctx.env.REFCLOCK_LIST))
@@ -935,6 +899,10 @@ int main(int argc, char **argv) {
                 yesno(ctx.env.ENABLE_DOC and not ctx.env.DISABLE_MANPAGE))
 
     ctx.recurse("pylib")
+    # Convert the Python directories to absolute paths.
+    # This makes them behave the same as PREFIX.
+    ctx.env.PYTHONDIR = os.path.abspath(ctx.env.PYTHONDIR)
+    ctx.env.PYTHONARCHDIR = os.path.abspath(ctx.env.PYTHONARCHDIR)
     msg_setting("PYTHONDIR", ctx.env.PYTHONDIR)
     msg_setting("PYTHONARCHDIR", ctx.env.PYTHONARCHDIR)
 
@@ -1021,9 +989,6 @@ def afterparty(ctx):
     # expected to work.
     if ctx.cmd == 'clean':
         ctx.exec_command("rm -f ntpd/version.h ")
-    if ctx.cmd in ('uninstall', 'install'):
-        # Make sure libs are removed from the old location
-        FixConfig.cleanup_python_libs(ctx, ctx.cmd)
     for x in ("ntpclients", "tests/pylib",):
         # List used to be longer...
         path_build = ctx.bldnode.make_node("pylib")
@@ -1040,16 +1005,17 @@ def afterparty(ctx):
 
 
 python_scripts = [
-    "ntpclients/ntploggps",
-    "ntpclients/ntpdig",
-    "ntpclients/ntpkeygen",
-    "ntpclients/ntpmon",
-    "ntpclients/ntpq",
-    "ntpclients/ntpsweep",
-    "ntpclients/ntptrace",
-    "ntpclients/ntpviz",
-    "ntpclients/ntpwait",
-    "ntpclients/ntplogtemp",
+    "ntpclients/ntploggps.py",
+    "ntpclients/ntpdig.py",
+    "ntpclients/ntpkeygen.py",
+    "ntpclients/ntpmon.py",
+    "ntpclients/ntpq.py",
+    "ntpclients/ntpsweep.py",
+    "ntpclients/ntptrace.py",
+    "ntpclients/ntpviz.py",
+    "ntpclients/ntpwait.py",
+    "ntpclients/ntplogtemp.py",
+    "ntpclients/ntpsnmpd.py",
 ]
 
 
@@ -1063,10 +1029,6 @@ def build(ctx):
         # .pyc and .pyo files) in a source directory, compilation to
         # the build directory never happens.  This is how we foil that.
         ctx.add_pre_fun(lambda ctx: ctx.exec_command("rm -f pylib/*.py[co]"))
-
-    if ctx.cmd == "install":
-        # Make sure libs are removed from the old location
-        ctx.add_pre_fun(FixConfig.cleanup_python_libs)
 
     if ctx.env.ENABLE_DOC_USER:
         if ctx.variant != "main":
@@ -1087,12 +1049,19 @@ def build(ctx):
     ctx.recurse("attic")
     ctx.recurse("tests")
 
+    # Make sure the python scripts compile, but don't install them
+    ctx(
+        features="py",
+        source=python_scripts,
+        install_path=None,
+    )
+
     scripts = ["ntpclients/ntpleapfetch"] + python_scripts
 
     ctx(
         features="subst",
         source=scripts,
-        target=scripts,
+        target=[x.replace('.py', '') for x in scripts],
         chmod=Utils.O755,
         install_path='${BINDIR}',
     )
@@ -1112,6 +1081,7 @@ def build(ctx):
     ctx.manpage(8, "ntpclients/ntpkeygen-man.txt")
     ctx.manpage(8, "ntpclients/ntpleapfetch-man.txt")
     ctx.manpage(8, "ntpclients/ntpwait-man.txt")
+    ctx.manpage(8, "ntpclients/ntpsnmpd-man.txt")
 
     # Skip running unit tests on a cross compile build
     if not ctx.env.ENABLE_CROSS:
@@ -1136,8 +1106,8 @@ def build(ctx):
 
     if ctx.cmd == "build":
         if "PYTHONPATH" in os.environ:
-            print("--- PYTHONPATH is set, "
-                  "this may mask or cause library-related problems ---")
+            print("--- PYTHONPATH is not set, "
+                  "loading the Python ntp library may be troublesome ---")
 
 #
 # Boot script setup

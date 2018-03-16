@@ -285,3 +285,15 @@ def detect_openmp(self):
 			break
 	else:
 		self.fatal('Could not find OpenMP')
+@conf
+def check_gfortran_o_space(self):
+	if self.env.FC_NAME!='GFORTRAN'or int(self.env.FC_VERSION[0])>4:
+		return
+	self.env.stash()
+	self.env.FCLNK_TGT_F=['-o','']
+	try:
+		self.check_fc(msg='Checking if the -o link must be split from arguments',fragment=FC_FRAGMENT,features='fc fcshlib')
+	except self.errors.ConfigurationError:
+		self.env.revert()
+	else:
+		self.env.commit()

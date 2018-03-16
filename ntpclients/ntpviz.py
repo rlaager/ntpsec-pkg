@@ -56,6 +56,18 @@ ntpviz: can't find the Python argparse module
 """)
     sys.exit(1)
 
+if sys.version_info[0] == 2:
+    import codecs
+    import sys
+
+    # force UTF-8 strings, otherwise some systems crash on micro.
+    reload(sys)
+    sys.setdefaultencoding('utf8')
+
+    def open(file, mode='r', buffering=-1, encoding=None, errors=None):
+        return codecs.open(filename=file, mode=mode, encoding=encoding,
+            errors=errors, buffering=buffering)
+
 # believe it or not, Python has no way to make a simple constant!
 MS_PER_S = 1e3          # milliseconds per second
 NS_PER_S = 1e9          # nanoseconds per second
@@ -101,7 +113,8 @@ try:
     import ntp.statfiles
     import ntp.util
 except ImportError as e:
-    sys.stderr.write("ntpviz: can't find Python NTP modules.\n")
+    sys.stderr.write(
+        "ntpviz: can't find Python NTP library.\n")
     sys.stderr.write("%s\n" % e)
     sys.exit(1)
 
@@ -379,13 +392,17 @@ def gnuplot(template, outfile=None):
     if outfile is None:
         out = None
     else:
-        out = open(outfile, "w")
+        out = open(outfile, "w", encoding='utf-8')
     ##
 
     # can be 30% faster to write to a tmp file than to pipe to gnuplot
     # bonus, we can keep the plot file for debug.
-    tmp_file = tempfile.NamedTemporaryFile(mode='w',
-                                           suffix='.plt', delete=False)
+    if sys.version_info[0] == 2:
+        tmp_file = tempfile.NamedTemporaryFile(mode='w',
+                                               suffix='.plt', delete=False)
+    else:
+        tmp_file = tempfile.NamedTemporaryFile(mode='w', encoding='utf-8',
+                                               suffix='.plt', delete=False)
     # note that tmp_file is a file handle, it is not a file object
     tmp_file.write(template)
     tmp_file.close()
@@ -739,8 +756,8 @@ component of frequency drift.</p>
                 out['min_y'] = out['max_y'] * 0.8
                 out['max_y'] = out['max_y'] * 1.2
         elif 2 > out['min_y']:
-                # scale 0:max_x
-                out['min_y'] = 0
+            # scale 0:max_x
+            out['min_y'] = 0
 
         # recalc fmt
         out['fmt'] = gnuplot_fmt(out["min_y"], out["max_y"])
@@ -1533,7 +1550,7 @@ Python by ESR, concept and gnuplot code by Dan Drown.
 
         except ImportError:
             if 0 < args.debug_level:
-                sys.stderr.write("ntpviz: INFO: psutils not found\n")
+                sys.stderr.write("ntpviz: INFO: psutil not found\n")
             pass
 
         # set nice()
@@ -1832,7 +1849,7 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
     header = os.path.join(args.outdir, "header")
     if os.path.isfile(header):
         try:
-            header_file = open(header, 'r')
+            header_file = open(header, 'r', encoding='utf-8')
             header_txt = header_file.read()
             index_buffer += '<br>\n' + header_txt + '\n'
         except IOError:
@@ -1926,7 +1943,7 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
     footer = os.path.join(args.outdir, "footer")
     if os.path.isfile(footer):
         try:
-            footer_file = open(footer, 'r')
+            footer_file = open(footer, 'r', encoding='utf-8')
             footer_txt = footer_file.read()
             index_buffer += '<br>\n' + footer_txt + '\n'
         except IOError:
@@ -1935,12 +1952,12 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
 
     # and send the file buffer
     index_filename = os.path.join(args.outdir, "index.html")
-    with open(index_filename + ".tmp", "w") as ifile:
+    with open(index_filename + ".tmp", "w", encoding='utf-8') as ifile:
         ifile.write(index_buffer)
 
     # create csv file, as a tmp file
     csv_filename = os.path.join(args.outdir, "summary.csv")
-    with open(csv_filename + ".tmp", "w") as csv_file:
+    with open(csv_filename + ".tmp", "w", encoding='utf-8') as csv_file:
         csv_ob = csv.writer(csv_file)
         csv_ob.writerow(VizStats.csv_head)
         for row in csvs:
