@@ -1,3 +1,28 @@
+ntpsec (1.1.0+dfsg1-1) unstable; urgency=medium
+
+  * Make ntpsec Conflict with ntpdate
+  * Stop deleting /var/lib/ntpdate/ (Closes: 892966)
+    Thanks to Bernhard Schmidt <berni@debian.org> for the suggestion.
+  * New upstream version
+  * Drop patches merged upstream
+    - fix-ntpdig.patch
+    - systemd-remove-extra-dependencies.patch
+    - fix-name-of-psutil.patch
+    - fix-spectracom-log-prefixes.patch
+    - fix-ntpviz-file-encodings.patch
+    - systemd-remove-remainafterexit.patch
+    - systemd-use-high-priority.patch
+    - systemd-ionice-ntpviz.patch
+    - systemd-cleanup-ntp-wait-service.patch
+    - fix-ntploggps.patch
+    - systemd-use-usr-sbin.patch
+    - systemd-do-not-restart.patch
+    - systemd-allow-running-in-containers.patch
+    - Merge-Classic-fix-for-CVE-2018-7182.patch
+  * Update copyright
+
+ -- Richard Laager <rlaager@wiktel.com>  Fri, 16 Mar 2018 00:42:24 -0500
+
 ntpsec (1.0.0+dfsg1-5) unstable; urgency=high
 
   * Fix CVE-2018-7182
