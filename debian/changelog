@@ -1,9 +1,14 @@
 ntpsec (1.1.0+dfsg1-1) unstable; urgency=medium
 
   * Make ntpsec Conflict with ntpdate
+    - Use ntpsec-ntpdate instead of ntpdate.
   * Stop deleting /var/lib/ntpdate/ (Closes: 892966)
     Thanks to Bernhard Schmidt <berni@debian.org> for the suggestion.
   * New upstream version
+    - Digests longer then 20 bytes will be truncated.
+    - We have dropped support for Broadcast servers.
+    - A bug that caused the rejection of 33% of packets from Amazon time
+      service has been fixed.
   * Drop patches merged upstream
     - fix-ntpdig.patch
     - systemd-remove-extra-dependencies.patch
