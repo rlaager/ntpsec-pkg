@@ -3,7 +3,7 @@ Upstream-Name: NTPsec
 Source: https://www.ntpsec.org
 
 Files: *
-Copyright: 2011-2017 Network Time Foundation
+Copyright: 2011-2018 Network Time Foundation
            2015-2017 NTPsec project contributors
            Mark Andrews <mark_andrews@isc.org>
              Leitch atomic clock controller
@@ -158,7 +158,7 @@ Copyright: Bernhard Schmidt <berni@debian.org>
            Matthias Urlichs <smurf@debian.org>
            Peter Eisentraut <petere@debian.org>
            Kurt Roeckx <kurt@roeckx.be>
-           2016-2017 Richard Laager <rlaager@wiktel.com>
+           2016-2018 Richard Laager <rlaager@wiktel.com>
 License: NTP
 
 Files: debian/apparmor-profile debian/apparmor-profile.tunable
