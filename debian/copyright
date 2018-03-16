@@ -4,7 +4,7 @@ Source: https://www.ntpsec.org
 
 Files: *
 Copyright: 2011-2018 Network Time Foundation
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
            Mark Andrews <mark_andrews@isc.org>
              Leitch atomic clock controller
            Bernd Altmeier <altmeier@atlsoft.de>
@@ -181,26 +181,26 @@ License: CC0
 
 Files: include/ascii.h include/binio.h include/ieee754io.h include/parse_conf.h include/parse.h include/trimble.h libparse/binio.c libparse/clk_dcf7000.c libparse/clk_meinberg.c libparse/clk_rawdcf.c libparse/clk_schmid.c libparse/clk_trimtaip.c libparse/clk_trimtsip.c libparse/data_mbg.c libparse/gpstolfp.c libparse/ieee754io.c libparse/parse.c libparse/parse_conf.c libparse/trim_info.c ntpd/refclock_generic.c
 Copyright: 1989-2015 Frank Kardel <kardel@ntp.org>
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
 License: BSD-3-clause
 
-Files: devel/linkcheck include/ntp_endian.h libntp/ntp_endian.c libntp/pymodule.c libntp/pymodule.c ntpclients/ntpdig ntpclients/ntpmon ntpclients/ntpq ntpclients/ntpsweep ntpd/ntp_sandbox.c pylib/agentx.py pylib/__init__.py pylib/packet.py pylib/util.py
-Copyright: 2015-2017 NTPsec project contributors
+Files: devel/linkcheck include/ntp_endian.h libntp/ntp_endian.c libntp/pymodule.c libntp/pymodule.c ntpclients/ntpdig.py ntpclients/ntpmon.py ntpclients/ntpq.py ntpclients/ntpsweep.py ntpd/ntp_sandbox.c pylib/agentx.py pylib/__init__.py pylib/packet.py pylib/util.py
+Copyright: 2015-2018 NTPsec project contributors
 License: BSD-2-clause
 
 Files: devel/hacking.txt
-Copyright: 2015-2017 NTPsec project contributors
+Copyright: 2015-2018 NTPsec project contributors
 License: CC-BY-4.0
 
 Files: devel/trace/*.ini
 Copyright: 2015 Chris Johns <chrisj@ntpsec.org>
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
 License: NTP
 
 Files: include/isc_error.h include/isc_interfaceiter.h include/isc_netaddr.h include/isc_result.h include/ntp_assert.h libntp/assert.c libntp/isc_error.c libntp/isc_interfaceiter.c libntp/isc_net.c libntp/strl_obsd.c
 Copyright: 1999-2003 Internet Software Consortium
            2004-2015 Internet Systems Consortium, Inc. ("ISC")
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
 Comment: This is not compatible with upstream libisc. The NTPsec lead developer
          says they have made changes to the API.  Here is their comment, from
          libisc/README:
@@ -212,18 +212,18 @@ License: ISC
 Files: include/ntp_filegen.h ntpd/ntp_filegen.c
 Copyright: 1992, 1996 by Rainer Pruy
            Friedrich-Alexander Universität Erlangen-Nürnberg, Germany
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
 License: BSD-2-clause
 
 Files: include/ntp_debug.h
 Copyright: 2005 Frank Kardel
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
 License: BSD-2-clause
 
 Files: include/mbg_gps166.h
 Copyright: Meinberg Funkuhren (www.meinberg.de)
            1997-2005 Frank Kardel <kardel@ntp.org>
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
 License: BSD-3-clause
 
 Files: libjsmn/*
@@ -237,7 +237,7 @@ License: Expat
 
 Files: libntp/emalloc.c
 Copyright: 2008 Otto Moerbeek <otto@drijf.net>
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
 License: NTP and ISC
 
 Files: libntp/ntp_dns.c libntp/ntp_random.c
@@ -247,34 +247,35 @@ License: BSD-4-Clause-UC
 
 Files: libntp/strl_obsd.c
 Copyright: 1998 Todd C. Miller <Todd.Miller@courtesan.com>
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
 License: ISC
 
 Files: libparse/clk_computime.c
 Copyright: Alois Camenzind <alois.camenzind@ubs.ch>
            1997-2005 Frank Kardel <kardel@ntp.org>
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
 License: BSD-3-clause
 
 Files: libparse/clk_wharton.c
 Copyright: 1999-2000 Philippe De Muyter <phdm@macqel.be>
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
 License: BSD-2-clause
 
 Files: libparse/clk_varitext.c
 Copyright: 1989-2005 Frank Kardel <kardel@ntp.org>
            1997 A.McConnell
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
 License: BSD-3-clause
 
 Files: ntpclients/ntpleapfetch
 Copyright: 2014 Timothe Litt <litt@acm.org>
-           2015-2017 NTPsec project contributors
+           2018 Sanjeev Gupta <ghane0@gmail.com>
+           2015-2018 NTPsec project contributors
 License: BSD-2-clause
 
 Files: ntpd/ntp_config.c ntpd/ntp_parser.y ntpd/ntp_scanner.c ntpd/ntp_scanner.h
 Copyright: 2006 Sachin Kamboj, University of Delaware
-           2015-2017 NTPsec project contributors
+           2015-2018 NTPsec project contributors
 License: BSD-2-clause
 
 Files: ntpd/ntp_signd.c
