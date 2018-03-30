@@ -9,8 +9,7 @@ installinit_error() {
 #DEBHELPER#
 
 if [ "$1" = "purge" ]; then
-	if ! dpkg -s ntp > /dev/null 2>&1
-	then
+	if ! dpkg -s ntp > /dev/null 2>&1; then
 		rm -rf /var/lib/ntp/
 		rm -rf /var/log/ntpstats/
 	fi
