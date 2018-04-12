@@ -52,8 +52,10 @@
   /etc/ntp.keys r,
 
   /etc/ntp.drift rwl,
+  /etc/ntp.drift-tmp rw,
   /etc/ntp/drift* rwl,
   /var/lib/ntp/ntp.drift rw,
+  /var/lib/ntp/ntp.drift-tmp rw,
   /var/lib/ntp/drift* rw,
   /usr/share/zoneinfo/leap-seconds.list rw,
 
