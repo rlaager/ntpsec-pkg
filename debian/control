@@ -103,7 +103,7 @@ Depends: adduser,
          python3-ntp,
          systemd | cron | cron-daemon,
          ${misc:Depends}
-Recommends: ntpsec,
+Recommends: ntpsec | ntp,
             systemd | python3-psutil,
             ${misc:Recommends}
 Suggests: python,
