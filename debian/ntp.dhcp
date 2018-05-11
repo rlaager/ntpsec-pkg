@@ -3,7 +3,13 @@ NTP_DHCP_CONF=/run/ntp.conf.dhcp
 
 
 ntp_server_restart() {
-	invoke-rc.d ntp try-restart
+	if [ -r /etc/default/ntp ]; then
+	        . /etc/default/ntp
+	fi
+
+	if [ "$IGNORE_DHCP" != "yes" ]; then
+		invoke-rc.d ntp try-restart
+	fi
 }
 
 
