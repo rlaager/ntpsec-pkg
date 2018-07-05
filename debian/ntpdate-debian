@@ -18,7 +18,7 @@ if [ "$NTPDATE_USE_NTP_CONF" = yes ]; then
 	fi
 fi
 
-if [ -r /run/ntpdate.dhcp ]; then
+if [ "$IGNORE_DHCP" != "yes" ] && [ -r /run/ntpdate.dhcp ]; then
 	. /run/ntpdate.dhcp
 fi
 

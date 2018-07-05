@@ -11,3 +11,6 @@ NTPSERVERS="0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.
 
 # Additional options to pass to ntpdate
 NTPOPTIONS=""
+
+# Set to "yes" to ignore DHCP servers returned by DHCP.
+IGNORE_DHCP=""
