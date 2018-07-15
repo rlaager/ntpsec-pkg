@@ -1,3 +1,34 @@
+Transitioning from (or to) the ntp package
+------------------------------------------
+
+If you are transitioning from the ntp package to ntpsec, be advised that
+purging the ntp package will break ntpsec in several ways:
+
+1) It will remove /var/lib/ntp, which deletes the drift file:
+   https://bugs.debian.org/894475
+2) It will remove /var/log/ntpstats, which deletes the logs used by
+   ntpviz: https://bugs.debian.org/894475
+3) Due to a bug in update-rc.d, it will remove the /etc/rc*.d symlinks,
+   breaking the ntp service under sysvinit:
+   https://bugs.debian.org/680293
+4) Due to a bug (or missing feature) in deb-systemd-helper, it will
+   disable the ntp.service systemd unit:
+   https://bugs.debian.org/903807
+
+If you wish to purge the ntp package, run:
+    mv /var/lib/ntp /var/lib/ntp-bak
+    mv /var/log/ntpstats /var/log/ntpstats-bak
+    dpkg --purge ntp
+    mv /var/lib/ntp-bak /var/lib/ntp
+    mv /var/log/ntpstats-bak /var/log/ntpstats
+    dpkg-reconfigure ntpsec
+
+If you are transitioning from the ntpsec package to ntp, issues #3 and
+#4 above will occur.  If you wish to purge the ntpsec package, run:
+    dpkg --purge ntpsec
+    dpkg-reconfigure ntp
+
+
 Configuration
 -------------
 
