@@ -203,7 +203,7 @@ override_dh_installifupdown-arch:
 PKD  = $(abspath $(dir $(word 1,$(MAKEFILE_LIST))))
 
 .PHONY: get-orig-source
-## http://wiki.debian.org/onlyjob/get-orig-source
+## https://wiki.debian.org/onlyjob/get-orig-source
 get-orig-source:  $(info I: $(DEB_SOURCE)_$(DEB_VERSION))
 	@echo "# Downloading..."
 	uscan --noconf --verbose --rename --destdir=$(CURDIR) \

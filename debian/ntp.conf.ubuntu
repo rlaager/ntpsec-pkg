@@ -17,7 +17,7 @@ tos minclock 4 minsane 3
 # Specify one or more NTP servers.
 
 # Use servers from the NTP Pool Project. Approved by Ubuntu Technical Board
-# on 2011-02-08 (LP: #104525). See http://www.pool.ntp.org/join.html for
+# on 2011-02-08 (LP: #104525). See https://www.pool.ntp.org/join.html for
 # more information.
 pool 0.ubuntu.pool.ntp.org iburst
 pool 1.ubuntu.pool.ntp.org iburst
