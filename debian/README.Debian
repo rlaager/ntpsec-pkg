@@ -6,10 +6,10 @@ synchronizes to high-stratum NTP servers on the Internet.  This should
 be sufficient for most installations on well-connected hosts that
 simply want to keep their clocks accurate.
 
-The default time servers are servers from a pool.ntp.org vendor zone
-assigned to Debian.  Consider replacing this if you have local time
-servers in your organization or network.  A list of public NTP time
-servers is available on the web at:
+The default time servers are servers from a pool.ntp.org vendor zone.
+Consider replacing this if you have local time servers in your
+organization or network.  A list of public NTP time servers is
+available on the web at:
 
     http://ntp.isc.org/bin/view/Servers/WebHome
 
