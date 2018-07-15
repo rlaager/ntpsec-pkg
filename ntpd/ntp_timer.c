@@ -137,7 +137,7 @@ init_timer(void)
 	/*
 	 * Initialize...
 	 */
-	sawALRM = false;
+	sig_flags.sawALRM = false;
 	alarm_overflow = 0;
 	adjust_timer = 1;
 	stats_timer = SECSPERHR;
@@ -228,19 +228,19 @@ timer(void)
 	 * synchronization source is an orphan. It shows offset zero and
 	 * reference ID the loopback address.
 	 */
-	if (sys_orphan < STRATUM_UNSPEC && sys_peer == NULL &&
+	if (sys_orphan < STRATUM_UNSPEC && sys_vars.sys_peer == NULL &&
 	    current_time > orphwait) {
-		if (sys_leap == LEAP_NOTINSYNC) {
-			sys_leap = LEAP_NOWARNING;
+		if (sys_vars.sys_leap == LEAP_NOTINSYNC) {
+			sys_vars.sys_leap = LEAP_NOWARNING;
 		}
-		sys_stratum = (uint8_t)sys_orphan;
-		if (sys_stratum > 1)
-			sys_refid = htonl(LOOPBACKADR);
+		sys_vars.sys_stratum = (uint8_t)sys_orphan;
+		if (sys_vars.sys_stratum > 1)
+			sys_vars.sys_refid = htonl(LOOPBACKADR);
 		else
-			memcpy(&sys_refid, "LOOP", REFIDLEN);
+			memcpy(&sys_vars.sys_refid, "LOOP", REFIDLEN);
 		sys_offset = 0;
-		sys_rootdelay = 0;
-		sys_rootdisp = 0;
+		sys_vars.sys_rootdelay = 0;
+		sys_vars.sys_rootdisp = 0;
 	}
 
 	time(&now);
@@ -250,17 +250,16 @@ timer(void)
 	 * is imminent or every 8th second.
 	 */
 	if (leapsec > LSPROX_NOWARN || 0 == (current_time & 7))
-		check_leapsec(now,
-                                (sys_leap == LEAP_NOTINSYNC));
-        if (sys_leap != LEAP_NOTINSYNC) {
-                if (leapsec >= LSPROX_ANNOUNCE && leapdif) {
-		        if (leapdif > 0)
-			        sys_leap = LEAP_ADDSECOND;
-		        else
-			        sys_leap = LEAP_DELSECOND;
-                } else {
-                        sys_leap = LEAP_NOWARNING;
-                }
+		check_leapsec(now, (sys_vars.sys_leap == LEAP_NOTINSYNC));
+	if (sys_vars.sys_leap != LEAP_NOTINSYNC) {
+		if (leapsec >= LSPROX_ANNOUNCE && leapdif) {
+			if (leapdif > 0)
+				sys_vars.sys_leap = LEAP_ADDSECOND;
+			else
+				sys_vars.sys_leap = LEAP_DELSECOND;
+		} else {
+			sys_vars.sys_leap = LEAP_NOWARNING;
+		}
 	}
 
 	/*
@@ -310,13 +309,13 @@ catchALRM(
 # ifdef DEBUG
 	const char *msg = NULL;
 # endif
-	if (sawALRM) {
+	if (sig_flags.sawALRM) {
 		alarm_overflow++;
 # ifdef DEBUG
 		msg = "catchALRM: overflow\n";
 # endif
 	} else {
-		sawALRM = true;
+		sig_flags.sawALRM = true;
 # ifdef DEBUG
 		msg = "catchALRM: normal\n";
 # endif
@@ -352,7 +351,7 @@ check_leap_sec_in_progress( const leap_result_t *lsdata ) {
 
 	/* if changed we may have to update the leap status sent to clients */
 	if (leap_sec_in_progress != prv_leap_sec_in_progress)
-		set_sys_leap(sys_leap);
+		set_sys_leap(sys_vars.sys_leap);
 }
 
 static void
@@ -374,7 +373,7 @@ check_leapsec(
 
 	leap_result_t lsdata;
 	uint32_t       lsprox;
-	leapsec_electric((pll_control && kern_enable) ? electric_on : electric_off);
+	leapsec_electric((clock_ctl.pll_control && clock_ctl.kern_enable) ? electric_on : electric_off);
 #ifdef ENABLE_LEAP_SMEAR
 	leap_smear.enabled = (leap_smear_intv != 0);
 #endif
@@ -394,53 +393,51 @@ check_leapsec(
 		leap_smear.doffset = 0.0;
 
 		if (leap_smear.enabled) {
-		      if (lsdata.tai_diff) {
-			      if (leap_smear.interval == 0) {
-				      leap_smear.interval = leap_smear_intv;
-				      leap_smear.intv_end = lsdata.ttime;
-				      leap_smear.intv_start = leap_smear.intv_end - leap_smear.interval;
-				      DPRINT(1, ("*** leapsec_query: setting leap_smear interval %li, begin %.0f, end %.0f\n",
-						 leap_smear.interval, leap_smear.intv_start, leap_smear.intv_end));
-			      }
-		      }
-		      else {
-			      if (leap_smear.interval)
-				      DPRINT(1, ("*** leapsec_query: clearing leap_smear interval\n"));
-			      leap_smear.interval = 0;
-		      }
+			if (lsdata.tai_diff) {
+				if (leap_smear.interval == 0) {
+					leap_smear.interval = leap_smear_intv;
+					leap_smear.intv_end = lsdata.ttime;
+					leap_smear.intv_start = leap_smear.intv_end - leap_smear.interval;
+					DPRINT(1, ("*** leapsec_query: setting leap_smear interval %li, begin %.0f, end %.0f\n",
+						   leap_smear.interval, leap_smear.intv_start, leap_smear.intv_end));
+				}
+			} else {
+				if (leap_smear.interval)
+					DPRINT(1, ("*** leapsec_query: clearing leap_smear interval\n"));
+				leap_smear.interval = 0;
+			}
 
-		      if (leap_smear.interval) {
-			      double dtemp = now;
-			      if (dtemp >= leap_smear.intv_start && dtemp <= leap_smear.intv_end) {
-				      double leap_smear_time = dtemp - leap_smear.intv_start;
-				      /*
-				       * For now we just do a linear interpolation over the smear interval
-				       * https://developers.google.com/time/smear
-				       */
-				      leap_smear.doffset = -(leap_smear_time * lsdata.tai_diff / leap_smear.interval);
-				      /*
-				       * TODO see if we're inside an
-				       * inserted leap second, so we
-				       * need to compute
-				       * leap_smear.doffset = 1.0 -
-				       * leap_smear.doffset
-				       */
-				      leap_smear.in_progress = true;
+			if (leap_smear.interval) {
+				double dtemp = now;
+				if (dtemp >= leap_smear.intv_start && dtemp <= leap_smear.intv_end) {
+					double leap_smear_time = dtemp - leap_smear.intv_start;
+					/*
+					 * For now we just do a linear interpolation over the smear interval
+					 * https://developers.google.com/time/smear
+					 */
+					leap_smear.doffset = -(leap_smear_time * lsdata.tai_diff / leap_smear.interval);
+					/*
+					 * TODO see if we're inside an
+					 * inserted leap second, so we
+					 * need to compute
+					 * leap_smear.doffset = 1.0 -
+					 * leap_smear.doffset
+					 */
+					leap_smear.in_progress = true;
 #if 0 && defined( DEBUG )
-				      msyslog(LOG_NOTICE, "CLOCK: *** leapsec_query: [%.0f:%.0f] (%li), now %u (%.0f), smear offset %.6f ms\n",
-					      leap_smear.intv_start, leap_smear.intv_end, leap_smear.interval,
-					      now, leap_smear_time, leap_smear.doffset);
+					msyslog(LOG_NOTICE, "CLOCK: *** leapsec_query: [%.0f:%.0f] (%li), now %u (%.0f), smear offset %.6f ms\n",
+						leap_smear.intv_start, leap_smear.intv_end, leap_smear.interval,
+						now, leap_smear_time, leap_smear.doffset);
 #else
-				      DPRINT(1, ("*** leapsec_query: [%.0f:%.0f] (%li), now %lld (%.0f), smear offset %.6f ms\n",
-						 leap_smear.intv_start, leap_smear.intv_end, leap_smear.interval,
-						 (long long)now, leap_smear_time, leap_smear.doffset));
+					DPRINT(1, ("*** leapsec_query: [%.0f:%.0f] (%li), now %lld (%.0f), smear offset %.6f ms\n",
+						   leap_smear.intv_start, leap_smear.intv_end, leap_smear.interval,
+						   (long long)now, leap_smear_time, leap_smear.doffset));
 #endif
 
-			      }
-		      }
-		}
-		else
-		      leap_smear.interval = 0;
+				}
+			}
+		} else
+			leap_smear.interval = 0;
 
 		/*
 		 * Update the current leap smear offset, eventually 0.0 if outside smear interval.
@@ -487,15 +484,15 @@ check_leapsec(
 	 * to piping hot in one step. If things are already that wobbly,
 	 * we let the normal clock correction take over, even if a jump
 	 * is involved.
-         * Also make sure the alarming events are edge-triggered, that is,
-         * created only when the threshold is crossed.
-         */
+	 * Also make sure the alarming events are edge-triggered, that is,
+	 * created only when the threshold is crossed.
+	 */
 	if (  (leapsec > 0 || lsprox < LSPROX_ALERT)
 	    && leapsec < lsprox                     ) {
 		if (  leapsec < LSPROX_SCHEDULE
-                   && lsprox >= LSPROX_SCHEDULE) {
+		   && lsprox >= LSPROX_SCHEDULE) {
 			if (lsdata.dynamic)
-				report_event(PEVNT_ARMED, sys_peer, NULL);
+				report_event(PEVNT_ARMED, sys_vars.sys_peer, NULL);
 			else
 				report_event(EVNT_ARMED, NULL, NULL);
 		}
@@ -503,16 +500,16 @@ check_leapsec(
 	}
 	if (leapsec > lsprox) {
 		if (  leapsec >= LSPROX_SCHEDULE
-                   && lsprox   < LSPROX_SCHEDULE) {
+		   && lsprox   < LSPROX_SCHEDULE) {
 			report_event(EVNT_DISARMED, NULL, NULL);
 		}
 		leapsec = lsprox;
 	}
 
-        if (leapsec >= LSPROX_SCHEDULE)
-                leapdif = lsdata.tai_diff;
-        else
-                leapdif = 0;
+	if (leapsec >= LSPROX_SCHEDULE)
+		leapdif = lsdata.tai_diff;
+	else
+		leapdif = 0;
 
 	check_leap_sec_in_progress(&lsdata);
 }

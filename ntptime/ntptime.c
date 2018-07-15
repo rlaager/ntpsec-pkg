@@ -47,7 +47,7 @@ struct ntptimeval
 
 /* MUSL port shim */
 #ifndef HAVE_NTP_GETTIME
-int ntp_gettime(struct ntptimeval *ntv)
+static int ntp_gettime(struct ntptimeval *ntv)
 {
 	struct timex tntx;
 	int result;
@@ -410,7 +410,7 @@ main(
 		}
 		if (json)
 		    /* hack to avoid trailing comma - not semantically needed */
-		    fputs("\"version\":\""  NTPSEC_VERSION_STRING "\"}\n", stdout);
+		    printf("\"version\":\"ntpsec-%s\"}\n", NTPSEC_VERSION_EXTENDED);
 		exit(EXIT_SUCCESS);
 	}
 

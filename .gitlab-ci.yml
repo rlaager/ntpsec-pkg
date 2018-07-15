@@ -50,11 +50,21 @@
       - build/main/ntpclients/ntpwait
       - build/main/ntpd/ntpd
       - build/main/ntpfrob/ntpfrob
+  retry: 2
+
+gitlab-alpine-basic:
+  <<: *job_definition
+  image: alpine
+  script:
+    - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev
+    - python ./waf configure build check
+  tags:
+    - gitlab-org
 
 gitlab-basic:
   <<: *job_definition
   script:
-    - apt-get update -qq && apt-get install -y -qq bison libcap-dev pps-tools python-dev
+    - apt-get update -qq && apt-get install -y -qq netbase bison libcap-dev pps-tools python-dev
     - python ./waf configure build check
   tags:
     - gitlab-org
@@ -62,131 +72,185 @@ gitlab-basic:
 gitlab-refclocks:
   <<: *job_definition
   script:
-    - apt-get update -qq && apt-get install -y -qq bison libcap-dev pps-tools python-dev
+    - apt-get update -qq && apt-get install -y -qq netbase bison libcap-dev pps-tools python-dev
     - python ./waf configure --refclock=all build check
   tags:
     - gitlab-org
 
-debian-wheezy-basic:
+debian-oldoldstable-basic:
   <<: *job_definition
+  image: debian:oldoldstable-slim
   script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
     - python ./waf configure build check
   tags:
-    - debian-wheezy
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-debian-wheezy-refclocks:
+debian-oldoldstable-refclocks:
   <<: *job_definition
+  image: debian:oldoldstable-slim
   script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
     - python ./waf configure --refclock=all build check
   tags:
-    - debian-wheezy
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-debian-jessie-basic:
+debian-oldstable-basic:
   <<: *job_definition
+  image: debian:oldstable-slim
   script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
     - python ./waf configure build check
   tags:
-    - debian-jessie
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-debian-jessie-refclocks:
+debian-oldstable-refclocks:
   <<: *job_definition
+  image: debian:oldstable-slim
   script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
     - python ./waf configure --refclock=all build check
   tags:
-    - debian-jessie
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-debian-stretch-basic:
+debian-stable-basic:
   <<: *job_definition
+  image: debian:stable-slim
   script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
     - python ./waf configure build check
   tags:
-    - debian-stretch
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-debian-stretch-refclocks:
+debian-stable-refclocks:
   <<: *job_definition
+  image: debian:stable-slim
   script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
     - python ./waf configure --refclock=all build check
   tags:
-    - debian-stretch
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
+
+debian-testing-basic:
+  <<: *job_definition
+  image: debian:testing-slim
+  script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
+    - python ./waf configure build check
+  tags:
+    - gitlab-org
+
+debian-testing-refclocks:
+  <<: *job_definition
+  image: debian:testing-slim
+  script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
+    - python ./waf configure --refclock=all build check
+  tags:
+    - gitlab-org
+
+debian-unstable-basic:
+  <<: *job_definition
+  image: debian:unstable-slim
+  allow_failure: true
+  script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
+    - python ./waf configure build check
+  tags:
+    - gitlab-org
+
+debian-unstable-refclocks:
+  <<: *job_definition
+  image: debian:unstable-slim
+  allow_failure: true
+  script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
+    - python ./waf configure --refclock=all build check
+  tags:
+    - gitlab-org
 
 ubuntu-1404-lts-basic:
   <<: *job_definition
+  image: ubuntu:14.04
   script:
+    - apt-get update
+    - apt-get install -y bison gcc libssl-dev libcap-dev pps-tools python-dev
     - python ./waf configure build check
   tags:
-    - ubuntu-1404-lts
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
 ubuntu-1404-lts-refclocks:
   <<: *job_definition
+  image: ubuntu:14.04
   script:
+    - apt-get update
+    - apt-get install -y bison gcc libssl-dev libcap-dev pps-tools python-dev
     - python ./waf configure --refclock=all build check
   tags:
-    - ubuntu-1404-lts
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
 ubuntu-1604-lts-basic:
   <<: *job_definition
+  image: ubuntu:16.04
   script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
     - python ./waf configure build check
   tags:
-    - ubuntu-1604-lts
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
 ubuntu-1604-lts-refclocks:
   <<: *job_definition
+  image: ubuntu:16.04
   script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
     - python ./waf configure --refclock=all build check
   tags:
-    - ubuntu-1604-lts
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
 ubuntu-1710-basic:
   <<: *job_definition
+  image: ubuntu:17.10
   script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
     - python ./waf configure build check
   tags:
-    - ubuntu-1710
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
 ubuntu-1710-refclocks:
   <<: *job_definition
+  image: ubuntu:17.10
   script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
     - python ./waf configure --refclock=all build check
   tags:
-    - ubuntu-1710
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-gcc-7-basic:
+gcc-latest-basic:
   <<: *job_definition
-  image: gcc:7
+  image: gcc:latest
   script:
     - apt-get update -qq && apt-get install -y -qq bison libcap-dev pps-tools python-dev
     - python ./waf configure build check
   tags:
     - gitlab-org
 
-gcc-7-refclocks:
+gcc-latest-refclocks:
   <<: *job_definition
-  image: gcc:7
+  image: gcc:latest
   script:
     - apt-get update -qq && apt-get install -y -qq bison libcap-dev pps-tools python-dev
     - python ./waf configure --refclock=all build check
@@ -229,77 +293,79 @@ freebsd-11-refclocks:
   only:
     - branches@NTPsec/ntpsec
 
-centos-6-basic:
+centos-latest-basic:
   <<: *job_definition
+  image: centos:latest
   script:
+    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
     - python ./waf configure build check
   tags:
-    - centos-6
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-centos-6-refclocks:
+centos-latest-refclocks:
   <<: *job_definition
+  image: centos:latest
   script:
+    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
     - python ./waf configure --refclock=all build check
   tags:
-    - centos-6
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-centos-7-basic:
+fedora-latest-basic:
   <<: *job_definition
+  image: fedora:latest
   script:
+    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
     - python ./waf configure build check
   tags:
-    - centos-7
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-centos-7-refclocks:
+fedora-latest-refclocks:
   <<: *job_definition
+  image: fedora:latest
   script:
+    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
     - python ./waf configure --refclock=all build check
   tags:
-    - centos-7
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-fedora-26-basic:
+fedora-branched-basic:
   <<: *job_definition
+  image: fedora:branched
   script:
+    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
     - python ./waf configure build check
   tags:
-    - fedora-26
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-fedora-26-refclocks:
+fedora-branched-refclocks:
   <<: *job_definition
+  image: fedora:branched
   script:
+    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
     - python ./waf configure --refclock=all build check
   tags:
-    - fedora-26
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-fedora-27-basic:
+fedora-rawhide-basic:
   <<: *job_definition
+  image: fedora:rawhide
+  allow_failure: true
   script:
+    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
     - python ./waf configure build check
   tags:
-    - fedora-27
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
-fedora-27-refclocks:
+fedora-rawhide-refclocks:
   <<: *job_definition
+  image: fedora:rawhide
+  allow_failure: true
   script:
+    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
     - python ./waf configure --refclock=all build check
   tags:
-    - fedora-27
-  only:
-    - branches@NTPsec/ntpsec
+    - gitlab-org
 
 python3:
   <<: *job_definition
@@ -313,10 +379,112 @@ python3:
 python-coverage:
   <<: *job_definition
   script:
-    - apt-get update -qq && apt-get install -y -qq bison python-dev python-coverage
+    - apt-get update -qq && apt-get install -y -qq netbase bison python-dev python-coverage
     - python ./waf configure build check
     - for i in build/main/tests/pylib/test_*; do python-coverage run -a --source build/main/pylib $i; done
     - python-coverage report
   tags:
     - gitlab-org
 
+clang-basic:
+  <<: *job_definition
+  script:
+    - apt-get update -qq && apt-get install -y -qq netbase bison libcap-dev pps-tools python-dev clang
+    - python ./waf configure --check-c-compiler=clang build check
+  tags:
+    - gitlab-org
+
+clang-refclocks:
+  <<: *job_definition
+  script:
+    - apt-get update -qq && apt-get install -y -qq netbase bison libcap-dev pps-tools python-dev clang
+    - python ./waf configure --check-c-compiler=clang --refclock=all build check
+  tags:
+    - gitlab-org
+
+openSUSE-latest-basic:
+  <<: *job_definition
+  image: opensuse:latest
+  script:
+    - zypper -n install bison gcc libopenssl-devel libcap-devel pps-tools-devel python-devel
+    - python ./waf configure build check
+  tags:
+    - gitlab-org
+
+openSUSE-latest-refclocks:
+  <<: *job_definition
+  image: opensuse:latest
+  script:
+    - zypper -n install bison gcc libopenssl-devel libcap-devel pps-tools-devel python-devel
+    - python ./waf configure --refclock=all build check
+  tags:
+    - gitlab-org
+
+openSUSE-tumbleweed-basic:
+  <<: *job_definition
+  image: opensuse:tumbleweed
+  allow_failure: true
+  script:
+    - zypper -n install bison gcc libopenssl-devel libcap-devel pps-tools-devel python-devel
+    - python ./waf configure build check
+  tags:
+    - gitlab-org
+
+openSUSE-tumbleweed-refclocks:
+  <<: *job_definition
+  image: opensuse:tumbleweed
+  allow_failure: true
+  script:
+    - zypper -n install bison gcc libopenssl-devel libcap-devel pps-tools-devel python-devel
+    - python ./waf configure --refclock=all build check
+  tags:
+    - gitlab-org
+
+debian-stable-basic-32bit:
+  <<: *job_definition
+  image: i386/debian:stable-slim
+  script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
+    - python ./waf configure build check
+  tags:
+    - gitlab-org
+
+debian-stable-refclocks-32bit:
+  <<: *job_definition
+  image: i386/debian:stable-slim
+  script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
+    - python ./waf configure --refclock=all build check
+  tags:
+    - gitlab-org
+
+debian-stable-mDNS-basic:
+  <<: *job_definition
+  image: debian:stable-slim
+  script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev libavahi-compat-libdnssd-dev
+    - python ./waf configure build check
+  tags:
+    - gitlab-org
+
+debian-stable-mDNS-refclocks:
+  <<: *job_definition
+  image: debian:stable-slim
+  script:
+    - apt-get update
+    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev libavahi-compat-libdnssd-dev
+    - python ./waf configure --refclock=all build check
+  tags:
+    - gitlab-org
+
+cross-build:
+  <<: *job_definition
+  script:
+    - PYTHON_VERSION=2.7 PYTAG=cpython27 pyext_PATTERN="%s.so" PYTHON_LDFLAGS='-lpthread -ldl' ./waf configure --cross-compiler=arm-linux-gnueabihf-gcc-5 --cross-cflags '-I/srv/arm-local/include -I/srv/arm-local/include/python2.7' --cross-ldflags '-L/srv/arm-local/lib' --pythondir=/srv/arm-local/lib/python2.7/dist-packages --pythonarchdir=/srv/arm-local/lib/python2.7/dist-packages build
+  tags:
+    - ubuntu-1604-lts
+  only:
+    - branches@NTPsec/ntpsec

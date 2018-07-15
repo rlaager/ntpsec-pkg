@@ -10,51 +10,6 @@
 #include "ntp_lists.h"
 #include "ntp_stdlib.h"
 
-/*
- *		    Table of valid association combinations
- *		    ---------------------------------------
- *
- *                             packet->mode
- * peer->mode      | UNSPEC  ACTIVE PASSIVE  CLIENT  SERVER  BCAST
- * ----------      | ---------------------------------------------
- * NO_PEER         |   e       1       0       1       1       1
- * ACTIVE          |   e       1       1       0       0       0
- * PASSIVE         |   e       1       e       0       0       0
- * CLIENT          |   e       0       0       0       1       0
- * SERVER          |   e       0       0       0       0       0
- * BCAST           |   e       0       0       0       0       0
- * BCLIENT         |   e       0       0       0       e       1
- *
- * One point to note here: a packet in BCAST mode can potentially match
- * a peer in CLIENT mode, but we that is a special case and we check for
- * that early in the decision process.  This avoids having to keep track
- * of what kind of associations are possible etc...  We actually
- * circumvent that problem by requiring that the first b(m)roadcast
- * received after the change back to BCLIENT mode sets the clock.
- */
-#define AM_MODES	7	/* number of rows and columns */
-#define NO_PEER		0	/* action when no peer is found */
-
-static int AM[AM_MODES][AM_MODES] = {
-/*			packet->mode					    */
-/* peer { UNSPEC,   ACTIVE,     PASSIVE,    CLIENT,     SERVER,     BCAST } */
-/* mode */
-/*NONE*/{ AM_ERR, AM_NEWPASS, AM_NOMATCH, AM_FXMIT,   AM_MANYCAST, AM_NEWBCL},
-
-/*A*/	{ AM_ERR, AM_PROCPKT, AM_PROCPKT, AM_NOMATCH, AM_NOMATCH,  AM_NOMATCH},
-
-/*P*/	{ AM_ERR, AM_PROCPKT, AM_ERR,     AM_NOMATCH, AM_NOMATCH,  AM_NOMATCH},
-
-/*C*/	{ AM_ERR, AM_NOMATCH, AM_NOMATCH, AM_NOMATCH, AM_PROCPKT,  AM_NOMATCH},
-
-/*S*/	{ AM_ERR, AM_NOMATCH, AM_NOMATCH, AM_NOMATCH, AM_NOMATCH,  AM_NOMATCH},
-
-/*BCST*/{ AM_ERR, AM_NOMATCH, AM_NOMATCH, AM_NOMATCH, AM_NOMATCH,  AM_NOMATCH},
-
-/*BCL*/ { AM_ERR, AM_NOMATCH, AM_NOMATCH, AM_NOMATCH, AM_NOMATCH,  AM_PROCPKT},
-};
-
-#define MATCH_ASSOC(x, y)	AM[(x)][(y)]
 
 /*
  * These routines manage the allocation of memory to peer structures
@@ -117,10 +72,6 @@ static void		free_peer(struct peer *);
 static void		getmorepeermem(void);
 static	void		peer_reset	(struct peer *);
 static int		score(struct peer *);
-
-static inline l_fp ntohl_fp(l_fp_w lfpw) {
-    return lfpinit_u(ntohl(lfpw.l_ui), ntohl(lfpw.l_uf));
-}
 
 
 /*
@@ -267,16 +218,12 @@ findexistingpeer(
  */
 struct peer *
 findpeer(
-	struct recvbuf *rbufp,
-	int		pkt_mode,
-	int *		action
+	struct recvbuf *rbufp
 	)
 {
 	struct peer *	p;
 	sockaddr_u *	srcadr;
 	unsigned int	hash;
-	struct pkt *	pkt;
-	l_fp		pkt_org;
 
 	findpeer_calls++;
 	srcadr = &rbufp->recv_srcadr;
@@ -288,37 +235,10 @@ findpeer(
                 /* ensure peer source address matches */
                 if (!ADDR_PORT_EQ(srcadr, &p->srcadr)) continue;
 
-                /* If the association matching rules determine that this
-                 * is not a valid combination, then look for the next
-                 * valid peer association.
-                 */
-                *action = MATCH_ASSOC(p->hmode, pkt_mode);
-
-                /* A response to our manycastclient solicitation might
-                 * be misassociated with an ephemeral peer already spun
-                 * for the server.  If the packet's org timestamp
-                 * doesn't match the peer's, check if it matches the
-                 * ACST prototype peer's.  If so it is a redundant
-                 * solicitation response, return AM_ERR to discard it.
-                 * [Classic Bug 1762]
-                 */
-                if (MODE_SERVER == pkt_mode && AM_PROCPKT == *action) {
-                        pkt = &rbufp->recv_pkt;
-                        pkt_org = ntohl_fp(pkt->org);
-                        if (p->org != pkt_org && findmanycastpeer(rbufp))
-                                *action = AM_ERR;
-                }
-
-                /* If an error was returned, exit back right here. */
-                if (*action == AM_ERR) return NULL;
-
-                /* If a match is found, we stop our search. */
-                if (*action != AM_NOMATCH) break;
+		return p;
         }
 
-	/* If no matching association is found */
-	if (NULL == p) *action = MATCH_ASSOC(NO_PEER, pkt_mode);
-	return p;
+	return NULL;
 }
 
 /*
@@ -736,7 +656,7 @@ newpeer(
 	if ((MDF_BCAST & cast_flags) && peer->dstadr != NULL)
 		enable_broadcast(peer->dstadr, srcadr);
 
-	peer->precision = sys_precision;
+	peer->precision = sys_vars.sys_precision;
 	peer->hpoll = peer->cfg.minpoll;
 	if (cast_flags & MDF_POOL)
 		peer_clear(peer, "POOL", initializing1);
@@ -744,7 +664,7 @@ newpeer(
 		peer_clear(peer, "BCST", initializing1);
 	else
 		peer_clear(peer, "INIT", initializing1);
-	if (mode_ntpdate)
+	if (clock_ctl.mode_ntpdate)
 		peer_ntpdate++;
 
 	/*
@@ -832,39 +752,6 @@ peer_all_reset(void)
 }
 
 
-/*
- * findmanycastpeer - find and return a manycastclient or pool
- *		      association matching a received response.
- */
-struct peer *
-findmanycastpeer(
-	struct recvbuf *rbufp	/* receive buffer pointer */
-	)
-{
-	struct peer *peer;
-	struct pkt *pkt;
-	l_fp p_org;
-
-	/*
-	 * This routine is called upon arrival of a server-mode response
-	 * to a manycastclient multicast solicitation, or to a pool
-	 * server unicast solicitation.  Search the peer list for a
-	 * manycastclient association where the last transmit timestamp
-	 * matches the response packet's originate timestamp.  There can
-	 * be multiple manycastclient associations, or multiple pool
-	 * solicitation assocations, so this assumes the transmit
-	 * timestamps are unique for such.
-	 */
-	pkt = &rbufp->recv_pkt;
-	for (peer = peer_list; peer != NULL; peer = peer->p_link)
-		if (MDF_SOLICIT_MASK & peer->cast_flags) {
-			p_org = ntohl_fp(pkt->org);
-			if (p_org == peer->org)
-				break;
-		}
-
-	return peer;
-}
 
 /* peer_cleanup - clean peer list prior to shutdown */
 void peer_cleanup(void)

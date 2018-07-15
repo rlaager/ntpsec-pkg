@@ -6,7 +6,6 @@ from __future__ import print_function
 import unittest
 import ntp.util
 import ntp.packet
-import shutil
 import sys
 import socket
 
@@ -96,10 +95,8 @@ class TestPylibUtilMethods(unittest.TestCase):
     def test_stdversion(self):
         f = ntp.util.stdversion
 
-        ver = str(ntp.version.VERSION)
-        tick = str(ntp.version.VCS_TICK)
-        date = str(ntp.version.VCS_DATE)
-        self.assertEqual(f(), "ntpsec-" + ver + "+" + tick + " " + date)
+        ver = "@NTPSEC_VERSION_EXTENDED@"
+        self.assertEqual(f(), "ntpsec-" + ver)
 
     def test_rfc3339(self):
         f = ntp.util.rfc3339
@@ -152,6 +149,17 @@ class TestPylibUtilMethods(unittest.TestCase):
         self.assertEqual(ntp.util.portsplit(
             "[0000:1111:2222:3333:4444:5555:6666:7777]:123"),
             ("0000:1111:2222:3333:4444:5555:6666:7777", ":123"))
+
+    def test_parseConf(self):
+        data = """foo bar 42 #blah blah blah
+        "abcd"   poi? 3.14
+        "\\"\\n\\\\foo\\c" \\
+        poi! """
+        parsed = ntp.util.parseConf(data)
+        self.assertEqual(parsed,
+                         [[(False, "foo"), (False, "bar"), (False, 42)],
+                          [(True, "abcd"), (False, "poi?"), (False, 3.14)],
+                          [(True, "\"\n\\foo"), (False, "poi!")]])
 
     def test_stringfilt(self):
         f = ntp.util.stringfilt

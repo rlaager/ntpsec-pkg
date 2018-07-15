@@ -43,11 +43,13 @@ struct ctl_proc {
 #define AUTH	1
 	void (*handler) (struct recvbuf *, int); /* handle request */
 };
-
+  
 
 /*
  * Request processing routines
  */
+static  void    unmarshall_ntp_control(struct ntp_control *, struct recvbuf *);
+static  uint16_t extract_16bits_from_stream(uint8_t *);
 static	void	ctl_error	(uint8_t);
 #ifdef REFCLOCK
 static	unsigned short ctlclkstatus	(struct refclockstat *);
@@ -55,11 +57,10 @@ static	unsigned short ctlclkstatus	(struct refclockstat *);
 static	void	ctl_flushpkt	(uint8_t);
 static	void	ctl_putdata	(const char *, unsigned int, bool);
 static	void	ctl_putstr	(const char *, const char *, size_t);
-static	void	ctl_putdblf	(const char *, int, int, double);
-#define	ctl_putdbl(tag, d)	ctl_putdblf(tag, 1, 3, d)
-#define	ctl_putdbl6(tag, d)	ctl_putdblf(tag, 1, 6, d)
-#define	ctl_putsfp(tag, sfp)	ctl_putdblf(tag, 0, -1, \
-					    FP_UNSCALE(sfp))
+static	void	ctl_putdblf	(const char *, bool, int, double);
+#define	ctl_putdbl(tag, d)	ctl_putdblf(tag, true, 3, d)
+#define	ctl_putdbl6(tag, d)	ctl_putdblf(tag, true, 6, d)
+#define	ctl_putsfp(tag, sfp)	ctl_putdblf(tag, false, -1, FP_UNSCALE(sfp))
 static	void	ctl_putuint	(const char *, uint64_t);
 static	void	ctl_puthex	(const char *, uint64_t);
 static	void	ctl_putint	(const char *, long);
@@ -438,6 +439,10 @@ static const uint8_t def_sys_var[] = {
 	CS_TAI,
 	CS_LEAPTAB,
 	CS_LEAPEND,
+#ifdef ENABLE_LEAP_SMEAR
+	CS_LEAPSMEARINTV,
+	CS_LEAPSMEAROFFS,
+#endif	/* ENABLE_LEAP_SMEAR */
 	0
 };
 
@@ -698,6 +703,31 @@ init_control(void)
 
 }
 
+/*
+ * unmarshall_ntp_control - unmarshall data stream into a ntp_sontrol struct
+ */
+void
+unmarshall_ntp_control(struct ntp_control *pkt, struct recvbuf *rbufp)
+{
+    pkt->li_vn_mode = (uint8_t)rbufp->recv_buffer[0];
+    pkt->r_m_e_op = (uint8_t)rbufp->recv_buffer[1];
+	pkt->sequence = extract_16bits_from_stream(&rbufp->recv_buffer[2]);
+	pkt->status = extract_16bits_from_stream(&rbufp->recv_buffer[4]);
+	pkt->associd = extract_16bits_from_stream(&rbufp->recv_buffer[6]);
+	pkt->offset = extract_16bits_from_stream(&rbufp->recv_buffer[8]);
+	pkt->count = extract_16bits_from_stream(&rbufp->recv_buffer[10]);
+    memcpy(&pkt->data, rbufp->recv_buffer + 12, 480 + MAX_MAC_LEN);
+}
+
+uint16_t
+extract_16bits_from_stream(uint8_t *addr)
+{
+    uint16_t var = 0;
+    var = (uint16_t)*addr << 8;
+    var |= (uint16_t)*(addr + 1);
+    var = ntohs(var);
+	return var;
+}
 
 /*
  * ctl_error - send an error response for the current request
@@ -743,6 +773,7 @@ process_control(
 	)
 {
 	struct ntp_control *pkt;
+	struct ntp_control pkt_core;
 	int req_count;
 	int req_data;
 	const struct ctl_proc *cc;
@@ -758,7 +789,8 @@ process_control(
 	numctlreq++;
 	rmt_addr = &rbufp->recv_srcadr;
 	lcl_inter = rbufp->dstadr;
-	pkt = (struct ntp_control *)&rbufp->recv_pkt;
+	unmarshall_ntp_control(&pkt_core, rbufp);
+	pkt = &pkt_core;
 
 	/*
 	 * If the length is less than required for the header, or
@@ -792,7 +824,7 @@ process_control(
 	 * Pull enough data from the packet to make intelligent
 	 * responses
 	 */
-	rpkt.li_vn_mode = PKT_LI_VN_MODE(sys_leap, res_version,
+	rpkt.li_vn_mode = PKT_LI_VN_MODE(sys_vars.sys_leap, res_version,
 					 MODE_CONTROL);
 	res_opcode = pkt->r_m_e_op;
 	rpkt.sequence = pkt->sequence;
@@ -935,15 +967,15 @@ ctlsysstatus(void)
 
 	this_clock = CTL_SST_TS_UNSPEC;
 #ifdef REFCLOCK
-	if (sys_peer != NULL) {
-		if (CTL_SST_TS_UNSPEC != sys_peer->sstclktype)
-			this_clock = sys_peer->sstclktype;
+	if (sys_vars.sys_peer != NULL) {
+		if (CTL_SST_TS_UNSPEC != sys_vars.sys_peer->sstclktype)
+			this_clock = sys_vars.sys_peer->sstclktype;
 	}
 #else /* REFCLOCK */
-	if (sys_peer != 0)
+	if (sys_vars.sys_peer != 0)
 		this_clock = CTL_SST_TS_NTP;
 #endif /* REFCLOCK */
-	return CTL_SYS_STATUS(sys_leap, this_clock, ctl_sys_num_events,
+	return CTL_SYS_STATUS(sys_vars.sys_leap, this_clock, ctl_sys_num_events,
 			      ctl_sys_last_event);
 }
 
@@ -1161,7 +1193,7 @@ ctl_putunqstr(
 static void
 ctl_putdblf(
 	const char *	tag,
-	int		use_f,
+	bool		use_f,
 	int		precision,
 	double		d
 	)
@@ -1455,35 +1487,35 @@ ctl_putsys(
 	switch (varid) {
 
 	case CS_LEAP:
-		ctl_putuint(sys_var[CS_LEAP].text, sys_leap);
+		ctl_putuint(sys_var[CS_LEAP].text, sys_vars.sys_leap);
 		break;
 
 	case CS_STRATUM:
-		ctl_putuint(sys_var[CS_STRATUM].text, sys_stratum);
+		ctl_putuint(sys_var[CS_STRATUM].text, sys_vars.sys_stratum);
 		break;
 
 	case CS_PRECISION:
-		ctl_putint(sys_var[CS_PRECISION].text, sys_precision);
+		ctl_putint(sys_var[CS_PRECISION].text, sys_vars.sys_precision);
 		break;
 
 	case CS_ROOTDELAY:
-		ctl_putdbl(sys_var[CS_ROOTDELAY].text, sys_rootdelay * MS_PER_S);
+		ctl_putdbl(sys_var[CS_ROOTDELAY].text, sys_vars.sys_rootdelay * MS_PER_S);
 		break;
 
 	case CS_ROOTDISPERSION:
 		ctl_putdbl(sys_var[CS_ROOTDISPERSION].text,
-			   sys_rootdisp * MS_PER_S);
+			   sys_vars.sys_rootdisp * MS_PER_S);
 		break;
 
 	case CS_REFID:
-		if (sys_stratum > 1 && sys_stratum < STRATUM_UNSPEC)
-			ctl_putadr(sys_var[varid].text, sys_refid, NULL);
+		if (sys_vars.sys_stratum > 1 && sys_vars.sys_stratum < STRATUM_UNSPEC)
+			ctl_putadr(sys_var[varid].text, sys_vars.sys_refid, NULL);
 		else
-			ctl_putrefid(sys_var[varid].text, sys_refid);
+			ctl_putrefid(sys_var[varid].text, sys_vars.sys_refid);
 		break;
 
 	case CS_REFTIME:
-		ctl_putts(sys_var[CS_REFTIME].text, &sys_reftime);
+		ctl_putts(sys_var[CS_REFTIME].text, &sys_vars.sys_reftime);
 		break;
 
 	case CS_POLL:
@@ -1491,16 +1523,16 @@ ctl_putsys(
 		break;
 
 	case CS_PEERID:
-		if (sys_peer == NULL)
+		if (sys_vars.sys_peer == NULL)
 			ctl_putuint(sys_var[CS_PEERID].text, 0);
 		else
 			ctl_putuint(sys_var[CS_PEERID].text,
-				    sys_peer->associd);
+				    sys_vars.sys_peer->associd);
 		break;
 
 	case CS_PEERADR:
-		if (sys_peer != NULL && sys_peer->dstadr != NULL)
-			ss = sockporttoa(&sys_peer->srcadr);
+		if (sys_vars.sys_peer != NULL && sys_vars.sys_peer->dstadr != NULL)
+			ss = sockporttoa(&sys_vars.sys_peer->srcadr);
 		else
 			ss = "0.0.0.0:0";
 		ctl_putunqstr(sys_var[CS_PEERADR].text, ss, strlen(ss));
@@ -1508,8 +1540,8 @@ ctl_putsys(
 
 	case CS_PEERMODE: {
 		uint64_t u;
-		u = (sys_peer != NULL)
-			? sys_peer->hmode
+		u = (sys_vars.sys_peer != NULL)
+			? sys_vars.sys_peer->hmode
 			: MODE_UNSPEC;
 		ctl_putuint(sys_var[CS_PEERMODE].text, u);
 		break;
@@ -1661,67 +1693,67 @@ ctl_putsys(
 		break;
 
 	case CS_MRU_ENABLED:
-		ctl_puthex(sys_var[varid].text, mon_enabled);
+		ctl_puthex(sys_var[varid].text, mon_data.mon_enabled);
 		break;
 
 	case CS_MRU_DEPTH:
-		ctl_putuint(sys_var[varid].text, mru_entries);
+		ctl_putuint(sys_var[varid].text, mon_data.mru_entries);
 		break;
 
 	case CS_MRU_MEM: {
 		uint64_t u;
-		u = mru_entries * sizeof(mon_entry);
+		u = mon_data.mru_entries * sizeof(mon_entry);
 		u = (u+512)/1024;
 		ctl_putuint(sys_var[varid].text, u);
 		break;
 		}
 
 	case CS_MRU_DEEPEST:
-		ctl_putuint(sys_var[varid].text, mru_peakentries);
+		ctl_putuint(sys_var[varid].text, mon_data.mru_peakentries);
 		break;
 
 	case CS_MRU_MINDEPTH:
-		ctl_putuint(sys_var[varid].text, mru_mindepth);
+		ctl_putuint(sys_var[varid].text, mon_data.mru_mindepth);
 		break;
 
 	case CS_MRU_MAXAGE:
-		ctl_putint(sys_var[varid].text, mru_maxage);
+		ctl_putint(sys_var[varid].text, mon_data.mru_maxage);
 		break;
 
 	case CS_MRU_MINAGE:
-		ctl_putint(sys_var[varid].text, mru_minage);
+		ctl_putint(sys_var[varid].text, mon_data.mru_minage);
 		break;
 
 	case CS_MRU_MAXDEPTH:
-		ctl_putuint(sys_var[varid].text, mru_maxdepth);
+		ctl_putuint(sys_var[varid].text, mon_data.mru_maxdepth);
 		break;
 
 	case CS_MRU_MAXMEM: {
 		uint64_t u;
-		u = mru_maxdepth * sizeof(mon_entry);
+		u = mon_data.mru_maxdepth * sizeof(mon_entry);
 		u = (u+512)/1024;
 		ctl_putuint(sys_var[varid].text, u);
 		break;
 		}
 
 	case CS_MRU_EXISTS:
-		ctl_putuint(sys_var[varid].text, mru_exists);
+		ctl_putuint(sys_var[varid].text, mon_data.mru_exists);
 		break;
 
 	case CS_MRU_NEW:
-		ctl_putuint(sys_var[varid].text, mru_new);
+		ctl_putuint(sys_var[varid].text, mon_data.mru_new);
 		break;
 
 	case CS_MRU_RECYCLEOLD:
-		ctl_putuint(sys_var[varid].text, mru_recycleold);
+		ctl_putuint(sys_var[varid].text, mon_data.mru_recycleold);
 		break;
 
 	case CS_MRU_RECYCLEFULL:
-		ctl_putuint(sys_var[varid].text, mru_recyclefull);
+		ctl_putuint(sys_var[varid].text, mon_data.mru_recyclefull);
 		break;
 
 	case CS_MRU_NONE:
-		ctl_putuint(sys_var[varid].text, mru_none);
+		ctl_putuint(sys_var[varid].text, mon_data.mru_none);
 		break;
 
 	case CS_MRU_OLDEST_AGE: {
@@ -1736,47 +1768,48 @@ ctl_putsys(
 		break;
 
 	case CS_SS_RESET:
-		ctl_putuint(sys_var[varid].text, current_time - sys_stattime);
+		ctl_putuint(sys_var[varid].text,
+					current_time - stat_count.sys_stattime);
 		break;
 
 	case CS_SS_RECEIVED:
-		ctl_putuint(sys_var[varid].text, sys_received);
+		ctl_putuint(sys_var[varid].text, stat_count.sys_received);
 		break;
 
 	case CS_SS_THISVER:
-		ctl_putuint(sys_var[varid].text, sys_newversion);
+		ctl_putuint(sys_var[varid].text, stat_count.sys_newversion);
 		break;
 
 	case CS_SS_OLDVER:
-		ctl_putuint(sys_var[varid].text, sys_oldversion);
+		ctl_putuint(sys_var[varid].text, stat_count.sys_oldversion);
 		break;
 
 	case CS_SS_BADFORMAT:
-		ctl_putuint(sys_var[varid].text, sys_badlength);
+		ctl_putuint(sys_var[varid].text, stat_count.sys_badlength);
 		break;
 
 	case CS_SS_BADAUTH:
-		ctl_putuint(sys_var[varid].text, sys_badauth);
+		ctl_putuint(sys_var[varid].text, stat_count.sys_badauth);
 		break;
 
 	case CS_SS_DECLINED:
-		ctl_putuint(sys_var[varid].text, sys_declined);
+		ctl_putuint(sys_var[varid].text, stat_count.sys_declined);
 		break;
 
 	case CS_SS_RESTRICTED:
-		ctl_putuint(sys_var[varid].text, sys_restricted);
+		ctl_putuint(sys_var[varid].text, stat_count.sys_restricted);
 		break;
 
 	case CS_SS_LIMITED:
-		ctl_putuint(sys_var[varid].text, sys_limitrejected);
+		ctl_putuint(sys_var[varid].text, stat_count.sys_limitrejected);
 		break;
 
 	case CS_SS_KODSENT:
-		ctl_putuint(sys_var[varid].text, sys_kodsent);
+		ctl_putuint(sys_var[varid].text, stat_count.sys_kodsent);
 		break;
 
 	case CS_SS_PROCESSED:
-		ctl_putuint(sys_var[varid].text, sys_processed);
+		ctl_putuint(sys_var[varid].text, stat_count.sys_processed);
 		break;
 
 	case CS_AUTHDELAY:
@@ -1833,7 +1866,7 @@ ctl_putsys(
 			putfunc args	/* no trailing ; */
 
 	case CS_K_OFFSET:
-		ctl_putdblf(sys_var[varid].text, 0, -1,
+		ctl_putdblf(sys_var[varid].text, false, -1,
 			ntp_error_in_seconds(ntx.offset) * MS_PER_S);
 		break;
 
@@ -1842,12 +1875,12 @@ ctl_putsys(
 		break;
 
 	case CS_K_MAXERR:
-		ctl_putdblf(sys_var[varid].text, 0, 6,
+		ctl_putdblf(sys_var[varid].text, false, 6,
 			    ntp_error_in_seconds(ntx.maxerror) * MS_PER_S);
 		break;
 
 	case CS_K_ESTERR:
-		ctl_putdblf(sys_var[varid].text, 0, 6,
+		ctl_putdblf(sys_var[varid].text, false, 6,
 			 ntp_error_in_seconds(ntx.esterror) * MS_PER_S);
 		break;
 
@@ -1861,7 +1894,7 @@ ctl_putsys(
 		break;
 
 	case CS_K_PRECISION:
-		ctl_putdblf(sys_var[varid].text, 0, 6,
+		ctl_putdblf(sys_var[varid].text, false, 6,
 			    ntp_error_in_seconds(ntx.precision) * MS_PER_S);
 		break;
 
@@ -1928,7 +1961,7 @@ ctl_putsys(
 
 	case CS_IOSTATS_RESET:
 		ctl_putuint(sys_var[varid].text,
-			    current_time - io_timereset);
+			    current_time - pkt_count.io_timereset);
 		break;
 
 	case CS_TOTAL_RBUF:
@@ -1948,31 +1981,31 @@ ctl_putsys(
 		break;
 
 	case CS_IO_DROPPED:
-		ctl_putuint(sys_var[varid].text, packets_dropped);
+		ctl_putuint(sys_var[varid].text, pkt_count.packets_dropped);
 		break;
 
 	case CS_IO_IGNORED:
-		ctl_putuint(sys_var[varid].text, packets_ignored);
+		ctl_putuint(sys_var[varid].text, pkt_count.packets_ignored);
 		break;
 
 	case CS_IO_RECEIVED:
-		ctl_putuint(sys_var[varid].text, packets_received);
+		ctl_putuint(sys_var[varid].text, pkt_count.packets_received);
 		break;
 
 	case CS_IO_SENT:
-		ctl_putuint(sys_var[varid].text, packets_sent);
+		ctl_putuint(sys_var[varid].text, pkt_count.packets_sent);
 		break;
 
 	case CS_IO_SENDFAILED:
-		ctl_putuint(sys_var[varid].text, packets_notsent);
+		ctl_putuint(sys_var[varid].text, pkt_count.packets_notsent);
 		break;
 
 	case CS_IO_WAKEUPS:
-		ctl_putuint(sys_var[varid].text, handler_calls);
+		ctl_putuint(sys_var[varid].text, pkt_count.handler_calls);
 		break;
 
 	case CS_IO_GOODWAKEUPS:
-		ctl_putuint(sys_var[varid].text, handler_pkts);
+		ctl_putuint(sys_var[varid].text, pkt_count.handler_pkts);
 		break;
 
 	case CS_TIMERSTATS_RESET:
@@ -2008,7 +2041,7 @@ ctl_putsys(
 
 	case CS_ROOTDISTANCE:
 		ctl_putdbl(sys_var[CS_ROOTDISTANCE].text,
-			   sys_rootdist * MS_PER_S);
+			   sys_vars.sys_rootdist * MS_PER_S);
 		break;
 
         default:
@@ -2967,7 +3000,7 @@ static void configure(
 			msyslog(LOG_NOTICE,
 				"MODE6: runtime config from %s rejected due to nomodify restriction",
 				socktoa(&rbufp->recv_srcadr));
-		sys_restricted++;
+		stat_count.sys_restricted++;
 		return;
 	}
 
@@ -3420,7 +3453,7 @@ static void read_mru_list(
 			msyslog(LOG_NOTICE,
 				"MODE6: mrulist from %s rejected due to nomrulist restriction",
 				socktoa(&rbufp->recv_srcadr));
-		sys_restricted++;
+		stat_count.sys_restricted++;
 		return;
 	}
 	/*
@@ -3555,7 +3588,7 @@ static void read_mru_list(
 	mon = NULL;
 	for (i = 0; i < (size_t)priors; i++) {
 		hash = MON_HASH(&addr[i]);
-		for (mon = mon_hash[hash];
+		for (mon = mon_data.mon_hash[hash];
 		     mon != NULL;
 		     mon = mon->hash_next)
 			if (ADDR_PORT_EQ(&mon->rmtadr, &addr[i]))
@@ -3586,10 +3619,10 @@ static void read_mru_list(
 		 * that case return the starting point entry.
 		 */
 		if (limit > 1)
-			mon = PREV_DLIST(mon_mru_list, mon, mru);
+			mon = PREV_DLIST(mon_data.mon_mru_list, mon, mru);
 	} else {	/* start with the oldest */
-		mon = TAIL_DLIST(mon_mru_list, mru);
-		countdown = mru_entries;
+		mon = TAIL_DLIST(mon_data.mon_mru_list, mru);
+		countdown = mon_data.mru_entries;
 	}
 
 	/*
@@ -3601,7 +3634,7 @@ static void read_mru_list(
 	prior_mon = NULL;
 	for (count = 0;
 	     mon != NULL && res_frags < frags && count < limit;
-	     mon = PREV_DLIST(mon_mru_list, mon, mru)) {
+	     mon = PREV_DLIST(mon_data.mon_mru_list, mon, mru)) {
 
 		if (mon->count < mincount)
 			continue;
@@ -3963,6 +3996,7 @@ read_ordlist(
 	const char addr_rst_s[] = "addr_restrictions";
 	const size_t a_r_chars = COUNTOF(addr_rst_s) - 1;
 	struct ntp_control *	cpkt;
+	struct ntp_control pkt_core;
 	unsigned short		qdata_octets;
 
 	UNUSED_ARG(rbufp);
@@ -3979,7 +4013,8 @@ read_ordlist(
 	 * which are access control lists.  Other request data return
 	 * CERR_UNKNOWNVAR.
 	 */
-	cpkt = (struct ntp_control *)&rbufp->recv_pkt;
+	unmarshall_ntp_control(&pkt_core, rbufp);
+	cpkt = &pkt_core;
 	qdata_octets = ntohs(cpkt->count);
 	if (0 == qdata_octets || (ifstatint8_ts == qdata_octets &&
 	    !memcmp(ifstats_s, cpkt->data, ifstatint8_ts))) {
@@ -4052,9 +4087,9 @@ read_clockstatus(
 		 * Find a clock for this jerk.	If the system peer
 		 * is a clock use it, else search peer_list for one.
 		 */
-		if (sys_peer != NULL && (FLAG_REFCLOCK &
-		    sys_peer->cfg.flags))
-			peer = sys_peer;
+		if (sys_vars.sys_peer != NULL && (FLAG_REFCLOCK &
+		    sys_vars.sys_peer->cfg.flags))
+			peer = sys_vars.sys_peer;
 		else
 			for (peer = peer_list;
 			     peer != NULL;

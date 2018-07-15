@@ -1900,9 +1900,9 @@ local_input(
 					buf->dstadr       = rbufp->dstadr;
 					buf->receiver     = rbufp->receiver;
 					buf->fd           = rbufp->fd;
-					buf->X_from_where = rbufp->X_from_where;
+					buf->recv_peer    = rbufp->recv_peer;
 					parse->generic->io.recvcount++;
-					packets_received++;
+					pkt_count.packets_received++;
 					add_full_recv_buffer(buf);
 				}
 				parse_iodone(&parse->parseio);
@@ -2402,7 +2402,7 @@ parse_hardpps(
 			 * tell the rest, that we have a kernel PPS source, iff we ever enable HARDPPS
 			 */
 			if (mode == PARSE_HARDPPS_ENABLE)
-			        hardpps_enable = true;
+			        clock_ctl.hardpps_enable = true;
 		}
 	}
 
@@ -2604,7 +2604,7 @@ parse_start(
 
 	peer->rootdelay       = parse->parse_type->cl_rootdelay;
 	peer->sstclktype      = parse->parse_type->cl_type;
-	peer->precision       = sys_precision;
+	peer->precision       = sys_vars.sys_precision;
 
 	peer->stratum         = STRATUM_REFCLOCK;
 
@@ -4120,16 +4120,15 @@ gps16x_message(
 					char buffer[128];
 
 					get_mbg_ascii_msg(&bufp, &gps_ascii_msg);
-
+					strlcpy(buffer, "gps_message=", sizeof(buffer));
 					if (gps_ascii_msg.valid)
 						{
 							char buffer1[128];
 							mkreadable(buffer1, sizeof(buffer1), gps_ascii_msg.s, strlen(gps_ascii_msg.s), (int)0);
-
-							snprintf(buffer, sizeof(buffer), "gps_message=\"%s\"", buffer1);
+							strlcat(buffer, buffer1, sizeof(buffer));
 						}
 					else
-						snprintf(buffer, sizeof(buffer), "gps_message=<NONE>");
+						strlcat(buffer, "<None>", sizeof(buffer));
 
 					set_var(&parse->kv, buffer, sizeof(buffer), RO|DEF);
 				}
