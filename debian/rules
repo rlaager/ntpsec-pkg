@@ -14,9 +14,6 @@ ifeq (hurd, $(DEB_HOST_ARCH_OS))
 	# hurd does not provided the system calls needed for ntpd to work.
 	exit 1
 endif
-	# Use the packaged version of autorevision:
-	ln -sf /usr/bin/autorevision wafhelpers/autorevision.sh
-
 	# Only build with refclocks NOT slated for removal.  See also
 	# debian/patches/update-refclock-docs.patch.  However, if the reason
 	# for deprecation is only "two digit years", I *am* keeping it.

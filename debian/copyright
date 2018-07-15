@@ -373,10 +373,6 @@ Files: waf waflib/*
 Copyright: 2005-2017 Thomas Nagy
 License: BSD-3-clause
 
-Files: wafhelpers/autorevision.sh
-Copyright: 2012-2016 dak180 <dak180@users.sourceforge.net> and contributors
-License: Expat
-
 License: BSD-2-clause
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions

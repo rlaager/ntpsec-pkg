@@ -1,5 +1,4 @@
 # Forwarding not needed
-use-upstream-version.patch
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
 systemd-configure-ntpviz.patch
