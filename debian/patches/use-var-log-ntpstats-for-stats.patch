@@ -9,10 +9,10 @@ Description: Use /var/log/ntpstats for stats
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2018-03-16
+Last-Update: 2018-07-14
 --- a/docs/includes/ntpd-body.txt
 +++ b/docs/includes/ntpd-body.txt
-@@ -516,7 +516,7 @@
+@@ -511,7 +511,7 @@
  |process ID file         |none              |+-p+        |+pidfile+
  |log file                |system log        |+-l+        |+logfile+
  |include file            |none              |none        |+includefile+

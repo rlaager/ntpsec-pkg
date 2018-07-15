@@ -4,10 +4,10 @@ Description: Use /etc/ntpviz for header and footer
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2017-11-05
+Last-Update: 2018-07-14
 --- a/docs/includes/ntpviz-body.txt
 +++ b/docs/includes/ntpviz-body.txt
-@@ -169,11 +169,17 @@
+@@ -168,11 +168,17 @@
  
  The first file is named 'header'.  The contents of that file will be
  added almost at the top of the body on the generated index page.
