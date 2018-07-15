@@ -18,7 +18,6 @@ Build-Depends: asciidoc,
                python3-all-dev,
                python3-dev (>= 3.3),
                xsltproc
-X-Python3-Version: >= 3.3
 Build-Conflicts: libavahi-compat-libdnssd-dev,
                  libwww-dev,
                  libwww-ssl-dev
