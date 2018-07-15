@@ -1,3 +1,32 @@
+ntpsec (1.1.1+dfsg1-1) unstable; urgency=medium
+
+  * Leave logs and drift file if ntp is installed
+  * Changes as of ntp_4.2.8p11+dfsg-1 have been merged as appropriate:
+    - Drop old versioned build-deps.
+      Thanks to Bernhard Schmidt <berni@debian.org>
+    - Sync AppArmor profile changes from Ubuntu.
+      Thanks to Bernhard Schmidt <berni@debian.org>
+  * Update apparmor for new drift temp file
+  * Allow ntp for ntpsec-ntpviz Recommends
+  * Drop preempt from Ubuntu ntp.conf
+  * Use ntp.conf.dhcp if it exists, rather than only if it is newer than
+    /etc/ntp.conf
+  * Add an option to ignore DHCP-provided servers (Closes: 898402)
+  * Update upstream GPG key
+  * New upstream version
+    - Log timestamps now include the year.  This is useful when
+      investigating bugs involving time-setting and -g.
+    - Many internal cleanups to clear the way for upcoming major features.
+      They should generally not be user visible.  Refer to the git-log if
+      you are interested.
+    - Restore support for peer (MODE_ACTIVE) packets
+  * Drop autorevision-related code
+  * Refresh Debian patches
+  * README.Debian: Update bit about dhclient.conf
+  * README.Debian: Add notes about the purge issues
+
+ -- Richard Laager <rlaager@wiktel.com>  Sat, 14 Jul 2018 23:57:24 -0500
+
 ntpsec (1.1.0+dfsg1-1) unstable; urgency=medium
 
   * Make ntpsec Conflict with ntpdate
