@@ -163,9 +163,9 @@ License: NTP
 
 Files: debian/apparmor-profile debian/apparmor-profile.tunable
 Copyright: 2002-2005 Novell/SUSE
-           2009-2017 Canonical, Ltd.
+           2009-2018 Canonical, Ltd.
            2017 Kurt Roeckx <kurt@roeckx.be>
-           2016-2017 Richard Laager <rlaager@wiktel.com>
+           2016-2018 Richard Laager <rlaager@wiktel.com>
 License: GPL-2
  This program is free software; you can redistribute it and/or
  modify it under the terms of version 2 of the GNU General Public
@@ -242,7 +242,7 @@ License: NTP and ISC
 
 Files: libntp/ntp_dns.c libntp/ntp_random.c
 Copyright: 1983, 1993 The Regents of the University of California
-           2015-2017 by the NTPsec project contributors
+           2015-2018 by the NTPsec project contributors
 License: BSD-4-Clause-UC
 
 Files: libntp/strl_obsd.c
@@ -286,7 +286,7 @@ License: NTP
 
 Files: ntpd/refclock_jjy.c
 Copyright: 2001-2004, 2015 Takao Abe <takao_abe@xurb.jp>
-           2015-2017 by the NTPsec project contributors
+           2015-2018 by the NTPsec project contributors
 License: BSD-3-clause-Abe
  Permission to use, copy, modify, and distribute this software
  and its documentation for any purpose is hereby granted
@@ -315,7 +315,7 @@ License: BSD-3-clause-Abe
 
 Files: ntpd/refclock_oncore.c
 Copyright: Poul-Henning Kamp <phk@FreeBSD.ORG>
-           2015-2017 by the NTPsec project contributors
+           2015-2018 by the NTPsec project contributors
 Comment: The "COPYRIGHT 1991-1994 MOTOROLA INC." and similar are part of a
  copy of text from a label on hardware, to illustrate the models of hardware
  the driver was tested with.
@@ -326,7 +326,7 @@ License: Beerware
 
 Files: ntpd/refclock_trimble.c
 Copyright: 1997, 1998, 1999, 2000 Trimble Navigation Ltd.
-           2015-2017 by the NTPsec project contributors
+           2015-2018 by the NTPsec project contributors
 License: BSD-4-clause-Trimble
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions
