@@ -16,7 +16,7 @@ if [ "$1" = "configure" ]; then
 	# behavior.  (If they were using logging, the directory will not be
 	# empty.)
 	if ! dpkg -s ntpsec-ntpviz > /dev/null 2>&1; then
-	        rmdir /var/log/ntpstats 2> /dev/null || true
+		rmdir /var/log/ntpstats 2> /dev/null || true
 	fi
 
 	# If the directory does exist, make sure the ownership is correct.
