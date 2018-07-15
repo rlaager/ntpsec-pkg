@@ -22,10 +22,19 @@ defaultTimeout = 30
 pingTime = 60
 
 
+def gen_next(generator):
+    if str is bytes:  # Python 2
+        return generator.next()
+    else:  # Python 3
+        return next(generator)
+
+
 class MIBControl:
-    def __init__(self, oidTree, mibRoot=(), rangeSubid=0, upperBound=None,
+    def __init__(self, oidTree=None, mibRoot=(), rangeSubid=0, upperBound=None,
                  mibContext=None):
-        self.oidTree = oidTree  # contains callbacks for the MIB
+        self.oidTree = {}  # contains callbacks for the MIB
+        if oidTree is not None:
+            self.oidTree = oidTree
         # The undo system is only for the last operation
         self.inSetP = False  # Are we currently in the set procedure?
         self.setVarbinds = []  # Varbind of the current set operation
@@ -48,11 +57,35 @@ class MIBControl:
     def mib_context(self):
         return self.context
 
+    def addNode(self, oid, reader=None, writer=None, dynamic=None):
+        if isinstance(oid, ax.OID):  # get it in a mungable format
+            oid = tuple(oid.subids)
+        # dynamic is the generator for tables
+        currentLevel = self.oidTree
+        remainingOID = oid
+        while True:
+            node, remainingOID = ntp.util.slicedata(remainingOID, 1)
+            node = node[0]
+            if node not in currentLevel.keys():
+                currentLevel[node] = {"reader":None, "writer":None,
+                                      "subids":None}
+            if len(remainingOID) == 0:  # We have reached the target node
+                currentLevel[node]["reader"] = reader
+                currentLevel[node]["writer"] = writer
+                if dynamic is not None:
+                    # can't be both dynamic and non-dynamic
+                    currentLevel[node]["subids"] = dynamic
+                return
+            else:
+                if currentLevel[node]["subids"] is None:
+                    currentLevel[node]["subids"] = {}
+                currentLevel = currentLevel[node]["subids"]
+
     def getOID_core(self, nextP, searchoid, returnGenerator=False):
-        gen = ax.walkMIBTree(self.oidTree, self.mibRoot)
+        gen = walkMIBTree(self.oidTree, self.mibRoot)
         while True:
             try:
-                oid, reader, writer = gen.next()
+                oid, reader, writer = gen_next(gen)
                 if nextP is True:  # GetNext
                     # For getnext any OID greater than the start qualifies
                     oidhit = (oid > searchoid)
@@ -84,11 +117,11 @@ class MIBControl:
     def getOIDsInRange(self, oidrange, firstOnly=False):
         "Get a list of every (optionally the first) OID in a range"
         oids = []
-        gen = ax.walkMIBTree(self.oidTree, self.mibRoot)
+        gen = walkMIBTree(self.oidTree, self.mibRoot)
         # Find the first OID
         while True:
             try:
-                oid, reader, writer = gen.next()
+                oid, reader, writer = gen_next(gen)
                 if reader is None:
                     continue  # skip unimplemented OIDs
                 elif oid.subids == oidrange.start.subids:
@@ -100,6 +133,10 @@ class MIBControl:
                         continue
                 elif oid > oidrange.start:
                     # If we are here it means we hit the start but skipped
+                    if (oidrange.end.isNull() is False) and \
+                       (oid >= oidrange.end):
+                        # We fell off the range
+                        return []
                     oids.append((oid, reader, writer))
                     break
             except StopIteration:
@@ -110,10 +147,11 @@ class MIBControl:
         # Start filling in the rest of the range
         while True:
             try:
-                oid, reader = gen.next()
+                oid, reader, writer = gen_next(gen)
                 if reader is None:
                     continue  # skip unimplemented OIDs
-                elif (oidrange.end is not None) and (oid >= oidrange.end):
+                elif (oidrange.end.isNull() is False) and \
+                     (oid >= oidrange.end):
                     break  # past the end of a bounded range
                 else:
                     oids.append((oid, reader, writer))
@@ -135,7 +173,7 @@ class PacketControl:
         self.packetLog = {}  # Sent packets kept until response is received
         self.loopCallback = None  # called each loop in runforever mode
         self.database = dbase  # class for handling data requests
-        self.receivedData = ""  # buffer for data from incomplete packets
+        self.receivedData = b""  # buffer for data from incomplete packets
         self.receivedPackets = []  # use as FIFO
         self.timeout = timeout
         self.sessionID = None  # need this for all packets
@@ -176,8 +214,8 @@ class PacketControl:
                     "Received packet with incorrect session ID: %s" % packet,
                     3)
                 resp = ax.ResponsePDU(True, packet.sessionID,
-                                      packet.transactioID, packet.packetID,
-                                      0, ax.REPERR_NOT_OPEN, 0)
+                                      packet.transactionID, packet.packetID,
+                                      0, ax.RSPERR_NOT_OPEN, 0)
                 self.sendPacket(resp, False)
                 continue
             ptype = packet.pduType
@@ -207,7 +245,7 @@ class PacketControl:
                                   self.database.mib_upperBound(),
                                   self.database.mib_context())
         self.sendPacket(register, False)
-        response = self.waitForResponse(register, True)
+        response = self.waitForResponse(register)
         self.stillConnected = True
 
     def waitForResponse(self, opkt, ignoreSID=False):
@@ -230,7 +268,7 @@ class PacketControl:
     def checkResponses(self):
         "Check for expected responses that have timed out"
         currentTime = time.time()
-        for key in self.packetLog.keys():
+        for key in list(self.packetLog.keys()):
             expiration, originalPkt, callback = self.packetLog[key]
             if currentTime > expiration:
                 if callback is not None:
@@ -287,7 +325,7 @@ class PacketControl:
             if resp is None:  # Timed out. Need to restart the session.
                 # Er, problem: Can't handle reconnect from inside PacketControl
                 self.stillConnected = False
-        self.sendPacket(pkt, True)
+        self.sendPacket(pkt, True, callback=callback)
 
     def sendNotify(self, varbinds, context=None):
         # DUMMY packetID, does this need to change? or does the pktID only
@@ -311,7 +349,7 @@ class PacketControl:
 
     def pollSocket(self):
         "Reads all currently available data from the socket, non-blocking"
-        data = ""
+        data = b""
         while True:
             tmp = select.select([self.socket], [], [], 0)[0]
             if len(tmp) == 0:  # No socket, means no data available
@@ -500,3 +538,49 @@ class PacketControl:
             # Ok, response with no associated packet.
             # Probably something that timed out.
             pass
+
+
+def walkMIBTree(tree, rootpath=()):
+    # Tree node formats:
+    # {"reader": <func>, "writer": <func>, "subids": {.blah.}}
+    # {"reader": <func>, "writer": <func>, "subids": <func>}
+    # The "subids" function in dynamic nodes must return an MIB tree
+    nodeStack = []
+    oidStack = []
+    current = tree
+    currentKeys = list(current.keys())
+    currentKeys.sort()
+    keyID = 0
+    while True:
+        if keyID >= len(currentKeys):
+            if len(nodeStack) > 0:
+                # No more nodes this level, pop higher node
+                current, currentKeys, keyID, key = nodeStack.pop()
+                oidStack.pop()
+                keyID += 1
+                continue
+            else:  # Out of tree, we are done
+                return
+        key = currentKeys[keyID]
+        oid = ax.OID(rootpath + tuple(oidStack) + (key,))
+        yield (oid, current[key].get("reader"), current[key].get("writer"))
+        subs = current[key].get("subids")
+        if subs is not None:
+            # Push current node, move down a level
+            nodeStack.append((current, currentKeys, keyID, key))
+            oidStack.append(key)
+            if isinstance(subs, dict) is True:
+                current = subs
+            else:
+                current = subs()  # Tree generator function
+                if current == {}:  # no dynamic subids, pop
+                    current, currentKeys, keyID, key = nodeStack.pop()
+                    oidStack.pop()
+                    keyID += 1
+                    continue
+            currentKeys = list(current.keys())
+            currentKeys.sort()
+            keyID = 0
+            key = currentKeys[keyID]
+            continue
+        keyID += 1

@@ -148,13 +148,15 @@ static	void	stop_kern_loop(void);
 /*
  * Clock state machine control flags
  */
-bool	ntp_enable = true;	/* clock discipline enabled */
-bool	pll_control = false;	/* kernel support available */
-bool	kern_enable = true;	/* kernel support enabled */
-bool	hardpps_enable;		/* kernel PPS discipline enabled */
-bool	allow_panic = false;	/* allow panic correction (-g) */
-bool	force_step_once = false; /* always step time once at startup (-G) */
-bool	mode_ntpdate = false;	/* exit on first clock set (-q) */
+struct clock_control_flags clock_ctl = {
+	.ntp_enable = true,	/* clock discipline enabled */
+	.pll_control = false,	/* kernel support available */
+	.kern_enable = true,	/* kernel support enabled */
+	.hardpps_enable = false,		/* kernel PPS discipline enabled */
+	.allow_panic = false,	/* allow panic correction (-g) */
+	.force_step_once = false, /* always step time once at startup (-G) */
+	.mode_ntpdate = false	/* exit on first clock set (-q) */
+};
 int	freq_cnt;		/* initial frequency clamp */
 
 static int freq_set;		/* initial set frequency switch */
@@ -224,7 +226,7 @@ init_loopfilter(void)
 	 * Initialize state variables.
 	 */
 	sys_poll = ntp_minpoll;
-	clock_jitter = LOGTOD(sys_precision);
+	clock_jitter = LOGTOD(sys_vars.sys_precision);
 	freq_cnt = (int)clock_minstep;
 }
 
@@ -362,44 +364,40 @@ or, from ntp_adjtime():
 	    case TIME_ERROR: /* 5: unsynchronized, or loss of synchronization */
 				/* error (see status word) */
 
+		des[0] = 0;
+		des[1] = 0;  /* we skip first ":".  */
+
 		if (ptimex->status & STA_UNSYNC)
-			snprintf(des, sizeof(des), "%s%sClock Unsynchronized",
-				des, (*des) ? "; " : "");
+			strlcat(des, ":Clock Unsynchronized", sizeof(des));
 
 		if (ptimex->status & STA_CLOCKERR)
-			snprintf(des, sizeof(des), "%s%sClock Error",
-				des, (*des) ? "; " : "");
+			strlcat(des, ":Clock Error", sizeof(des));
 
 		if (!(ptimex->status & STA_PPSSIGNAL)
 		    && ptimex->status & STA_PPSFREQ)
-			snprintf(des, sizeof(des), "%s%sPPS Frequency Sync wanted but no PPS",
-				des, (*des) ? "; " : "");
+			strlcat(des, ":PPS Frequency Sync wanted but no PPS", sizeof(des));
 
 		if (!(ptimex->status & STA_PPSSIGNAL)
 		    && ptimex->status & STA_PPSTIME)
-			snprintf(des, sizeof(des), "%s%sPPS Time Sync wanted but no PPS signal",
-				des, (*des) ? "; " : "");
+			strlcat(des, ":PPS Time Sync wanted but no PPS signal", sizeof(des));
 
 		if (   ptimex->status & STA_PPSTIME
 		    && ptimex->status & STA_PPSJITTER)
-			snprintf(des, sizeof(des), "%s%sPPS Time Sync wanted but PPS Jitter exceeded",
-				des, (*des) ? "; " : "");
+			strlcat(des, ":PPS Time Sync wanted but PPS Jitter exceeded", sizeof(des));
 
 		if (   ptimex->status & STA_PPSFREQ
 		    && ptimex->status & STA_PPSWANDER)
-			snprintf(des, sizeof(des), "%s%sPPS Frequency Sync wanted but PPS Wander exceeded",
-				des, (*des) ? "; " : "");
+			strlcat(des, ":PPS Frequency Sync wanted but PPS Wander exceeded", sizeof(des));
 
 		if (   ptimex->status & STA_PPSFREQ
 		    && ptimex->status & STA_PPSERROR)
-			snprintf(des, sizeof(des), "%s%sPPS Frequency Sync wanted but Calibration error detected",
-				des, (*des) ? "; " : "");
+			strlcat(des, ":PPS Frequency Sync wanted but Calibration error detected", sizeof(des));
 
 		if (pps_call && !(ptimex->status & STA_PPSSIGNAL))
 			report_event(EVNT_KERN, NULL,
 			    "no PPS signal");
 		DPRINT(1, ("kernel loop status %#x (%s)\n",
-			   (unsigned)ptimex->status, des));
+			   (unsigned)ptimex->status, des+1));
 		/*
 		 * This code may be returned when ntp_adjtime() has just
 		 * been called for the first time, quite a while after
@@ -415,7 +413,7 @@ or, from ntp_adjtime():
 		 * msyslog(LOG_INFO, "CLOCK: kernel reports time synchronization lost");
 		 */
 		msyslog(LOG_INFO, "CLOCK: kernel reports TIME_ERROR: %#x: %s",
-			(unsigned)ptimex->status, des);
+			(unsigned)ptimex->status, des+1);
 	    break;
 #else
 # warning TIME_ERROR is not defined
@@ -470,7 +468,7 @@ local_clock(
 #ifdef ENABLE_LOCKCLOCK
 	{
 #else
-	if (!ntp_enable) {
+	if (!clock_ctl.ntp_enable) {
 #endif /* ENABLE_LOCKCLOCK */
 		record_loop_stats(fp_offset, drift_comp, clock_jitter,
 		    clock_stability, sys_poll);
@@ -488,7 +486,7 @@ local_clock(
 	 * than the step threshold; so, subsequent panics will exit.
 	 */
 	if (fabs(fp_offset) > clock_panic && clock_panic > 0 &&
-	    !allow_panic) {
+	    !clock_ctl.allow_panic) {
 		snprintf(tbuf, sizeof(tbuf),
 		    "%+.0f s; set clock manually within %.0f s.",
 		    fp_offset, clock_panic);
@@ -505,7 +503,7 @@ local_clock(
 	 * terminal does not detach, so the termination message prints
 	 * directly to the terminal.
 	 */
-	if (mode_ntpdate) {
+	if (clock_ctl.mode_ntpdate) {
 		if (  ( fp_offset > clock_max_fwd  && clock_max_fwd  > 0)
 		   || (-fp_offset > clock_max_back && clock_max_back > 0)) {
 			step_systime(fp_offset, ntp_set_tod);
@@ -567,9 +565,9 @@ local_clock(
 	rval = 1;
 	if (  ( fp_offset > clock_max_fwd  && clock_max_fwd  > 0)
 	   || (-fp_offset > clock_max_back && clock_max_back > 0)
-	   || force_step_once ) {
-		if (force_step_once) {
-			force_step_once = false;  /* we want this only once after startup */
+	   || clock_ctl.force_step_once ) {
+		if (clock_ctl.force_step_once) {
+			clock_ctl.force_step_once = false;  /* we want this only once after startup */
 			msyslog(LOG_NOTICE, "CLOCK: Doing intital time step" );
 		}
 
@@ -640,7 +638,7 @@ local_clock(
 			step_systime(fp_offset, ntp_set_tod);
 			reinit_timer();
 			tc_counter = 0;
-			clock_jitter = LOGTOD(sys_precision);
+			clock_jitter = LOGTOD(sys_vars.sys_precision);
 			rval = 2;
 			if (state == EVNT_NSET) {
 				rstclock(EVNT_FREQ, 0);
@@ -691,7 +689,7 @@ local_clock(
 		 * startup until the initial transient has subsided.
 		 */
 		default:
-			allow_panic = false;
+			clock_ctl.allow_panic = false;
 			if (freq_cnt == 0) {
 
 				/*
@@ -739,7 +737,7 @@ local_clock(
 	 * lead to overflow problems. This might occur if some misguided
 	 * lad set the step threshold to something ridiculous.
 	 */
-	if (pll_control && kern_enable && freq_cnt == 0) {
+	if (clock_ctl.pll_control && clock_ctl.kern_enable && freq_cnt == 0) {
 		static int kernel_status;	/* from ntp_adjtime */
 
 		/*
@@ -776,14 +774,14 @@ local_clock(
 				ntv.constant = 0;
 
 			ntv.esterror = (long)(clock_jitter * US_PER_S);
-			ntv.maxerror = (long)((sys_rootdelay / 2 +
-			    sys_rootdisp) * US_PER_S);
+			ntv.maxerror = (long)((sys_vars.sys_rootdelay / 2 +
+			    sys_vars.sys_rootdisp) * US_PER_S);
 			ntv.status = STA_PLL;
 
 			/*
 			 * Enable/disable the PPS if requested.
 			 */
-			if (hardpps_enable) {
+			if (clock_ctl.hardpps_enable) {
 				ntv.status |= (STA_PPSTIME | STA_PPSFREQ);
 				if (!(pll_status & STA_PPSTIME))
 					sync_status("PPS enabled",
@@ -796,9 +794,9 @@ local_clock(
 						pll_status,
 						ntv.status);
 			}
-			if (sys_leap == LEAP_ADDSECOND)
+			if (sys_vars.sys_leap == LEAP_ADDSECOND)
 				ntv.status |= STA_INS;
-			else if (sys_leap == LEAP_DELSECOND) ntv.status |= STA_DEL;
+			else if (sys_vars.sys_leap == LEAP_DELSECOND) ntv.status |= STA_DEL;
 		}
 
 		/*
@@ -812,7 +810,7 @@ local_clock(
 		 */
 		if ((0 > ntp_adj_ret) || (ntp_adj_ret != kernel_status)) {
 			kernel_status = ntp_adj_ret;
-			ntp_adjtime_error_handler(__func__, &ntv, ntp_adj_ret, errno, hardpps_enable, false, __LINE__ - 1);
+			ntp_adjtime_error_handler(__func__, &ntv, ntp_adj_ret, errno, clock_ctl.hardpps_enable, false, __LINE__ - 1);
 		}
 		pll_status = ntv.status;
 		clock_offset = ntv.offset * S_PER_NS;
@@ -937,9 +935,9 @@ adj_host_clock(
 	 * would be counterproductive. During the startup clamp period, the
 	 * time constant is clamped at 2.
 	 */
-	sys_rootdisp += clock_phi;
+	sys_vars.sys_rootdisp += clock_phi;
 #ifndef ENABLE_LOCKCLOCK
-	if (!ntp_enable || mode_ntpdate)
+	if (!clock_ctl.ntp_enable || clock_ctl.mode_ntpdate)
 		return;
 	/*
 	 * Determine the phase adjustment. The gain factor (denominator)
@@ -952,7 +950,7 @@ adj_host_clock(
 	} else if (freq_cnt > 0) {
 		offset_adj = clock_offset / (CLOCK_PLL * ULOGTOD(1));
 		freq_cnt--;
-	} else if (pll_control && kern_enable) {
+	} else if (clock_ctl.pll_control && clock_ctl.kern_enable) {
 		offset_adj = 0.;
 	} else {
 		offset_adj = clock_offset / (CLOCK_PLL * ULOGTOD(sys_poll));
@@ -964,7 +962,7 @@ adj_host_clock(
 	 * set_freq().  Otherwise it is a component of the adj_systime()
 	 * offset.
 	 */
-	if (pll_control && kern_enable)
+	if (clock_ctl.pll_control && clock_ctl.kern_enable)
 		freq_adj = 0.;
 	else
 		freq_adj = drift_comp;
@@ -1058,11 +1056,11 @@ set_freq(
 
 	drift_comp = freq;
 	loop_desc = "ntpd";
-	if (pll_control) {
+	if (clock_ctl.pll_control) {
 		int ntp_adj_ret;
 		ZERO(ntv);
 		ntv.modes = MOD_FREQUENCY;
-		if (kern_enable) {
+		if (clock_ctl.kern_enable) {
 			loop_desc = "kernel";
 			ntv.freq = DTOFREQ(drift_comp);
 		}
@@ -1081,7 +1079,7 @@ start_kern_loop(void)
 	static bool atexit_done;
 	int ntp_adj_ret;
 
-	pll_control = true;
+	clock_ctl.pll_control = true;
 	ZERO(ntv);
 	ntv.modes = MOD_BITS;
 	ntv.status = STA_PLL;
@@ -1098,7 +1096,7 @@ start_kern_loop(void)
 	newsigsys.sa_flags = 0;
 	if (sigaction(SIGSYS, &newsigsys, &sigsys)) {
 		msyslog(LOG_ERR, "ERR: sigaction() trap SIGSYS: %m");
-		pll_control = false;
+		clock_ctl.pll_control = false;
 	} else {
 		if (sigsetjmp(env, 1) == 0) {
 			if ((ntp_adj_ret = ntp_adjtime_ns(&ntv)) != 0) {
@@ -1108,7 +1106,7 @@ start_kern_loop(void)
 		if (sigaction(SIGSYS, &sigsys, NULL)) {
 			msyslog(LOG_ERR,
 			    "ERR: sigaction() restore SIGSYS: %m");
-			pll_control = false;
+			clock_ctl.pll_control = false;
 		}
 	}
 #else /* SIGSYS */
@@ -1122,7 +1120,7 @@ start_kern_loop(void)
 	 * if available.
 	 */
 	pll_status = ntv.status;
-	if (pll_control) {
+	if (clock_ctl.pll_control) {
 		if (!atexit_done) {
 			atexit_done = true;
 			atexit(&stop_kern_loop);
@@ -1140,7 +1138,7 @@ start_kern_loop(void)
 static void
 stop_kern_loop(void)
 {
-	if (pll_control && kern_enable)
+	if (clock_ctl.pll_control && clock_ctl.kern_enable)
 		report_event(EVNT_KERN, NULL,
 		    "kernel time sync disabled");
 }
@@ -1154,12 +1152,12 @@ select_loop(
 	int	use_kern_loop
 	)
 {
-	if (kern_enable == use_kern_loop)
+	if (clock_ctl.kern_enable == use_kern_loop)
 		return;
-	if (pll_control && !use_kern_loop)
+	if (clock_ctl.pll_control && !use_kern_loop)
 		stop_kern_loop();
-	kern_enable = use_kern_loop;
-	if (pll_control && use_kern_loop)
+	clock_ctl.kern_enable = use_kern_loop;
+	if (clock_ctl.pll_control && use_kern_loop)
 		start_kern_loop();
 	/*
 	 * If this loop selection change occurs after initial startup,
@@ -1167,7 +1165,7 @@ select_loop(
 	 * from the kernel loop.
 	 */
 #if !defined(ENABLE_LOCKCLOCK)
-	if (pll_control && loop_started)
+	if (clock_ctl.pll_control && loop_started)
 		set_freq(drift_comp);
 #endif
 }
@@ -1217,7 +1215,7 @@ loop_config(
 	 */
 	case LOOP_DRIFTINIT:
 #ifndef ENABLE_LOCKCLOCK
-		if (mode_ntpdate)
+		if (clock_ctl.mode_ntpdate)
 			break;
 
 		start_kern_loop();
@@ -1245,7 +1243,7 @@ loop_config(
 	case LOOP_KERN_CLEAR:
 #if 0		/* XXX: needs more review, and how can we get here? */
 #ifndef ENABLE_LOCKCLOCK
-		if (pll_control && kern_enable) {
+		if (clock_ctl.pll_control && clock_ctl.kern_enable) {
 			memset((char *)&ntv, 0, sizeof(ntv));
 			ntv.modes = MOD_STATUS;
 			ntv.status = STA_UNSYNC;
@@ -1348,7 +1346,7 @@ pll_trap(
 	)
 {
 	UNUSED_ARG(arg);
-	pll_control = false;
+	clock_ctl.pll_control = false;
 	siglongjmp(env, 1);
 }
 #endif /* SIGSYS */

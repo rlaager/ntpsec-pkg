@@ -205,16 +205,9 @@ refclock_newpeer(
 
 	/*
 	 * Set peer.pmode based on the hmode. For appearances only.
+	 * Leftover from "peer" modes.
 	 */
-	switch (peer->hmode) {
-	case MODE_ACTIVE:
-		peer->pmode = MODE_PASSIVE;
-		break;
-
-	default:
-		peer->pmode = MODE_SERVER;
-		break;
-	}
+	peer->pmode = MODE_SERVER;
 
 	/*
 	 * Do driver dependent initialization. The above defaults
@@ -546,9 +539,9 @@ refclock_receive(
 		return;
 
 	clock_filter(peer, pp->offset, 0., pp->jitter);
-	if (cal_enable && fabs(last_offset) < sys_mindisp && sys_peer !=
+	if (cal_enable && fabs(last_offset) < sys_mindisp && sys_vars.sys_peer !=
 	    NULL) {
-		if (sys_peer->is_pps_driver &&
+		if (sys_vars.sys_peer->is_pps_driver &&
 		    !peer->is_pps_driver)
 			pp->fudgetime1 -= pp->offset * FUDGEFAC;
 	}
@@ -998,7 +991,7 @@ refclock_params(
 				"REFCLOCK: refclock_params: time_pps_kcbind: %m");
 			return false;
 		}
-		hardpps_enable = true;
+		clock_ctl.hardpps_enable = true;
 	}
 	return true;
 }
@@ -1034,7 +1027,7 @@ refclock_catcher(
 	if (ap->handle == 0)
 		return PPS_SETUP;
 
-	if (ap->pps_params.mode == 0 && sys_leap != LEAP_NOTINSYNC) {
+	if (ap->pps_params.mode == 0 && sys_vars.sys_leap != LEAP_NOTINSYNC) {
 		if (refclock_params(pp->sloppyclockflag, ap) < 1)
 			return PPS_SETUP;
 	}

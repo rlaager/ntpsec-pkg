@@ -334,12 +334,7 @@ struct peer {
 #define	LEAP_DELSECOND	0x2	/* last minute of day has 59 seconds */
 #define	LEAP_NOTINSYNC	0x3	/* overload, clock is free running */
 
-/*
- * Values for peer mode and packet mode. Only the modes through
- * MODE_BROADCAST and MODE_BCLIENT appear in the transition
- * function. MODE_CONTROL and MODE_PRIVATE can appear in packets,
- * but those never survive to the translation function.
- * See MATCH_ASSOC in ntp_peer.
+/* Packet Modes
  */
 #define	MODE_UNSPEC	0	/* unspecified (old version) */
 #define	MODE_ACTIVE	1	/* symmetric active mode */
@@ -414,10 +409,6 @@ struct parsed_pkt {
         uint64_t xmt;
         unsigned num_extensions;
         struct exten *extensions;
-        bool keyid_present;
-        uint32_t keyid;
-        size_t mac_len;
-        char mac[20];
 };
 
 struct exten {

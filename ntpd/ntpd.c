@@ -32,8 +32,6 @@
 
 #include "recvbuff.h"
 
-#include "version.h"
-
 void catchQuit (int sig);
 static volatile int signo = 0;
 /* In an ideal world, 'finish_safe()' would declared as noreturn... */
@@ -44,7 +42,7 @@ static	void	finish_safe	(int)
 # include <ulimit.h>
 #endif /* SIGDANGER */
 
-#if defined(HAVE_DNS_SD_H) && defined(ENABLE_MDNS_REGISTRATION)
+#if defined(HAVE_DNS_SD_H)
 # include <dns_sd.h>
 static DNSServiceRef mdns;
 #endif
@@ -66,7 +64,7 @@ static bool dumpopts;
 static long wait_sync = -1;
 static const char *driftfile, *pidfile;
 
-#if defined(HAVE_DNS_SD_H) && defined(ENABLE_MDNS_REGISTRATION)
+#if defined(HAVE_DNS_SD_H)
 /*
  * mDNS registration flag. If set, we attempt to register with the
  * mDNS system, but only after we have synched the first time. If the
@@ -75,7 +73,7 @@ static const char *driftfile, *pidfile;
  */
 static bool mdnsreg = false;
 int mdnstries = 5;
-#endif  /* ENABLE_MDNS_REGISTRATION */
+#endif  /* HAVE_DNS_SD_H */
 
 static bool droproot = false;
 static char *user;		/* User to switch to */
@@ -263,10 +261,10 @@ parse_cmdline_opts(
 			driftfile = ntp_optarg;
 		break;
 	    case 'g':
-		allow_panic = true;
+		clock_ctl.allow_panic = true;
 		break;
 	    case 'G':
-		force_step_once = true;
+		clock_ctl.force_step_once = true;
 		break;
 	    case 'h':
 		ntpd_usage();
@@ -293,9 +291,9 @@ parse_cmdline_opts(
 		listen_to_virtual_ips = false;
 		break;
 	    case 'm':
-#if defined(HAVE_DNS_SD_H) && defined(ENABLE_MDNS_REGISTRATION)
+#if defined(HAVE_DNS_SD_H)
 		mdnsreg = true;
-#endif  /* ENABLE_MDNS_REGISTRATION */
+#endif  /* HAVE_DNS_SD_H */
 		break;
 	    case 'M':
 		/* defer */
@@ -318,7 +316,7 @@ parse_cmdline_opts(
 		}
 		break;
 	    case 'q':
-		mode_ntpdate = true;
+		clock_ctl.mode_ntpdate = true;
 		nofork = true;
 		break;
 	    case 'r':
@@ -485,7 +483,7 @@ const char *ntpd_version(void)
 {
     static char versionbuf[64];
     snprintf(versionbuf, sizeof(versionbuf),
-	     "ntpd ntpsec-%s+%d %s", VERSION, VCS_TICK, VCS_DATE);
+	     "ntpd ntpsec-%s", NTPSEC_VERSION_EXTENDED);
     return versionbuf;
 }
 
@@ -837,9 +835,9 @@ ntpdmain(
 	    if (driftfile)
 		fprintf(stdout, "driftfile \"%s\";\n", driftfile);
 	    fprintf(stdout, "#allow_panic = %s\n",
-		    allow_panic ? "true" : "false");
+		    clock_ctl.allow_panic ? "true" : "false");
 	    fprintf(stdout, "#force_step_once = %s\n",
-		    force_step_once ? "true" : "false");
+		    clock_ctl.force_step_once ? "true" : "false");
 #ifdef ENABLE_DROPROOT
 	    if (chrootdir)
 		fprintf(stdout, "#chrootdir = \"%s\";\n", chrootdir);
@@ -854,15 +852,15 @@ ntpdmain(
 		fprintf(stdout, "logfile \"%s\";\n", logfilename);
 	    fprintf(stdout, "#listen_to_virtual_ips = %s\n",
 		    listen_to_virtual_ips ? "true" : "false");
-#if defined(HAVE_DNS_SD_H) && defined(ENABLE_MDNS_REGISTRATION)
+#if defined(HAVE_DNS_SD_H)
 	    fprintf(stdout, "#mdnsreg = %s\n",
 		    mdnsreg ? "true" : "false");
-#endif  /* ENABLE_MDNS_REGISTRATION */
+#endif  /* HAVE_DNS_SD_H */
 	    if (pidfile)
 		fprintf(stdout, "pidfile \"%s\";\n", pidfile);
 	    /* FIXME: dump priority */
 	    fprintf(stdout, "#mode_ntpdate = %s\n",
-		    mode_ntpdate ? "true" : "false");
+		    clock_ctl.mode_ntpdate ? "true" : "false");
 	    if (statsdir[0])
 		fprintf(stdout, "statsdir \"%s\";\n", statsdir);
 	    fprintf(stdout, "#interface_interval = %d\n", interface_interval);
@@ -920,28 +918,28 @@ static void mainloop(void)
 	init_timer();
 
 	for (;;) {
-		if (sawQuit)
+		if (sig_flags.sawQuit)
 			finish_safe(signo);
 
-		if (!sawALRM && !has_full_recv_buffer()) {
+		if (!sig_flags.sawALRM && !has_full_recv_buffer()) {
 			/*
 			 * Nothing to do.  Wait for something.
 			 */
 			io_handler();
 		}
 
-		if (sawALRM) {
+		if (sig_flags.sawALRM) {
 			/*
 			 * Out here, signals are unblocked.  Call timer routine
 			 * to process expiry.
 			 */
-			sawALRM = false;
+		    sig_flags.sawALRM = false;
 			timer();
 		}
 
 #ifdef ENABLE_DNS_LOOKUP
-		if (sawDNS) {
-			sawDNS = false;
+		if (sig_flags.sawDNS) {
+			sig_flags.sawDNS = false;
 			dns_check();
 		}
 #endif
@@ -958,10 +956,10 @@ static void mainloop(void)
 			rbuf = get_full_recv_buffer();
 			while (rbuf != NULL) {
 
-				if (sawALRM) {
+				if (sig_flags.sawALRM) {
 					/* avoid timer starvation during lengthy I/O handling */
 					timer();
-					sawALRM = false;
+					sig_flags.sawALRM = false;
 				}
 
 				/*
@@ -999,8 +997,8 @@ static void mainloop(void)
 		/*
 		 * Check files
 		 */
-		if (sawHUP) {
-			sawHUP = false;
+		if (sig_flags.sawHUP) {
+			sig_flags.sawHUP = false;
 			msyslog(LOG_INFO, "LOG: Saw SIGHUP");
 
 			reopen_logfile();
@@ -1016,8 +1014,8 @@ static void mainloop(void)
 		 * Go around again
 		 */
 
-# if defined(HAVE_DNS_SD_H) && defined(ENABLE_MDNS_REGISTRATION)
-		if (mdnsreg && (current_time - mdnsreg ) > 60 && mdnstries && sys_leap != LEAP_NOTINSYNC) {
+# if defined(HAVE_DNS_SD_H)
+		if (mdnsreg && (current_time - mdnsreg ) > 60 && mdnstries && sys_vars.sys_leap != LEAP_NOTINSYNC) {
 			mdnsreg = current_time;
 			msyslog(LOG_INFO, "INIT: Attempting to register mDNS");
 			if ( DNSServiceRegister (&mdns, 0, 0, NULL, "_ntp._udp", NULL, NULL,
@@ -1032,7 +1030,7 @@ static void mainloop(void)
 				mdnsreg = false;
 			}
 		}
-# endif /* ENABLE_MDNS_REGISTRATION */
+# endif /* HAVE_DNS_SD_H */
 
 	}
 }
@@ -1054,7 +1052,7 @@ finish_safe(
 	msyslog(LOG_NOTICE, "ERR: %s exiting on signal %d (%s)", progname,
 		sig, sig_desc);
 	/* See Classic Bugs 2513 and Bug 2522 re the unlink of PIDFILE */
-# if defined(HAVE_DNS_SD_H) && defined(ENABLE_MDNS_REGISTRATION)
+# if defined(HAVE_DNS_SD_H)
 	if (mdns != NULL)
 		DNSServiceRefDeallocate(mdns);
 # endif
@@ -1067,7 +1065,7 @@ catchQuit(
 	int	sig
 	)
 {
-	sawQuit = true;
+	sig_flags.sawQuit = true;
 	signo = sig;
 }
 
@@ -1077,7 +1075,7 @@ catchQuit(
 static void catchHUP(int sig)
 {
 	UNUSED_ARG(sig);
-	sawHUP = true;
+	sig_flags.sawHUP = true;
 }
 
 #ifdef ENABLE_DNS_LOOKUP
@@ -1087,7 +1085,7 @@ static void catchHUP(int sig)
 static void catchDNS(int sig)
 {
 	UNUSED_ARG(sig);
-	sawDNS = true;
+	sig_flags.sawDNS = true;
 }
 #endif
 

@@ -113,7 +113,7 @@ extern	unsigned int	sys_tai;
 extern 	int	freq_cnt;
 
 /* ntp_monitor.c */
-#define MON_HASH_SIZE		(1U << mon_hash_bits)
+#define MON_HASH_SIZE		(1U << mon_data.mon_hash_bits)
 #define MON_HASH_MASK		(MON_HASH_SIZE - 1)
 #define	MON_HASH(addr)		(sock_hash(addr) & MON_HASH_MASK)
 extern	void	init_mon	(void);
@@ -127,7 +127,7 @@ extern  int	mon_get_oldest_age(l_fp);
 extern	void	init_peer	(void);
 extern	struct peer *findexistingpeer(sockaddr_u *, const char *,
 				      struct peer *, int);
-extern	struct peer *findpeer	(struct recvbuf *, int, int *);
+extern	struct peer *findpeer	(struct recvbuf *);
 extern	struct peer *findpeerbyassoc(associd_t);
 extern  void	set_peerdstadr	(struct peer *, endpt *);
 extern	struct peer *newpeer	(sockaddr_u *, const char *,
@@ -141,7 +141,6 @@ extern  void	peer_refresh_interface(struct peer *);
 extern	void	unpeer		(struct peer *);
 extern	void	clear_all	(void);
 extern	int	score_all	(struct peer *);
-extern	struct peer *findmanycastpeer(struct recvbuf *);
 extern	void	peer_cleanup	(void);
 
 /* ntp_proto.c */
@@ -232,17 +231,19 @@ extern	void	reset_auth_stats(void);
 /*
  * Other statistics of possible interest
  */
-extern uint64_t packets_dropped;	/* # packets dropped on reception */
-extern uint64_t packets_ignored;	/* received on wild card interface */
-extern uint64_t packets_received;	/* total number of packets received */
-extern uint64_t packets_sent;		/* total number of packets sent */
-extern uint64_t packets_notsent; 	/* total number of packets which couldn't be sent */
-
-/* There used to be a signal handler for received packets. */
-/* It's not needed now that the kernel time stamps packets. */
-extern uint64_t handler_calls;	/* number of calls to interrupt handler */
-extern uint64_t handler_pkts;	/* number of pkts received by handler */
-extern uptime_t io_timereset;	/* time counters were reset */
+struct packet_counters {
+   uint64_t packets_dropped;	/* # packets dropped on reception */
+   uint64_t packets_ignored;	/* received on wild card interface */
+   uint64_t packets_received;	/* total number of packets received */
+   uint64_t packets_sent;		/* total number of packets sent */
+   uint64_t packets_notsent; 	/* total number of packets which couldn't be sent */
+  /* There used to be a signal handler for received packets. */
+  /* It's not needed now that the kernel time stamps packets. */
+  uint64_t handler_calls;	/* number of calls to interrupt handler */
+  uint64_t handler_pkts;	/* number of pkts received by handler */
+  uptime_t io_timereset;	/* time counters were reset */
+};
+extern volatile struct packet_counters pkt_count;
 
 /* ntp_io.c */
 extern bool	disable_dynamic_updates;
@@ -262,14 +263,17 @@ extern double	clock_phi;		/* dispersion rate (s/s) */
 /*
  * Clock state machine control flags
  */
-extern bool	ntp_enable;		/* clock discipline enabled */
-extern bool	pll_control;		/* kernel support available */
-extern bool	kern_enable;		/* kernel support enabled */
-extern bool	hardpps_enable;		/* kernel PPS discipline enabled */
+struct clock_control_flags {
+    bool	ntp_enable;		/* clock discipline enabled */
+    bool	pll_control;		/* kernel support available */
+    bool	kern_enable;		/* kernel support enabled */
+    bool	hardpps_enable;		/* kernel PPS discipline enabled */
+    bool	allow_panic;		/* allow panic correction (-g) */
+    bool	force_step_once;	/* always step time once at startup (-G) */
+    bool	mode_ntpdate;		/* exit on first clock set (-q) */
+};
+extern struct clock_control_flags clock_ctl;
 extern bool	cal_enable;		/* refclock calibrate enable */
-extern bool	allow_panic;		/* allow panic correction (-g) */
-extern bool	force_step_once;	/* always step time once at startup (-G) */
-extern bool	mode_ntpdate;		/* exit on first clock set (-q) */
 extern int	peer_ntpdate;		/* count of ntpdate peers */
 
 /*
@@ -284,24 +288,39 @@ extern double	sys_offset;		/* system offset (s) */
 extern double	sys_jitter;		/* system jitter (s) */
 
 /* ntp_monitor.c */
-extern uint8_t	mon_hash_bits;		/* log2 size of hash table */
-extern mon_entry ** mon_hash;		/* MRU hash table */
-extern mon_entry mon_mru_list;		/* mru listhead */
-extern unsigned int	mon_enabled;		/* MON_OFF (0) or other MON_* */
-extern uint64_t	mru_entries;		/* mru list count */
-extern uint64_t	mru_peakentries;	/* highest mru_entries */
-extern uint64_t	mru_initalloc;		/* entries to preallocate */
-extern uint64_t	mru_incalloc;		/* allocation batch factor */
-extern uint64_t	mru_mindepth;		/* preempt above this */
-extern int	mru_maxage;		/* recycle if older than this */
-extern int	mru_minage;		/* recycle if older than this & full */
-extern uint64_t	mru_maxdepth; 		/* MRU size hard limit */
-extern uint64_t	mru_exists;		/* slot already exists */
-extern uint64_t	mru_new;		/* allocated new slot */
-extern uint64_t	mru_recycleold;		/* recycle: age > maxage */
-extern uint64_t	mru_recyclefull;	/* recycle: full and age > minage */
-extern uint64_t	mru_none;		/* couldn't allocate slot */
-extern int	mon_age;		/* preemption limit */
+struct monitor_data {
+    uint8_t	mon_hash_bits;		/* log2 size of hash table */
+    /*
+	 * Pointers to the hash table and the MRU list.  Memory for the hash
+	 * table is allocated only if monitoring is enabled.
+	 * Total size can easily exceed 32 bits (4 GB)
+	 * Total count is unlikely to exceed 32 bits in 2017
+	 *   but memories keep growing.
+	 */
+    mon_entry ** mon_hash;		/* MRU hash table */
+    mon_entry mon_mru_list;		/* mru listhead */
+    uint64_t	mru_entries;		/* mru list count */
+    /*
+	 * Initialization state.  We may be monitoring, we may not.  If
+	 * we aren't, we may not even have allocated any memory yet.
+	 */
+    unsigned int	mon_enabled;		/* MON_OFF (0) or other MON_* */
+
+    uint64_t	mru_peakentries;	/* highest mru_entries */
+    uint64_t	mru_initalloc;		/* entries to preallocate */
+    uint64_t	mru_incalloc;		/* allocation batch factor */
+    uint64_t	mru_mindepth;		/* preempt above this */
+    int	mru_maxage;		/* recycle if older than this */
+    int	mru_minage;		/* recycle if older than this & full */
+    uint64_t	mru_maxdepth; 		/* MRU size hard limit */
+    uint64_t	mru_exists;		/* slot already exists */
+    uint64_t	mru_new;		/* allocated new slot */
+    uint64_t	mru_recycleold;		/* recycle: age > maxage */
+    uint64_t	mru_recyclefull;	/* recycle: full and age > minage */
+    uint64_t	mru_none;		/* couldn't allocate slot */
+    int	mon_age;		/* preemption limit */
+};
+extern struct monitor_data mon_data;
 
 /* ntp_peer.c */
 extern struct peer *peer_list;		/* peer structures list */
@@ -316,16 +335,19 @@ extern int	peer_associations;	/* mobilized associations */
  * System variables are declared here.	See Section 3.2 of the
  * specification.
  */
-extern uint8_t	sys_leap;		/* system leap indicator */
-extern uint8_t	sys_stratum;		/* system stratum */
-extern int8_t	sys_precision;		/* local clock precision */
-extern double	sys_rootdelay;		/* roundtrip delay to primary source */
-extern double	sys_rootdisp;		/* dispersion to primary source */
-extern double	sys_rootdist;		/* distance to primary source */
-extern uint32_t	sys_refid;		/* reference id */
-extern l_fp	sys_reftime;		/* last update time */
-extern struct peer *sys_peer;		/* current peer */
-extern int	sys_maxclock;		/* maximum candidates */
+int	sys_maxclock;		/* maximum candidates */
+struct system_variables {
+    uint8_t	sys_leap;		/* system leap indicator */
+    uint8_t	sys_stratum;		/* system stratum */
+    int8_t	sys_precision;		/* local clock precision */
+    double	sys_rootdelay;		/* roundtrip delay to primary source */
+    double	sys_rootdisp;		/* dispersion to primary source */
+    double	sys_rootdist;		/* distance to primary source */
+    uint32_t	sys_refid;		/* reference id */
+    l_fp	sys_reftime;		/* last update time */
+    struct peer *sys_peer;		/* current peer */
+};
+extern struct system_variables sys_vars;
 
 /*
  * Nonspecified system state variables.
@@ -336,24 +358,31 @@ extern int	sys_minsane;		/* minimum candidates */
 /*
  * Statistics counters
  */
-extern uptime_t	sys_stattime;		/* time since sysstats reset */
-extern uint64_t	sys_received;		/* packets received */
-extern uint64_t	sys_processed;		/* packets for this host */
-extern uint64_t	sys_restricted;	 	/* restricted packets */
-extern uint64_t	sys_newversion;		/* current version  */
-extern uint64_t	sys_oldversion;		/* old version */
-extern uint64_t	sys_badlength;		/* bad length or format */
-extern uint64_t	sys_badauth;		/* bad authentication */
-extern uint64_t	sys_declined;		/* declined */
-extern uint64_t	sys_limitrejected;	/* rate exceeded */
-extern uint64_t	sys_kodsent;		/* KoD sent */
-extern uptime_t	use_stattime;		/* time since usestats reset */
+struct statistics_counters {
+    uptime_t	sys_stattime;		/* time since sysstats reset */
+    uint64_t	sys_received;		/* packets received */
+    uint64_t	sys_processed;		/* packets for this host */
+    uint64_t	sys_restricted;	 	/* restricted packets */
+    uint64_t	sys_newversion;		/* current version  */
+    uint64_t	sys_oldversion;		/* old version */
+    uint64_t	sys_badlength;		/* bad length or format */
+    uint64_t	sys_badauth;		/* bad authentication */
+    uint64_t	sys_declined;		/* declined */
+    uint64_t	sys_limitrejected;	/* rate exceeded */
+    uint64_t	sys_kodsent;		/* KoD sent */
+    uptime_t	use_stattime;		/* time since usestats reset */
+};
+extern volatile struct statistics_counters stat_count;
 
 /* Signalling: Set by signal handlers */
-extern volatile bool sawALRM;
-extern volatile bool sawHUP;
-extern volatile bool sawDNS;
-extern volatile bool sawQuit;		/* SIGQUIT, SIGINT, SIGTERM */
+struct signals_detected {
+    bool sawALRM;
+    bool sawHUP;
+    bool sawDNS;
+    bool sawQuit;                   /* SIGQUIT, SIGINT, SIGTERM */
+};
+extern volatile struct signals_detected sig_flags;
+
 
 /* ntp_restrict.c */
 extern restrict_u *	restrictlist4;	/* IPv4 restriction list */
