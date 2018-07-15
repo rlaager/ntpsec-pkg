@@ -72,9 +72,7 @@ information provided by the DHCP server, and restarting the NTP
 server.
 
 In order for this to work, the "ntp-servers" option must be mentioned
-in the "request" statement in /etc/dhcp/dhclient.conf.  This is not
-the case in a default installation.  A complete configuration might
-look like this, for example:
+in the "request" statement in /etc/dhcp/dhclient.conf.  For example:
 
     request subnet-mask, broadcast-address, time-offset, routers,
             domain-name, domain-name-servers, host-name,
