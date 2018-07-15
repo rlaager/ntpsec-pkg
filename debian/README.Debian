@@ -42,7 +42,7 @@ Consider replacing this if you have local time servers in your
 organization or network.  A list of public NTP time servers is
 available on the web at:
 
-    http://ntp.isc.org/bin/view/Servers/WebHome
+    https://support.ntp.org/bin/view/Servers/WebHome
 
 Extra configuration work will be necessary to offer time service to
 other hosts, to use hardware time receivers, or to synchronize the
