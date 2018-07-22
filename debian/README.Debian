@@ -4,10 +4,9 @@ Transitioning from (or to) the ntp package
 If you are transitioning from the ntp package to ntpsec, be advised that
 purging the ntp package will break ntpsec:
 
-1) It will remove /var/lib/ntp, which deletes the drift file:
-   https://bugs.debian.org/894475
+1) It will remove /var/lib/ntp, which deletes the drift file.
 2) It will remove /var/log/ntpstats, which deletes the logs used by
-   ntpviz: https://bugs.debian.org/894475
+   ntpviz.
 
 If you wish to purge the ntp package, run:
     mv /var/lib/ntp /var/lib/ntp-bak
@@ -15,7 +14,9 @@ If you wish to purge the ntp package, run:
     dpkg --purge ntp
     mv /var/lib/ntp-bak /var/lib/ntp
     mv /var/log/ntpstats-bak /var/log/ntpstats
-    dpkg-reconfigure ntpsec
+
+See also:
+    https://bugs.debian.org/894475
 
 
 Configuration
