@@ -28,7 +28,10 @@ ntpsec (1.1.1+dfsg1-1) unstable; urgency=medium
   * debian/copyright: Use HTTPS for Format URL
   * Update URLs in debian/ to HTTPS
   * debian/copyright: Merge in full CC0 text
-  * Rename "ntp" service to "ntpsec"
+  * Rename ntp service to ntpsec
+  * Rename ntp-wait.service to ntpsec-wait.service
+  * Rename ntp-rotate-stats.service to ntpsec-rotate-stats.service
+  * Rename ntp-rotate-stats.timer to ntpsec-rotate-stats.timer
 
  -- Richard Laager <rlaager@wiktel.com>  Sun, 22 Jul 2018 00:25:20 -0500
 

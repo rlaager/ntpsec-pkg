@@ -31,7 +31,9 @@ if [ "$1" = "upgrade" ] && [ -n "$2" ] &&
 		/etc/systemd/system/multi-user.target.wants/ntp.service \
 		/etc/systemd/system/ntp.service.wants/ntplogtemp.timer \
 		/etc/systemd/system/ntp.service.wants/ntpviz-daily.timer \
-		/etc/systemd/system/ntp.service.wants/ntpviz-weekly.timer
+		/etc/systemd/system/ntp.service.wants/ntpviz-weekly.timer \
+		/etc/systemd/system/timers.target.wants/ntp-rotate-stats.timer \
+		/etc/systemd/system/time-sync.target.wants/ntp-wait.service
 	rmdir --ignore-fail-on-non-empty /etc/systemd/system/ntp.service.wants
 fi
 
