@@ -25,6 +25,16 @@ if [ "$1" = "configure" ]; then
 	fi
 fi
 
+if [ "$1" = "upgrade" ] && [ -n "$2" ] &&
+   dpkg --compare-versions "$2" le-nl "1.1.0+dfsg1-2~"; then
+	rm -f \
+		/etc/systemd/system/multi-user.target.wants/ntp.service \
+		/etc/systemd/system/ntp.service.wants/ntplogtemp.timer \
+		/etc/systemd/system/ntp.service.wants/ntpviz-daily.timer \
+		/etc/systemd/system/ntp.service.wants/ntpviz-weekly.timer
+	rmdir --ignore-fail-on-non-empty /etc/systemd/system/ntp.service.wants
+fi
+
 if [ "$1" = "triggered" ]; then
 	# The default configuration uses a leapfile from tzdata
 	# restart ntp on changes
