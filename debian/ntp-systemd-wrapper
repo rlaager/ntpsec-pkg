@@ -4,8 +4,8 @@ DAEMON=/usr/sbin/ntpd
 PIDFILE=/run/ntpd.pid
 LOCKFILE=/run/lock/ntpdate
 
-if [ -r /etc/default/ntp ]; then
-        . /etc/default/ntp
+if [ -r /etc/default/ntpsec ]; then
+        . /etc/default/ntpsec
 fi
 
 if [ "$IGNORE_DHCP" != "yes" ] && [ -e /run/ntp.conf.dhcp ]; then

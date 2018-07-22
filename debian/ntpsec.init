@@ -23,8 +23,8 @@ PIDFILE=/run/ntpd.pid
 
 test -x $DAEMON || exit 5
 
-if [ -r /etc/default/ntp ]; then
-	. /etc/default/ntp
+if [ -r /etc/default/ntpsec ]; then
+	. /etc/default/ntpsec
 fi
 
 if [ "$IGNORE_DHCP" != "yes" ] && [ -e /run/ntp.conf.dhcp ]; then

@@ -1,9 +1,9 @@
 Description: systemd: Fix ntp-wait.service paths
  - ntpwait is installed to /usr/sbin.
- - ntpd.service is called ntp.service in this package
+ - ntpd.service is called ntpsec.service in this package
 Forwarded: not-needed
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2018-03-04
+Last-Update: 2018-07-21
 --- a/etc/ntp-wait.service
 +++ b/etc/ntp-wait.service
 @@ -1,13 +1,13 @@
@@ -11,8 +11,8 @@ Last-Update: 2018-03-04
  Description=Wait for ntpd to synchronize system clock
 -Requisite=ntpd.service
 -After=ntpd.service
-+Requisite=ntp.service
-+After=ntp.service
++Requisite=ntpsec.service
++After=ntpsec.service
  Conflicts=systemd-timesyncd.service
  ConditionCapability=CAP_SYS_TIME
  

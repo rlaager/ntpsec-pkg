@@ -1,6 +1,6 @@
 [Unit]
 Description=Rotate ntpd stats
-Requisite=ntp.service
+Requisite=ntpsec.service
 
 [Service]
 Type=simple

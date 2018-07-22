@@ -1,6 +1,6 @@
 Description: systemd: Configure ntpviz
  - Configure ntpviz to match the cron.d jobs
- - ntpd.service is called ntp.service in this package
+ - ntpd.service is called ntpsec.service in this package
 Forwarded: not-needed
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2017-11-10
@@ -11,7 +11,7 @@ Last-Update: 2017-11-10
  Documentation=man:ntpviz(1)
  Description=Graph daily information for NTP
 -Requisite=ntpd.service
-+Requisite=ntp.service
++Requisite=ntpsec.service
  
  [Service]
 -Type=simple
@@ -27,7 +27,7 @@ Last-Update: 2017-11-10
  Documentation=man:ntpviz(1)
  Description=Graph weekly information for NTP
 -Requisite=ntpd.service
-+Requisite=ntp.service
++Requisite=ntpsec.service
  
  [Service]
 -Type=simple
@@ -43,7 +43,7 @@ Last-Update: 2017-11-10
  
  [Install]
 -WantedBy=ntpd.service
-+WantedBy=ntp.service
++WantedBy=ntpsec.service
 --- a/etc/ntpviz-daily.timer
 +++ b/etc/ntpviz-daily.timer
 @@ -6,4 +6,4 @@
@@ -51,7 +51,7 @@ Last-Update: 2017-11-10
  
  [Install]
 -WantedBy=ntpd.service
-+WantedBy=ntp.service
++WantedBy=ntpsec.service
 --- a/etc/ntpviz-weekly.timer
 +++ b/etc/ntpviz-weekly.timer
 @@ -6,4 +6,4 @@
@@ -59,4 +59,4 @@ Last-Update: 2017-11-10
  
  [Install]
 -WantedBy=ntpd.service
-+WantedBy=ntp.service
++WantedBy=ntpsec.service

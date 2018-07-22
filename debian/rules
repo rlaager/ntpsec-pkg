@@ -94,7 +94,7 @@ override_dh_install:
 	install -d debian/ntpsec/lib/systemd/system
 	install -m 644 \
 		etc/ntpd.service \
-		debian/ntpsec/lib/systemd/system/ntp.service
+		debian/ntpsec/lib/systemd/system/ntpsec.service
 	install -m 644 \
 		etc/ntp-wait.service \
 		debian/ntpsec/lib/systemd/system/
@@ -171,7 +171,7 @@ endif
 	dh_install
 
 override_dh_installinit-arch:
-	dh_installinit -pntpsec --name=ntp --error-handler=installinit_error
+	dh_installinit -pntpsec --error-handler=installinit_error
 	dh_installinit -pntpsec-ntpviz --name=ntpviz
 	dh_installinit -pntpsec-ntpdate
 	mv debian/ntpsec-ntpdate/etc/default/ntpsec-ntpdate \
@@ -183,7 +183,9 @@ endif
 	dh_apparmor --profile-name=usr.sbin.ntpd -pntpsec
 
 override_dh_systemd_start:
-	dh_systemd_start -pntpsec ntp.service ntp-rotate-stats.timer
+	dh_systemd_start -pntpsec \
+		ntpsec.service \
+		ntp-rotate-stats.timer
 	dh_systemd_start -pntpsec-ntpviz \
 		ntploggps.timer \
 		ntplogtemp.timer \
