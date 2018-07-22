@@ -15,7 +15,7 @@ if [ "$1" = "configure" ]; then
 			--no-create-home --home /nonexistent ntp
 
 		install -o ntp -g ntp -d /var/log/ntpstats
-		invoke-rc.d ntp restart
+		invoke-rc.d ntpsec restart
 	fi
 fi
 

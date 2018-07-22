@@ -8,7 +8,7 @@ ntp_server_restart() {
 	fi
 
 	if [ "$IGNORE_DHCP" != "yes" ]; then
-		invoke-rc.d ntp try-restart
+		invoke-rc.d ntpsec try-restart
 	fi
 }
 

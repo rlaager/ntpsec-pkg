@@ -28,7 +28,7 @@ fi
 if [ "$1" = "triggered" ]; then
 	# The default configuration uses a leapfile from tzdata
 	# restart ntp on changes
-	invoke-rc.d ntp try-restart || true
+	invoke-rc.d ntpsec try-restart || true
 fi
 
 installinit_error() {
