@@ -1,2 +1,2 @@
-mv_conffile /etc/default/ntp /etc/default/ntpsec 1.1.0+dfsg1-1 ntpsec
-mv_conffile /etc/init.d/ntp /etc/init.d/ntpsec 1.1.0+dfsg1-1 ntpsec
+mv_conffile /etc/default/ntp /etc/default/ntpsec 1.1.0+dfsg1-2~ ntpsec
+mv_conffile /etc/init.d/ntp /etc/init.d/ntpsec 1.1.0+dfsg1-2~ ntpsec
