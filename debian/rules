@@ -146,6 +146,10 @@ override_dh_install:
 		debian/ntpsec-ntpdate/etc/dhcp/dhclient-exit-hooks.d/ntpdate
 	install -D -m 0755 debian/ntpdate-debian \
 		debian/ntpsec-ntpdate/usr/sbin/ntpdate-debian
+	install -D -m 0644 debian/ntpsec-systemd-netif.path \
+		debian/ntpsec/lib/systemd/system/ntpsec-systemd-netif.path
+	install -D -m 0644 debian/ntpsec-systemd-netif.service \
+		debian/ntpsec/lib/systemd/system/ntpsec-systemd-netif.service
 
 ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
 	install -D -m 0644 debian/ntp.conf.ubuntu debian/ntpsec/etc/ntp.conf
@@ -185,7 +189,8 @@ endif
 override_dh_systemd_start:
 	dh_systemd_start -pntpsec \
 		ntpsec.service \
-		ntp-rotate-stats.timer
+		ntpsec-systemd-netif.path \
+		ntpsec-rotate-stats.timer
 	dh_systemd_start -pntpsec-ntpviz \
 		ntploggps.timer \
 		ntplogtemp.timer \

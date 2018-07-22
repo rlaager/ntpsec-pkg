@@ -32,8 +32,10 @@ ntpsec (1.1.1+dfsg1-1) unstable; urgency=medium
   * Rename ntp-wait.service to ntpsec-wait.service
   * Rename ntp-rotate-stats.service to ntpsec-rotate-stats.service
   * Rename ntp-rotate-stats.timer to ntpsec-rotate-stats.timer
+  * Refactor DHCP hooks.
+    Thanks to Dimitri John Ledkov <xnox@ubuntu.com> for the networkd example.
 
- -- Richard Laager <rlaager@wiktel.com>  Sun, 22 Jul 2018 00:25:20 -0500
+ -- Richard Laager <rlaager@wiktel.com>  Sun, 22 Jul 2018 21:59:40 -0500
 
 ntpsec (1.1.0+dfsg1-1) unstable; urgency=medium
 

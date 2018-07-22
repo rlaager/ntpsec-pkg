@@ -14,16 +14,37 @@ ntp_server_restart() {
 
 
 ntp_servers_setup_remove() {
-	if [ ! -e $NTP_DHCP_CONF ]; then
+	if [ ! -e "$NTP_DHCP_CONF" ]; then
 		return
 	fi
-	rm -f $NTP_DHCP_CONF
+	rm -f "$NTP_DHCP_CONF"
 	ntp_server_restart
 }
 
 
 ntp_servers_setup_add() {
-	if [ -e $NTP_DHCP_CONF ] && [ "$new_ntp_servers" = "$old_ntp_servers" ]; then
+	# dhclient provides the old servers in $old_ntp_servers, but NetworkManager
+	# and networkd do not.  Get the old list from the configuration file, if
+	# it is present.
+	old_ntp_servers=""
+	if [ -e "$NTP_DHCP_CONF" ]; then
+		old_ntp_servers=$(awk '/^server / {print $2}' "$NTP_DHCP_CONF")
+	fi
+
+	# $new_ntp_servers comes from dhclient.
+	# $DHCP4_NTP_SERVERS and $DHCP6_NTP_SERVERS come from NetworkManager.
+	new_ntp_servers=$(
+		for i in \
+			$new_ntp_servers \
+			$DHCP4_NTP_SERVERS $DHCP6_NTP_SERVERS \
+			$(sed -n 's/NTP=//p' /run/systemd/netif/leases/* 2>/dev/null)
+		do
+			echo $i
+		done)
+
+	# NOTE: By this point, both $old_ntp_servers and $new_ntp_servers are
+	# NOTE: newline-separated.
+	if [ "$new_ntp_servers" = "$old_ntp_servers" ]; then
 		return
 	fi
 
@@ -33,8 +54,8 @@ ntp_servers_setup_add() {
 	fi
 
 	tmp=$(mktemp "$NTP_DHCP_CONF.XXXXXX") || return
-	chmod --reference=$NTP_CONF $tmp
-	chown --reference=$NTP_CONF $tmp
+	chmod --reference="$NTP_CONF" "$tmp"
+	chown --reference="$NTP_CONF" "$tmp"
 
 	(
 	  echo "# This file was copied from $NTP_CONF with the server options changed"
@@ -46,10 +67,10 @@ ntp_servers_setup_add() {
 		echo "server $server iburst"
 	  done
 	  echo
-	  sed '/^[[:space:]]*\(server\|peer\|pool\)[[:space:]]/d' $NTP_CONF
-	) >>$tmp
+	  sed '/^[[:space:]]*\(server\|peer\|pool\)[[:space:]]/d' "$NTP_CONF"
+	) >> "$tmp"
 	
-	mv $tmp $NTP_DHCP_CONF
+	mv "$tmp" "$NTP_DHCP_CONF"
 
 	ntp_server_restart
 }
