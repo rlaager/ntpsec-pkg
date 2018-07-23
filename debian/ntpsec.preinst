@@ -1,0 +1,19 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "install" ] && [ -z "$2" ]; then
+	# If the user is converting from ntp to ntpsec, copy their
+	# /etc/default/ntp if and only if it was modified.  This will result
+	# in the usual prompt asking the user to resolve their changes.
+	if ! [ -e /etc/default/ntpsec ] && [ -e /etc/default/ntp ]; then
+		md5sum="$(md5sum /etc/default/ntp | sed -e 's/ .*//')"
+		old_md5sum="$(dpkg-query -W -f='${Conffiles}' ntp | \
+	                sed -n -e "\' /etc/default/ntp ' { s/ obsolete$//; s/.* //; p }")"
+		if [ "$md5sum" != "$old_md5sum" ]; then
+			cp /etc/default/ntp /etc/default/ntpsec
+		fi
+	fi
+fi
+
+#DEBHELPER#
