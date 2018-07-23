@@ -52,16 +52,16 @@ case $1 in
 			start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --startas $DAEMON -- -p $PIDFILE $NTPD_OPTS
 		) 9>$LOCKFILE
 		log_end_msg $?
-  		;;
+		;;
 	stop)
 		log_daemon_msg "Stopping NTP server" "ntpd"
-  		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE --retry=TERM/30/KILL/5 --exec $DAEMON
+		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE --retry=TERM/30/KILL/5 --exec $DAEMON
 		log_end_msg $?
 		rm -f $PIDFILE
-  		;;
+		;;
 	restart|force-reload)
 		$0 stop && sleep 2 && $0 start
-  		;;
+		;;
 	try-restart)
 		if $0 status >/dev/null; then
 			$0 restart
