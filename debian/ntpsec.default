@@ -1,4 +1,4 @@
-NTPD_OPTS='-g -N'
+NTPD_OPTS="-g -N"
 
-# Set to 'yes' to ignore DHCP servers returned by DHCP.
-IGNORE_DHCP=''
+# Set to "yes" to ignore DHCP servers returned by DHCP.
+IGNORE_DHCP=""
