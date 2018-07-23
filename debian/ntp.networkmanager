@@ -1,9 +1,15 @@
 #!/bin/sh
 
 case "$2" in
-	up|vpn-up) reason=BOUND; ;;
-	down|vpn-down) reason=RELEASE; ;;
-	*) exit 0; ;;
+	up|vpn-up)
+		reason=BOUND
+		;;
+	down|vpn-down)
+		reason=RELEASE
+		;;
+	*)
+		exit 0
+		;;
 esac
 
 test -f /etc/dhcp/dhclient-exit-hooks.d/ntp || exit 0
