@@ -81,22 +81,17 @@ graphs from those stats.  If Apache is installed, these will be served at
 DHCP
 ----
 
-If DHCP is used to configure the host, and the DHCP server sends information
-about NTP servers, then this information will be used automatically.  This is
-done by making a copy of /etc/ntp.conf at /run/ntp.conf.dhcp, replacing the
-server entries with the information provided by the DHCP server, and restarting
-the NTP server.
+If DHCP is used to configure the host and the DHCP server sends information
+about NTP servers, this information will be used automatically.  This is done
+by making a copy of /etc/ntp.conf at /run/ntp.conf.dhcp, replacing the server
+entries with the information provided by the DHCP server, and restarting the
+NTP server.
 
-In order for this to work, the "ntp-servers" option must be mentioned in the
-"request" statement in /etc/dhcp/dhclient.conf.  For example:
+If you use dhclient, the "ntp-servers" option must be mentioned in the
+"request" statement in /etc/dhcp/dhclient.conf.  This is the default.
 
-    request subnet-mask, broadcast-address, time-offset, routers,
-            domain-name, domain-name-servers, host-name,
-            netbios-name-servers, netbios-scope, interface-mtu,
-            ntp-servers;
-
-If you don't like using the NTP servers sent by the DHCP server, this is als
-the right place to turn off this behavior.
+To ignore the NTP servers sent by the DHCP server, set IGNORE_DHCP to "yes" in
+/etc/default/ntpsec.
 
 To make the DHCP server in the Debian package isc-dhcp-server send NTP server
 information, add a line like the following at an appropriate place:
