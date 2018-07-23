@@ -25,7 +25,7 @@ if [ "$1" = "configure" ]; then
 	fi
 fi
 
-if [ "$1" = "upgrade" ] && [ -n "$2" ] &&
+if [ "$1" = "install" -o "$1" = "upgrade" ] && [ -n "$2" ] &&
    dpkg --compare-versions "$2" le-nl "1.1.0+dfsg1-2~"; then
 	rm -f \
 		/etc/systemd/system/multi-user.target.wants/ntp.service \
@@ -34,7 +34,7 @@ if [ "$1" = "upgrade" ] && [ -n "$2" ] &&
 		/etc/systemd/system/ntp.service.wants/ntpviz-weekly.timer \
 		/etc/systemd/system/timers.target.wants/ntp-rotate-stats.timer \
 		/etc/systemd/system/time-sync.target.wants/ntp-wait.service
-	rmdir --ignore-fail-on-non-empty /etc/systemd/system/ntp.service.wants
+	rmdir /etc/systemd/system/ntp.service.wants 2>/dev/null || true
 fi
 
 if [ "$1" = "triggered" ]; then
