@@ -17,6 +17,7 @@ NTPD_OPTS="$NTPD_OPTS -u $(getent passwd ntp | cut -f 3,4 -d:)"
 # Protect the service startup against concurrent ntpdate ifup hooks
 (
         if flock -w 180 9; then
+                # shellcheck disable=SC2086
                 exec $DAEMON -p $PIDFILE $NTPD_OPTS
         else
                 echo "Timeout waiting for $LOCKFILE"

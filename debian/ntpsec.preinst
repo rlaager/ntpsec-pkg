@@ -8,6 +8,7 @@ if [ "$1" = "install" ] && [ -z "$2" ]; then
 	# in the usual prompt asking the user to resolve their changes.
 	if ! [ -e /etc/default/ntpsec ] && [ -e /etc/default/ntp ]; then
 		md5sum="$(md5sum /etc/default/ntp | sed -e 's/ .*//')"
+		# shellcheck disable=SC2016
 		old_md5sum="$(dpkg-query -W -f='${Conffiles}' ntp | \
 	                sed -n -e "\' /etc/default/ntp ' { s/ obsolete$//; s/.* //; p }")"
 		if [ "$md5sum" != "$old_md5sum" ]; then

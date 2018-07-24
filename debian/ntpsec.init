@@ -49,6 +49,7 @@ case $1 in
 		fi
 		(
 			flock -w 180 9
+			# shellcheck disable=SC2086
 			start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --startas $DAEMON -- -p $PIDFILE $NTPD_OPTS
 		) 9>$LOCKFILE
 		log_end_msg $?

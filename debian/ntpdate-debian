@@ -22,4 +22,5 @@ if [ "$IGNORE_DHCP" != "yes" ] && [ -r /run/ntpdate.dhcp ]; then
 	. /run/ntpdate.dhcp
 fi
 
+# shellcheck disable=SC2086
 exec /usr/sbin/ntpdate $NTPOPTIONS "$@" $NTPSERVERS
