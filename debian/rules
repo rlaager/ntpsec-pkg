@@ -138,14 +138,14 @@ override_dh_install:
 		www/ntpsec-logo.png \
 		debian/ntpsec-ntpviz/usr/share/ntpsec-ntpviz/ntpviz
 
-	install -D -m 0644 debian/ntp.dhcp \
-		debian/ntpsec/etc/dhcp/dhclient-exit-hooks.d/ntp
-	install -D -m 0755 debian/ntp.networkmanager \
-		debian/ntpsec/etc/NetworkManager/dispatcher.d/ntp
 	install -D -m 0644 debian/ntpdate.dhcp \
 		debian/ntpsec-ntpdate/etc/dhcp/dhclient-exit-hooks.d/ntpdate
 	install -D -m 0755 debian/ntpdate-debian \
 		debian/ntpsec-ntpdate/usr/sbin/ntpdate-debian
+	install -D -m 0644 debian/ntpsec.dhcp \
+		debian/ntpsec/etc/dhcp/dhclient-exit-hooks.d/ntpsec
+	install -D -m 0755 debian/ntpsec.networkmanager \
+		debian/ntpsec/etc/NetworkManager/dispatcher.d/ntpsec
 	install -D -m 0644 debian/ntpsec-systemd-netif.path \
 		debian/ntpsec/lib/systemd/system/ntpsec-systemd-netif.path
 	install -D -m 0644 debian/ntpsec-systemd-netif.service \
