@@ -199,11 +199,6 @@ override_dh_systemd_start:
 		ntpviz-daily.timer \
 		ntpviz-weekly.timer
 
-override_dh_installlogcheck-arch:
-	dh_installlogcheck -a
-	mv debian/ntpsec-ntpdate/etc/logcheck/ignore.d.server/ntpsec-ntpdate \
-		debian/ntpsec-ntpdate/etc/logcheck/ignore.d.server/ntpdate
-
 PKD  = $(abspath $(dir $(word 1,$(MAKEFILE_LIST))))
 
 .PHONY: get-orig-source
