@@ -146,6 +146,8 @@ override_dh_install:
 		debian/ntpsec/etc/NetworkManager/dispatcher.d/ntpsec
 	install -D -m 0644 debian/ntpsec-ntpdate.dhcp \
 		debian/ntpsec-ntpdate/etc/dhcp/dhclient-exit-hooks.d/ntpsec-ntpdate
+	install -D -m 0755 debian/ntpsec-ntpdate.networkmanager \
+		debian/ntpsec-ntpdate/etc/NetworkManager/dispatcher.d/ntpsec-ntpdate
 	install -D -m 0644 debian/ntpsec-systemd-netif.path \
 		debian/ntpsec/lib/systemd/system/ntpsec-systemd-netif.path
 	install -D -m 0644 debian/ntpsec-systemd-netif.service \
