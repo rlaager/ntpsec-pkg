@@ -30,17 +30,13 @@ if [ -r /lib/udev/hotplug.functions ]; then
 	wait_for_file /usr/sbin/ntpdate-debian
 fi
 
-if [ -e /usr/sbin/openntpd ]; then
-    service='openntpd'
-else
-    service='ntp'
-fi
+service="ntpsec"
 
-invoke-rc.d --quiet $service stop >/dev/null 2>&1 || true
+invoke-rc.d --quiet "$service" stop >/dev/null 2>&1 || true
 
 # Avoid running more than one at a time
 flock -n /run/lock/ntpdate /usr/sbin/ntpdate-debian -s $OPTS 2>/dev/null || :
 
-invoke-rc.d --quiet $service start >/dev/null 2>&1 || true
+invoke-rc.d --quiet "$service" start >/dev/null 2>&1 || true
 
 ) &
