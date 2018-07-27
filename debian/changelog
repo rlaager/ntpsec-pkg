@@ -34,6 +34,7 @@ ntpsec (1.1.1+dfsg1-1) unstable; urgency=medium
   * Rename ntp-rotate-stats.timer to ntpsec-rotate-stats.timer
   * Refactor DHCP hooks.
     Thanks to Dimitri John Ledkov <xnox@ubuntu.com> for the networkd example.
+  * Rename the ntpsec DHCP hooks
 
  -- Richard Laager <rlaager@wiktel.com>  Sun, 22 Jul 2018 21:59:40 -0500
 

@@ -1,5 +1,6 @@
 NTPDATE_CONF=/etc/default/ntpdate
-NTPDATE_DHCP_CONF=/run/ntpdate.dhcp
+NTPDATE_DHCP_CONF_DIR=/run/ntpsec
+NTPDATE_DHCP_CONF=$NTPDATE_DHCP_CONF_DIR/ntpdate.dhcp
 
 
 ntp_servers_setup_remove() {
@@ -39,6 +40,7 @@ ntp_servers_setup_add() {
 		return
 	fi
 
+	mkdir -p "$NTPDATE_DHCP_CONF_DIR"
 	tmp=$(mktemp "$NTPDATE_DHCP_CONF.XXXXXX") || return
 	chmod --reference="$NTPDATE_CONF" "$tmp"
 	chown --reference="$NTPDATE_CONF" "$tmp"

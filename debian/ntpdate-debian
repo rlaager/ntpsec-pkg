@@ -19,8 +19,8 @@ if [ "$NTPDATE_USE_NTP_CONF" = yes ]; then
 	fi
 fi
 
-if [ "$IGNORE_DHCP" != "yes" ] && [ -r /run/ntpdate.dhcp ]; then
-	. /run/ntpdate.dhcp
+if [ "$IGNORE_DHCP" != "yes" ] && [ -r /run/ntpsec/ntpdate.dhcp ]; then
+	. /run/ntpsec/ntpdate.dhcp
 fi
 
 # shellcheck disable=SC2086

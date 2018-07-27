@@ -25,7 +25,12 @@ if [ "$1" = "configure" ]; then
 	fi
 fi
 
-if [ "$1" = "install" -o "$1" = "upgrade" ] && [ -n "$2" ] &&
+if [ "$1" = "install" ] && [ -z "$2" ]; then
+	if [ -e /run/ntp.conf.dhcp ]; then
+		mkdir -p /run/ntpsec
+		cp /run/ntp.conf.dhcp /run/ntpsec/
+	fi
+elif [ "$1" = "install" -o "$1" = "upgrade" ] && [ -n "$2" ] &&
    dpkg --compare-versions "$2" le-nl "1.1.0+dfsg1-2~"; then
 	rm -f \
 		/etc/systemd/system/multi-user.target.wants/ntp.service \
@@ -35,6 +40,12 @@ if [ "$1" = "install" -o "$1" = "upgrade" ] && [ -n "$2" ] &&
 		/etc/systemd/system/timers.target.wants/ntp-rotate-stats.timer \
 		/etc/systemd/system/time-sync.target.wants/ntp-wait.service
 	rmdir /etc/systemd/system/ntp.service.wants 2>/dev/null || true
+
+	if [ -e /run/ntp.conf.dhcp ]; then
+		mkdir -p /run/ntpsec
+		mv -n /run/ntp.conf.dhcp /run/ntpsec/
+		rm -f /run/ntp.conf.dhcp
+	fi
 fi
 
 if [ "$1" = "triggered" ]; then
