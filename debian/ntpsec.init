@@ -32,7 +32,7 @@ if [ "$IGNORE_DHCP" != "yes" ] && [ -e /run/ntp.conf.dhcp ]; then
 fi
 
 
-LOCKFILE=/run/lock/ntpdate
+LOCKFILE=/run/lock/ntpsec-ntpdate
 
 RUNASUSER=ntp
 UGID=$(getent passwd $RUNASUSER | cut -f 3,4 -d:) || true

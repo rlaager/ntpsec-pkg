@@ -2,7 +2,7 @@
 
 DAEMON=/usr/sbin/ntpd
 PIDFILE=/run/ntpd.pid
-LOCKFILE=/run/lock/ntpdate
+LOCKFILE=/run/lock/ntpsec-ntpdate
 
 if [ -r /etc/default/ntpsec ]; then
         . /etc/default/ntpsec
