@@ -69,7 +69,7 @@ ntp_servers_setup_add() {
 	  echo
 	  sed '/^[[:space:]]*\(server\|peer\|pool\)[[:space:]]/d' "$NTP_CONF"
 	) >> "$tmp"
-	
+
 	mv "$tmp" "$NTP_DHCP_CONF"
 
 	ntp_server_restart
