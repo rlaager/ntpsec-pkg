@@ -2,6 +2,13 @@
 
 set -e
 
+# shellcheck disable=SC2154
+if [ -n "$METHOD" ] && [ "$service" != "ntpsec" ]; then
+	# Do nothing if called from /etc/network/if-up.d/ntpdate, which is the
+	# hook from the ntpdate package (as opposed to ntpsec-ntpdate).
+	exit 0
+fi
+
 if [ -r /etc/default/ntpdate ]; then
 	. /etc/default/ntpdate
 fi
