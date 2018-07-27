@@ -26,7 +26,6 @@ ntp_servers_setup_add() {
 		for i in \
 			$new_ntp_servers \
 			$DHCP4_NTP_SERVERS $DHCP6_NTP_SERVERS \
-			$(sed -n 's/NTP=//p' /run/systemd/netif/leases/* 2>/dev/null)
 		do
 			echo $i
 		done | tr "\n" " " | sed "s| $||")
