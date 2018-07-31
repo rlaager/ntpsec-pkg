@@ -1,4 +1,4 @@
-NTP_CONF=/etc/ntp.conf
+NTP_CONF=/etc/ntpsec/ntp.conf
 NTP_DHCP_CONF_DIR=/run/ntpsec
 NTP_DHCP_CONF=$NTP_DHCP_CONF_DIR/ntp.conf.dhcp
 

@@ -6,5 +6,6 @@ hardcode-python3-path.patch
 use-python2-for-ntploggps.patch
 update-refclock-docs.patch
 use-etc-ntpviz-for-header-and-footer.patch
-use-var-log-ntpstats-for-stats.patch
+use-var-log-ntpsec-for-stats.patch
+set-statsdir-by-default.patch
 use-sbin-for-ntploggps-and-ntplogtemp.patch

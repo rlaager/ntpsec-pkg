@@ -1,3 +1,4 @@
-mv_conffile /etc/dhcp/dhclient-exit-hooks.d/ntpdate /etc/dhcp/dhclient-exit-hooks.d/ntpsec-ntpdate 1.1.0+dfsg1-2~ ntpsec
-mv_conffile /etc/network/if-up.d/ntpdate /etc/network/if-up.d/ntpsec-ntpdate 1.1.0+dfsg1-2~ ntpsec
-rm_conffile /etc/logcheck/ignore.d.server/ntpdate 1.1.0+dfsg1-2~ ntpsec
+mv_conffile /etc/default/ntpdate /etc/default/ntpsec-ntpdate 1.1.0+dfsg1-2~ ntpsec-ntpdate
+mv_conffile /etc/dhcp/dhclient-exit-hooks.d/ntpdate /etc/dhcp/dhclient-exit-hooks.d/ntpsec-ntpdate 1.1.0+dfsg1-2~ ntpsec-ntpdate
+mv_conffile /etc/network/if-up.d/ntpdate /etc/network/if-up.d/ntpsec-ntpdate 1.1.0+dfsg1-2~ ntpsec-ntpdate
+rm_conffile /etc/logcheck/ignore.d.server/ntpdate 1.1.0+dfsg1-2~ ntpsec-ntpdate

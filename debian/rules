@@ -154,12 +154,12 @@ override_dh_install:
 		debian/ntpsec/lib/systemd/system/ntpsec-systemd-netif.service
 
 ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
-	install -D -m 0644 debian/ntp.conf.ubuntu debian/ntpsec/etc/ntp.conf
+	install -D -m 0644 debian/ntp.conf.ubuntu debian/ntpsec/etc/ntpsec/ntp.conf
 else
-	install -D -m 0644 debian/ntp.conf debian/ntpsec/etc/ntp.conf
+	install -D -m 0644 debian/ntp.conf debian/ntpsec/etc/ntpsec/ntp.conf
 endif
 	install -D -m 0644 debian/ntpviz.conf \
-		debian/ntpsec-ntpviz/etc/ntp.d/ntpviz.conf
+		debian/ntpsec-ntpviz/etc/ntpsec/ntp.d/ntpviz.conf
 
 	# install apparmor profile
 	install -D -m 0644 debian/apparmor-profile \
@@ -180,11 +180,9 @@ override_dh_installinit-arch:
 	dh_installinit -pntpsec --error-handler=installinit_error
 	dh_installinit -pntpsec-ntpviz --name=ntpviz
 	dh_installinit -pntpsec-ntpdate
-	mv debian/ntpsec-ntpdate/etc/default/ntpsec-ntpdate \
-		debian/ntpsec-ntpdate/etc/default/ntpdate
 ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
 	install -m 644 debian/ntpsec-ntpdate.default.ubuntu \
-		debian/ntpsec-ntpdate/etc/default/ntpdate
+		debian/ntpsec-ntpdate/etc/default/ntpsec-ntpdate
 endif
 	dh_apparmor --profile-name=usr.sbin.ntpd -pntpsec
 

@@ -1,0 +1,1 @@
+mv_conffile /etc/ntp.d/ntpviz.conf /etc/ntpsec/ntp.d/ntpviz.conf 1.1.0+dfsg1-2~ ntpsec-ntpviz

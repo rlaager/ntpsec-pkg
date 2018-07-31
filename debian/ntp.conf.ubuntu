@@ -1,10 +1,10 @@
-# /etc/ntp.conf, configuration for ntpd; see ntp.conf(5) for help
+# /etc/ntpsec/ntp.conf, configuration for ntpd; see ntp.conf(5) for help
 
-driftfile /var/lib/ntp/ntp.drift
+driftfile /var/lib/ntpsec/ntp.drift
 leapfile /usr/share/zoneinfo/leap-seconds.list
 
-# You must create /var/log/ntpstats (owned by ntp:ntp) to enable logging.
-#statsdir /var/log/ntpstats/
+# You must create /var/log/ntpsec (owned by ntpsec:ntpsec) to enable logging.
+#statsdir /var/log/ntpsec/
 #statistics loopstats peerstats clockstats
 #filegen loopstats file loopstats type day enable
 #filegen peerstats file peerstats type day enable

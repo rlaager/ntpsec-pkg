@@ -1,8 +1,8 @@
-# The settings in this file are used by the program ntpdate-ubuntu, but not
+# The settings in this file are used by the program ntpdate-debian, but not
 # by the upstream program ntpdate.
 
-# Set to "yes" to take the server list from /etc/ntp.conf, from package ntp,
-# so you only have to keep it in one place.
+# Set to "yes" to take the server list from /etc/ntpsec/ntp.conf, so you only
+# have to keep it in one place.
 NTPDATE_USE_NTP_CONF=yes
 
 # List of NTP servers to use  (Separate multiple servers with spaces.)
@@ -11,3 +11,6 @@ NTPSERVERS="ntp.ubuntu.com"
 
 # Additional options to pass to ntpdate
 NTPOPTIONS=""
+
+# Set to "yes" to ignore DHCP servers returned by DHCP.
+IGNORE_DHCP=""

@@ -1,18 +1,18 @@
 #!/bin/sh
 
-# The package default /etc/ntp.conf suggests (and the ntpviz package
-# /etc/ntp.d/ntpviz.conf enables) logging of various statistics to
-# the /var/log/ntpstats directory.  The daemon automatically changes
-# to a new datestamped set of files at midnight, so all we need to do
-# is delete old ones, and compress the ones we're keeping so disk
-# usage is controlled.
+# The package default /etc/ntpsec/ntp.conf suggests (and the ntpviz package
+# /etc/ntpsec/ntp.d/ntpviz.conf enables) logging of various statistics to
+# the /var/log/ntpsec directory.  The daemon automatically changes to a new
+# datestamped set of files at midnight, so all we need to do is delete old
+# ones, and compress the ones we're keeping so disk usage is controlled.
 
-statsdir=$(grep -v '^#' /etc/ntp.conf | sed -nr 's/^statsdir[[:space:]]+([^[:space:]]+).*$/\1/p')
+statsdir=$(grep -v '^#' /etc/ntpsec/ntp.conf | \
+	sed -nr 's/^statsdir[[:space:]]+([^[:space:]]+).*$/\1/p')
 
-# The ntpsec package, unlike ntp, uses /var/log/ntpstats as the default for
+# The ntpsec package, unlike ntp, uses /var/log/ntpsec as the default for
 # statsdir.
 if [ -z "$statsdir" ]; then
-	statsdir=/var/log/ntpstats
+	statsdir=/var/log/ntpsec
 fi
 
 if [ -d "$statsdir" ]; then

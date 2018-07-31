@@ -1,16 +1,14 @@
 ntpsec (1.1.1+dfsg1-1) unstable; urgency=medium
 
-  * Leave logs and drift file if ntp is installed
   * Changes as of ntp_4.2.8p11+dfsg-1 have been merged as appropriate:
     - Drop old versioned build-deps.
       Thanks to Bernhard Schmidt <berni@debian.org>
     - Sync AppArmor profile changes from Ubuntu.
       Thanks to Bernhard Schmidt <berni@debian.org>
   * Update apparmor for new drift temp file
-  * Allow ntp for ntpsec-ntpviz Recommends
   * Drop preempt from Ubuntu ntp.conf
   * Use ntp.conf.dhcp if it exists, rather than only if it is newer than
-    /etc/ntp.conf
+    ntp.conf
   * Add an option to ignore DHCP-provided servers (Closes: 898402)
   * Update upstream GPG key
   * New upstream version
@@ -35,8 +33,16 @@ ntpsec (1.1.1+dfsg1-1) unstable; urgency=medium
   * Refactor DHCP hooks.
     Thanks to Dimitri John Ledkov <xnox@ubuntu.com> for the networkd example.
   * Rename the ntpsec DHCP hooks
+  * Rename the files used by the DHCP hooks
+  * Rename the ntpdate hooks
+  * Add NetworkManager support for ntpdate DHCP hook
+  * Remove ntpdate logcheck rule
+  * Rename /etc/ntp.conf to /etc/ntpsec/ntp.conf
+  * Rename /etc/ntp.d to /etc/ntpsec/ntp.d
+  * Rename /var/lib/ntp to /var/lib/ntpsec
+  * Rename /var/log/ntpstats to /var/log/ntpsec
 
- -- Richard Laager <rlaager@wiktel.com>  Sun, 22 Jul 2018 21:59:40 -0500
+ -- Richard Laager <rlaager@wiktel.com>  Tue, 31 Jul 2018 03:18:23 -0500
 
 ntpsec (1.1.0+dfsg1-1) unstable; urgency=medium
 

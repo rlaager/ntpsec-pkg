@@ -1,4 +1,4 @@
-NTPDATE_CONF=/etc/default/ntpdate
+NTPDATE_CONF=/etc/default/ntpsec-ntpdate
 NTPDATE_DHCP_CONF_DIR=/run/ntpsec
 NTPDATE_DHCP_CONF=$NTPDATE_DHCP_CONF_DIR/ntpdate.dhcp
 

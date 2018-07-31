@@ -1,9 +1,9 @@
 ntpsec (1.1.1+dfsg1-1) unstable; urgency=medium
 
-  The ntp service has been renamed to ntpsec.  For systemd, ntp.service is
-  now ntpsec.service.  For sysvinit, /etc/init.d/ntp is now
-  /etc/init.d/ntpsec.  Also, /etc/default/ntp is now /etc/default/ntpsec.
-  Likewise, ntp-wait.service has been renamed to ntpsec-wait.service, and
-  ntp-rotate-stats.service has been renamed to ntpsec-rotate-stats.service.
+  To address various bugs, a number of things have been renamed to avoid
+  conflicting with the ntp packages.  Most critically, /etc/ntp.conf is now
+  at /etc/ntpsec/ntp.conf.  Also, the ntp service has been renamed to ntpsec.
+  For systemd, ntp.service is now ntpsec.service.  For sysvinit,
+  /etc/init.d/ntp is now /etc/init.d/ntpsec.  This is not an exhaustive list.
 
- -- Richard Laager <rlaager@wiktel.com>  Sun, 22 Jul 2018 00:21:30 -0500
+ -- Richard Laager <rlaager@wiktel.com>  Tue, 31 Jul 2018 03:18:23 -0500

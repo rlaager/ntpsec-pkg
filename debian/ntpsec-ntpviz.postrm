@@ -3,20 +3,17 @@
 set -e
 
 if [ "$1" != "upgrade" ]; then
-    rm -rf /var/lib/ntp/ntpviz
-    rmdir /var/log/ntpstats 2> /dev/null || true
+    rm -rf /var/lib/ntpsec/ntpviz
+    rmdir /var/log/ntpsec 2> /dev/null || true
 fi
 
 if [ "$1" = "purge" ]; then
 	# This intentionally allows for deinstalled (i.e. removed, but not
-	# purged) ntpsec, as it does not remove /var/log/ntpstats until it
-	# is purged.  Those files would be owned by the ntp user and group.
-	# Also, ntp is allowed here for the same reason, since ntpsec-ntpviz
-	# does not require ntpsec and can be installed alongside ntp.
-	if ! (LANG=C dpkg -s ntpsec 2> /dev/null ;
-	      LANG=C dpkg -s ntp 2> /dev/null) | \
+	# purged) ntpsec, as it does not remove /var/log/ntpsec until it is
+	# purged.  Those files would be owned by the ntpsec user and group.
+	if ! LANG=C dpkg -s ntpsec 2> /dev/null | \
 	     grep -qE "^Status: (deinstall|hold|install)"; then
-		deluser --system --quiet ntp || true
+		deluser --system --quiet ntpsec || true
 	fi
 fi
 

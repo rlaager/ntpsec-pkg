@@ -5,18 +5,25 @@ set -e
 if [ "$1" = "configure" ]; then
 	# If the log directory does not exist, create it and restart ntpd to
 	# enable logging.
-	if ! [ -d /var/log/ntpstats ]; then
-		# This has to be duplicated from the ntpsec postinst so that the ntp
-		# user and group exist for the install command below. This package
-		# intentionally does not depend on ntpsec.  Even if it did, a
-		# Pre-Depends would be required, which Policy frowns upon.
-		addgroup --system --quiet ntp
-		adduser --system --quiet --ingroup ntp \
-			--no-create-home --home /nonexistent ntp
+	if ! [ -d /var/log/ntpsec ]; then
+		# This has to be duplicated from the ntpsec postinst so the
+		# user and group exist for the install command below. This
+		# package intentionally does not depend on ntpsec.  Even if it
+		# did, a Pre-Depends would be required, which Policy frowns
+		# upon.
+		addgroup --system --quiet ntpsec
+		adduser --system --quiet --ingroup ntpsec \
+			--no-create-home --home /nonexistent ntpsec
 
-		install -o ntp -g ntp -d /var/log/ntpstats
+		install -o ntpsec -g ntpsec -d /var/log/ntpsec
 		invoke-rc.d ntpsec restart
 	fi
 fi
 
 #DEBHELPER#
+
+if [ "$1" = "configure" ] && [ -n "$2" ] &&
+   dpkg --compare-versions "$2" le-nl "1.1.0+dfsg1-2~"; then
+	# We have completed the transition of /etc/ntp.d.
+	rmdir /etc/ntp.d 2> /dev/null || true
+fi
