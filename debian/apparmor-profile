@@ -19,6 +19,7 @@
   #include <abstractions/user-tmp>
 
   capability ipc_lock,
+  capability net_admin,
   capability net_bind_service,
   capability setgid,
   capability setuid,
