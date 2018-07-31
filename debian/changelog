@@ -21,7 +21,6 @@ ntpsec (1.1.1+dfsg1-1) unstable; urgency=medium
   * Drop autorevision-related code
   * Refresh Debian patches
   * README.Debian: Update bit about dhclient.conf
-  * README.Debian: Add notes about the purge issues
   * README.Debian: Fix broken link to NTP servers
   * debian/copyright: Use HTTPS for Format URL
   * Update URLs in debian/ to HTTPS
