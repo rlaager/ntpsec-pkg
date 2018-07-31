@@ -53,6 +53,8 @@ if [ "$1" = "configure" ]; then
 
 		if [ -e /var/lib/ntp/ntp.drift ]; then
 			mv -n /var/lib/ntp/ntp.drift /var/lib/ntpsec/ntp.drift
+			chown ntpsec:ntpsec /var/lib/ntpsec/ntp.drift
+			chmod 644 /var/lib/ntpsec/ntp.drift
 			rm -f /var/lib/ntp/ntp.drift
 			rmdir /var/lib/ntp 2> /dev/null || true
 		fi
