@@ -73,11 +73,11 @@ if [ "$1" = "configure" ]; then
 			rmdir /var/log/ntpstats 2> /dev/null || true
 		fi
 
-        if [ -e /etc/ntp.d ]; then
-            mkdir -p /etc/ntpsec/ntp.d
-            mv -n /etc/ntp.d/*.conf /etc/ntpsec/ntp.d
-            rmdir /etc/ntp.d 2> /dev/null || true
-        fi
+		if [ -e /etc/ntp.d ]; then
+			mkdir -p /etc/ntpsec/ntp.d
+			mv -n /etc/ntp.d/*.conf /etc/ntpsec/ntp.d
+			rmdir /etc/ntp.d 2> /dev/null || true
+		fi
 	fi
 fi
 

@@ -3,8 +3,8 @@
 set -e
 
 if [ "$1" != "upgrade" ]; then
-    rm -rf /var/lib/ntpsec/ntpviz
-    rmdir /var/log/ntpsec 2> /dev/null || true
+	rm -rf /var/lib/ntpsec/ntpviz
+	rmdir /var/log/ntpsec 2> /dev/null || true
 fi
 
 if [ "$1" = "purge" ]; then
