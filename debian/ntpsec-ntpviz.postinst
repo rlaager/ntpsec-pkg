@@ -18,6 +18,17 @@ if [ "$1" = "configure" ]; then
 		install -o ntpsec -g ntpsec -d /var/log/ntpsec
 		invoke-rc.d ntpsec restart
 	fi
+
+	if [ "$1" = "configure" ] && [ -n "$2" ] &&
+	   dpkg --compare-versions "$2" le-nl "1.1.0+dfsg1-2~"; then
+		mv -n /var/lib/ntp/ntpviz/day/* /var/lib/ntpsec/ntpviz/day/
+		mv -n /var/lib/ntp/ntpviz/week/* /var/lib/ntpsec/ntpviz/week/
+		rmdir /var/lib/ntp/ntpviz/day \
+		      /var/lib/ntp/ntpviz/week \
+		      /var/lib/ntp/ntpviz \
+		      /var/lib/ntp \
+			2>/dev/null || true
+	fi
 fi
 
 #DEBHELPER#
@@ -25,5 +36,6 @@ fi
 if [ "$1" = "configure" ] && [ -n "$2" ] &&
    dpkg --compare-versions "$2" le-nl "1.1.0+dfsg1-2~"; then
 	# We have completed the transition of /etc/ntp.d.
+	rm -f /etc/ntp.d/ntpviz.conf
 	rmdir /etc/ntp.d 2> /dev/null || true
 fi
