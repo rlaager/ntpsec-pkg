@@ -102,10 +102,8 @@ installinit_error() {
 
 if [ "$1" = "configure" ] && [ -n "$2" ] &&
    dpkg --compare-versions "$2" le-nl "1.1.0+dfsg1-2~"; then
-	# We have completed the transition of ntpsec to its own user, etc.
-	# Cleanup things we took over from ntp, if ntp is already purged.
+	# We have completed the transition of ntpsec to its own user.
 	if ! dpkg -s ntp > /dev/null 2>&1; then
-		rm -rf /var/lib/ntp/
 		deluser --system --quiet ntp || true
 	fi
 fi
