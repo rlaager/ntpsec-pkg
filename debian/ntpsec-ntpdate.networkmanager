@@ -2,6 +2,11 @@
 
 case "$2" in
 	up|vpn-up)
+		if [ "$DHCP4_REQUESTED_NTP_SERVERS" != "1" ] &&
+		   [ "$DHCP6_REQUESTED_NTP_SERVERS" != "1" ]; then
+			exit 0
+		fi
+
 		# shellcheck disable=SC2034
 		reason=BOUND
 		;;
