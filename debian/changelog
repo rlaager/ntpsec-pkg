@@ -42,7 +42,7 @@ ntpsec (1.1.1+dfsg1-1) unstable; urgency=medium
   * Rename /var/log/ntpstats to /var/log/ntpsec
   * Add net_admin to the apparmor profile
 
- -- Richard Laager <rlaager@wiktel.com>  Tue, 31 Jul 2018 15:51:57 -0500
+ -- Richard Laager <rlaager@wiktel.com>  Thu, 02 Aug 2018 22:04:20 -0500
 
 ntpsec (1.1.0+dfsg1-1) unstable; urgency=medium
 
