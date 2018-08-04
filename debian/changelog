@@ -39,7 +39,7 @@ ntpsec (1.1.1+dfsg1-1) unstable; urgency=medium
   * Rename /etc/ntp.conf to /etc/ntpsec/ntp.conf
   * Rename /etc/ntp.d to /etc/ntpsec/ntp.d
   * Rename /var/lib/ntp to /var/lib/ntpsec
-  * Rename /var/log/ntpstats to /var/log/ntpsec
+  * Rename /var/log/ntpstats to /var/log/ntpsec (Closes: 893542)
   * Add net_admin to the apparmor profile
 
  -- Richard Laager <rlaager@wiktel.com>  Thu, 02 Aug 2018 22:04:20 -0500
