@@ -25,7 +25,7 @@ ntp_servers_setup_add() {
 	new_ntp_servers=$(
 		for i in \
 			$new_ntp_servers \
-			$DHCP4_NTP_SERVERS $DHCP6_NTP_SERVERS \
+			$DHCP4_NTP_SERVERS $DHCP6_NTP_SERVERS
 		do
 			echo $i
 		done | tr "\n" " " | sed "s| $||")
