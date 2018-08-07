@@ -1,3 +1,9 @@
+ntpsec (1.1.1+dfsg1-2) unstable; urgency=medium
+
+  * Fix syntax error in ntpsec-ntpdate DHCP hook
+
+ -- Richard Laager <rlaager@wiktel.com>  Tue, 07 Aug 2018 09:11:08 -0500
+
 ntpsec (1.1.1+dfsg1-1) unstable; urgency=medium
 
   * Changes as of ntp_4.2.8p11+dfsg-1 have been merged as appropriate:
