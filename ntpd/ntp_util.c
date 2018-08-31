@@ -11,6 +11,7 @@
 #include "ntp_leapsec.h"
 #include "ntp_stdlib.h"
 #include "ntp_stdlib.h"
+#include "ntp_auth.h"
 #include "ntpd.h"
 #include "timespecops.h"
 
@@ -66,7 +67,7 @@ static FILEGEN usestats;
 
 /*
  * This controls whether stats are written to the fileset. Provided
- * so that ntpq can turn off stats when the file system fills up. 
+ * so that ntpq can turn off stats when the file system fills up.
  */
 bool stats_control;
 
@@ -83,7 +84,7 @@ static	void	record_use_stats(void);
 	void	ntpd_time_stepped(void);
 static  void	check_leap_expiration(bool, time_t);
 
-/* 
+/*
  * Prototypes
  */
 #ifdef DEBUG
@@ -174,7 +175,7 @@ static void drift_write(char *driftfile, double drift)
 }
 
 
-/* 
+/*
  * write_stats - hourly: sysstats, usestats, and maybe drift
  */
 void
@@ -517,8 +518,8 @@ mprintf_clock_stats(
  * file format
  * day (MJD)
  * time (s past midnight)
- * source IP address old format) or drivername(unit) (new format)
- * destination peer address 
+ * source IP address (old format) or drivername(unit) (new format)
+ * destination peer address
  * t1 t2 t3 t4 timestamps
  * various other local statistics
  */
@@ -539,7 +540,7 @@ record_raw_stats(
 {
 	struct timespec	now;
 	const sockaddr_u *dstaddr = peer->dstadr ? &peer->dstadr->sin : NULL;
-	l_fp	t1 = peer->org;		/* originate timestamp */
+	l_fp	t1 = peer->org_ts;	/* originate timestamp */
 	l_fp	t2 = peer->rec;		/* receive timestamp */
 	l_fp	t3 = peer->xmt;		/* transmit timestamp */
 	l_fp	t4 = peer->dst;		/* destination timestamp */
@@ -734,7 +735,7 @@ check_leap_file(
 	/* just do nothing if there is no leap file */
 	if ( ! (leapfile_name && *leapfile_name))
 		return;
-	
+
 	/* try to load leapfile, force it if no leapfile loaded yet */
 	if (leapsec_load_file(
 		    leapfile_name, &leapfile_stat,
@@ -793,7 +794,7 @@ getauthkeys(
 	len = strlen(keyfile);
 	if (!len)
 		return;
-	
+
 	key_file_name = erealloc(key_file_name, len + 1);
 	memcpy(key_file_name, keyfile, len + 1);
 

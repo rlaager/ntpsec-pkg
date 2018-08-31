@@ -10,6 +10,14 @@ Much of the traditional function of a news file is now better addressed
 by browsing the comments in the revision history.  This file will focus
 on user-visible changes.
 
+== 2018-08-28 1.1.2 ==
+
+Use data minimization on client requests
+  https://datatracker.ietf.org/doc/draft-ietf-ntp-data-minimization/
+
+Support AES-128-CMAC for authentication
+  https://datatracker.ietf.org/doc/draft-ietf-ntp-mac/
+
 == 2018-06-11: 1.1.1 ==
 
 Log timestamps now include the year.  This is useful when
@@ -44,7 +52,7 @@ The following NTP Classic CVEs announced in February 2018 do not affect NTPsec:
 We have dropped support for Broadcast servers.  We had kept it for
 older desktop operating systems listening on the local network
 broadcast domain, a use case that is now no longer in use at sane
-enviroments, and no longer necessary for modern desktop OSs.
+environments, and no longer necessary for modern desktop OSs.
 
 It is now possible to unpeer refclocks using a type/unit specification
 rather than a magic IP address.  This was the last obligatory use of

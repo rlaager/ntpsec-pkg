@@ -2,12 +2,12 @@
 .\"     Title: ntp.keys
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 06/12/2018
+.\"      Date: 08/29/2018
 .\"    Manual: NTPsec
-.\"    Source: NTPsec 1.1.1+
+.\"    Source: NTPsec 1.1.2+
 .\"  Language: English
 .\"
-.TH "NTP\&.KEYS" "5" "06/12/2018" "NTPsec 1\&.1\&.1+" "NTPsec"
+.TH "NTP\&.KEYS" "5" "08/29/2018" "NTPsec 1\&.1\&.2+" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -33,7 +33,7 @@ ntp.keys \- NTP symmetric key file format
 .sp
 This document describes the format of an NTP symmetric key file\&. For a description of the use of this type of file, see the "Authentication Support" page of the Web documentation\&.
 .sp
-ntpd(8) reads its keys from a file specified using the \-k command line option or the \fIkeys\fR statement in the configuration file\&. While key number 0 is fixed by the NTP standard (as 56 zero bits) and may not be changed, one or more keys numbered between 1 and 65534 may be arbitrarily set in the keys file\&.
+ntpd(8) reads its keys from a file specified using the \-k command line option or the \fIkeys\fR statement in the configuration file\&. While key number 0 is fixed by the NTP standard (as 56 zero bits) and may not be changed, one or more keys numbered between 1 and 65535 may be arbitrarily set in the keys file\&.
 .sp
 The key file uses the same comment conventions as the configuration file\&. Key entries use a fixed format of the form
 .sp
@@ -47,7 +47,7 @@ keyno type key
 .RE
 .\}
 .sp
-where keyno is a positive integer (between 1 and 65534), type is the message digest algorithm, and key is the key itself\&.
+where keyno is a positive integer (between 1 and 65535), type is the message digest algorithm, and key is the key itself\&.
 .sp
 The file does not need to be sorted by keyno\&.
 .sp

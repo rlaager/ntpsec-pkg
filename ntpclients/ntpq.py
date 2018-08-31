@@ -34,6 +34,7 @@ except ImportError as e:
     sys.exit(1)
 
 version = ntp.util.stdversion()
+master_encoding = 'latin-1'
 
 # General notes on Python 2/3 compatibility:
 #
@@ -276,9 +277,9 @@ usage: help [ command ]
             "===========================================================\n")
         for (i, peer) in enumerate(self.peers):
             statval = ntp.control.CTL_PEER_STATVAL(peer.status)
-            if ((not showall and
-                 (statval & (ntp.control.CTL_PST_CONFIG |
-                             ntp.control.CTL_PST_REACH)) == 0)):
+            if (not showall and
+                    (statval & (ntp.control.CTL_PST_CONFIG |
+                                ntp.control.CTL_PST_REACH)) == 0):
                 continue
             sw = ntp.util.PeerStatusWord(peer.status)
             display = "%3d %5u  %04x   %3.3s  %4s  %4.4s %9.9s %11s %2lu" \
@@ -309,10 +310,10 @@ usage: help [ command ]
                 self.say("=" * (maxhostlen + 1))
             self.say(("=" * report.width()) + "\n")
             for peer in self.peers:
-                if ((not showall and
-                     not (ntp.control.CTL_PEER_STATVAL(peer.status) &
-                          (ntp.control.CTL_PST_CONFIG |
-                           ntp.control.CTL_PST_REACH)))):
+                if (not showall and
+                    not (ntp.control.CTL_PEER_STATVAL(peer.status) &
+                         (ntp.control.CTL_PST_CONFIG |
+                          ntp.control.CTL_PST_REACH))):
                     if self.debug:
                         self.warn("eliding [%d]\n" % peer.associd)
                     continue
@@ -353,7 +354,7 @@ usage: help [ command ]
         if line.startswith("&"):
             try:
                 idx = int(line[1:].split()[0])
-            except:
+            except ValueError:
                 self.warn("Invalid index literal.\n")
                 return -1
             if idx < 0 or idx >= 2**16-1:
@@ -367,11 +368,11 @@ usage: help [ command ]
         else:
             try:
                 associd = int(line.split()[0])
-            except:
+            except ValueError:
                 self.warn("Invalid associd literal.\n")
                 return -1
-            if ((associd != 0 and
-                 associd not in [peer.associd for peer in self.peers])):
+            if (associd != 0 and
+                    associd not in [peer.associd for peer in self.peers]):
                 self.warn("Unknown associd.\n")
                 return -1
             else:
@@ -587,8 +588,8 @@ usage: delay [ msec ]
                 session.ai_family = socket.AF_INET6
                 tokens.pop(0)
             try:
-                if ((tokens and
-                     self.session.openhost(tokens[0], session.ai_family))):
+                if (tokens and
+                        self.session.openhost(tokens[0], session.ai_family)):
                     print("current host set to %s" % self.session.hostname)
                 elif self.session.havehost():
                     print("current host remains %s" % self.session.hostname)
@@ -800,8 +801,8 @@ usage: authenticate [yes|no]
         else:
             try:
                 newversion = int(line)
-                if ((newversion >= ntp.magic.NTP_OLDVERSION and
-                     newversion <= ntp.magic.NTP_VERSION)):
+                if (newversion >= ntp.magic.NTP_OLDVERSION and
+                        newversion <= ntp.magic.NTP_VERSION):
                     self.pktversion = newversion
                 else:
                     print("versions %d to %d, please"
@@ -1374,7 +1375,6 @@ usage: mrulist [tag=value] [tag=value] [tag=value] [tag=value]
         except ntp.packet.ControlException as e:
             self.warn(e.message + "\n")
             return
-        pass
 
     def help_ifstats(self):
         self.say("""\
@@ -1405,6 +1405,8 @@ function: show ntpd access control list
 usage: reslist
 """)
 
+# FIXME: This table should move to ntpd
+#          so the answers track when ntpd is updated
     def do_sysinfo(self, _line):
         "display system summary"
         sysinfo = (
@@ -1431,6 +1433,8 @@ function: display system summary
 usage: sysinfo
 """)
 
+# FIXME: This table should move to ntpd
+#          so the answers track when ntpd is updated
     def do_kerninfo(self, _line):
         "display kernel loop and PPS statistics"
         kerninfo = (
@@ -1459,6 +1463,8 @@ function: display kernel loop and PPS statistics
 usage: kerninfo
 """)
 
+# FIXME: This table should move to ntpd
+#          so the answers track when ntpd is updated
     def do_sysstats(self, _line):
         "display system uptime and packet counts"
         sysstats = (
@@ -1484,6 +1490,8 @@ function: display system uptime and packet counts
 usage: sysstats
 """)
 
+# FIXME: This table should move to ntpd
+#          so the answers track when ntpd is updated
     def do_monstats(self, _line):
         "display monitor (mrulist) counters and limits"
         monstats = (
@@ -1511,18 +1519,28 @@ function: display monitor (mrulist) counters and limits
 usage: monstats
 """)
 
+# FIXME: This table should move to ntpd
+#          so the answers track when ntpd is updated
     def do_authinfo(self, _line):
         "display symmetric authentication counters"
         authinfo = (
-            ("authreset", "time since reset:", NTP_INT),
-            ("authkeys", "stored keys:     ", NTP_INT),
-            ("authfreek", "free keys:       ", NTP_INT),
-            ("authklookups", "key lookups:     ", NTP_INT),
-            ("authknotfound", "keys not found:  ", NTP_INT),
-            ("authkuncached", "uncached keys:   ", NTP_INT),
-            ("authkexpired", "expired keys:    ", NTP_INT),
-            ("authencrypts", "encryptions:     ", NTP_INT),
-            ("authdecrypts", "decryptions:     ", NTP_INT),
+            ("authreset",          "time since reset:    ", NTP_INT),
+            ("authkeys",           "stored keys:         ", NTP_INT),
+            ("authfreek",          "free keys:           ", NTP_INT),
+            ("authklookups",       "key lookups:         ", NTP_INT),
+            ("authknotfound",      "keys not found:      ", NTP_INT),
+            ("authencrypts",       "encryptions:         ", NTP_INT),
+            ("authdigestencrypts", "digest encryptions:  ", NTP_INT),
+            ("authcmacencrypts",   "CMAC encryptions:    ", NTP_INT),
+            ("authdecrypts",       "decryptions:         ", NTP_INT),
+            ("authdigestdecrypts", "digest decryptions:  ", NTP_INT),
+            ("authdigestfails",    "digest failures:     ", NTP_INT),
+            ("authcmacdecrypts",   "CMAC decryptions:    ", NTP_INT),
+            ("authcmacfails",      "CMAC failures:       ", NTP_INT),
+            # Old variables no longer supported.
+            # Interesting if looking at an old system.
+            ("authkuncached",      "uncached keys:       ", NTP_INT),
+            ("authkexpired",       "expired keys:        ", NTP_INT),
         )
         self.collect_display(associd=0, variables=authinfo, decodestatus=False)
 
@@ -1532,6 +1550,8 @@ function: display symmetric authentication counters
 usage: authinfo
 """)
 
+# FIXME: This table should move to ntpd
+#          so the answers track when ntpd is updated
     def do_iostats(self, _line):
         "display network input and output counters"
         iostats = (
@@ -1556,6 +1576,8 @@ function: display network input and output counters
 usage: iostats
 """)
 
+# FIXME: This table should move to ntpd
+#          so the answers track when ntpd is updated
     def do_timerstats(self, line):
         "display interval timer counters"
         timerstats = (
@@ -1571,6 +1593,7 @@ usage: iostats
 function: display interval timer counters
 usage: timerstats
 """)
+
 
 # Default values we use.
 DEFHOST = "localhost"    # default host name
@@ -1706,11 +1729,10 @@ if __name__ == '__main__':
     if len(arguments) == 0:
         interpreter.chosts.append((DEFHOST, session.ai_family))
 
-    if ((len(interpreter.ccmds) == 0 and
+    if (len(interpreter.ccmds) == 0 and
             not interpreter.interactive and
             os.isatty(0) and
-            os.isatty(1)
-         )):
+            os.isatty(1)):
         interpreter.interactive = True
 
     try:

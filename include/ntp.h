@@ -16,6 +16,7 @@
 #include "ntp_net.h"
 
 extern int32_t ntp_random (void);
+extern uint64_t ntp_random64 (void);
 
 /*
  * Calendar arithmetic - contributed by G. Healton
@@ -110,14 +111,13 @@ extern int32_t ntp_random (void);
 
 
 /*
- * The endpt structure is used to hold the addresses and socket
+ * The netendpt structure is used to hold the addresses and socket
  * numbers of each of the local network addresses we are using.
  * endpt is unrelated to the select algorithm's struct endpoint.
  */
-typedef struct __endpt {
-	struct __endpt *elink;		/* endpt list link */
+typedef struct netendpt {
+	struct netendpt *elink;		/* endpt list link */
 	SOCKET		fd;		/* socket descriptor */
-	SOCKET		bfd;		/* for receiving broadcasts */
 	uint32_t	ifnum;		/* endpt instance count */
 	sockaddr_u	sin;		/* unicast address */
 	sockaddr_u	mask;		/* subnet mask */
@@ -139,19 +139,19 @@ typedef struct __endpt {
 
 /*
  * Flags for interfaces. Do not change these casually as they will be visible
- * in Mode 6 ifstats reports. 
+ * in Mode 6 ifstats reports.
  */
 #define INT_UP		0x001	/* Interface is up */
 #define	INT_PPP		0x002	/* Point-to-point interface */
 #define	INT_LOOPBACK	0x004U	/* the loopback interface */
 #define	INT_BROADCAST	0x008	/* can broadcast out this interface */
-#define INT_MULTICAST	0x010	/* can multicast out this interface */
+/* #define INT_MULTICAST	0x010	** can multicast out this interface */
 #define	INT_BCASTOPEN	0x020U	/* broadcast receive socket is open */
-#define INT_MCASTOPEN	0x040	/* multicasting enabled */
+/* #define INT_MCASTOPEN	0x040	** multicasting enabled */
 #define INT_WILDCARD	0x080	/* wildcard interface - usually skipped */
 #define INT_MCASTIF	0x100	/* bound directly to MCAST address */
 #define INT_PRIVACY	0x200	/* RFC 4941 IPv6 privacy address */
-#define INT_BCASTXMIT	0x400   /* socket setup to allow broadcasts */
+/* #define INT_BCASTXMIT	0x400   ** socket setup to allow broadcasts */
 
 /*
  * Read-only control knobs for a peer structure.
@@ -279,22 +279,12 @@ struct peer {
 	l_fp	rec;		/* receive time stamp */
 	l_fp	xmt;		/* transmit time stamp */
 	l_fp	dst;		/* destination timestamp */
-	l_fp	org;		/* origin timestamp */
+	l_fp	org_ts;		/* origin real-timestamp */
+	l_fp	org_rand;	/* origin pseudo-timestamp */
 	double	offset;		/* peer clock offset */
 	double	delay;		/* peer roundtrip delay */
 	double	jitter;		/* peer jitter (squares) */
 	double	disp;		/* peer dispersion */
-
-	/*
-	 * Variables used to correct for packet length and asymmetry.
-	 */
-	double	t21;		/* outbound packet delay */
-	int	t21_bytes;	/* outbound packet length */
-	int	t21_last;	/* last outbound packet length */
-	double	r21;		/* outbound data rate */
-	double	t34;		/* inbound packet delay */
-	int	t34_bytes;	/* inbound packet length */
-	double	r34;		/* inbound data rate */
 
 	/*
 	 * End of clear-to-zero area
@@ -436,9 +426,13 @@ struct pkt {
 	l_fp_w	rec;		/* receive time stamp */
 	l_fp_w	xmt;		/* transmit time stamp */
 
+/* Old style authentication was just appended
+ * without the type/length of an extension header. */
+/* Length includes 1 word of keyID */
+/* MD5 length is 16 bytes => 4+1 */
+/* SHA length is 20 bytes => 5+1 */
 #define MIN_MAC_LEN	(1 * sizeof(uint32_t))	/* crypto_NAK */
-#define MAX_MD5_LEN	(5 * sizeof(uint32_t))	/* MD5 */
-#define	MAX_MAC_LEN	(6 * sizeof(uint32_t))	/* SHA */
+#define	MAX_MAC_LEN	(6 * sizeof(uint32_t))	/* MAX of old style */
 
 	uint32_t	exten[(MAX_MAC_LEN) / sizeof(uint32_t)];
 } __attribute__ ((aligned));
@@ -604,7 +598,6 @@ struct mon_data {
 	int		count;		/* total packet count */
 	unsigned short	flags;		/* restrict flags */
 	uint8_t		vn_mode;	/* packet mode & version */
-	uint8_t		cast_flags;	/* flags MDF_?CAST */
 	sockaddr_u	rmtadr;		/* address of remote host */
 };
 
@@ -614,7 +607,7 @@ struct mon_data {
  */
 #define	MDF_UCAST	0x01	/* unicast client */
 /* #define MDF_MCAST	0x02	** multicast server (not used) */
-#define	MDF_BCAST	0x04	/* broadcast server */
+/* #define MDF_BCAST	0x04	** broadcast server (not used) */
 #define	MDF_POOL	0x08	/* pool client solicitor */
 /* #define MDF_ACAST	0x10	** manycast client solicitor (not used) */
 #define	MDF_BCLNT	0x20	/* eph. broadcast/multicast client */
@@ -622,9 +615,9 @@ struct mon_data {
 /*
  * In the context of struct peer in ntpd, one cast_flags bit
  * represent configured associations which never receive packets, and
- * whose reach is always 0: MDF_BCAST
+ * whose reach is always 0: MDF_BCAST  (Historical)
  */
-#define MDF_TXONLY_MASK	(MDF_BCAST | MDF_POOL)
+#define MDF_TXONLY_MASK	(MDF_POOL)
 /*
  * manycastclient-like solicitor association cast_flags bits
  */
@@ -690,11 +683,6 @@ struct restrict_u_tag {
 #define	RES_MSSNTP		0x0800	/* enable MS-SNTP authentication */
 #define	RES_FLAKE		0x1000	/* flakeway - drop 10% */
 #define	RES_NOMRULIST		0x2000	/* mode 6 mrulist denied */
-
-#define	RES_ALLFLAGS		(RES_FLAGS | RES_NOQUERY |	\
-				 RES_NOMODIFY | RES_KOD |	\
-				 RES_MSSNTP | RES_FLAKE |	\
-				 RES_NOMRULIST)
 
 /* pythonize-header: start ignoring */
 

@@ -89,11 +89,9 @@ extern	endpt *	getinterface		(sockaddr_u *, uint32_t);
 extern	endpt *	select_peerinterface	(struct peer *, sockaddr_u *,
 					 endpt *);
 extern	endpt *	findinterface		(sockaddr_u *);
-extern	void	enable_broadcast	(endpt *, sockaddr_u *);
 extern	void	interface_update	(interface_receiver_t, void *);
 extern  void    io_handler              (void);
 extern	void	init_io 	(void);
-extern  SOCKET	open_socket	(sockaddr_u *, bool, bool, endpt *);
 extern	void	io_open_sockets	(void);
 extern	void	io_clr_stats	(void);
 extern	void	sendpkt 	(sockaddr_u *, endpt *, void *, int);
@@ -226,7 +224,6 @@ extern char *ntp_signd_socket;
 
 /* ntp_control.c */
 extern keyid_t	ctl_auth_keyid;		/* keyid used for authenticating write requests */
-extern	void	reset_auth_stats(void);
 
 /*
  * Other statistics of possible interest

@@ -42,7 +42,9 @@ static void RunAllTests(void)
 	RUN_TEST_GROUP(authkeys);
 	RUN_TEST_GROUP(calendar);
 	RUN_TEST_GROUP(clocktime);
+	RUN_TEST_GROUP(endian);
 	RUN_TEST_GROUP(decodenetnum);
+	RUN_TEST_GROUP(dolfptoa);
 	RUN_TEST_GROUP(hextolfp);
 	RUN_TEST_GROUP(lfpfunc);
 	RUN_TEST_GROUP(lfptostr);
@@ -51,7 +53,7 @@ static void RunAllTests(void)
 	RUN_TEST_GROUP(netof6);
 	RUN_TEST_GROUP(numtoa);
 	RUN_TEST_GROUP(prettydate);
-	RUN_TEST_GROUP(recvbuff);
+	RUN_TEST_GROUP(random);
 	RUN_TEST_GROUP(refidsmear);
 	RUN_TEST_GROUP(socktoa);
 	RUN_TEST_GROUP(statestr);
@@ -70,6 +72,7 @@ static void RunAllTests(void)
 #ifdef TEST_NTPD
 	RUN_TEST_GROUP(leapsec);
 	RUN_TEST_GROUP(hackrestrict);
+	RUN_TEST_GROUP(recvbuff);
 #endif
 
 }
@@ -78,7 +81,7 @@ static void RunAllTests(void)
 int main(int argc, const char * argv[]) {
 
 	ssl_init();
-	init_auth();
+	auth_init();
 	init_network();
 
 	args_argc = argc;

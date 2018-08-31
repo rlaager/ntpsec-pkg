@@ -2,7 +2,7 @@
  * dolfptoa - do the grunge work of converting an l_fp number to decimal
  *
  * Warning: this conversion is lossy in the low-order bits of the fractional
- * part.  It's good enough for statistics and logging, but do not expect 
+ * part.  It's good enough for statistics and logging, but do not expect
  * it to round-trip through atolfp(). 1444359386.1798776096, for example, may
  * dump as ...095 or ...097.
  */
@@ -49,9 +49,13 @@ dolfptoa(
 	for (dec = cp - cbuf; dec > 0 && fpi != 0; dec--) {
 		/* can add another digit */
 		uint32_t digit;
-		
+
 		digit  = fpi;
 		fpi   /= 10U;
+		/*
+		 * This should be able to be replaced by [digit -= fpi * 10].
+		 * It is being left as is at the moment for subtle bug avoidance.
+		 */
 		digit -= (fpi << 3) + (fpi << 1); /* i*10 */
 		*--cp  = (uint8_t)digit;
 	}
@@ -69,7 +73,7 @@ dolfptoa(
 	}
 	if (dec > (long)sizeof(cbuf) - (cpend - cbuf))
 		dec = (long)sizeof(cbuf) - (cpend - cbuf);
-	
+
 	/*
 	 * If there's a fraction to deal with, do so.
 	 */
@@ -104,14 +108,14 @@ dolfptoa(
 		M_LSHIFT(digit, fpv);
 		M_ADD(digit, fpv, tmph, tmpl);
 #undef M_ADD
-#undef M_SHIFT
+#undef M_LSHIFT
 		*cpend++ = (uint8_t)digit;
 	}
 
 	/* decide whether to round or simply extend by zeros */
 	if (dec > 0) {
 		/* only '0' digits left -- just reposition end */
-		cpend += dec; 
+		cpend += dec;
 	} else {
 		/* some bits remain in 'fpv'; do round */
 		uint8_t *tp    = cpend;
@@ -121,7 +125,7 @@ dolfptoa(
 			*--tp += 1;
 			if (*tp == 10)
 				*tp = 0;
-			else 
+			else
 				carry = false;
 		}
 

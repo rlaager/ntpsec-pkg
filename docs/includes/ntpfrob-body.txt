@@ -25,6 +25,10 @@ utilities.
   Bump the clock by a specified number of microseconds.
 +-c+::
   Compute and display clock jitter.
++-d+::
+  display values extracted via adjtimex(2).
++-D+::
+  display values extracted via adjtimex(2) forcibly including PPS.
 +-e+::
   Measure clock precision.
 +-j+::

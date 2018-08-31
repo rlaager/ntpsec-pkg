@@ -1178,7 +1178,7 @@ class ControlSession:
                                                   self.debug, th))
 
         if ((rpkt.version() > ntp.magic.NTP_VERSION) or
-            (rpkt.version() < ntp.magic.NTP_OLDVERSION)):
+           (rpkt.version() < ntp.magic.NTP_OLDVERSION)):
             warndbg("Fragment received with version %d"
                     % rpkt.version(), 1)
             return False
@@ -1594,8 +1594,8 @@ This combats source address spoofing
                 for i in range(len(span.entries)):
                     e = span.entries[len(span.entries) - i - 1]
                     incr = ", addr.%d=%s, last.%d=%s" % (i, e.addr, i, e.last)
-                    if ((len(req_buf) + len(incr) >=
-                            ntp.control.CTL_MAX_DATA_LEN)):
+                    if (len(req_buf) + len(incr) >=
+                            ntp.control.CTL_MAX_DATA_LEN):
                         break
                     else:
                         req_buf += incr

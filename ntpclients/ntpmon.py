@@ -191,6 +191,7 @@ class OutputContext:
     def __exit__(self, extype_unused, value_unused, traceback_unused):
         curses.endwin()
 
+
 usage = '''
 USAGE: ntpmon [-nudV] [-l logfile] [-D lvl] [host]
   Flg Arg Option-Name    Description
@@ -333,8 +334,8 @@ if __name__ == '__main__':
                                                        peer.associd)
                             data = data.encode('UTF-8')
                             stdscr.addstr(data, hilite)
-                            if (('refid' in variables and
-                                 'INIT' in variables['refid'])):
+                            if ('refid' in variables and
+                                    'INIT' in variables['refid']):
                                 initphase = True
 
                         # Now the MRU report

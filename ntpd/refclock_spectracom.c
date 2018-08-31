@@ -23,7 +23,7 @@
  * servers including the 9483, 9489, and SecureSync.
  *
  * WARNING: This driver depends on the system clock for year disambiguation.
- * It will thus not be usable for recovery if the system clock is trashed.  
+ * It will thus not be usable for recovery if the system clock is trashed.
  *
  * In former times this driver supported the Spectracom 9300 (now
  * end-of-lifed) and several models of Spectracom radio clocks that were
@@ -533,7 +533,7 @@ spectracom_control(
 {
 	struct spectracomunit *up;
 	struct refclockproc *pp;
-	
+
 	UNUSED_ARG(unit);
 	UNUSED_ARG(in_st);
 	UNUSED_ARG(out_st);

@@ -12,6 +12,7 @@
 #include "ntp_config.h"
 #include "ntp_syslog.h"
 #include "ntp_assert.h"
+#include "ntp_auth.h"
 #ifdef ENABLE_DNS_LOOKUP
 #include "ntp_dns.h"
 #endif
@@ -563,7 +564,7 @@ ntpdmain(
 	}
 
 	set_prettydate_pivot(time(NULL));
-	
+
 # ifdef HAVE_WORKING_FORK
 	/* make sure the FDs are initialised */
 	pipe_fds[0] = -1;
@@ -598,13 +599,13 @@ ntpdmain(
 			msyslog(LOG_ERR, "INIT: fork: %m");
 			exit(exit_code);
 		}
-		if (rc > 0) {	
+		if (rc > 0) {
 			/* parent */
 			exit_code = wait_child_sync_if(pipe_fds[0],
 						       wait_sync);
 			exit(exit_code);
 		}
-		
+
 		/*
 		 * child/daemon
 		 * close all open files excepting waitsync_fd_to_close.
@@ -663,7 +664,7 @@ ntpdmain(
 	 * Exactly what command-line options are we expecting here?
 	 */
 	ssl_init();
-	init_auth();
+	auth_init();
 	init_util();
 	init_restrict();
 	init_mon();
@@ -867,7 +868,7 @@ ntpdmain(
 	    /* FIXME: dump variable settings */
 	    exit(0);
 	}
-			
+
 	if (ipv4_works && ipv6_works) {
 		if (opt_ipv4)
 			ipv6_works = false;
@@ -887,7 +888,6 @@ ntpdmain(
 	have_interface_option = (!listen_to_virtual_ips || explicit_interface);
 	readconfig(getconfig(explicit_config));
 	check_minsane();
-
         if ( 8 > sizeof(time_t) ) {
 	    msyslog(LOG_ERR, "INIT: This system has a 32-bit time_t.");
 	    msyslog(LOG_ERR, "INIT: This ntpd will fail on 2038-01-19T03:14:07Z.");
@@ -903,7 +903,11 @@ ntpdmain(
 		msyslog(LOG_INFO, "INIT: running as non-root disables dynamic interface tracking");
 	}
 #endif
-	
+
+	if (access(statsdir, W_OK) != 0) {
+	    msyslog(LOG_ERR, "statistics directory %s does not exist or is unwriteable, error %s", statsdir, strerror(errno));
+	}
+
 	mainloop();
         /* unreachable, mainloop() never returns */
 }
@@ -1022,7 +1026,7 @@ static void mainloop(void)
 			    htons(NTP_PORT), 0, NULL, NULL, NULL) != kDNSServiceErr_NoError ) {
 				if (!--mdnstries) {
 					msyslog(LOG_ERR, "INIT: Unable to register mDNS, giving up.");
-				} else {	
+				} else {
 					msyslog(LOG_INFO, "INIT: Unable to register mDNS, will try later.");
 				}
 			} else {
