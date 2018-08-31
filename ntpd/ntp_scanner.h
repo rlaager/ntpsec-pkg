@@ -1,6 +1,6 @@
 /* ntp_scanner.h
  *
- * The header file for a simple lexical analyzer. 
+ * The header file for a simple lexical analyzer.
  *
  * Written By:	Sachin Kamboj
  *		University of Delaware
@@ -50,7 +50,7 @@ typedef enum {
  * ----------
  */
 
-/* 
+/*
  * Define a structure to hold the FSA for the keywords.
  * The structure is actually a tree.
  *
@@ -99,7 +99,7 @@ struct FILE_INFO {
 	FILE *		   fpi;		/* File Descriptor */
 	bool               force_eof;	/* locked or not */
 	int                backch;	/* ungetch buffer */
-	
+
 	struct LCPOS       curpos;	/* current scan position */
 	struct LCPOS       bakpos;	/* last line end for ungetc */
 	struct LCPOS       tokpos;	/* current token position */
@@ -109,7 +109,7 @@ struct FILE_INFO {
 };
 
 
-/* SCANNER GLOBAL VARIABLES 
+/* SCANNER GLOBAL VARIABLES
  * ------------------------
  */
 extern config_tree cfgt;	  /* Parser output stored here */

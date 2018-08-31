@@ -2,12 +2,12 @@
 .\"     Title: ntpq
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 06/12/2018
+.\"      Date: 08/29/2018
 .\"    Manual: NTPsec
-.\"    Source: NTPsec 1.1.1+
+.\"    Source: NTPsec 1.1.2+
 .\"  Language: English
 .\"
-.TH "NTPQ" "1" "06/12/2018" "NTPsec 1\&.1\&.1+" "NTPsec"
+.TH "NTPQ" "1" "08/29/2018" "NTPsec 1\&.1\&.2+" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -848,7 +848,7 @@ Display operational summary\&.
 .PP
 sysstats
 .RS 4
-Print statistics counters maintained in the protocol module\&.
+Print statistics counters maintained in the protocol module\&. Note that the relationships among these counters can look unlikely because packets can get flagged for inclusion in exception statistics in more than one way, for example by having both a bad length and an old version\&.
 .RE
 .SH "AUTHENTICATION"
 .sp

@@ -9,6 +9,7 @@
 #include "ntpd.h"
 #include "ntp_lists.h"
 #include "ntp_stdlib.h"
+#include "ntp_auth.h"
 
 
 /*
@@ -149,7 +150,7 @@ findexistingpeer_name(
 
 
 static
-struct peer *		
+struct peer *
 findexistingpeer_addr(
 	sockaddr_u *	addr,
 	struct peer *	start_peer,
@@ -169,13 +170,13 @@ findexistingpeer_addr(
 	 * start_peer is included so we can locate instances of the
 	 * same peer through different interfaces in the hash table.
 	 * A match requires the same mode and remote
-	 * address. 
+	 * address.
 	 */
 	if (NULL == start_peer)
 		peer = peer_hash[NTP_HASH_ADDR(addr)];
 	else
 		peer = start_peer->adr_link;
-	
+
 	while (peer != NULL) {
 		DPRINT(3, ("%s %s %d %d 0x%x ", sockporttoa(addr),
 			   sockporttoa(&peer->srcadr), mode, peer->hmode,
@@ -489,8 +490,8 @@ peer_refresh_interface(
 		   p->cfg.mode, p->cfg.peerkey));
 	if (niface != NULL) {
 		DPRINT(4, (
-			   "fd=%d, bfd=%d, name=%.16s, flags=0x%x, ifindex=%u, sin=%s",
-			   niface->fd,  niface->bfd, niface->name,
+			   "fd=%d, name=%.16s, flags=0x%x, ifindex=%u, sin=%s",
+			   niface->fd, niface->name,
 			   niface->flags, niface->ifindex,
 			   socktoa(&niface->sin)));
 		if (niface->flags & INT_BROADCAST)
@@ -553,7 +554,13 @@ newpeer(
 	)
 {
 	struct peer *	peer;
-	unsigned int		hash;
+	unsigned int	hash;
+	const char *	name;	/* for error messages */
+
+	if (NULL != hostname)
+		name = hostname;
+	else
+		name = socktoa(srcadr);
 
 	/*
 	 * First search from the beginning for an association with given
@@ -589,10 +596,7 @@ newpeer(
 	 * associations.
 	 */
 	if (peer != NULL) {
-		DPRINT(2, ("newpeer(%s) found existing association\n",
-			   (hostname)
-			   ? hostname
-			   : socktoa(srcadr)));
+		DPRINT(2, ("newpeer(%s) found existing association\n", name));
 		return NULL;
 	}
 
@@ -626,7 +630,7 @@ newpeer(
 	memcpy(&peer->cfg, ctl, sizeof(peer->cfg));
 
 	peer->cast_flags = cast_flags;
-	set_peerdstadr(peer, 
+	set_peerdstadr(peer,
 		       select_peerinterface(peer, srcadr, dstadr));
 
         if (NTP_MAXPOLL_UNK == peer->cfg.maxpoll)
@@ -650,18 +654,20 @@ newpeer(
 		DPRINT(3, ("newpeer(%s): local interface currently not bound\n",
 			   socktoa(srcadr)));
 
-	/*
-	 * Broadcast needs the socket enabled for broadcast
-	 */
-	if ((MDF_BCAST & cast_flags) && peer->dstadr != NULL)
-		enable_broadcast(peer->dstadr, srcadr);
+	/* if a key specified, verify that it will work */
+	if (0 != peer->cfg.peerkey) {
+		if (NULL == authlookup(peer->cfg.peerkey, false))
+			msyslog(LOG_ERR, "ERR: key %u not found for server %s",
+				peer->cfg.peerkey, name);
+		else if (NULL == authlookup(peer->cfg.peerkey, true))
+			msyslog(LOG_ERR, "ERR: key %u found but not trusted for server %s",
+				peer->cfg.peerkey, name);
+		}
 
 	peer->precision = sys_vars.sys_precision;
 	peer->hpoll = peer->cfg.minpoll;
 	if (cast_flags & MDF_POOL)
 		peer_clear(peer, "POOL", initializing1);
-	else if (cast_flags & MDF_BCAST)
-		peer_clear(peer, "BCST", initializing1);
 	else
 		peer_clear(peer, "INIT", initializing1);
 	if (clock_ctl.mode_ntpdate)

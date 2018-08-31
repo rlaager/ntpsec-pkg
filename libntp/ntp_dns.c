@@ -31,7 +31,7 @@
   peer->srcadr holds IPv4/IPv6/UNSPEC flag
   peer->hmode holds DNS retry time (log 2)
   FLAG_DNS used in server case to indicate need DNS
-  
+
   Server can't lookup again after finding an answer
     answer uses same peer slot, turns off FLAG_DNS
     srcadr+hmode changed by normal code
@@ -164,9 +164,9 @@ static void* dns_lookup(void* arg)
 	kill(getpid(), SIGDNS);
 	pthread_exit(NULL);
 
-	/* Prevent compiler warning. 
+	/* Prevent compiler warning.
 	 * More portable than an attribute or directive
-	 */  
+	 */
 	return (void *)NULL;
 };
 

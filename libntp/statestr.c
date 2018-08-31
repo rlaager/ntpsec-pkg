@@ -314,7 +314,7 @@ decode_bitflags(
 		 "decode_bitflags(%s) can't decode 0x%x in %d bytes",
 		 (tab == peer_st_bits)
 		     ? "peer_st"
-		     : 
+		     :
 		       (tab == k_st_bits)
 			   ? "kern_st"
 			   :
@@ -388,7 +388,7 @@ statustoa(
 			 getevents(CTL_SYS_NEVNT(st)),
 			 getcode(CTL_SYS_EVENT(st), sys_codes));
 		break;
-	
+
 	case TYPE_PEER:
 		pst = (uint8_t)CTL_PEER_STATVAL(st);
 		snprintf(cb, LIB_BUFLENGTH, "%s, %s, %s",
@@ -402,7 +402,7 @@ statustoa(
 				 getcode(CTL_PEER_EVENT(st), peer_codes));
 		}
 		break;
-	
+
 	case TYPE_CLOCK:
 		snprintf(cb, LIB_BUFLENGTH, "%s, %s",
 			 getevents(CTL_SYS_NEVNT(st)),

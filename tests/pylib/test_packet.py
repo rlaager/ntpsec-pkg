@@ -299,7 +299,7 @@ class TestSyncPacket(unittest.TestCase):
         self.assertEqual(errored, "Packet is a runt")
         # Test with extension, runt 16
         data2 = data + ext + "\x00\x11\x22\x33\x44\x55\x66\x77" \
-                "\x88\x99\xAA\xBB\xCC\xDD\xEE\xFF"
+                             "\x88\x99\xAA\xBB\xCC\xDD\xEE\xFF"
         try:
             cls = self.target(data2)
             errored = False
@@ -502,6 +502,7 @@ class TestSyncPacket(unittest.TestCase):
                          "1970-01-01T00:00:02Z:1970-01-01T00:00:03Z:"
                          "'foobar':machinations>")
 
+
 class TestMisc(unittest.TestCase):
     def test_Peer(self):
         session = SessionJig()
@@ -558,16 +559,18 @@ class TestMisc(unittest.TestCase):
         cls.first = "0x00000100.00000000"
         cls.ct = 4
         self.assertEqual(cls.avgint(), 64)
-        # Test sortaddr, ipv6
-        cls.addr = "[11:22:33::44:55]:42"
-        self.assertEqual(cls.sortaddr(),
-                         polybytes("\x00\x11\x00\x22\x00\x33\x00\x00"
-                                   "\x00\x00\x00\x00\x00\x44\x00\x55"))
-        # Test sortaddr, ipv6, local
-        cls.addr = "[11:22:33::44:55%8]:42"
-        self.assertEqual(cls.sortaddr(),
-                         polybytes("\x00\x11\x00\x22\x00\x33\x00\x00"
-                                   "\x00\x00\x00\x00\x00\x44\x00\x55"))
+        if socket.has_ipv6:
+            # Test sortaddr, ipv6
+            cls.addr = "[11:22:33::44:55]:42"
+            self.assertEqual(cls.sortaddr(),
+                             polybytes("\x00\x11\x00\x22\x00\x33\x00\x00"
+                                       "\x00\x00\x00\x00\x00\x44\x00\x55"))
+            # Test sortaddr, ipv6, local
+            cls.addr = "[11:22:33::44:55%8]:42"
+            self.assertEqual(cls.sortaddr(),
+                             polybytes("\x00\x11\x00\x22\x00\x33\x00\x00"
+                                       "\x00\x00\x00\x00\x00\x44\x00\x55"))
+
         # Test sortaddr, ipv4
         cls.addr = "11.22.33.44:23"
         self.assertEqual(cls.sortaddr(),
@@ -589,7 +592,6 @@ class TestMisc(unittest.TestCase):
                              "'last': '0x00000200.00000000', "
                              "'first': '0x00000100.00000000', 'ct': 4, "
                              "'mv': None, 'rs': None>")
-            pass
         else:
             # Python 3.x < 3.6, dicts enumerate randomly
             # I can not test randomness of this type
@@ -997,7 +999,7 @@ class TestControlSession(unittest.TestCase):
             cls.passwd = None
             cls.auth.fail_getitem = True
             fakegetpmod.getpass_returns = ["0102030405060708090A"
-                                          "0B0C0D0E0F1011121314"]  # 40 char
+                                           "0B0C0D0E0F1011121314"]  # 40 char
             cls.password()
             self.assertEqual(fakegetpmod.getpass_calls,
                              [("keytype Password: ", None)])
@@ -1661,7 +1663,7 @@ class TestControlSession(unittest.TestCase):
             queries = []
             result = cls.mrulist(variables={"sort": "addr",
                                             "frags": 24,
-                                            "resall":5})
+                                            "resall": 5})
             self.assertEqual(nonce_fetch_count, [4])
             self.assertEqual(queries,
                              [(10, 0, "nonce=foo, frags=24, resall=0x5", False),

@@ -33,6 +33,7 @@
 #include "lib_strbuf.h"
 #include "ntp_assert.h"
 #include "ntp_dns.h"
+#include "ntp_auth.h"
 
 /*
  * [Classic Bug 467]: Some linux headers collide with CONFIG_PHONE and
@@ -1135,7 +1136,7 @@ config_auth(
 	}
 	if (0 < count)
 		msyslog(LOG_INFO, "Found %d trusted keys.", count);
-	auth_prealloc_symkeys(count);
+	auth_prealloc(count);
 
 	/* Keys Command */
 	if (ptree->auth.keys)
@@ -2897,7 +2898,7 @@ config_reset_counters(
 			break;
 
 		case T_Auth:
-			reset_auth_stats();
+			auth_reset_stats(current_time);
 			break;
 
 		case T_Ctl:
@@ -3050,7 +3051,7 @@ void readconfig(const char *config_file)
 	 * init_syntax_tree(&cfgt);
 	 */
 	srccount = 0;
-	
+
 	/* parse the plain config file if it exists */
 	if (lex_init_stack(config_file, "r")) {
 		msyslog(LOG_INFO, "CONFIG: readconfig: parsing file: %s", config_file);
@@ -3058,7 +3059,7 @@ void readconfig(const char *config_file)
 		++srccount;
 		//cfgt.source.value.s = estrdup(config_file);
 	}
-	
+
 	/* parse configs in parallel subdirectory if that exists */
 	reparent(dirpath, sizeof(dirpath), config_file, CONFIG_DIR);
 	if (is_directory(dirpath) && lex_push_file(dirpath)) {
@@ -3075,7 +3076,7 @@ void readconfig(const char *config_file)
 #endif /* HAVE_NETINFO_NI_H */
 	    io_open_sockets();
 	}
-	    
+
 	lex_drop_stack();
 
 	DPRINT(1, ("Finished Parsing!!\n"));

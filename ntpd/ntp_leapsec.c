@@ -26,7 +26,7 @@
 #include "ntp_calendar.h"
 #include "ntp_leapsec.h"
 #include "ntp.h"
-#include "ntpd.h"	/* for rfc3339time() only */ 
+#include "ntpd.h"	/* for rfc3339time() only */
 #include "lib_strbuf.h"
 
 #include <openssl/evp.h>
@@ -325,7 +325,7 @@ leapsec_query(
 
 	if (when < pt->head.dtime - SECSPERDAY)
 		return fired;	/* Before last day */
-	
+
 	qr->proximity = LSPROX_ANNOUNCE;
 	if (when < pt->head.dtime - 10)
 		return fired;	/* Before last 10 seconds */
@@ -388,7 +388,7 @@ leapsec_load_stream(
 			msyslog(LOG_NOTICE, "CLOCK: %s ('%s'): good hash signature",
 				logPrefix, fname);
 			break;
-			
+
 		case LSVALID_NOHASH:
 			msyslog(LOG_ERR, "CLOCK: %s ('%s'): no hash signature",
 				logPrefix, fname);
@@ -438,7 +438,7 @@ leapsec_load_stream(
 			"CLOCK: %s ('%s'): loaded, expire=%s ofs=%d (no entries after build date)",
 			logPrefix, fname, rfc3339time(pt->head.expire),
 			pt->head.base_tai);
-	
+
 	return leapsec_set_table(pt);
 }
 
@@ -457,7 +457,7 @@ leapsec_load_file(
 	/* just do nothing if there is no leap file */
 	if ( !(fname && *fname) )
 		return false;
-	
+
 	/* try to stat the leapfile */
 	/* coverity[toctou] */
 	if (0 != stat(fname, &sb_new)) {
@@ -619,7 +619,7 @@ add_range(
 	}
 
 	/* make room in lower end and insert item */
-	memmove(pt->info+1, pt->info, pt->head.size*sizeof(*pt->info)); 
+	memmove(pt->info+1, pt->info, pt->head.size*sizeof(*pt->info));
 	pt->info[0] = *pi;
 	pt->head.size++;
 
@@ -651,7 +651,7 @@ get_line(
 {
 	int   ch;
 	char *ptr;
-	
+
 	/* if we cannot even store the delimiter, declare failure */
 	if (buff == NULL || size == 0)
 		return NULL;
@@ -738,7 +738,7 @@ reload_limits(
                 else
 			pt->head.dtime = pt->head.ttime +
 				pt->head.next_tai - pt->head.this_tai;
-		
+
 		pt->head.stime =  pt->head.ttime - pt->info[idx].stime;
 
 	} else {
@@ -914,7 +914,7 @@ do_hash_data(
 				EVP_DigestUpdate(
 				    mdctx, (const void *)text, sizeof(text));
 		}
-	
+
 	if (0 < tlen)
 		EVP_DigestUpdate(mdctx, (const void *)text, (size_t)tlen);
 }

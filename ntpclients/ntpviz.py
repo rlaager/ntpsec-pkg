@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """\
-ntpviz - logfile visualizer for NTP log files
+ntpviz - visualizer for NTP log files
 
 ntpviz [-d LOGDIR] [-g] [-n name] [-p DAYS]
          [-s starttime] [-e endtime]
@@ -65,8 +65,8 @@ if sys.version_info[0] == 2:
     sys.setdefaultencoding('utf8')
 
     def open(file, mode='r', buffering=-1, encoding=None, errors=None):
-        return codecs.open(filename=file, mode=mode, encoding=encoding,
-            errors=errors, buffering=buffering)
+        return(codecs.open(filename=file, mode=mode, encoding=encoding,
+               errors=errors, buffering=buffering))
 
 # believe it or not, Python has no way to make a simple constant!
 MS_PER_S = 1e3          # milliseconds per second
@@ -108,6 +108,7 @@ class UTC(datetime.tzinfo):
 
     def dst(self, dt):
         return datetime.timedelta(0)
+
 
 try:
     import ntp.statfiles
@@ -225,7 +226,7 @@ class VizStats(ntp.statfiles.NTPStats):
     <td style="text-align:left;">Name</td>
     <td>Min</td><td>1%</td><td>5%</td><td>50%</td><td>95%</td>
     <td>99%</td><td>Max</td> <td style="width:10px;">&nbsp;</td>
-    <td>90%</td><td>95%</td><td>StdDev</td>
+    <td>90%</td><td>98%</td><td>StdDev</td>
     <td style="width:10px;">&nbsp;</td><td>Mean</td><td>Units</td>
     <td>ness</td><td>osis</td>
   </tr>
@@ -642,10 +643,10 @@ plot \
         exp = """\
 <p>The frequency offsets and temperatures.
 Showing frequency offset (red, in parts
-per million, scale on right) and the temeratures.</p>
+per million, scale on right) and the temperatures.</p>
 
 <p>These are field 4 (frequency) from the loopstats log
-file, and field 3 from the temp log .</p>
+file, and field 3 from the tempstats log file.</p>
 
 """
 
@@ -702,14 +703,14 @@ plot \\
         # strip the trailing ", \n"
         plot_template = plot_template[:-4] + "\n"
         exp = """\
-<p>Local temperatures.  These will be site specific depending on what
-temperature sensors you have and collect data from.
+<p>Local temperatures.  These will be site-specific depending upon what
+temperature sensors you collect data from.
 Temperature changes affect the local clock crystal frequency and
 stability.  The math of how temperature changes frequency is
 complex, and also depends on crystal aging.  So there is no easy
-way to correct for it in software.  This the single most important
+way to correct for it in software.  This is the single most important
 component of frequency drift.</p>
-<p>The Local Termperatures are from field 3 from the tempstats log file.</p>
+<p>The Local Temperatures are from field 3 from the tempstats log file.</p>
 """
 
         ret = {'html': exp, 'stats': stats}
@@ -839,7 +840,7 @@ plot \
 """ % out
 
         exp = """\
-<p>This shows the frequency offset of the local clock (aka drift).  The
+<p>The frequency offset of the local clock (aka drift).  The
 graph includes percentile data to show how much the frequency changes
 over a longer period of time.  The majority of this change should come
 from temperature changes (ex: HVAC, the weather, CPU usage causing local
@@ -882,7 +883,7 @@ line at 0ppm.  Expected values of 99%-1% percentiles: 0.4ppm</p>
 
         if freq:
             exp = """\
-<p>This shows the RMS Frequency Jitter (aka wander) of the local
+<p>The RMS Frequency Jitter (aka wander) of the local
 clock's frequency.  In other words, how fast the local clock changes
 frequency.</p>
 
@@ -893,7 +894,7 @@ frequency.</p>
 """
         else:
             exp = """\
-<p>This shows the RMS Jitter of the local clock offset.  In other words,
+<p>The RMS Jitter of the local clock offset.  In other words,
 how fast the local clock offset is changing.</p>
 
 <p>Lower is better.  An ideal system would be a horizontal line at 0μs.</p>
@@ -980,11 +981,11 @@ plot \
                     rtt = 0
                     title = "Refclock Offset " + str(peerlist[0])
                     exp = """\
-<p>This shows the offset of a local refclock in seconds.  This is
+<p>The offset of a local refclock in seconds.  This is
 useful to see how the measured offset is behaving.</p>
 
 <p>Closer to 0s is better.  An ideal system would be a horizontal line
-at 0s. Typical 90%% ranges may be: local serial GPS 200 ms; local PPS
+at 0s. Typical 90% ranges may be: local serial GPS 200 ms; local PPS
 20µs.</p>
 
 <p>Clock Offset is field 5 in the peerstats log file.</p>
@@ -992,10 +993,10 @@ at 0s. Typical 90%% ranges may be: local serial GPS 200 ms; local PPS
                 else:
                     title = "Peer Offset " + str(peerlist[0])
                     exp = """\
-<p>This shows the offset of a peer or server in seconds.  This is
+<p>The offset of a peer or server in seconds.  This is
 useful to see how the measured offset is behaving.</p>
 
-<p>The chart also plots offset±rtt.  Where rtt is the round trip time
+<p>The chart also plots offset±rtt,  where rtt is the round trip time
 to the remote.  NTP can not really know the offset of a remote chimer,
 NTP computes it by subtracting rtt/2 from the offset.  Plotting the
 offset±rtt reverses this calculation to more easily see the effects of
@@ -1006,7 +1007,7 @@ at 0s. Typical 90% ranges may be: local LAN peer 80µs; 90% ranges for
 WAN servers may be 4ms and much larger. </p>
 
 <p>Clock Offset is field 5 in the peerstats log file.  The Round Trip
-Time (rtt) is field 6 in the peerstats file.</p>
+Time (rtt) is field 6 in the peerstats log file.</p>
 """
 
             else:
@@ -1014,8 +1015,9 @@ Time (rtt) is field 6 in the peerstats file.</p>
                 if "127.127." == peerlist[0][:8]:
                     title = "Refclock RMS Jitter " + str(peerlist[0])
                     exp = """\
-<p>This shows the RMS Jitter of a local refclock.  Jitter is the
-current estimated dispersion; the variation in offset between samples.</p>
+<p>The RMS Jitter of a local refclock.  Jitter is the
+current estimated dispersion, in other words the variation in offset
+between samples.</p>
 
 <p>Closer to 0s is better.  An ideal system would be a horizontal
 line at 0s.</p>
@@ -1025,9 +1027,9 @@ line at 0s.</p>
                 else:
                     title = "Peer Jitter " + str(peerlist[0])
                     exp = """\
-<p>This shows the RMS Jitter of a remote peer or server.  Jitter is
-the current estimated dispersion; the variation in offset between
-samples.</p>
+<p>The RMS Jitter of a remote peer or server.  Jitter is the
+current estimated dispersion, in other words the variation in offset
+between samples.</p>
 
 <p>Closer to 0s is better.  An ideal system would be a horizontal line
 at 0s.</p>
@@ -1047,7 +1049,7 @@ at 0s.</p>
             if "offset" == type:
                 title = "Peer Offsets"
                 exp = """\
-<p>This shows the offset of all refclocks, peers and servers.
+<p>The offset of all refclocks, peers and servers.
 This can be useful to see if offset changes are happening in
 a single clock or all clocks together.</p>
 
@@ -1056,8 +1058,8 @@ a single clock or all clocks together.</p>
             else:
                 title = "Peer Jitters"
                 exp = """\
-<p>This shows the RMS Jitter of all refclocks, peers and servers.
-Jitter is the current estimated dispersion; the variation in offset
+<p>The RMS Jitter of all refclocks, peers and servers. Jitter is the
+current estimated dispersion, in other words the variation in offset
 between samples.</p>
 
 <p>Closer to 0s is better.  An ideal system would be a horizontal line
@@ -1245,7 +1247,7 @@ plot \
         histogram_data = ["%s %s\n" % (k, v) for k, v in cnt.items()]
 
         exp = """\
-<p>This shows the clock offsets of the local clock as a histogram.</p>
+<p>The clock offsets of the local clock as a histogram.</p>
 
 <p>The Local Clock Offset is field 3 from the loopstats log file.</p>
 """
@@ -1256,6 +1258,7 @@ plot \
                'stats': [],
                'title': "Local Clock Time Offset Histogram"}
         return ret
+
 
 # Multiplotting can't live inside NTPViz because it consumes a list
 # of such objects, not a single one.
@@ -1292,6 +1295,7 @@ plot \\
     ret['title'] = "Multiplot"
     ret['plot'] = plot + plot_data
     return ret
+
 
 # here is how to create the base64 from an image file:
 # with open("path/to/file.png", "rb") as f:
@@ -1373,7 +1377,7 @@ Python by ESR, concept and gnuplot code by Dan Drown.
     parser.add_argument('-d', '--datadir',
                         default="/var/log/ntpstats",
                         dest='statsdirs',
-                        help="one or more logfile directories to read",
+                        help="one or more log file directories to read",
                         type=str)
     parser.add_argument('-e', '--endtime',
                         dest='endtime',
@@ -1551,7 +1555,6 @@ Python by ESR, concept and gnuplot code by Dan Drown.
         except ImportError:
             if 0 < args.debug_level:
                 sys.stderr.write("ntpviz: INFO: psutil not found\n")
-            pass
 
         # set nice()
         nice = os.nice(nice)
@@ -1718,9 +1721,15 @@ dd {
         index_header += '<b>Start Time:</b> %s UTC<br>\n' \
                         '<b>End Time:</b> %s UTC<br>\n' \
             % (start_time, end_time)
-        index_header += '<b>Report Period:</b> %1.1f days <br>\n' \
-            % (float(stats.period) /
-                float(ntp.statfiles.NTPStats.SecondsInDay))
+        if (1 > stats.period):
+            # less than a day, report hours
+            index_header += ('<b>Report Period:</b> %1.1f hours <br>\n' %
+                             (float(stats.period) / (24 * 60)))
+        else:
+            # more than a day, report days
+            index_header += ('<b>Report Period:</b> %1.1f days <br>\n' %
+                             (float(stats.period) /
+                              ntp.statfiles.NTPStats.SecondsInDay))
 
     if args.clip:
         index_header += """\

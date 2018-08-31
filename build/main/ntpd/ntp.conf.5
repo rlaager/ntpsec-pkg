@@ -2,12 +2,12 @@
 .\"     Title: ntp.conf
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 06/12/2018
+.\"      Date: 08/29/2018
 .\"    Manual: NTPsec
-.\"    Source: NTPsec 1.1.1+
+.\"    Source: NTPsec 1.1.2+
 .\"  Language: English
 .\"
-.TH "NTP\&.CONF" "5" "06/12/2018" "NTPsec 1\&.1\&.1+" "NTPsec"
+.TH "NTP\&.CONF" "5" "08/29/2018" "NTPsec 1\&.1\&.2+" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -165,7 +165,7 @@ config\-from\-file\&.
 .PP
 bias
 .RS 4
-Add the command argument, a floating\-point value in seconds, to the time offset () computed for this server\&. May be useful if you are a client on a network connection such as an ADSL line where there is a predictable asymmetry between upstream and downstream flight times\&. One way you night see this is if you use a fixed set of others and one has a stable offset that is an outlier from the others; in that case you might want to use
+Add the command argument, a floating\-point value in seconds, to the time offset () computed for this server\&. May be useful if you are a client on a network connection such as an ADSL line where there is a predictable asymmetry between upstream and downstream flight times\&. One way you might see this is if you use a fixed set of others and one has a stable offset that is an outlier from the others; in that case you might want to use
 bias
 to compensate out the offset\&.
 .RE
@@ -179,7 +179,7 @@ command\&.
 .PP
 iburst
 .RS 4
-When the server is unreachable, send a burst of six packets instead of the usual one\&. The packet spacing is normally 2 s; however, the spacing between the first two packets can be changed with the calldelay command to allow additional time for a modem or ISDN call to complete\&. This is designed to speed the initial synchronization acquisition with the
+When the server is unreachable, send a burst of six packets instead of the usual one\&. The packet spacing is normally 2 s; however, the spacing between the first and second packets can be changed with the calldelay command to allow additional time for a modem or ISDN call to complete\&. This is designed to speed the initial synchronization acquisition with the
 server
 command, and when ntpd(8) is started with the
 \-q
@@ -190,7 +190,7 @@ key \fIkey\fR
 .RS 4
 All packets sent to and received from the server or peer are to include authentication fields encrypted using the specified
 \fIkey\fR
-identifier with values from 1 to 65534, inclusive\&. The default is to include no encryption field\&.
+identifier with values from 1 to 65535, inclusive\&. The default is to include no encryption field\&.
 .RE
 .PP
 minpoll \fIminpoll\fR, maxpoll \fImaxpoll\fR
@@ -248,12 +248,12 @@ controlkey \fIkey\fR
 .RS 4
 Specifies the key identifier to use with the ntpq(1) utility, which uses the standard protocol defined in RFC 5905\&. The
 \fIkey\fR
-argument is the key identifier for a trusted key, where the value can be in the range 1 to 65,534, inclusive\&.
+argument is the key identifier for a trusted key, where the value can be in the range 1 to 65,535, inclusive\&.
 .RE
 .PP
 keys \fIkeyfile\fR
 .RS 4
-Specifies the complete path and location of the MD5/SHA1 key file containing the keys and key identifiers used by ntpd(8), and ntpq(1) when operating with symmetric\-key cryptography\&. This is the same operation as the
+Specifies the complete path and location of the key file containing the keys and key identifiers used by ntpd(8), and ntpq(1) when operating with symmetric\-key cryptography\&. This is the same operation as the
 \-k
 command line option\&.
 .RE
@@ -265,7 +265,7 @@ trustedkey
 lines are supported and trusted keys can also be specified on the command line\&.
 .RE
 .sp
-The authentication procedures require that both the local and remote servers share the same key and key identifier for this purpose, although different keys can be used with different servers\&. The \fIkey\fR arguments are 32\-bit unsigned integers with values from 1 to 65,534\&.
+The authentication procedures require that both the local and remote servers share the same key and key identifier for this purpose, although different keys can be used with different servers\&. The \fIkey\fR arguments are 32\-bit unsigned integers with values from 1 to 65,535\&.
 .SH "MONITORING SUPPORT"
 .sp
 ntpd(8) includes a comprehensive monitoring facility suitable for continuous, long term recording of server and client timekeeping performance\&. See the statistics command below for a listing and example of each type of statistics currently supported\&. Statistic files are managed using file generation sets and scripts in the \&./scripts directory of this distribution\&. Using these facilities and UNIX cron(8) jobs, the data can be automatically summarized and archived for retrospective analysis\&.
@@ -291,6 +291,7 @@ Enables recording of clock driver statistics information\&. Each update received
 .if n \{\
 .RE
 .\}
+.sp
 .TS
 allbox tab(:);
 lt lt lt
@@ -335,10 +336,8 @@ timecode (format varies by refclock)
 T}
 .TE
 .sp 1
-.RE
-.RE
-.sp
 The first two fields show the date (Modified Julian Day) and time (seconds and fraction past UTC midnight)\&. The next normally shows clock type and unit (but if you are running in strict Classic compatibility mode it will show the magic clock address in dotted\-quad notation)\&. The final field last timecode received from the clock in decoded ASCII format, where meaningful\&. In some clock drivers a good deal of additional information can be gathered and displayed as well\&. See information specific to each clock for further details\&.
+.RE
 .PP
 loopstats
 .RS 4
@@ -1119,6 +1118,7 @@ T}
 .TE
 .sp 1
 .RE
+.RE
 .PP
 statsdir \fIdirectory_path\fR
 .RS 4
@@ -1147,11 +1147,20 @@ This is the file name for the statistics records\&. Filenames of set members are
 \fIfilename\fR
 and
 \fIsuffix\fR:
-.RE
-.RE
-.PP
+.TS
+allbox tab(:);
+lt lt
+lt lt
+lt lt
+lt lt.
+T{
+Attribute
+T}:T{
+Description
+T}
+T{
 \fIprefix\fR
-.RS 4
+T}:T{
 This is a constant filename path\&. It is not subject to modifications via the
 \fIfilegen\fR
 option\&. It is defined by the server, usually specified as a compile\-time constant\&. It may, however, be configurable for individual file generation sets via other commands\&. For example, the prefix used with
@@ -1161,40 +1170,57 @@ and
 generation can be configured using the
 \fIstatsdir\fR
 option explained above\&.
-.RE
-.PP
+T}
+T{
 \fIfilename\fR
-.RS 4
+T}:T{
 This string is directly concatenated to the prefix mentioned above (no intervening \(oq/\(cq)\&. This can be modified using the file argument to the
 \fIfilegen\fR
 statement\&. No
 \&.\&.
 elements are allowed in this component to prevent filenames referring to parts outside the filesystem hierarchy denoted by
 \fIprefix\fR\&.
-.RE
-.PP
+T}
+T{
 \fIsuffix\fR
-.RS 4
+T}:T{
 This part is reflects individual elements of a file set\&. It is generated according to the type of a file set\&.
+T}
+.TE
+.sp 1
+.RE
 .PP
 type \fItypename\fR
 .RS 4
-A file generation set is characterized by its type\&. The following types are supported:
-.RE
-.RE
-.PP
+A file generation set is characterized by its type\&. The following types are supported: // The following are tables only because indent lists cannot be // nested more than 2 deep\&.
+.TS
+allbox tab(:);
+lt lt
+lt lt
+lt lt
+lt lt
+lt lt
+lt lt
+lt lt
+lt lt.
+T{
+Attribute
+T}:T{
+Description
+T}
+T{
 none
-.RS 4
+T}:T{
 The file set is actually a single plain file\&.
-.RE
-.PP
+T}
+T{
 pid
-.RS 4
+T}:T{
 One element of file set is used per incarnation of a ntpd server\&. This type does not perform any changes to file set members during runtime, however it provides an easy way of separating files belonging to different ntpd(8) server incarnations\&. The set member filename is built by appending a \(oq\&.\(cq to concatenated prefix and filename strings, and appending the decimal representation of the process ID of the ntpd(8) server process\&.
-.RE
-.PP
+T}
+T{
 day
-.RS 4
+T}:T{
 One file generation set element is created per day\&. A day is defined as the period between 00:00 and 24:00 UTC\&. The file set member suffix consists of a \(oq\&.\(cq and a day specification in the form
 \fIYYYYMMdd\fR\&.
 \fIYYYY\fR
@@ -1204,29 +1230,33 @@ is a two digit month number\&.
 \fIdd\fR
 is a two digit day number\&. Thus, all information written at 10 December 1992 would end up in a file named
 \fIprefix\fR\fIfilename\fR\&.19921210\&.
-.RE
-.PP
+T}
+T{
 week
-.RS 4
+T}:T{
 Any file set member contains data related to a certain week of a year\&. The term week is defined by computing day\-of\-year modulo 7\&. Elements of such a file generation set are distinguished by appending the following suffix to the file set filename base: A dot, a 4\-digit year number, the letter
 \fIW\fR, and a 2\-digit week number\&. For example, information from January, 10th 1992 would end up in a file with suffix
 \fI1992W1\fR\&.
-.RE
-.PP
+T}
+T{
 month
-.RS 4
+T}:T{
 One generation file set element is generated per month\&. The file name suffix consists of a dot, a 4\-digit year number, and a 2\-digit month\&.
-.RE
-.PP
+T}
+T{
 year
-.RS 4
+T}:T{
 One generation file element is generated per year\&. The filename suffix consists of a dot and a 4 digit year number\&.
-.RE
-.PP
-age
-.RS 4
+T}
+T{
+age$$
+T}:T{
 This type of file generation sets changes to a new element of the file set every 24 hours of server operation\&. The filename suffix consists of a dot, the letter
 \fIa\fR, and an 8\-digit number\&. This number is taken to be the number of seconds the server is running at the start of the corresponding 24\-hour period\&.
+T}
+.TE
+.sp 1
+.RE
 .PP
 link | nolink
 .RS 4
@@ -1451,7 +1481,9 @@ This command is used to configure reference clocks\&. The required
 argument is the shortname of a driver type (e\&.g\&.
 shm,
 nmea,
-generic; see the link:refclock\&.html [Reference Clock Drivers] page for a full list\&. The options are interpreted as follows:
+generic; see the
+Reference Clock Drivers
+page for a full list\&. The options are interpreted as follows:
 .PP
 unit
 .RS 4
@@ -1711,6 +1743,8 @@ This command specifies the location of an alternate log file to be used instead 
 \fIsyslog(3)\fR
 facility\&. This is the same operation as the \-l command line option\&.
 .RE
+.sp
+If your ntpd runs for a long time, you probably want to use logrotate or newsyslog to switch to a new log file occasionally\&. SIGHUP will reopen the log file\&.
 .PP
 mru [maxdepth \fIcount\fR | maxmem \fIkilobytes\fR | mindepth \fIcount\fR | maxage \fIseconds\fR | minage \fIseconds\fR | initalloc \fIcount\fR | initmem \fIkilobytes\fR | incalloc \fIcount\fR | incmem \fIkilobytes\fR]
 .RS 4

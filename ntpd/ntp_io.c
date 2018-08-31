@@ -110,6 +110,7 @@ unsigned int sys_ifnum;			/* next .ifnum to assign */
 static int ninterfaces;			/* total # of interfaces */
 
 bool disable_dynamic_updates;	/* if true, scan interfaces once only */
+extern  SOCKET  open_socket     (sockaddr_u *, bool, endpt *);
 
 static bool
 netaddr_eqprefix(const isc_netaddr_t *, const isc_netaddr_t *,
@@ -214,10 +215,6 @@ static	bool	addr_eqprefix	(const sockaddr_u *, const sockaddr_u *,
 				 int);
 static	int	create_sockets	(unsigned short);
 static	void	set_reuseaddr	(int);
-static	bool	socket_broadcast_enable	 (endpt *, SOCKET, sockaddr_u *);
-#ifdef  OS_MISSES_SPECIFIC_ROUTE_UPDATES
-static	bool	socket_broadcast_disable (endpt *, sockaddr_u *);
-#endif
 
 typedef struct remaddr remaddr_t;
 
@@ -243,7 +240,6 @@ static void	add_addr_to_list	(sockaddr_u *, endpt *);
 static void	create_wildcards	(unsigned short);
 static endpt *	findlocalinterface	(sockaddr_u *, int, int);
 static endpt *	findclosestinterface	(sockaddr_u *, int);
-static endpt *	findbcastinter		(sockaddr_u *);
 
 #ifdef DEBUG
 static const char *	action_text	(nic_rule_action);
@@ -424,7 +420,6 @@ interface_dump(const endpt *itf)
 {
 	printf("Dumping interface: %p\n", itf);
 	printf("fd = %d\n", itf->fd);
-	printf("bfd = %d\n", itf->bfd);
 	printf("sin = %s,\n", socktoa(&itf->sin));
 	sockaddr_dump(&itf->sin);
 	printf("bcast = %s,\n", socktoa(&itf->bcast));
@@ -469,12 +464,11 @@ sockaddr_dump(const sockaddr_u *psau)
 static void
 print_interface(const endpt *iface, const char *pfx, const char *sfx)
 {
-	printf("%sinterface #%u: fd=%d, bfd=%d, name=%s, "
+	printf("%sinterface #%u: fd=%d, name=%s, "
                "flags=0x%x, ifindex=%u, sin=%s",
 	       pfx,
 	       iface->ifnum,
 	       iface->fd,
-	       iface->bfd,
 	       iface->name,
 	       iface->flags,
 	       iface->ifindex,
@@ -736,7 +730,6 @@ init_interface(
 {
 	ZERO(*ep);
 	ep->fd = INVALID_SOCKET;
-	ep->bfd = INVALID_SOCKET;
 	ep->phase = sys_interphase;
 }
 
@@ -828,16 +821,6 @@ remove_interface(
 		ep->fd = INVALID_SOCKET;
 	}
 
-	if (ep->bfd != INVALID_SOCKET) {
-		msyslog(LOG_INFO,
-			"IO: stop listening for broadcasts to %s "
-                        "on interface #%u %s",
-			socktoa(&ep->bcast), ep->ifnum, ep->name);
-		close_and_delete_fd_from_list(ep->bfd);
-		ep->bfd = INVALID_SOCKET;
-		ep->flags &= ~INT_BCASTOPEN;
-	}
-
 	ninterfaces--;
 	mon_clearinterface(ep);
 
@@ -911,7 +894,7 @@ create_wildcards(
 		wildif->flags = INT_UP | INT_WILDCARD;
 		wildif->ignore_packets = (ACTION_DROP == action);
 
-		wildif->fd = open_socket(&wildif->sin, 0, 1, wildif);
+		wildif->fd = open_socket(&wildif->sin, true, wildif);
 
 		if (wildif->fd != INVALID_SOCKET) {
 			wildipv6 = wildif;
@@ -953,7 +936,7 @@ create_wildcards(
 
 		wildif->flags = INT_BROADCAST | INT_UP | INT_WILDCARD;
 		wildif->ignore_packets = (ACTION_DROP == action);
-		wildif->fd = open_socket(&wildif->sin, 0, 1, wildif);
+		wildif->fd = open_socket(&wildif->sin, true, wildif);
 
 		if (wildif->fd != INVALID_SOCKET) {
 			wildipv4 = wildif;
@@ -1270,18 +1253,11 @@ refresh_interface(
 {
 #ifdef  OS_MISSES_SPECIFIC_ROUTE_UPDATES
 	if (interface->fd != INVALID_SOCKET) {
-		int bcast = (interface->flags & INT_BCASTXMIT) != 0;
-		/* as we forcibly close() the socket remove the
-		   broadcast permission indication */
-		if (bcast)
-			socket_broadcast_disable(interface, &interface->sin);
-
 		close_and_delete_fd_from_list(interface->fd);
 
 		/* create new socket picking up a new first hop binding
 		   at connect() time */
-		interface->fd = open_socket(&interface->sin,
-					    bcast, 0, interface);
+		interface->fd = open_socket(&interface->sin, false, interface);
 		 /*
 		  * reset TTL indication so TTL is is set again
 		  * next time around
@@ -1784,18 +1760,12 @@ create_interface(
 	/*
 	 * create socket
 	 */
-	iface->fd = open_socket(&iface->sin, 0, 0, iface);
+	iface->fd = open_socket(&iface->sin, false, iface);
 
 	if (iface->fd != INVALID_SOCKET)
 		log_listen_address(iface);
 
-	if ((INT_BROADCAST & iface->flags)
-	    && iface->bfd != INVALID_SOCKET)
-		msyslog(LOG_INFO, "IO: Listening on broadcast address %s#%d",
-			socktoa((&iface->bcast)), port);
-
-	if (INVALID_SOCKET == iface->fd
-	    && INVALID_SOCKET == iface->bfd) {
+	if (INVALID_SOCKET == iface->fd) {
 		msyslog(LOG_ERR, "IO: unable to create socket on %s (%u) for %s#%d",
 			iface->name,
 			iface->ifnum,
@@ -1890,85 +1860,12 @@ set_reuseaddr(
 }
 
 /*
- * This is just a wrapper around an internal function so we can
- * make other changes as necessary later on
- */
-void
-enable_broadcast(
-	endpt *	iface,
-	sockaddr_u *		baddr
-	)
-{
-#ifdef OPEN_BCAST_SOCKET
-	socket_broadcast_enable(iface, iface->fd, baddr);
-#endif
-}
-
-#ifdef OPEN_BCAST_SOCKET
-/*
- * Enable a broadcast address to a given socket
- * The socket is in the ep_list all we need to do is enable
- * broadcasting. It is not this function's job to select the socket
- */
-static bool
-socket_broadcast_enable(
-	endpt *	iface,
-	SOCKET			fd,
-	sockaddr_u *		baddr
-	)
-{
-	int on = 1;
-
-	if (IS_IPV4(baddr)) {
-		/* if this interface can support broadcast, set SO_BROADCAST */
-		if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST,
-			       (char *)&on, sizeof(on)))
-			msyslog(LOG_ERR,
-				"IO: setsockopt(SO_BROADCAST) enable failure on address %s: %m",
-				socktoa(baddr));
-		else
-			DPRINT(2, ("Broadcast enabled on socket %d for address %s\n",
-				   fd, socktoa(baddr)));
-	}
-	iface->flags |= INT_BCASTXMIT;
-	return true;
-}
-
-#ifdef  OS_MISSES_SPECIFIC_ROUTE_UPDATES
-/*
- * Remove a broadcast address from a given socket
- * The socket is in the ep_list all we need to do is disable
- * broadcasting. It is not this function's job to select the socket
- */
-static bool
-socket_broadcast_disable(
-	endpt *	iface,
-	sockaddr_u *		baddr
-	)
-{
-	int off = 0;	/* This seems to be OK as an int */
-
-	if (IS_IPV4(baddr) && setsockopt(iface->fd, SOL_SOCKET,
-	    SO_BROADCAST, (char *)&off, sizeof(off)))
-		msyslog(LOG_ERR,
-			"IO: setsockopt(SO_BROADCAST) disable failure on address %s: %m",
-			socktoa(baddr));
-
-	iface->flags &= ~INT_BCASTXMIT;
-	return true;
-}
-#endif /* OS_MISSES_SPECIFIC_ROUTE_UPDATES */
-
-#endif /* OPEN_BCAST_SOCKET */
-
-/*
  * open_socket - open a socket, returning the file descriptor
  */
 
 SOCKET
 open_socket(
 	sockaddr_u *	addr,
-	bool		bcast,
 	bool		turn_off_reuse,
 	endpt *		interf
 	)
@@ -2051,8 +1948,6 @@ open_socket(
 				"IO: setsockopt IP_TOS (%02x) fails on "
                                 "address %s: %m",
 				(unsigned)qos, socktoa(addr));
-		if (bcast)
-			socket_broadcast_enable(interf, fd, addr);
 	}
 
 	/*
@@ -2116,7 +2011,7 @@ open_socket(
 	}
 
 	enable_packetstamps(fd, addr);
-	
+
 	DPRINT(4, ("bind(%d) AF_INET%s, addr %s%%%u#%d, flags 0x%x\n",
 		   fd, IS_IPV6(addr) ? "6" : "", socktoa(addr),
 		   SCOPE(addr), SRCPORT(addr), interf->flags));
@@ -2234,7 +2129,6 @@ read_refclock_packet(
 	rb->recv_length = (size_t)buflen;
 	rb->recv_peer = rp->srcclock;
 	rb->dstadr = 0;
-	rb->cast_flags = 0;
 	rb->fd = fd;
 	rb->recv_time = ts;
 	rb->receiver = rp->clock_recv;
@@ -2317,9 +2211,7 @@ read_network_packet(
 
 	if (buflen == 0 || (buflen == -1 &&
 			    ((EWOULDBLOCK == errno)
-#ifdef EAGAIN
 			     || (EAGAIN == errno)
-#endif
 	     ))) {
 		freerecvbuf(rb);
 		return (buflen);
@@ -2369,7 +2261,6 @@ read_network_packet(
 	 * put it on the full list and do bookkeeping.
 	 */
 	rb->dstadr = itf;
-	rb->cast_flags = (uint8_t)(rb->fd == rb->dstadr->bfd ? MDF_BCAST : MDF_UCAST);
 	rb->fd = fd;
 	ts = fetch_packetstamp(rb, &msghdr, ts);
 	rb->recv_time = ts;
@@ -2441,7 +2332,6 @@ input_handler(
 	)
 {
 	int		buflen;
-	int		doing;
 	SOCKET		fd;
 	l_fp		ts;	/* Timestamp at BOselect() gob */
 #ifdef ENABLE_DEBUG_TIMING
@@ -2516,24 +2406,12 @@ input_handler(
 	 * Loop through the interfaces looking for data to read.
 	 */
 	for (ep = ep_list; ep != NULL; ep = ep->elink) {
-		for (doing = 0; doing < 2; doing++) {
-			if (!doing) {
-				fd = ep->fd;
-			} else {
-				if (!(ep->flags & INT_BCASTOPEN))
-					break;
-				fd = ep->bfd;
-			}
-			if (fd < 0)
-				continue;
-			if (FD_ISSET(fd, fds))
-				do {
-					++select_count;
-					buflen = read_network_packet(
-							fd, ep, ts);
-				} while (buflen > 0);
-			/* Check more interfaces */
-		}
+		fd = ep->fd;
+		if (FD_ISSET(fd, fds))
+			do {
+				++select_count;
+				buflen = read_network_packet(fd, ep, ts);
+			} while (buflen > 0);
 	}
 
 #ifdef USE_ROUTING_SOCKET
@@ -2597,6 +2475,11 @@ select_peerinterface(
 	endpt *ep;
 	endpt *wild;
 
+#ifndef REFCLOCK
+	UNUSED_ARG(peer);
+#endif
+
+
 	wild = ANY_INTERFACE_CHOOSE(srcadr);
 
 	/*
@@ -2609,14 +2492,6 @@ select_peerinterface(
 	 */
 	if (IS_PEER_REFCLOCK(peer)) {
 		ep = loopback_interface;
-	} else if (peer->cast_flags & MDF_BCAST) {
-		ep = findbcastinter(srcadr);
-		if (ep != NULL)
-			DPRINT(4, ("Found *-cast interface %s for address %s\n",
-				   socktoa(&ep->sin), socktoa(srcadr)));
-		else
-			DPRINT(4, ("No *-cast local address found for address %s\n",
-				   socktoa(srcadr)));
 	} else {
 		ep = dstadr;
 		if (NULL == ep)
@@ -2919,88 +2794,6 @@ getinterface(
 
 	return iface;
 }
-
-
-/*
- * findbcastinter - find broadcast interface corresponding to address
- */
-static endpt *
-findbcastinter(
-	sockaddr_u *addr
-	)
-{
-	endpt *	iface;
-
-	iface = NULL;
-#if defined(SIOCGIFCONF)
-	DPRINT(4, ("Finding broadcast interface for addr %s in list of addresses\n",
-		   socktoa(addr)));
-
-	iface = findlocalinterface(addr, INT_LOOPBACK | INT_WILDCARD,
-				   1);
-	if (iface != NULL) {
-		DPRINT(4, ("Easily found bcast-/mcast- interface index #%d %s\n",
-			   iface->ifnum, iface->name));
-		return iface;
-	}
-
-	/*
-	 * plan B - try to find something reasonable in our lists in
-	 * case kernel lookup doesn't help
-	 */
-	for (iface = ep_list; iface != NULL; iface = iface->elink) {
-		if (iface->flags & INT_WILDCARD)
-			continue;
-
-		/* Don't bother with ignored interfaces */
-		if (iface->ignore_packets)
-			continue;
-
-		/*
-		 * First look if this is the correct family
-		 */
-		if(AF(&iface->sin) != AF(addr))
-			continue;
-
-		/* Skip the loopback addresses */
-		if (iface->flags & INT_LOOPBACK)
-			continue;
-
-		/*
-		 * We match only those interfaces marked as
-		 * broadcastable and either the explicit broadcast
-		 * address or the network portion of the IP address.
-		 * Sloppy.
-		 */
-		if (IS_IPV4(addr)) {
-			if (SOCK_EQ(&iface->bcast, addr))
-				break;
-
-			if ((NSRCADR(&iface->sin) & NSRCADR(&iface->mask))
-			    == (NSRCADR(addr)	  & NSRCADR(&iface->mask)))
-				break;
-		}
-		else if (IS_IPV6(addr)) {
-			if (SOCK_EQ(&iface->bcast, addr))
-				break;
-
-			if (SOCK_EQ(netof6(&iface->sin), netof6(addr)))
-				break;
-		}
-	}
-#endif /* SIOCGIFCONF */
-	if (NULL == iface) {
-		DPRINT(4, ("No bcast interface found for %s\n",
-			   socktoa(addr)));
-		iface = ANY_INTERFACE_CHOOSE(addr);
-	} else {
-		DPRINT(4, ("Found bcast-/mcast- interface index #%u %s\n",
-			   iface->ifnum, iface->name));
-	}
-
-	return iface;
-}
-
 
 /*
  * io_clr_stats - clear I/O module statistics

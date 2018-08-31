@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Common utility functions
+"Common utility functions"
 # SPDX-License-Identifier: BSD-2-clause
 
 from __future__ import print_function, division
@@ -56,9 +56,10 @@ def check_unicode():  # pragma: no cover
         return True  # needed by ntpmon
     return False
 
+
 def deunicode_units():  # pragma: no cover
-    "Under certain conditions it is not possible to force unicode output, "
-    "this overwrites units that contain unicode with safe versions"
+    """Under certain conditions it is not possible to force unicode output,
+    this overwrites units that contain unicode with safe versions"""
     global UNIT_US
     global UNIT_PPK
     # Replacement units
@@ -71,6 +72,7 @@ def deunicode_units():  # pragma: no cover
     UNIT_US = new_us
     UNIT_PPK = new_ppk
 
+
 # Variables that have units
 S_VARS = ("tai", "poll")
 MS_VARS = ("rootdelay", "rootdisp", "rootdist", "offset", "sys_jitter",
@@ -82,8 +84,8 @@ PPM_VARS = ("frequency", "clk_wander")
 
 
 def dolog(logfp, text, debug, threshold):
-    # debug is the current debug value
-    # threshold is the trigger for the current log
+    """debug is the current debug value
+    threshold is the trigger for the current log"""
     if logfp is None:
         return  # can turn off logging by supplying a None file descriptior
     text = rfc3339(time.time()) + " " + text + "\n"
@@ -272,7 +274,7 @@ def stringfiltcooker(data):
         part = rescalestring(part, mostcommon)
         fitted = fitinfield(part, 7)
         cooked.append(fitted)
-    rendered = " ".join(cooked) + " " + UNITS_SEC[mostcommon + \
+    rendered = " ".join(cooked) + " " + UNITS_SEC[mostcommon +
                                                   UNITS_SEC.index(UNIT_MS)]
     return rendered
 

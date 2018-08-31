@@ -25,6 +25,7 @@
 #include "ntp_leapsec.h"
 #include "lib_strbuf.h"
 #include "ntp_syscall.h"
+#include "ntp_auth.h"
 #include "timespecops.h"
 
 /* undefine to suppress random tags and get fixed emission order */
@@ -43,7 +44,7 @@ struct ctl_proc {
 #define AUTH	1
 	void (*handler) (struct recvbuf *, int); /* handle request */
 };
-  
+
 
 /*
  * Request processing routines
@@ -174,9 +175,9 @@ static const struct ctl_proc control_codes[] = {
 #define	CS_AUTHFREEK		49
 #define	CS_AUTHKLOOKUPS		50
 #define	CS_AUTHKNOTFOUND	51
-#define	CS_AUTHKUNCACHED	52
-#define	CS_AUTHKEXPIRED		53
-#define	CS_AUTHENCRYPTS		54
+#define	CS_AUTHENCRYPTS		52
+#define CS_AUTHDIGESTENCRYPT	53
+#define CS_AUTHCMACENCRYPT	54
 #define	CS_AUTHDECRYPTS		55
 #define	CS_AUTHRESET		56
 #define	CS_K_OFFSET		57
@@ -225,7 +226,11 @@ static const struct ctl_proc control_codes[] = {
 #define	CS_TICK                 98
 #define	CS_NUMCTLREQ		99
 #define CS_ROOTDISTANCE		100
-#define	CS_MAXCODE		CS_ROOTDISTANCE
+#define CS_AUTHDIGESTDECRYPT	101
+#define CS_AUTHDIGESTFAIL	102
+#define CS_AUTHCMACDECRYPT	103
+#define CS_AUTHCMACFAIL		104
+#define	CS_MAXCODE		CS_AUTHCMACFAIL
 
 /*
  * Peer variables we understand
@@ -267,19 +272,17 @@ static const struct ctl_proc control_codes[] = {
 #define	CP_FLASH		35
 #define	CP_MODE			36
 #define	CP_VARLIST		37
-#define	CP_IN			38
-#define	CP_OUT			39
-#define	CP_RATE			40
-#define	CP_BIAS			41
-#define	CP_SRCHOST		42
-#define	CP_TIMEREC		43
-#define	CP_TIMEREACH		44
-#define	CP_BADAUTH		45
-#define	CP_BOGUSORG		46
-#define	CP_OLDPKT		47
-#define	CP_SELDISP		48
-#define	CP_SELBROKEN		49
-#define	CP_CANDIDATE		50
+#define	CP_RATE			38
+#define	CP_BIAS			39
+#define	CP_SRCHOST		40
+#define	CP_TIMEREC		41
+#define	CP_TIMEREACH		42
+#define	CP_BADAUTH		43
+#define	CP_BOGUSORG		44
+#define	CP_OLDPKT		45
+#define	CP_SELDISP		46
+#define	CP_SELBROKEN		47
+#define	CP_CANDIDATE		48
 #define	CP_MAXCODE		CP_CANDIDATE
 
 /*
@@ -357,9 +360,9 @@ static const struct ctl_var sys_var[] = {
 	{ CS_AUTHFREEK,		RO, "authfreek" },	/* 49 */
 	{ CS_AUTHKLOOKUPS,	RO, "authklookups" },	/* 50 */
 	{ CS_AUTHKNOTFOUND,	RO, "authknotfound" },	/* 51 */
-	{ CS_AUTHKUNCACHED,	RO, "authkuncached" },	/* 52 */
-	{ CS_AUTHKEXPIRED,	RO, "authkexpired" },	/* 53 */
-	{ CS_AUTHENCRYPTS,	RO, "authencrypts" },	/* 54 */
+	{ CS_AUTHENCRYPTS,	RO, "authencrypts" },	/* 52 */
+	{ CS_AUTHDIGESTENCRYPT,	RO, "authdigestencrypts" },	/* 53 */
+	{ CS_AUTHCMACENCRYPT,	RO, "authcmacencrypts" },	/* 54 */
 	{ CS_AUTHDECRYPTS,	RO, "authdecrypts" },	/* 55 */
 	{ CS_AUTHRESET,		RO, "authreset" },	/* 56 */
 	{ CS_K_OFFSET,		RO, "koffset" },	/* 57 */
@@ -407,6 +410,10 @@ static const struct ctl_var sys_var[] = {
 	/* new in NTPsec */
 	{ CS_NUMCTLREQ,		RO, "ss_numctlreq" },	/* 99 */
 	{ CS_ROOTDISTANCE,	RO, "rootdist" },	/* 100 */
+	{ CS_AUTHDIGESTDECRYPT,	RO, "authdigestdecrypts" },	/* 101 */
+	{ CS_AUTHDIGESTFAIL,	RO, "authdigestfails" },	/* 102 */
+	{ CS_AUTHCMACDECRYPT,	RO, "authcmacdecrypts" },	/* 103 */
+	{ CS_AUTHCMACFAIL,	RO, "authcmacfails" },		/* 104 */
 	{ 0,                    EOV, "" }
 };
 
@@ -491,20 +498,18 @@ static const struct ctl_var peer_var[] = {
 	{ CP_FLASH,	RO, "flash" },		/* 35 */
 	{ CP_MODE,	RO, "mode" },		/* 36 */
 	{ CP_VARLIST,	RO, "peer_var_list" },	/* 37 */
-	{ CP_IN,	RO, "in" },		/* 38 */
-	{ CP_OUT,	RO, "out" },		/* 39 */
-	{ CP_RATE,	RO, "headway" },	/* 40 */
-	{ CP_BIAS,	RO, "bias" },		/* 41 */
-	{ CP_SRCHOST,	RO, "srchost" },	/* 42 */
-	{ CP_TIMEREC,	RO, "timerec" },	/* 43 */
-	{ CP_TIMEREACH,	RO, "timereach" },	/* 44 */
-	{ CP_BADAUTH,	RO, "badauth" },	/* 45 */
-	{ CP_BOGUSORG,	RO, "bogusorg" },	/* 46 */
-	{ CP_OLDPKT,	RO, "oldpkt" },		/* 47 */
-	{ CP_SELDISP,	RO, "seldisp" },	/* 48 */
-	{ CP_SELBROKEN,	RO, "selbroken" },	/* 49 */
-	{ CP_CANDIDATE, RO, "candidate" },	/* 50 */
-	{ 0,		EOV, "" }		/* 50/58 */
+	{ CP_RATE,	RO, "headway" },	/* 38 */
+	{ CP_BIAS,	RO, "bias" },		/* 39 */
+	{ CP_SRCHOST,	RO, "srchost" },	/* 40 */
+	{ CP_TIMEREC,	RO, "timerec" },	/* 41 */
+	{ CP_TIMEREACH,	RO, "timereach" },	/* 42 */
+	{ CP_BADAUTH,	RO, "badauth" },	/* 43 */
+	{ CP_BOGUSORG,	RO, "bogusorg" },	/* 44 */
+	{ CP_OLDPKT,	RO, "oldpkt" },		/* 45 */
+	{ CP_SELDISP,	RO, "seldisp" },	/* 46 */
+	{ CP_SELBROKEN,	RO, "selbroken" },	/* 47 */
+	{ CP_CANDIDATE, RO, "candidate" },	/* 48 */
+	{ 0,		EOV, "" }
 };
 
 
@@ -517,8 +522,6 @@ static const uint8_t def_peer_var[] = {
 	CP_SRCHOST,
 	CP_DSTADR,
 	CP_DSTPORT,
-	CP_OUT,
-	CP_IN,
 	CP_LEAP,
 	CP_STRATUM,
 	CP_PRECISION,
@@ -611,13 +614,6 @@ static struct utsname utsnamebuf;
 keyid_t ctl_auth_keyid;
 
 /*
- *  * A hack.  To keep the authentication module clear of ntp-ism's, we
- *   * include a time reset variable for its stats here.
- *    */
-static unsigned long auth_timereset;
-
-
-/*
  * We keep track of the last error reported by the system internally
  */
 static	uint8_t ctl_sys_last_event;
@@ -663,9 +659,7 @@ static bool	datanotbinflag;
 static sockaddr_u *rmt_addr;
 static endpt *lcl_inter;
 
-static bool	res_authenticate;
-static bool	res_authokay;
-static keyid_t	res_keyid;
+static auth_info* res_auth;  /* !NULL => authenticate */
 
 #define MAXDATALINELEN	(72)
 
@@ -754,8 +748,8 @@ ctl_error(
 	/*
 	 * send packet and bump counters
 	 */
-	if (res_authenticate) {
-		maclen = authencrypt(res_keyid, (uint32_t *)&rpkt,
+	if (NULL != res_auth) {
+		maclen = authencrypt(res_auth, (uint32_t *)&rpkt,
 				     CTL_HEADER_LEN);
 		sendpkt(rmt_addr, lcl_inter, &rpkt,
                         (int)CTL_HEADER_LEN + maclen);
@@ -833,9 +827,7 @@ process_control(
 	res_frags = 1;
 	res_offset = 0;
 	res_associd = ntohs(pkt->associd);
-	res_authenticate = false;
-	res_keyid = 0;
-	res_authokay = false;
+	res_auth = NULL;
 	req_count = (int)ntohs(pkt->count);
 	datanotbinflag = false;
 	datalinelen = 0;
@@ -864,22 +856,22 @@ process_control(
 	maclen = rbufp->recv_length - (size_t)properlen;
 	if ((rbufp->recv_length & 3) == 0 &&
 	    maclen >= MIN_MAC_LEN && maclen <= MAX_MAC_LEN) {
-		res_authenticate = true;
+		keyid_t keyid;
 		pkid = (void *)((char *)pkt + properlen);
-		res_keyid = ntohl(*pkid);
+		keyid = ntohl(*pkid);
 		DPRINT(3, ("recv_len %zu, properlen %d, wants auth with keyid %08x, MAC length=%zu\n",
-			   rbufp->recv_length, properlen, res_keyid,
+			   rbufp->recv_length, properlen, keyid,
 			   maclen));
 
-		if (!authistrusted(res_keyid))
-			DPRINT(3, ("invalid keyid %08x\n", res_keyid));
-		else if (authdecrypt(res_keyid, (uint32_t *)pkt,
+		res_auth = authlookup(keyid, true);  // FIXME
+		if (NULL == res_auth)
+			DPRINT(3, ("invalid keyid %08x\n", keyid));
+		else if (authdecrypt(res_auth, (uint32_t *)pkt,
 				     (int)rbufp->recv_length - (int)maclen,
 				     (int)maclen)) {
-			res_authokay = true;
 			DPRINT(3, ("authenticated okay\n"));
 		} else {
-			res_keyid = 0;
+			res_auth = NULL;
 			DPRINT(3, ("authentication failed\n"));
 		}
 	}
@@ -898,8 +890,8 @@ process_control(
 			DPRINT(3, ("opcode %d, found command handler\n",
 				   res_opcode));
 			if (cc->flags == AUTH
-			    && (!res_authokay
-				|| res_keyid != ctl_auth_keyid)) {
+			    && (NULL == res_auth
+				|| res_auth->keyid != ctl_auth_keyid)) {
 				ctl_error(CERR_PERMISSION);
 				return;
 			}
@@ -993,7 +985,6 @@ ctl_flushpkt(
 	int sendlen;
 	int maclen;
 	int totlen;
-	keyid_t keyid;
 
 	dlen = datapt - rpkt.data;
 	if (!more && datanotbinflag && dlen + 2 < CTL_MAX_DATA_LEN) {
@@ -1009,12 +1000,12 @@ ctl_flushpkt(
 	/*
 	 * Zero-fill the unused part of the packet.  This wasn't needed
 	 * when the clients were all in C, for which the first NUL is
-	 * a string terminator.  But Python allows NULs in strings, 
+	 * a string terminator.  But Python allows NULs in strings,
 	 * which means Python mode 6 clients might actually see the trailing
 	 * garbage.
 	 */
 	memset(rpkt.data + sendlen, '\0', sizeof(rpkt.data) - (size_t)sendlen);
-	
+
 	/*
 	 * Pad to a multiple of 32 bits
 	 */
@@ -1029,7 +1020,8 @@ ctl_flushpkt(
 			(res_opcode & CTL_OP_MASK);
 	rpkt.count = htons((unsigned short)dlen);
 	rpkt.offset = htons((unsigned short)res_offset);
-	if (res_authenticate) {
+	if (NULL != res_auth) {
+		keyid_t keyid;
 		totlen = sendlen;
 		/*
 		 * If we are going to authenticate, then there
@@ -1039,9 +1031,9 @@ ctl_flushpkt(
 		while (totlen & 7) {
 			totlen++;
 		}
-		keyid = htonl(res_keyid);
+		keyid = htonl(res_auth->keyid);
 		memcpy(datapt, &keyid, sizeof(keyid));
-		maclen = authencrypt(res_keyid,
+		maclen = authencrypt(res_auth,
 				     (uint32_t *)&rpkt, totlen);
 		sendpkt(rmt_addr, lcl_inter, &rpkt, totlen + maclen);
 	} else {
@@ -1131,8 +1123,8 @@ ctl_putdata(
  *		The write will be truncated if data contains  a NUL,
  *		so don't do that.
  *
- * ESR, 2016: Whoever wrote this should be *hurt*.  If the string value is 
- * empty, no "=" and no value literal is written, just the bare tag.  
+ * ESR, 2016: Whoever wrote this should be *hurt*.  If the string value is
+ * empty, no "=" and no value literal is written, just the bare tag.
  */
 static void
 ctl_putstr(
@@ -1373,8 +1365,11 @@ ctl_putadr(
 		*cp++ = *cq++;
 
 	*cp++ = '=';
-	if (NULL == addr)
-		cq = numtoa(addr32);
+	if (NULL == addr) {
+		struct in_addr in4;
+		in4.s_addr = addr32;
+		cq = inet_ntoa(in4);
+	}
 	else
 		cq = socktoa(addr);
 	INSIST((cp - buffer) < (int)sizeof(buffer));
@@ -1833,21 +1828,36 @@ ctl_putsys(
 		ctl_putuint(sys_var[varid].text, authkeynotfound);
 		break;
 
-	case CS_AUTHKUNCACHED:
-		ctl_putuint(sys_var[varid].text, authkeyuncached);
-		break;
-
-	case CS_AUTHKEXPIRED:
-	    /* historical relic - autokey used to expire keys */
-		ctl_putuint(sys_var[varid].text, 0);
-		break;
-
 	case CS_AUTHENCRYPTS:
 		ctl_putuint(sys_var[varid].text, authencryptions);
 		break;
 
+	case CS_AUTHDIGESTENCRYPT:
+		ctl_putuint(sys_var[varid].text, authdigestencrypt);
+		break;
+
+	case CS_AUTHCMACENCRYPT:
+		ctl_putuint(sys_var[varid].text, authcmacencrypt);
+		break;
+
 	case CS_AUTHDECRYPTS:
 		ctl_putuint(sys_var[varid].text, authdecryptions);
+		break;
+
+	case CS_AUTHDIGESTDECRYPT:
+		ctl_putuint(sys_var[varid].text, authdigestdecrypt);
+		break;
+
+	case CS_AUTHDIGESTFAIL:
+		ctl_putuint(sys_var[varid].text, authdigestfail);
+		break;
+
+	case CS_AUTHCMACDECRYPT:
+		ctl_putuint(sys_var[varid].text, authcmacdecrypt);
+		break;
+
+	case CS_AUTHCMACFAIL:
+		ctl_putuint(sys_var[varid].text, authcmacfail);
 		break;
 
 	case CS_AUTHRESET:
@@ -2116,16 +2126,6 @@ ctl_putpeer(
 			    (p->dstadr != NULL)
 				? SRCPORT(&p->dstadr->sin)
 				: 0);
-		break;
-
-	case CP_IN:
-		if (p->r21 > 0.)
-			ctl_putdbl(peer_var[id].text, p->r21 / MS_PER_S);
-		break;
-
-	case CP_OUT:
-		if (p->r34 > 0.)
-			ctl_putdbl(peer_var[id].text, p->r34 / MS_PER_S);
 		break;
 
 	case CP_RATE:
@@ -2517,7 +2517,7 @@ ctl_getitem(
 	 * packet; If it's EOV, it will never be NULL again until the
 	 * variable is found and processed in a given 'var_list'. (That
 	 * is, a result is returned that is neither NULL nor EOV).
-	 */ 
+	 */
 	static const struct ctl_var eol = { 0, EOV, NULL };
 	static char buf[128];
 	static u_long quiet_until;
@@ -2557,7 +2557,7 @@ ctl_getitem(
 			++plhead;
 		while (plhead != pltail && isspace((u_char)pltail[-1]))
 			--pltail;
-		
+
 		/* check payload size, terminate packet on overflow */
 		plsize = (size_t)(pltail - plhead);
 		if (plsize >= sizeof(buf))
@@ -2582,7 +2582,7 @@ ctl_getitem(
 	 * variable lists after an EoV was returned.  (Such a behavior
 	 * actually caused Bug 3008.)
 	 */
-	
+
 	if (NULL == var_list)
 		return &eol;
 
@@ -2625,7 +2625,7 @@ ctl_getitem(
 	    if (quiet_until <= current_time) {
 		    quiet_until = current_time + 300;
 		    msyslog(LOG_WARNING,
-			    "Possible 'ntpdx' exploit from %s#%u (possibly spoofed)",
+			    "Possible 'ntpdx' exploit from %s#%" PRIu16 " (possibly spoofed)",
 			    socktoa(rmt_addr), SRCPORT(rmt_addr));
 	    }
 	reqpt = reqend; /* never again for this packet! */
@@ -2698,7 +2698,7 @@ read_status(
 			return;
 		}
 		rpkt.status = htons(ctlpeerstatus(peer));
-		if (res_authokay)
+		if (NULL != res_auth)  /* FIXME: what's this for? */
 			peer->num_events = 0;
 		/*
 		 * For now, output everything we know about the
@@ -2751,7 +2751,7 @@ read_peervars(void)
 		return;
 	}
 	rpkt.status = htons(ctlpeerstatus(peer));
-	if (res_authokay)
+	if (NULL != res_auth)  /* FIXME: What's this for?? */
 		peer->num_events = 0;
 	ZERO(wants);
 	gotvar = false;
@@ -2796,7 +2796,7 @@ read_sysvars(void)
 	 * and give them to him.
 	 */
 	rpkt.status = htons(ctlsysstatus());
-	if (res_authokay)
+	if (NULL != res_auth)  /* FIXME: what's this for?? */
 		ctl_sys_num_events = 0;
 	wants_count = CS_MAXCODE + 1 + count_var(ext_sys_var);
 	wants = emalloc_zero(wants_count);
@@ -4246,7 +4246,7 @@ report_event(
 		if (IS_PEER_REFCLOCK(peer))
 			src = refclock_name(peer);
 		else
-#endif /* REFCLOCK */ 
+#endif /* REFCLOCK */
 		    src = socktoa(&peer->srcadr);
 
 		snprintf(statstr, sizeof(statstr),
@@ -4458,23 +4458,5 @@ free_varlist(
 			free((void *)(intptr_t)k->text);
 		free((void *)kv);
 	}
-}
-
-
-/* from ntp_request.c when ntpdc was nuked */
-
-/*
- *  * reset_auth_stats - reset the authentication stat counters.  Done here
- *   *                    to keep ntp-isms out of the authentication module
- *    */
-void
-reset_auth_stats(void)
-{
-        authkeylookups = 0;
-        authkeynotfound = 0;
-        authencryptions = 0;
-        authdecryptions = 0;
-        authkeyuncached = 0;
-        auth_timereset = current_time;
 }
 

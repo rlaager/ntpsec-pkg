@@ -596,10 +596,6 @@ int main(int argc, char **argv) {
     for header, sizeof in sorted(sizeofs, key=lambda x: x[1:]):
         check_sizeof(ctx, header, sizeof)
 
-    # These are helpful and don't break Linux or *BSD
-    ctx.define("OPEN_BCAST_SOCKET", 1,
-               comment="Whether to open a broadcast socket")
-
     # Check via pkg-config first, then fall back to a direct search
     if not ctx.check_cfg(
         package='libcrypto', uselib_store='CRYPTO',
@@ -607,10 +603,15 @@ int main(int argc, char **argv) {
         msg="Checking for OpenSSL (via pkg-config)",
         define_name='', mandatory=False,
     ):
+    # Very old versions of OpenSSL don't have cmac support.
+    # This gives a sane(er) error message.
+    # It would be possible to make CMAC support optional by adding
+    # appropriate #ifdefs to the code.
         openssl_headers = (
             "openssl/evp.h",
-            "openssl/rand.h",
+            "openssl/cmac.h",
             "openssl/objects.h",
+            "openssl/rand.h",
         )
         for hdr in openssl_headers:
             ctx.check_cc(header_name=hdr, includes=ctx.env.PLATFORM_INCLUDES)
@@ -908,6 +909,7 @@ def bin_test(ctx):
     from wafhelpers.bin_test import cmd_bin_test
     cmd_bin_test(ctx, config)
 
+
 # Borrowed from https://www.rtems.org/
 variant_cmd = (
     ("build", BuildContext),
@@ -944,6 +946,7 @@ def init_handler(ctx):
         obj.variant = v
         pprint("YELLOW", "--- %sing %s ---" % (cmd, v))
         obj.execute()
+
 
 commands = (
     ("install", "init_handler", None),

@@ -89,7 +89,7 @@ ntpc_lfptofloat(PyObject *self, PyObject *args)
     char *s;
     l_fp ts;
     struct timespec tt;
- 
+
     UNUSED_ARG(self);
     if (!PyArg_ParseTuple(args, "s", &s))
 	return NULL;
@@ -142,12 +142,6 @@ ntpc_step_systime(PyObject *self, PyObject *args)
     return Py_BuildValue("d", step_systime(full_adjustment, ntp_set_tod));
 }
 
-int32_t ntp_random(void)
-/* stub random function for get_systime() */
-{
-    return 0;
-}
-
 /* List of functions defined in the module */
 
 static PyMethodDef ntpc_methods[] = {
@@ -184,7 +178,7 @@ NTPSEC_PY_MODULE_INIT(ntpc)
     /* Create the module and add the functions */
     NTPSEC_PY_MODULE_DEF(m, "ntpc", module_doc, ntpc_methods)
 
-    /* for statustoa() */ 
+    /* for statustoa() */
     PyModule_AddIntConstant(m, "TYPE_SYS", TYPE_SYS);
     PyModule_AddIntConstant(m, "TYPE_PEER", TYPE_PEER);
     PyModule_AddIntConstant(m, "TYPE_CLOCK", TYPE_CLOCK);

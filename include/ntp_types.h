@@ -68,8 +68,8 @@ typedef uint16_t	associd_t; /* association ID */
 typedef uint32_t keyid_t;	/* cryptographic key ID */
 #define NTP_MAXKEY 0xffff	/* max authentication key number */
 
-/* Max digest length in non-extension MACs, add 4 for keyID */
-#define MAX_BARE_DIGEST_LENGTH 20
+/* Max MAC length in non-extension MACs, add 4 for keyID */
+#define MAX_BARE_MAC_LENGTH 20
 
 /*
  * Ordinary double has only 53 bits  of precision in IEEE754.  But l_fp
@@ -97,7 +97,7 @@ typedef long double doubletime_t;
  * aligned for the strictest alignment requirement of any type is not
  * easy to do portably, as the maximum alignment required is not
  * exposed.  Use the size of a struct of the types known to represent the
- * strictest alignment on some platform. This will force the struct to 
+ * strictest alignment on some platform. This will force the struct to
  * have the strictest possible alignment.
  */
 typedef struct max_alignment_tag {

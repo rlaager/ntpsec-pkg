@@ -44,26 +44,26 @@ class TestMIBControl(unittest.TestCase):
         # Top level, non-dynamic
         c.addNode((0,), 1, 2)
         self.assertEqual(c.oidTree,
-                         {0:{"reader":1, "writer":2, "subids":None}})
+                         {0: {"reader": 1, "writer": 2, "subids": None}})
         # Top level, non-dynamic, class OID
         c.addNode(AP.OID((1,)), 1, 2)
         self.assertEqual(c.oidTree,
-                         {0:{"reader":1, "writer":2, "subids":None},
-                          1:{"reader":1, "writer":2, "subids":None}})
+                         {0: {"reader": 1, "writer": 2, "subids": None},
+                          1: {"reader": 1, "writer": 2, "subids": None}})
         # Top level, dynamic
         c.addNode((2,), dynamic=3)
         self.assertEqual(c.oidTree,
-                         {0:{"reader":1, "writer":2, "subids":None},
-                          1:{"reader":1, "writer":2, "subids":None},
-                          2:{"reader":None, "writer":None, "subids":3}})
+                         {0: {"reader": 1, "writer": 2, "subids": None},
+                          1: {"reader": 1, "writer": 2, "subids": None},
+                          2: {"reader": None, "writer": None, "subids": 3}})
         # Sub level
         c.addNode((1, 2, 3), 1, 2)
         self.assertEqual(c.oidTree,
-                         {0:{"reader":1, "writer":2, "subids":None},
-                          1:{"reader":1, "writer":2, "subids":
-                             {2:{"reader":None, "writer":None, "subids":{
-                                 3:{"reader":1, "writer":2, "subids":None}}}}},
-                          2:{"reader":None, "writer":None, "subids":3}})
+                         {0: {"reader": 1, "writer": 2, "subids": None},
+                          1: {"reader": 1, "writer": 2, "subids":
+                              {2: {"reader": None, "writer": None, "subids": {
+                                   3: {"reader": 1, "writer": 2, "subids": None}}}}},
+                          2: {"reader": None, "writer": None, "subids": 3}})
 
     def test_getOID_andNext(self):
         c = AX.MIBControl()
@@ -212,7 +212,7 @@ class TestPacketControl(unittest.TestCase):
         # need jigs for
         # time
         pkts = []
-        recpTimes = []
+        # recpTimes = []
         handler_calls = [0]
 
         def packetEater_jig(self):
@@ -254,7 +254,7 @@ class TestPacketControl(unittest.TestCase):
             p._doloop()
             self.assertEqual(sock.data, [])
             self.assertEqual(handler_calls, [0])
-            # Test sucessful
+            # Test successful
             faketimemod.time_returns = [55]
             sock.data = []
             pkts = [AP.PingPDU(True, 42, 0, 0)]
@@ -314,7 +314,7 @@ class TestPacketControl(unittest.TestCase):
 
         def packetEater_jig(self):
             self.receivedPackets.append(pkts.pop(0))
-        
+
         p = AX.PacketControl(None, None)
         p.packetEater = (lambda : packetEater_jig(p))
         p.spinGap = 0
@@ -336,8 +336,8 @@ class TestPacketControl(unittest.TestCase):
         callback = (lambda resp, pkt: returns.append((resp, pkt)))
         faketimemod = jigs.TimeModuleJig()
         p = AX.PacketControl(None, None)
-        p.packetLog = {(42, 23, 100):(25, "foo", callback),
-                       (42, 24, 200):(50, "bar", callback)}
+        p.packetLog = {(42, 23, 100): (25, "foo", callback),
+                       (42, 24, 200): (50, "bar", callback)}
         faketimemod.time_returns = [40]
         try:
             timetemp = AX.time
@@ -345,7 +345,7 @@ class TestPacketControl(unittest.TestCase):
             p.checkResponses()
             self.assertEqual(returns, [(None, "foo")])
             self.assertEqual(p.packetLog,
-                             {(42, 24, 200):(50, "bar", callback)})
+                             {(42, 24, 200): (50, "bar", callback)})
         finally:
             AX.time = timetemp
 
@@ -392,7 +392,7 @@ class TestPacketControl(unittest.TestCase):
                                      b"\x00\x00\x00\x00\x00\x00\x00\x01"
                                      b"\x00\x00\x00\x02\x00\x00\x00\x08"
                                      b"\x00\x00\x00\x04fake"])
-        self.assertEqual(p.packetLog, {(0, 1, 2):(30.0, testpkt, "foo")})
+        self.assertEqual(p.packetLog, {(0, 1, 2): (30.0, testpkt, "foo")})
 
     def test_sendPing(self):
         sock = jigs.SocketJig()
@@ -424,8 +424,8 @@ class TestPacketControl(unittest.TestCase):
         sock = jigs.SocketJig()
         p = AX.PacketControl(sock, None)
         p.sessionID = 42
-        header = {"flags":{"bigEndian":True}, "session_id":42,
-                  "transaction_id":32, "packet_id":100}
+        header = {"flags": {"bigEndian": True}, "session_id": 42,
+                  "transaction_id": 32, "packet_id": 100}
         p.sendErrorResponse(header, AP.ERR_GENERR, 12)
         self.assertEqual(sock.data,
                          [b"\x01\x12\x10\x00"
@@ -463,7 +463,7 @@ class TestPacketControl(unittest.TestCase):
         sock = jigs.SocketJig()
         p = AX.PacketControl(sock, mjig)
         p.sessionID = 42
-        # Test sucessful
+        # Test successful
         pkt = AP.GetPDU(True, 42, 23, 100, [AP.SearchRange((0, 0), ())])
         p.handle_GetPDU(pkt)
         self.assertEqual(len(sock.data), 1)
@@ -633,7 +633,7 @@ class TestPacketControl(unittest.TestCase):
         handlerCalls = []
         handlerReturns = [AP.ERR_NOERROR, AP.ERR_NOERROR]
         handler = (lambda a, vb: (handlerCalls.append((a, vb)),
-                                      handlerReturns.pop(0))[1])
+                   handlerReturns.pop(0))[1])
         mjig = AX.MIBControl()
         mjig.setVarbinds = ["foo", "bar"]
         mjig.setHandlers = [handler, handler]
@@ -709,6 +709,7 @@ class TestPacketControl(unittest.TestCase):
 
     def test_handle_ResponsePDU(self):
         cbreturn = []
+
         def callback(pkt, origpkt):
             cbreturn.append((pkt, origpkt))
         opkt = AP.PingPDU(True, 42, 4, 50)
@@ -717,10 +718,10 @@ class TestPacketControl(unittest.TestCase):
         sock = jigs.SocketJig()
         p = AX.PacketControl(sock, None)
         p.sessionID = 42
-        p.packetLog = {(42, 4, 50):(30.0, opkt, callback)}
+        p.packetLog = {(42, 4, 50): (30.0, opkt, callback)}
         # Test non-expected response (likely to happen in a timeout)
         p.handle_ResponsePDU(incorrect_rpkt)
-        self.assertEqual(p.packetLog, {(42, 4, 50):(30.0, opkt, callback)})
+        self.assertEqual(p.packetLog, {(42, 4, 50): (30.0, opkt, callback)})
         # Test expected response
         p.handle_ResponsePDU(correct_rpkt)
         self.assertEqual(p.packetLog, {})

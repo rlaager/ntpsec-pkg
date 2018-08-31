@@ -2,12 +2,12 @@
 .\"     Title: ntpfrob
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 06/12/2018
+.\"      Date: 08/29/2018
 .\"    Manual: NTPsec
-.\"    Source: NTPsec 1.1.1+
+.\"    Source: NTPsec 1.1.2+
 .\"  Language: English
 .\"
-.TH "NTPFROB" "8" "06/12/2018" "NTPsec 1\&.1\&.1+" "NTPsec"
+.TH "NTPFROB" "8" "08/29/2018" "NTPsec 1\&.1\&.2+" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -60,6 +60,16 @@ Bump the clock by a specified number of microseconds\&.
 \-c
 .RS 4
 Compute and display clock jitter\&.
+.RE
+.PP
+\-d
+.RS 4
+display values extracted via adjtimex(2)\&.
+.RE
+.PP
+\-D
+.RS 4
+display values extracted via adjtimex(2) forcibly including PPS\&.
 .RE
 .PP
 \-e

@@ -213,7 +213,7 @@ getgroup:
 		 * is associated with running with uid 0 - should be refined on
 		 * ports that allow binding to NTP_PORT with uid != 0
 		 */
-		nonroot |= (sw_uid != 0);  /* also notifies routing message listener */
+		nonroot = nonroot || (sw_uid != 0);  /* also notifies routing message listener */
 #  endif /* !HAVE_LINUX_CAPABILITY && !HAVE_SOLARIS_PRIVS */
 
 #  ifdef HAVE_LINUX_CAPABILITY
@@ -228,7 +228,7 @@ getgroup:
 			 */
 			cap_t caps;
 			const char *captext;
-			
+
 			captext = want_dynamic_interface_tracking
 				      ? "cap_sys_nice,cap_sys_time,cap_net_bind_service=pe"
 				      : "cap_sys_nice,cap_sys_time=pe";
@@ -411,10 +411,13 @@ int scmp_sc[] = {
 	SCMP_SYS(geteuid),
 	SCMP_SYS(ppoll),
 	SCMP_SYS(sendmsg),
+#ifdef __NR_geteuid32
+	SCMP_SYS(geteuid32),
+#endif
 
 #ifdef __NR_mmap
 	/* gentoo 64-bit and 32-bit, Intel and Arm use mmap */
-	SCMP_SYS(mmap),           
+	SCMP_SYS(mmap),
 #endif
 #if defined(__i386__) || defined(__arm__)
 	SCMP_SYS(_newselect),
