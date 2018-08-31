@@ -46,7 +46,7 @@ endif
 	LINKFLAGS='$(LDFLAGS)' \
 		python3 waf configure \
 		--prefix=/usr \
-		--enable-debug-gdb --enable-mssntp \
+		--enable-debug-gdb --enable-mssntp --enable-warnings \
 		--refclock=local,spectracom,generic,arbiter,nmea,pps,hpgps,shm,trimble,jjy,zyfer,neoclock \
 		--enable-doc --htmldir=/usr/share/doc/ntpsec/html \
 		--build-epoch=$(shell date -d "$(shell dpkg-parsechangelog --show-field=Date)" "+%s")
