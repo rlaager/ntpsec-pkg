@@ -198,11 +198,3 @@ override_dh_systemd_start:
 		ntpviz-weekly.timer
 
 PKD  = $(abspath $(dir $(word 1,$(MAKEFILE_LIST))))
-
-.PHONY: get-orig-source
-## https://wiki.debian.org/onlyjob/get-orig-source
-get-orig-source:  $(info I: $(DEB_SOURCE)_$(DEB_VERSION))
-	@echo "# Downloading..."
-	uscan --noconf --verbose --rename --destdir=$(CURDIR) \
-		--check-dirname-level=0 --force-download \
-		--download-version $(DEB_VERSION) $(PKD)
