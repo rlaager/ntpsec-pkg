@@ -5,7 +5,7 @@ Description: Hardcode python3 path
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2018-03-16
+Last-Update: 2018-08-31
 --- a/attic/calc_tickadj/calc_tickadj
 +++ b/attic/calc_tickadj/calc_tickadj
 @@ -1,4 +1,4 @@
@@ -213,7 +213,7 @@ Last-Update: 2018-03-16
 +#!/usr/bin/python3
  # -*- coding: utf-8 -*-
  """\
- ntpviz - logfile visualizer for NTP log files
+ ntpviz - visualizer for NTP log files
 --- a/ntpclients/ntpwait.py
 +++ b/ntpclients/ntpwait.py
 @@ -1,4 +1,4 @@

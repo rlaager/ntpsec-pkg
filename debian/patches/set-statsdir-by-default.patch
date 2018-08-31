@@ -8,7 +8,7 @@ Description: Set statsdir by default
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2018-07-31
+Last-Update: 2018-08-31
 --- a/docs/includes/ntpd-body.txt
 +++ b/docs/includes/ntpd-body.txt
 @@ -511,7 +511,7 @@
@@ -22,7 +22,7 @@ Last-Update: 2018-07-31
  
 --- a/ntpd/ntp_util.c
 +++ b/ntpd/ntp_util.c
-@@ -50,7 +50,7 @@
+@@ -51,7 +51,7 @@
   * Statistics file stuff
   */
  #ifndef NTP_VAR

@@ -6,7 +6,7 @@ Description: Use python2 for ntploggps
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2018-03-16
+Last-Update: 2018-08-31
 --- a/ntpclients/ntploggps.py
 +++ b/ntpclients/ntploggps.py
 @@ -1,4 +1,4 @@
@@ -27,10 +27,10 @@ Last-Update: 2018-03-16
 -    sys.stderr.write("%s\n" % e)
 -    sys.exit(1)
 -
+ 
  def logging_setup():
      "Create logging object"
-     logFormat = logging.Formatter('%(message)s')
-@@ -104,10 +96,6 @@
+@@ -105,10 +97,6 @@
                      dest='verbose',
                      help="be verbose")
  
