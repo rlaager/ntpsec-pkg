@@ -18,7 +18,7 @@ Last-Update: 2018-07-31
 +Type=oneshot
  IOSchedulingClass=idle
 -ExecStart=/usr/bin/ntpviz -w l -p 1 -o /var/www/localhost/htdocs/day
-+ExecStart=/usr/bin/ntpviz -p 1 -o /var/lib/ntpsec/ntpviz/day @/etc/ntpviz/options
++ExecStart=/usr/bin/ntpviz -p 1 -d /var/log/ntpsec -o /var/lib/ntpsec/ntpviz/day @/etc/ntpviz/options
 +ExecStartPost=/usr/bin/find /var/lib/ntpsec/ntpviz/day -type f -mtime +1 -delete
 --- a/etc/ntpviz-weekly.service
 +++ b/etc/ntpviz-weekly.service
@@ -34,7 +34,7 @@ Last-Update: 2018-07-31
 +Type=oneshot
  IOSchedulingClass=idle
 -ExecStart=/usr/bin/ntpviz -w l -p 7 -o /var/www/localhost/htdocs/week
-+ExecStart=/usr/bin/ntpviz -p 7 -o /var/lib/ntpsec/ntpviz/week @/etc/ntpviz/options
++ExecStart=/usr/bin/ntpviz -p 7 -d /var/log/ntpsec -o /var/lib/ntpsec/ntpviz/week @/etc/ntpviz/options
 +ExecStartPost=/usr/bin/find /var/lib/ntpsec/ntpviz/week -type f -mtime +7 -delete
 --- a/etc/ntplogtemp.timer
 +++ b/etc/ntplogtemp.timer
