@@ -1,3 +1,19 @@
+ntpsec (1.1.2+dfsg1-1) unstable; urgency=medium
+
+  * Revert to old upstream GPG key
+  * New upstream version
+    - Use data minimization on client requests
+      https://datatracker.ietf.org/doc/draft-ietf-ntp-data-minimization/
+    - Support AES-128-CMAC for authentication
+      https://datatracker.ietf.org/doc/draft-ietf-ntp-mac/
+  * Refresh patches
+  * Drop get-orig-source rules target
+  * Add --enable-warnings
+  * Raise Standards-Version to 4.2.1
+  * Fix ntpviz to use /var/log/ntpsec
+
+ -- Richard Laager <rlaager@wiktel.com>  Sun, 02 Sep 2018 00:37:48 -0500
+
 ntpsec (1.1.1+dfsg1-2) unstable; urgency=medium
 
   * Fix syntax error in ntpsec-ntpdate DHCP hook (Closes: 905678)
