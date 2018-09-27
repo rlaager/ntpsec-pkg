@@ -15,7 +15,6 @@ Build-Depends: asciidoc,
                netbase,
                pps-tools [linux-any],
                python3 (>= 3.3),
-               python3-all-dev,
                python3-dev (>= 3.3),
                xsltproc
 Build-Conflicts: libavahi-compat-libdnssd-dev,
