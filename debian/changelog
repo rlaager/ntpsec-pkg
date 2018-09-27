@@ -1,3 +1,9 @@
+ntpsec (1.1.2+dfsg1-2) unstable; urgency=medium
+
+  * Drop dependency on python3-all-dev (Closes: 909731)
+
+ -- Richard Laager <rlaager@wiktel.com>  Thu, 27 Sep 2018 06:42:19 -0500
+
 ntpsec (1.1.2+dfsg1-1) unstable; urgency=medium
 
   * Revert to old upstream GPG key
