@@ -14,7 +14,8 @@ installinit_error() {
 #DEBHELPER#
 
 if [ "$1" = "purge" ]; then
-	rm -rf /var/log/ntpsec
+	rm -rf /var/lib/ntpsec/ntp.drift /var/log/ntpsec
+	rmdir /var/lib/ntpsec 2> /dev/null || true
 	if ! LANG=C dpkg -s ntpsec-ntpviz 2> /dev/null | \
 	     grep -qE "^Status: (hold|install)"; then
 		deluser --system --quiet ntpsec || true
