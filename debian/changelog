@@ -1,3 +1,9 @@
+ntpsec (1.1.2+dfsg1-3) unstable; urgency=medium
+
+  * Cleanup /var/lib/ntpsec on purge (Closes: 909923)
+
+ -- Richard Laager <rlaager@wiktel.com>  Sun, 30 Sep 2018 03:59:25 -0500
+
 ntpsec (1.1.2+dfsg1-2) unstable; urgency=medium
 
   * Drop dependency on python3-all-dev (Closes: 909731)
