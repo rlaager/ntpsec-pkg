@@ -1,6 +1,6 @@
-ntpsec (1.1.0+dfsg1-1ubuntu1) bionic; urgency=medium
+ntpsec (1.1.0+dfsg1-1ubuntu0.1) bionic; urgency=medium
 
-  * Update apparmor for new drift temp file (LP: 1788102)
+  * Update apparmor for new drift temp file (LP: #1788102)
 
  -- Richard Laager <rlaager@wiktel.com>  Tue, 21 Aug 2018 00:27:21 -0500
 
