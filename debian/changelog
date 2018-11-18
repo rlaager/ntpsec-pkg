@@ -1,3 +1,9 @@
+ntpsec (1.1.2+dfsg1-4) unstable; urgency=medium
+
+  * Strip tos lines when using DHCP servers (Closes: 913964)
+
+ -- Richard Laager <rlaager@wiktel.com>  Sun, 18 Nov 2018 04:11:00 -0600
+
 ntpsec (1.1.2+dfsg1-3) unstable; urgency=medium
 
   * Cleanup /var/lib/ntpsec on purge (Closes: 909923)
