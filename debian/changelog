@@ -1,3 +1,13 @@
+ntpsec (1.1.2+dfsg1-5) unstable; urgency=medium
+
+  [ Bjarni Ingi Gislason ]
+  * ntpdate.8: Some minor corrections to the manual (Closes: 915937)
+
+  [ Richard Laager ]
+  * Update ntpdate.8
+
+ -- Richard Laager <rlaager@wiktel.com>  Fri, 07 Dec 2018 23:11:13 -0600
+
 ntpsec (1.1.2+dfsg1-4) unstable; urgency=medium
 
   * Strip tos lines when using DHCP servers (Closes: 913964)
