@@ -23,7 +23,7 @@ ntpdate \- set the date and time via NTP
 sets the local date and time by polling the Network Time
 Protocol (NTP) server(s) given as the
 .I server
-arguments to determine the correct time.
+argument(s) to determine the correct time.
 It must be run as root on the local host (unless the option \fB\-q\fR
 is used).
 A number
@@ -68,10 +68,10 @@ authentication function.
 .TP
 .B \-B
 Force the time to always be slewed using the adjtime() system
-call, even if the measured offset is greater than +-128 ms. The
+call, even if the measured offset is greater than \(+-128 ms. The
 default is to step the time using settimeofday() if the offset
-is greater than +-128 ms. Note that, if the offset is much
-greater than +-128 ms in this case, that it can take a long
+is greater than \(+-128 ms. Note that, if the offset is much
+greater than \(+-128 ms in this case, that it can take a long
 time (hours) to slew the clock to the correct value. During
 this time, the host should not be used to synchronize clients.
 .TP
@@ -148,7 +148,7 @@ tickadj.
 .SH AUTHOR
 David L. Mills (mills@udel.edu)
 .br
-This man page was converted from html to roff by
+This man page was converted from HTML to roff by
 Fabrizio Polacco <fpolacco@debian.org>
 .SH "SEE ALSO"
 \fBntpdate\-debian\fR(8)
