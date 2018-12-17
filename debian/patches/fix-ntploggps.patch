@@ -1,37 +1,22 @@
-Description: Fix ntploggps for Python 3
- The Python 3 version of the gps module has no isnan() function.  This
- has been removed in favor of isfinite(), which covers additional cases
- like +inf and -inf.
+Description: Fix ntploggps for newer versions of gps module
+ Current versions of the gps module have no isnan() function.  This has
+ been removed in favor of isfinite().
  .
- However, gps.isfinite() does not exist for Python2, so we have to inline
- it here to cover both.
+ Note that this change breaks ntploggps on older versions of the gps
+ module.
 Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/863/
-Origin: vendor
+Origin: https://gitlab.com/NTPsec/ntpsec/commit/87ffc14e39bad36fe59f24e93bb172915f2b5e0b
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2018-12-17
 
 --- a/ntpclients/ntploggps.py
 +++ b/ntpclients/ntploggps.py
-@@ -52,6 +52,13 @@ except ImportError as e:
-     sys.stderr.write("%s\n" % e)
-     sys.exit(1)
- 
-+# This is gps.isfinite() inlined here, because it only exists in the gps
-+# module for Python 3, not Python 2.
-+def isfinite(f):
-+    "Check if f is finite"
-+    # Python 2 does not think +Inf or -Inf are NaN
-+    # Python 2 has no easier way to test for Inf
-+    return float('-inf') < float(f) < float('inf')
- 
- def logging_setup():
-     "Create logging object"
-@@ -171,7 +178,7 @@ class GpsPoller(threading.Thread):
+@@ -171,7 +171,7 @@
          if isinstance(t, int):
              return t
          if isinstance(t, float):
 -            if gps.isnan(t):
-+            if not isfinite(t):
++            if not gps.isfinite(t):
                  return None
              return t
          return gps.isotime(t)
