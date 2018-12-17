@@ -1,0 +1,20 @@
+Description: Fix ntploggps for Python 3
+ The Python 3 version of the gps module has no isnan() function.  The Python 2
+ version of gps.isnan() works on both Python 2 and Python 3, so inlining it
+ works for both.
+Forwarded: https://gitlab.com/NTPsec/ntpsec/merge_requests/863/
+Origin: vendor
+Author: Richard Laager <rlaager@wiktel.com>
+Last-Update: 2018-12-16
+
+--- a/ntpclients/ntploggps.py
++++ b/ntpclients/ntploggps.py
+@@ -171,7 +171,7 @@
+         if isinstance(t, int):
+             return t
+         if isinstance(t, float):
+-            if gps.isnan(t):
++            if str(t) == 'nan':
+                 return None
+             return t
+         return gps.isotime(t)
