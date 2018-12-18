@@ -1,3 +1,6 @@
+# Accepted upstream
+fix-ntploggps.patch
+
 # Forwarding not needed
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
@@ -8,4 +11,3 @@ use-etc-ntpviz-for-header-and-footer.patch
 use-var-log-ntpsec-for-stats.patch
 set-statsdir-by-default.patch
 use-sbin-for-ntploggps-and-ntplogtemp.patch
-fix-ntploggps.patch
