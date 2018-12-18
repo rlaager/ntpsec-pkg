@@ -1,3 +1,9 @@
+ntpsec (1.1.2+dfsg1-6) unstable; urgency=medium
+
+  * Use python3-gps
+
+ -- Richard Laager <rlaager@wiktel.com>  Tue, 18 Dec 2018 13:30:35 -0600
+
 ntpsec (1.1.2+dfsg1-5) unstable; urgency=medium
 
   [ Bjarni Ingi Gislason ]
