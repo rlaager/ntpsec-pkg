@@ -4,7 +4,7 @@ Source: https://www.ntpsec.org
 
 Files: *
 Copyright: 2011-2018 Network Time Foundation
-           2015-2018 NTPsec project contributors
+           2015-2019 NTPsec project contributors
            Mark Andrews <mark_andrews@isc.org>
              Leitch atomic clock controller
            Bernd Altmeier <altmeier@atlsoft.de>
@@ -159,7 +159,7 @@ Copyright: Bernhard Schmidt <berni@debian.org>
            Peter Eisentraut <petere@debian.org>
            Kurt Roeckx <kurt@roeckx.be>
            2017 Dimitri John Ledkov <xnox@ubuntu.com>
-           2016-2018 Richard Laager <rlaager@wiktel.com>
+           2016-2019 Richard Laager <rlaager@wiktel.com>
 License: NTP
 
 Files: debian/apparmor-profile debian/apparmor-profile.tunable
@@ -189,7 +189,7 @@ Files: devel/linkcheck include/ntp_endian.h libntp/ntp_endian.c libntp/pymodule.
 Copyright: 2015-2018 NTPsec project contributors
 License: BSD-2-clause
 
-Files: devel/hacking.txt
+Files: devel/hacking.adoc
 Copyright: 2015-2018 NTPsec project contributors
 License: CC-BY-4.0
 
