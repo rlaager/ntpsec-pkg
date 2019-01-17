@@ -1,6 +1,3 @@
-# Accepted upstream
-fix-ntploggps.patch
-
 # Forwarding not needed
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
