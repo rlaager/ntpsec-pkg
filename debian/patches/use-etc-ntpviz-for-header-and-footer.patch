@@ -4,9 +4,9 @@ Description: Use /etc/ntpviz for header and footer
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2018-08-31
---- a/docs/includes/ntpviz-body.txt
-+++ b/docs/includes/ntpviz-body.txt
+Last-Update: 2019-01-17
+--- a/docs/includes/ntpviz-body.adoc
++++ b/docs/includes/ntpviz-body.adoc
 @@ -174,6 +174,10 @@
  generated index page, and the 'footer' file will be added almost at
  the bottom of the body of the generated index page.
@@ -16,5 +16,5 @@ Last-Update: 2018-08-31
 +`/etc/ntpviz/week/header.html`.
 +
  The contents are at the discretion of the operator. One might put
- links to other related webpages, or notes on the server OS, software
+ links to other related web pages, or notes on the server OS, software
  versions, hardware configuration, etc. into either of these files,

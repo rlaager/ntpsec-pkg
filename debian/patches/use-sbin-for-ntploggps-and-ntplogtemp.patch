@@ -5,41 +5,42 @@ Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
 Last-Update: 2018-08-31
---- a/ntpclients/ntploggps-man.txt
-+++ b/ntpclients/ntploggps-man.txt
+--- a/ntpclients/ntploggps-man.adoc
++++ b/ntpclients/ntploggps-man.adoc
 @@ -1,4 +1,4 @@
 -= ntploggps(1) =
 += ntploggps(8) =
- :doctype: manpage
- :man source: NTPsec
  :man version: @NTPSEC_VERSION@
---- a/ntpclients/ntplogtemp-man.txt
-+++ b/ntpclients/ntplogtemp-man.txt
+ include::../docs/manual.include[]
+ 
+--- a/ntpclients/ntplogtemp-man.adoc
++++ b/ntpclients/ntplogtemp-man.adoc
 @@ -1,4 +1,4 @@
 -= ntplogtemp(1) =
 += ntplogtemp(8) =
- :doctype: manpage
- :man source: NTPsec
  :man version: @NTPSEC_VERSION@
+ include::../docs/manual.include[]
+ 
 --- a/wscript
 +++ b/wscript
-@@ -1062,14 +1062,14 @@
-     if ctx.cmd == 'clean':
+@@ -1063,7 +1063,7 @@
          afterparty(ctx)
  
--    ctx.manpage(1, "ntpclients/ntploggps-man.txt")
-+    ctx.manpage(8, "ntpclients/ntploggps-man.txt")
-     ctx.manpage(1, "ntpclients/ntpdig-man.txt")
-     ctx.manpage(1, "ntpclients/ntpmon-man.txt")
-     ctx.manpage(1, "ntpclients/ntpq-man.txt")
-     ctx.manpage(1, "ntpclients/ntpsweep-man.txt")
-     ctx.manpage(1, "ntpclients/ntptrace-man.txt")
-     ctx.manpage(1, "ntpclients/ntpviz-man.txt")
--    ctx.manpage(1, "ntpclients/ntplogtemp-man.txt")
-+    ctx.manpage(8, "ntpclients/ntplogtemp-man.txt")
-     ctx.manpage(8, "ntpclients/ntpkeygen-man.txt")
-     ctx.manpage(8, "ntpclients/ntpleapfetch-man.txt")
-     ctx.manpage(8, "ntpclients/ntpwait-man.txt")
+     if ctx.env['PYTHON_GPS']:
+-        ctx.manpage(1, "ntpclients/ntploggps-man.adoc")
++        ctx.manpage(8, "ntpclients/ntploggps-man.adoc")
+     ctx.manpage(1, "ntpclients/ntpdig-man.adoc")
+     if ctx.env['PYTHON_CURSES']:
+         ctx.manpage(1, "ntpclients/ntpmon-man.adoc")
+@@ -1071,7 +1071,7 @@
+     ctx.manpage(1, "ntpclients/ntpsweep-man.adoc")
+     ctx.manpage(1, "ntpclients/ntptrace-man.adoc")
+     ctx.manpage(1, "ntpclients/ntpviz-man.adoc")
+-    ctx.manpage(1, "ntpclients/ntplogtemp-man.adoc")
++    ctx.manpage(8, "ntpclients/ntplogtemp-man.adoc")
+     ctx.manpage(8, "ntpclients/ntpkeygen-man.adoc")
+     ctx.manpage(8, "ntpclients/ntpleapfetch-man.adoc")
+     ctx.manpage(8, "ntpclients/ntpwait-man.adoc")
 --- a/etc/ntploggps.service
 +++ b/etc/ntploggps.service
 @@ -1,9 +1,9 @@
