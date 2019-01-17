@@ -3,7 +3,7 @@
 ntpdate \- set the date and time via NTP
 .SH SYNOPSIS
 .B ntpdate
-.RB [\| \-bBdoqsuv \|]
+.RB [\| \-46bBdoqsuv \|]
 .RB [\| \-a
 .IR key \|]
 .RB [\| \-e
@@ -52,12 +52,22 @@ system adjtime() routine. The latter technique is less disruptive and
 more accurate when the error is small, and works quite well when
 ntpdate is run by cron every hour or two.
 
-ntpdate will decline to set the date if an NTP server daemon (e.g.,
-ntpd) is running on the same host. When running ntpdate on a regular
-basis from cron as an alternative to running a daemon, doing so once
-every hour or two will result in precise enough timekeeping to avoid
-stepping the clock.
+ntpdate will, if the \fB\-u\fR flag was not specified, decline to set the date if an
+NTP server daemon (e.g., ntpd) is running on the same host. When running
+ntpdate on a regular basis from cron as an alternative to running a daemon,
+doing so once every hour or two will result in precise enough timekeeping to
+avoid stepping the clock.
+
+Note that in contexts where a host name is expected, a \fB\-4\fR qualifier preceding
+the host name forces DNS resolution to the IPv4 namespace, while a \fB\-6\fR qualifier
+forces DNS resolution to the IPv6 namespace.
 .SH OPTIONS
+.TP
+.B \-4
+Force DNS resolution of following host names on the command line to the IPv4 namespace.
+.TP
+.B \-6
+Force DNS resolution of following host names on the command line to the IPv6 namespace.
 .TP
 .BI \-a \ key
 Enable the authentication function and specify the key
@@ -77,9 +87,9 @@ call. This option should be used when called from a startup
 file at boot time.
 .TP
 .B \-d
-Enable the debugging mode, in which ntpdate will go through all
-the steps, but not adjust the local clock. Information useful
-for general debugging will also be printed.
+Enable the debugging mode, in which ntpdate will go through all the steps,
+but not adjust the local clock and using an unprivileged port. Information
+useful for general debugging will also be printed.
 .TP
 .BI \-e \ authdelay
 Specify the processing delay to perform an authentication
@@ -94,9 +104,9 @@ keyfile. The default is /etc/ntp.keys. This file should be in
 the format described in ntpd.
 .TP
 .BI \-o \ version
-Specify the NTP version for outgoing packets as the integer
-version, which can be 1 or 2. The default is 3. This allows
-ntpdate to be used with older NTP versions.
+Specify the NTP version for outgoing packets as the integer version, which
+can be 1, 2, 3 or 4. The default is 4. This allows ntpdate to be used with
+older NTP versions.
 .TP
 .BI \-p \ samples
 Specify the number of samples to be acquired from each server
@@ -112,10 +122,10 @@ system syslog facility. This is designed primarily for
 convenience of cron scripts.
 .TP
 .BI \-t \ timeout
-Specify the maximum time waiting for a server response as the
-value timeout, in seconds and fraction. The value is rounded
-to a multiple of 0.2 seconds. The default is 1 second, a value
-suitable for polling across a LAN.
+Specify the maximum time waiting for a server response as the value timeout,
+in seconds and fraction. The value is rounded to a multiple of 0.2
+seconds. The default is 1 second, a value suitable for polling across a
+LAN.
 .TP
 .B \-u
 Direct ntpdate to use an unprivileged port for outgoing packets.
@@ -129,7 +139,7 @@ Be verbose. This option will cause ntpdate's version
 identification string to be logged.
 .SH DIAGNOSTICS
 \fBntpdate\fP's exit status is zero if it found a server
-and could update the clock, and nonzero otherwise.
+and updates the clock, and nonzero otherwise.
 .SH FILES
 .TP
 .I /etc/ntp.keys
