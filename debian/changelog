@@ -1,3 +1,37 @@
+ntpsec (1.1.3+dfsg1-1) unstable; urgency=high
+
+  * New upstream version (Closes: 919513)
+    - Lots of typo fixes, documentation cleanups, test targets.
+    - CVE-2019-6442: "An authenticated attacker can write one byte out of
+      bounds in ntpd via a malformed config request, related to
+      config_remotely in ntp_config.c, yyparse in ntp_parser.tab.c, and
+      yyerror in ntp_parser.y."
+    - CVE-2019-6443: "Because of a bug in ctl_getitem, there is a stack-based
+      buffer over-read in read_sysvars in ntp_control.c in ntpd.
+    - CVE-2019-6444: "process_control() in ntp_control.c has a stack-based
+      buffer over-read because attacker-controlled data is dereferenced by
+      ntohl() in ntpd."
+    - CVE-2019-6445: "An authenticated attacker can cause a NULL pointer
+      dereference and ntpd crash in ntp_control.c, related to ctl_getitem."
+  * Drop debian/patches/fix-ntploggps.patch (merged upstream)
+  * Refresh patches
+  * Revert "Use python3-gps"
+    At this time, python3-gps is only available in experimental.
+  * Disable the waf PYTHON_GPS check
+  * Update debian/copyright
+  * Fix ntpdate.8 documentation of -B
+  * Changes as of ntp_4.2.8p12+dfsg-3 have been merged as appropriate:
+    - Update ntpdate.8 from ntpdate.html
+      Thanks to Bernhard Schmidt <berni@debian.org>
+    - Update ntpdate.README.Debian
+      Thanks to Bernhard Schmidt <berni@debian.org>
+    - As a notable exception, while the ntp package has removed the ntpdate
+      hooks, I have not (yet?) done so in ntpsec.
+  * Set Rules-Requires-Root: no
+  * Sort debian/ntpsec.maintscript
+
+ -- Richard Laager <rlaager@wiktel.com>  Thu, 17 Jan 2019 04:17:46 -0600
+
 ntpsec (1.1.2+dfsg1-6) unstable; urgency=medium
 
   * Use python3-gps
