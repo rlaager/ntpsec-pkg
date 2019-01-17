@@ -67,13 +67,8 @@ client and server key files. The default is to disable the
 authentication function.
 .TP
 .B \-B
-Force the time to always be slewed using the adjtime() system
-call, even if the measured offset is greater than \(+-128 ms. The
-default is to step the time using settimeofday() if the offset
-is greater than \(+-128 ms. Note that, if the offset is much
-greater than \(+-128 ms in this case, that it can take a long
-time (hours) to slew the clock to the correct value. During
-this time, the host should not be used to synchronize clients.
+Force the time to always be slewed using the adjtime() system call.  This is
+the default.
 .TP
 .B \-b
 Force the time to be stepped using the settimeofday() system
