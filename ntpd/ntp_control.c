@@ -849,6 +849,13 @@ process_control(
 		return;
 	}
 
+	if (CTL_MAX_DATA_LEN < req_count) {
+                /* count too big */
+		ctl_error(CERR_BADFMT);
+		numctlbadpkts++;
+		return;
+	}
+
 	properlen = req_count + (int)CTL_HEADER_LEN;
 	/* round up proper len to a 8 octet boundary */
 
@@ -880,6 +887,13 @@ process_control(
 	 * Set up translate pointers
 	 */
 	reqpt = (char *)pkt->data;
+	if (CTL_MAX_DATA_LEN < req_count) {
+                /* count too big */
+		/* coverity[deadcode] backstop to prevent stack overflow */
+		ctl_error(CERR_BADFMT);
+		numctlbadpkts++;
+		return;
+	}
 	reqend = reqpt + req_count;
 
 	/*
@@ -1983,7 +1997,8 @@ ctl_putsys(
 		break;
 
 	case CS_USED_RBUF:
-		ctl_putuint(sys_var[varid].text, full_recvbuffs());
+		// FIXME: nuke this slot
+		ctl_putuint(sys_var[varid].text, 0);
 		break;
 
 	case CS_RBUF_LOWATER:
@@ -2538,7 +2553,7 @@ ctl_getitem(
 
 	/* Scan the string in the packet until we hit comma or
 	 * EoB. Register position of first '=' on the fly. */
-	for (tp = NULL, cp = reqpt; cp != reqend; ++cp) {
+	for (tp = NULL, cp = reqpt; cp < reqend; ++cp) {
 		if (*cp == '=' && tp == NULL)
 			tp = cp;
 		if (*cp == ',')
@@ -2624,9 +2639,12 @@ ctl_getitem(
 	NLOG(NLOG_SYSEVENT)
 	    if (quiet_until <= current_time) {
 		    quiet_until = current_time + 300;
+	/* The cast on SRCPORT is required to supress a warning on NetBSD 8.0
+	 * http://gnats.netbsd.org/cgi-bin/query-pr-single.pl?number=53618
+	 */
 		    msyslog(LOG_WARNING,
 			    "Possible 'ntpdx' exploit from %s#%" PRIu16 " (possibly spoofed)",
-			    socktoa(rmt_addr), SRCPORT(rmt_addr));
+			    socktoa(rmt_addr), (unsigned)SRCPORT(rmt_addr));
 	    }
 	reqpt = reqend; /* never again for this packet! */
 	return NULL;
@@ -2881,6 +2899,7 @@ write_variables(
 	const struct ctl_var *v;
 	int ext_var;
 	char *valuep;
+	char nulltxt[1] = { '\0' };
 	long val;
 	size_t octets;
 	char *vareqv;
@@ -2908,11 +2927,10 @@ write_variables(
 	 * Look through the variables. Dump out at the first sign of
 	 * trouble.
 	 */
-	while ((v = ctl_getitem(sys_var, &valuep)) != 0) {
+	while (NULL != (v = ctl_getitem(sys_var, &valuep))) {
 		ext_var = 0;
 		if (v->flags & EOV) {
-			if ((v = ctl_getitem(ext_sys_var, &valuep)) !=
-			    0) {
+			if (NULL != (v = ctl_getitem(ext_sys_var, &valuep))) {
 				if (v->flags & EOV) {
 					ctl_error(CERR_UNKNOWNVAR);
 					return;
@@ -2926,9 +2944,13 @@ write_variables(
 			ctl_error(CERR_PERMISSION);
 			return;
 		}
+		if (NULL == valuep)
+			valuep = nulltxt;
+
 		errno = 0;
-		if (!ext_var && (*valuep == '\0'
-				 || (val = strtol(valuep, NULL, 10), errno != 0))) {
+		if (!ext_var &&
+                    (*valuep == '\0' ||
+                     (val = strtol(valuep, NULL, 10), errno != 0))) {
 			ctl_error(CERR_BADFMT);
 			return;
 		}

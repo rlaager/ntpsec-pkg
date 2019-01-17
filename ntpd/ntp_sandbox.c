@@ -297,8 +297,13 @@ int scmp_sc[] = {
 #endif
 
 	SCMP_SYS(getdents),	/* Scanning /etc/ntp.d/ */
+	SCMP_SYS(getdents64),
+#ifdef __NR_prlimit64
+	SCMP_SYS(prlimit64),	/* 64 bit Fedora 26 with early_droproot*/
 #endif
+#endif  /* ENABLE_EARLY_DROPROOT */
 
+        SCMP_SYS(access),
 	SCMP_SYS(adjtimex),
 	SCMP_SYS(bind),
 	SCMP_SYS(brk),
@@ -317,16 +322,12 @@ int scmp_sc[] = {
 #ifdef __NR_getrandom
 	SCMP_SYS(getrandom),	/* Added in 3.17 kernel */
 #endif
-	SCMP_SYS(getitimer),
 #ifdef __NR_ugetrlimit
 	SCMP_SYS(ugetrlimit),	/* sysconf */
 #endif
 #ifdef __NR_getrlimit
 	SCMP_SYS(getrlimit),	/* sysconf */
 	SCMP_SYS(setrlimit),
-#endif
-#ifdef __NR_prlimit64
-	SCMP_SYS(prlimit64),	/* 64 bit Fedora 26 with early_droproot*/
 #endif
 	SCMP_SYS(getrusage),
 	SCMP_SYS(getsockname),
@@ -359,7 +360,6 @@ int scmp_sc[] = {
 	SCMP_SYS(select),	/* not in ARM */
 #endif
 	SCMP_SYS(sendto),
-	SCMP_SYS(setitimer),
 	SCMP_SYS(setsid),
 #ifdef __NR_setsockopt
 	SCMP_SYS(setsockopt),	/* not in old kernels */
@@ -371,6 +371,14 @@ int scmp_sc[] = {
 #ifdef __NR_time
 	SCMP_SYS(time),		/* not in ARM */
 #endif
+#ifdef HAVE_TIMER_CREATE
+	SCMP_SYS(timer_create),
+	SCMP_SYS(timer_gettime),
+	SCMP_SYS(timer_settime),
+#else
+	SCMP_SYS(getitimer),
+	SCMP_SYS(setitimer),
+#endif
 	SCMP_SYS(write),
         SCMP_SYS(unlink),
 
@@ -380,7 +388,6 @@ int scmp_sc[] = {
  * rather than generate a trap.
  */
 	SCMP_SYS(clone),	/* threads */
-	SCMP_SYS(futex),	/* sem_xxx, used by threads */
 	SCMP_SYS(kill),		/* generate signal */
 	SCMP_SYS(madvise),
 	SCMP_SYS(mprotect),
@@ -390,8 +397,11 @@ int scmp_sc[] = {
 	SCMP_SYS(statfs),
 	SCMP_SYS(uname),
 #endif
+/* This shouldn't be needed if we don't use DNS, but
+ * several libraries call pthread_once, just in case.
+ */
+	SCMP_SYS(futex),	/* sem_xxx, used by threads */
 
-        SCMP_SYS(access),
 
 #ifdef REFCLOCK
 	SCMP_SYS(nanosleep),
@@ -447,6 +457,8 @@ int scmp_sc[] = {
 	else {
 		msyslog(LOG_NOTICE, "INIT: sandbox: seccomp enabled.");
 	}
+        seccomp_release(ctx);
+
 #endif /* HAVE_SECCOMP_H */
 
 	return nonroot;

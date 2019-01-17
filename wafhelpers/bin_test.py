@@ -1,69 +1,104 @@
+"""Run a suite of tests on the listed binaries."""
 from __future__ import print_function
-import re
-from os.path import exists
-from waflib.Utils import subprocess
-from waflib.Logs import pprint
+import os
+import os.path
+import sys
+import waflib.Context
+import waflib.Logs
+import waflib.Utils
+sys.path.insert(0, "%s/main/tests/pylib" % waflib.Context.out_dir)
+import ntp.poly
+import ntp.util
+
+verStr = ntp.util.stdversion()
 
 cmd_map = {
-    ("main/ntpd/ntpd", "-invalid"): br'.*must be run as root, not uid.*',
-    ("main/ntpclients/ntpdig", "time.apple.com"): br'.*time.apple.com.*',
-    ("main/ntpfrob/ntpfrob", "-h"): br'usage:',
-    ("main/ntpfrob/ntpfrob", "-b 100000"):
-        br"Bumping clock by 100000 microseconds",
-    ("main/ntpclients/ntpkeygen", None):
-        br'Generating new ',
-    ("main/ntpclients/ntpq", "-p"): br'.*remote.*jitter.*',
-    ("main/ntptime/ntptime", None):
-        br'ntp_gettime\(\) returns code 0 \(OK\)',
-    ("main/attic/sht", "2:r"): br'reader',
-
-    # Perl library
-    #       ("main/ntpclients/ntptrace", ""): br'',
-    #       ("main/ntpclients/ntpwait", ""): br'',
-    #       ("main/ntpclients/ntpsweep", ""): br'',
+    ("main/ntpclients/ntpleapfetch", "--version"): "ntpleapfetch %s\n"
+                                                   % verStr,
+    ("main/ntpd/ntpd", "--version"): "ntpd %s\n" % verStr,
+    ("main/ntpfrob/ntpfrob", "-V"): "ntpfrob %s\n" % verStr,
+    ("main/ntptime/ntptime", "-V"): "ntptime %s\n" % verStr
+}
+cmd_map2 = {
+    ("main/ntpclients/ntpdig", "--version"): "ntpdig %s\n" % verStr,
+    ("main/ntpclients/ntpkeygen", "--version"): "ntpkeygen %s\n" % verStr,
+    ("main/ntpclients/ntpq", "--version"): "ntpq %s\n" % verStr,
+    ("main/ntpclients/ntplogtemp", "--version"): "ntplogtemp %s\n" % verStr,
+    ("main/ntpclients/ntpsnmpd", "--version"): "ntpsnmpd %s\n" % verStr,
+    ("main/ntpclients/ntpsweep", "--version"): "ntpsweep %s\n" % verStr,
+    ("main/ntpclients/ntptrace", "--version"): "ntptrace %s\n" % verStr,
+    ("main/ntpclients/ntpviz", "--version"): "ntpviz %s\n" % verStr,
+    ("main/ntpclients/ntpwait", "--version"): "ntpwait %s\n" % verStr
+}
+cmd_map3 = {    # Need curses
+    ("main/ntpclients/ntpmon", "--version"): "ntpmon %s\n" % verStr,
 }
 
+test_logs = []
 
-# XXX: Needs to run in a thread with a timeout.
-def run(cmd, reg):
+def addLog(color, text):
+    test_logs.append((color, text))
+
+def bin_test_summary(ctx):
+    for i in test_logs:
+        waflib.Logs.pprint(i[0], i[1])
+
+def run(cmd, reg, pythonic):
+    """Run an individual non-python test."""
     check = False
 
-    if cmd[1] is None:
-        cmd = [cmd[0]]
+    breg = ntp.poly.polybytes(reg)
 
-    print("running: ", " ".join(cmd), end="")
+    prefix = "running: " + " ".join(cmd)
 
-    if not exists("build/%s" % cmd[0]):
-        pprint("YELLOW", " SKIPPING (does not exist)")
+    if not os.path.exists("%s/%s" % (waflib.Context.out_dir, cmd[0])):
+        addLog("YELLOW", prefix + " SKIPPING (does not exist)")
         return False
 
-    p = subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE, env=None, cwd="build")
+    if pythonic:
+        cmd = [sys.executable] + list(cmd)
+    p = waflib.Utils.subprocess.Popen(cmd, env={'PYTHONPATH': '%s/main/tests/pylib' %
+                                                 waflib.Context.out_dir},
+                         stdin=waflib.Utils.subprocess.PIPE,
+                         stdout=waflib.Utils.subprocess.PIPE,
+                         stderr=waflib.Utils.subprocess.PIPE, cwd=waflib.Context.out_dir)
 
     stdout, stderr = p.communicate()
 
-    regex = re.compile(reg)
-
-    if regex.match(stdout) or regex.match(stderr):
+    if (stdout == breg) or (stderr == breg):
         check = True
 
     if check:
-        pprint("GREEN", "  OK")
-        return False
-    else:
-        pprint("RED", "  FAILED")
+        addLog("GREEN", prefix + "  OK")
         return True
+    addLog("RED", prefix + "  FAILED")
+    addLog("PINK", "Expected: " + breg)
+    if stdout:
+        addLog("PINK", "Got (stdout): " + ntp.poly.polystr(stdout))
+    if stderr:
+        addLog("PINK", "Got (stderr): " + ntp.poly.polystr(stderr))
+    return False
 
 
 def cmd_bin_test(ctx, config):
-    fail = True
+    """Run a suite of binary tests."""
+    fails = 0
+
+    if ctx.env['PYTHON_CURSES']:
+      for cmd in cmd_map3:
+        cmd_map2[cmd] = cmd_map3[cmd]
 
     for cmd in sorted(cmd_map):
-        fail = run(cmd, cmd_map[cmd])
+        if not run(cmd, cmd_map[cmd], False):
+            fails += 1
 
-    if fail:
-        pprint("RED", "Tests failed!")
-        # ctx.fatal("Failed")
+    for cmd in sorted(cmd_map2):
+        if not run(cmd, cmd_map2[cmd], True):
+            fails += 1
 
-# cmd_bin_test(None, None)
+    if 1 == fails:
+        bin_test_summary(ctx)
+        ctx.fatal("1 binary test failed!")
+    elif 1 < fails:
+        bin_test_summary(ctx)
+        ctx.fatal("%d binary tests failed!" % fails)

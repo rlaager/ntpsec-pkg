@@ -2,12 +2,12 @@
 .\"     Title: ntpq
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 08/29/2018
+.\"      Date: 01/14/2019
 .\"    Manual: NTPsec
-.\"    Source: NTPsec 1.1.2+
+.\"    Source: NTPsec 1.1.3+
 .\"  Language: English
 .\"
-.TH "NTPQ" "1" "08/29/2018" "NTPsec 1\&.1\&.2+" "NTPsec"
+.TH "NTPQ" "1" "01/14/2019" "NTPsec 1\&.1\&.3+" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,13 +34,13 @@ ntpq \- standard NTP query program
 ntpq [\-46adhinpkwWu] [\-c \fIcommand\fR] [\fIhost\fR] [\&...]
 .SH "DESCRIPTION"
 .sp
-The ntpq utility program is used to monitor NTP daemon ntpd operations and determine performance\&. It uses the standard NTP mode 6 control message formats defined in Appendix B of the NTPv3 specification RFC 1305\&. The same formats are used in NTPv4, although some of the variable names have changed and new ones added\&. The description on this page is for the NTPv4 variables\&.
+The ntpq utility program is used to monitor NTP daemon ntpd operations and determine performance\&. It uses the standard NTP mode 6 control message formats defined in Appendix B of the NTPv3 specification RFC 1305\&. The same formats are used in NTPv4, although some of the variable names have changed, and new ones added\&. The description on this page is for the NTPv4 variables\&.
 .sp
 The program can be run either in interactive mode or controlled using command line arguments\&. Requests to read and write arbitrary variables can be assembled, with raw and pretty\-printed output options being available\&. It can also obtain and print a list of peers in a common format by sending multiple queries to the server\&.
 .sp
-If one or more request options is included on the command line when ntpq is executed, each of the requests will be sent to the NTP servers running on each of the hosts given as command line arguments, or on localhost by default\&. If no request options are given, ntpq will attempt to read commands from the standard input and execute these on the NTP server running on the first host given on the command line, again defaulting to localhost when no other host is specified\&. ntpq will prompt for commands if the standard input is a terminal device\&.
+If one or more request options are included on the command line when ntpq is executed, each of the requests will be sent to the NTP servers running on each of the hosts given as command line arguments, or on localhost by default\&. If no request options are given, ntpq will attempt to read commands from the standard input and execute these on the NTP server running on the first host given on the command line, again defaulting to localhost when no other host is specified\&. ntpq will prompt for commands if the standard input is a terminal device\&.
 .sp
-ntpq uses NTP mode 6 packets to communicate with the NTP server, and hence can be used to query any compatible server on the network which permits it\&. Note that since NTP is a UDP protocol this communication will be somewhat unreliable, especially over large distances in terms of network topology\&. ntpq makes one attempt to retransmit requests, and will time requests out if the remote host is not heard from within a suitable timeout time\&.
+ntpq uses NTP mode 6 packets to communicate with the NTP server, and hence can be used to query any compatible server on the network which permits it\&. Note that since NTP is a UDP protocol this communication will be somewhat unreliable, especially over large distances in terms of network topology\&. ntpq makes one attempt to retransmit requests and will time requests out if the remote host is not heard from within a suitable timeout time\&.
 .sp
 Note that in contexts where a host name is expected, a \-4 qualifier preceding the host name forces DNS resolution to the IPv4 namespace, while a \-6 qualifier forces DNS resolution to the IPv6 namespace\&.
 .sp
@@ -95,12 +95,12 @@ Print a usage message summarizing options end exit\&.
 .PP
 \-n, \-\-numeric
 .RS 4
-Output all host addresses in numeric format rather than converting to the canonical host names\&. You may get hostnames anyway for peers in initialization phase, before DNS has resolved the peer name\&.
+Output all host addresses in numeric format rather than converting to the canonical host names\&. You may get hostnames anyway for peers in the initialization phase before DNS has resolved the peer name\&.
 .RE
 .PP
 \-p, \-\-peers
 .RS 4
-Print a list of the peers known to the server as well as a summary of their state\&. This is equivalent to the
+Print a list of the peers known to the server as well as a summary of their state; this is equivalent to the
 peers
 interactive command\&.
 .RE
@@ -117,7 +117,7 @@ Print the version string and exit\&.
 .PP
 \-w, \-\-wide
 .RS 4
-Wide mode: if the host name or IP Address doesn\(cqt fit, write the full name/address and indent the next line so columns line up\&. The default truncates the name or address\&.
+Wide mode: if the host name or IP Address doesn\(cqt fit, write the full name/address and indent the next line, so columns line up\&. The default truncates the name or address\&.
 .RE
 .PP
 \-W num, \-\-width=num
@@ -131,7 +131,7 @@ Display timing information with units\&.
 .RE
 .SH "INTERNAL COMMANDS"
 .sp
-Interactive format commands consist of a keyword followed by zero to four arguments\&. Only enough characters of the full keyword to uniquely identify the command need be typed\&. The output of a command is normally sent to the standard output, but optionally the output of individual commands may be sent to a file by appending a >, followed by a file name, to the command line\&. A number of interactive format commands are executed entirely within the ntpq program itself and do not result in NTP mode\-6 requests being sent to a server\&. These are described following\&.
+Interactive format commands consist of a keyword followed by zero to four arguments\&. Only enough characters of the full keyword to uniquely identify the command need be typed\&. The output of a command is normally sent to the standard output, but optionally the output of individual commands may be sent to a file by appending a >, followed by a file name, to the command line\&. Some interactive format commands are executed entirely within the ntpq program itself and do not result in NTP mode 6 requests being sent to a server\&. These are described as following\&.
 .PP
 ? [\fIcommand_keyword\fR], help [\fIcommand_keyword\fR]
 .RS 4
@@ -148,9 +148,9 @@ addvars \fIname\fR [ = value] [\&...]; rmvars \fIname\fR [\&...]; clearvars
 The arguments to this command consist of a list of items of the form
 name = value, where the
 = value
-is ignored, and can be omitted in read requests\&.
+is ignored and can be omitted in read requests\&.
 ntpq
-maintains an internal list in which data to be included in control messages can be assembled, and sent using the
+maintains an internal list in which data to be included in control messages can be assembled and sent using the
 readlist
 and
 writelist
@@ -197,7 +197,7 @@ Displays or sets the file for debug logging\&. <stderr> will send logs to standa
 .PP
 delay \fImilliseconds\fR
 .RS 4
-Specify a time interval to be added to timestamps included in requests which require authentication\&. This is used to enable (unreliable) server reconfiguration over long delay network paths or between machines whose clocks are unsynchronized\&. Actually the server does not now require timestamps in authenticated requests, so this command may be obsolete\&.
+Specify a time interval to be added to timestamps included in requests which require authentication; this is used to enable (unreliable) server reconfiguration over long delay network paths or between machines whose clocks are unsynchronized\&. The server does not now require timestamps in authenticated requests so that this command may be obsolete\&.
 .RE
 .PP
 exit
@@ -218,14 +218,15 @@ yes
 is specified, host names are printed in information displays\&. If
 no
 is specified, numeric addresses are printed instead\&. The default is
-yes, unless modified using the command line
+yes
+unless modified using the command line
 \-n
 switch\&.
 .RE
 .PP
 keyid \fIkeyid\fR
 .RS 4
-This command specifies the key number to be used to authenticate configuration requests\&. This must correspond to a key ID configured with the
+This command specifies the key number to be used to authenticate configuration requests; this must correspond to a key ID configured with the
 controlkey
 command in the server\(cqs
 ntp\&.conf
@@ -234,14 +235,14 @@ ntp\&.conf
 keytype
 .RS 4
 Specify the digest algorithm to use for authenticated requests, with default
-MD5\&. The keytype must match what the server is expecting for the the specified key ID\&.
+MD5\&. The keytype must match what the server is expecting for the specified key ID\&.
 .RE
 .PP
 ntpversion 1 | 2 | 3 | 4
 .RS 4
 Sets the NTP version number which
 ntpq
-claims in packets\&. Defaults to 2, Note that mode\-6 control messages (and modes, for that matter) didn\(cqt exist in NTP version 1\&.
+claims in packets\&. Defaults to 2, Note that mode 6 control messages (and modes, for that matter) didn\(cqt exist in NTP version 1\&.
 .RE
 .PP
 passwd
@@ -257,7 +258,7 @@ ntpq\&.
 .PP
 raw
 .RS 4
-Display server messages as received and without reformatting\&. The only formatting/interpretation done on the data is to transform nonascii data into a printable (but barely understandable) form\&.
+Display server messages as received and without reformatting\&. The only formatting/interpretation done on the data is to transform non\-ASCII data into a printable (but barely understandable) form\&.
 .RE
 .PP
 timeout \fImilliseconds\fR
@@ -280,7 +281,7 @@ program\&.
 .RE
 .SH "CONTROL MESSAGE COMMANDS"
 .sp
-Association IDs are used to identify system, peer and clock variables\&. System variables are assigned an association ID of zero and system name space, while each association is assigned a nonzero association ID and peer namespace\&. Most control commands send a single mode\-6 message to the server and expect a single response message\&. The exceptions are the peers command, which sends a series of messages, and the mreadlist and mreadvar commands, which iterate over a range of associations\&.
+Association IDs are used to identify system, peer and clock variables\&. System variables are assigned an association ID of zero and system name space, while each association is assigned a nonzero association ID and peer namespace\&. Most control commands send a single mode 6 message to the server and expect a single response message\&. The exceptions are the peers command, which sends a series of messages, and the mreadlist and mreadvar commands, which iterate over a range of associations\&.
 .PP
 associations
 .RS 4
@@ -395,7 +396,7 @@ Send the remainder of the command line, including whitespace, to the server as a
 .PP
 config\-from\-file \fIfilename\fR
 .RS 4
-Send the each line of
+Send each line of
 \fIfilename\fR
 to the server as run\-time configuration commands in the same format as the configuration file\&. This command is experimental until further notice and clarification\&. Authentication is required\&.
 .RE
@@ -434,7 +435,7 @@ Display monitor facility statistics\&.
 .PP
 direct
 .RS 4
-Normally, the mrulist command retrieves an entire MRUreport (possibly consisting of more than one MRU span), sorts it, and presents the result\&. But attempting to fetch an entire MRU report may fail on a server so loaded that none of its MRU entries age out before they are shipped\&. With this option, each segment is reported as it arrives\&.
+Normally, the mrulist command retrieves an entire MRU report (possibly consisting of more than one MRU span), sorts it, and presents the result\&. But attempting to fetch an entire MRU report may fail on a server so loaded that none of its MRU entries age out before they are shipped\&. With this option, each segment is reported as it arrives\&.
 .RE
 .PP
 mrulist [limited | kod | mincount=\fIcount\fR | laddr=\fIlocaladdr\fR | sort=\fIsortorder\fR | resany=\fIhexmask\fR | resall=\fIhexmask\fR]
@@ -809,7 +810,7 @@ is required, as the same name can occur in both spaces\&. If no
 name
 is included, all operative variables in the name space are displayed\&. In this case only, if the
 assocID
-is omitted, it is assumed zero\&. Multiple names are specified with comma separators and without whitespace\&. Note that time values are represented in milliseconds and frequency values in parts\-per\-million (PPM)\&. Some NTP timestamps are represented in the format YYYYMMDDTTTT, where YYYY is the year, MM the month of year, DD the day of month and TTTT the time of day\&.
+is omitted, it is assumed zero\&. Multiple names are specified with comma separators and without whitespace\&. Note that time values are represented in milliseconds and frequency values in parts\-per\-million (PPM)\&. Some NTP timestamps are represented in the format YYYYMMDDTTTT, where YYYY is the year, MM the month of the year, DD the day of the month and TTTT the time of day\&.
 .RE
 .PP
 reslist
@@ -854,12 +855,12 @@ Print statistics counters maintained in the protocol module\&. Note that the rel
 .sp
 Four commands require authentication to the server: config\-from\-file, config, ifstats, and reslist\&. An authkey file must be in place and a control key declared in ntp\&.conf for these commands to work\&.
 .sp
-If you are running as root or otherwise have read access to the authkey and ntp\&.conf file, ntpq will mine the required credentials for you\&. Otherwise you will be prompted to enter a key ID and password\&.
+If you are running as root or otherwise have read access to the authkey and ntp\&.conf file, ntpq will mine the required credentials for you\&. Otherwise, you will be prompted to enter a key ID and password\&.
 .sp
-Credentials, once entered, are retained and used for the duration of your ntpq session\&.
+Credentials once entered, are retained and used for the duration of your ntpq session\&.
 .SH "STATUS WORDS AND KISS CODES"
 .sp
-The current state of the operating program is shown in a set of status words maintained by the system and each association separately\&. These words are displayed in the rv and as commands both in hexadecimal and decoded short tip strings\&. The codes, tips and short explanations are on the Event Messages and Status Words page\&. The page also includes a list of system and peer messages, the code for the latest of which is included in the status word\&.
+The current state of the operating program is shown in a set of status words maintained by the system and each association separately\&. These words are displayed in the rv and as commands both in hexadecimal and decoded short tip strings\&. The codes, tips, and short explanations are on the Event Messages and Status Words page\&. The page also includes a list of system and peer messages, the code for the latest of which is included in the status word\&.
 .sp
 Information resulting from protocol machine state transitions is displayed using an informal set of ASCII strings called kiss codes\&. The original purpose was for kiss\-o\*(Aq\-death (KoD) packets sent by the server to advise the client of an unusual condition\&. They are now displayed, when appropriate, in the reference identifier field in various billboards\&.
 .SH "SYSTEM VARIABLES"
@@ -1400,7 +1401,7 @@ In older versions, no count of control packets was listed under sysstats\&.
 The \-O (\-\-old\-rv) option of legacy versions has been retired\&.
 .SH "KNOWN LIMITATIONS"
 .sp
-It is possible for a ":config unpeer" command to fail silently, yielding "Config Succeeded", if it is given a peer identifier that looks like a driver type name or a hostname not present in the peer list\&. The error will however be reported in the system log\&.
+It is possible for a ":config unpeer" command to fail silently, yielding "Config Succeeded", if it is given a peer identifier that looks like a driver type name or a hostname not present in the peer list\&. The error will, however, be reported in the system log\&.
 .sp
 The config command cannot be used to change a server\(cqs default restrictions\&.
 .sp

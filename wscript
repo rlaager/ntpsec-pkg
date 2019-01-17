@@ -22,8 +22,7 @@ from waflib.Tools import waf_unit_test
 sys.dont_write_bytecode = True
 
 from wafhelpers.options import options_cmd
-from wafhelpers.probes \
-    import probe_header_with_prerequisites, probe_function_with_prerequisites
+from wafhelpers.probes import probe_header, probe_function
 from wafhelpers.test import test_write_log, test_print_log
 
 
@@ -49,6 +48,7 @@ Usage: waf <command>
     dist        Create a release
     install     Install the project
     loccount    Show SLOC count of the source tree
+    uninstall   Uninstall the project
 
 ''')
 
@@ -184,15 +184,12 @@ def configure(ctx):
         ctx.fatal("asciidoc and xsltproc are required in order "
                   "to build documentation")
     elif ctx.options.enable_doc:
-        ctx.env.ASCIIDOC_FLAGS = ["-f", "%s/docs/asciidoc.conf"
-                                  % ctx.srcnode.abspath()]
+        ctx.env.ASCIIDOC_FLAGS = []
         ctx.env.ENABLE_DOC_USER = ctx.options.enable_doc
 
     # XXX: conditionally build this with --disable-man?
     # Should it build without docs enabled?
-    ctx.env.A2X_FLAGS = ["--format", "manpage",
-                         "--asciidoc-opts=--conf-file=%s/docs/asciidoc.conf"
-                         % ctx.srcnode.abspath()]
+    ctx.env.A2X_FLAGS = ["--format", "manpage"]
     if not ctx.options.enable_a2x_xmllint:
         ctx.env.A2X_FLAGS += ["--no-xmllint"]
 
@@ -603,58 +600,55 @@ int main(int argc, char **argv) {
         msg="Checking for OpenSSL (via pkg-config)",
         define_name='', mandatory=False,
     ):
-    # Very old versions of OpenSSL don't have cmac support.
-    # This gives a sane(er) error message.
-    # It would be possible to make CMAC support optional by adding
-    # appropriate #ifdefs to the code.
-        openssl_headers = (
-            "openssl/evp.h",
-            "openssl/cmac.h",
-            "openssl/objects.h",
-            "openssl/rand.h",
-        )
-        for hdr in openssl_headers:
-            ctx.check_cc(header_name=hdr, includes=ctx.env.PLATFORM_INCLUDES)
-        # FIXME! Ignoring the result...
         ctx.check_cc(msg="Checking for OpenSSL's crypto library",
-                     lib="crypto")
+                     lib="crypto", mandatory=True)
 
     # Optional functions.  Do all function checks here, otherwise
     # we're likely to duplicate them.
-    functions = (
+    optional_functions = (
         ('_Unwind_Backtrace', ["unwind.h"]),
         ('adjtimex', ["sys/time.h", "sys/timex.h"]),
         ('backtrace_symbols_fd', ["execinfo.h"]),
         ('closefrom', ["stdlib.h"]),
-        ('clock_gettime', ["time.h"], "RT"),
-        ('clock_settime', ["time.h"], "RT"),
         ('ntp_adjtime', ["sys/time.h", "sys/timex.h"]),     # BSD
         ('ntp_gettime', ["sys/time.h", "sys/timex.h"]),     # BSD
         ('res_init', ["netinet/in.h", "arpa/nameser.h", "resolv.h"]),
         ('sched_setscheduler', ["sched.h"]),
         ('strlcpy', ["string.h"]),
-        ('strlcat', ["string.h"]),
-        ('timer_create', ["time.h"])
+        ('strlcat', ["string.h"]) 
     )
-    for ft in functions:
-        if len(ft) == 2:
-            probe_function_with_prerequisites(ctx, function=ft[0],
-                                              prerequisites=ft[1])
-        else:
-            probe_function_with_prerequisites(ctx, function=ft[0],
-                                              prerequisites=ft[1],
-                                              use=ft[2])
+    for ft in optional_functions:
+            probe_function(ctx, function=ft[0], prerequisites=ft[1])
+
+    # This area is still work in progress
+    # Need to disable making symbols
+    #   but not until killing off HAVE_TIMER_CREATE
+
+    # Sanity checks to give a sensible error message
+    required_functions = (
+        # MacOS doesn't have timer_create ??
+        ('timer_create', ["signal.h", "time.h"], "RT", False),
+        # Very old versions of OpenSSL don't have cmac.h
+        #  We could add ifdefs, but old crypto is deprecated in favor of CMAC
+        #  and so far, all the systems that we want to support are new enough.
+        ('CMAC_CTX_new', ["openssl/cmac.h"], "CRYPTO", True) )
+    for ft in required_functions:
+            probe_function(ctx, function=ft[0],
+                prerequisites=ft[1], use=ft[2],
+                mandatory=ft[3])
+
+
 
     # check for BSD versions outside of libc
     if not ctx.get_define("HAVE_STRLCAT"):
-        ret = probe_function_with_prerequisites(ctx, function='strlcat',
-                                                prerequisites=['bsd/string.h'])
+        ret = probe_function(ctx, function='strlcat',
+                    prerequisites=['bsd/string.h'])
         if ret:
             ctx.define("HAVE_STRLCAT", 1, comment="Using bsd/strlcat")
 
     if not ctx.get_define("HAVE_STRLCPY"):
-        ret = probe_function_with_prerequisites(ctx, function='strlcpy',
-                                                prerequisites=['bsd/string.h'])
+        ret = probe_function(ctx, function='strlcpy',
+                    prerequisites=['bsd/string.h'])
         if ret:
             ctx.define("HAVE_STRLCPY", 1, comment="Using bsd/strlcpy")
 
@@ -685,7 +679,6 @@ int main(int argc, char **argv) {
         ("net/route.h", ["sys/types.h", "sys/socket.h", "net/if.h"]),
         "netinfo/ni.h",     # Apple
         "priv.h",           # Solaris
-        "semaphore.h",
         "stdatomic.h",
         "sys/clockctl.h",   # NetBSD
         "sys/ioctl.h",
@@ -703,7 +696,7 @@ int main(int argc, char **argv) {
                 continue
         else:
             (hdr, prereqs) = hdr
-            if probe_header_with_prerequisites(ctx, hdr, prereqs):
+            if probe_header(ctx, hdr, prereqs):
                 continue
         if os.path.exists("/usr/include/" + hdr):
             # Sanity check...
@@ -843,11 +836,6 @@ int main(int argc, char **argv) {
     else:
         ctx.undefine("ENABLE_CLASSIC_MODE")
 
-    if ctx.options.enable_debug_timing:
-        ctx.define("ENABLE_DEBUG_TIMING", 1)
-    else:
-        ctx.undefine("ENABLE_DEBUG_TIMING")
-
     # Ugly hack to examine config symbols
     for sym in ctx.env.DEFINES:
         if sym.startswith("NTP_SIZEOF_TIME_T="):
@@ -909,6 +897,10 @@ def bin_test(ctx):
     from wafhelpers.bin_test import cmd_bin_test
     cmd_bin_test(ctx, config)
 
+def bin_test_summary(ctx):
+    """Display results of binary check, use after tests."""
+    from wafhelpers.bin_test import bin_test_summary
+    bin_test_summary(ctx)
 
 # Borrowed from https://www.rtems.org/
 variant_cmd = (
@@ -997,10 +989,8 @@ def afterparty(ctx):
 
 
 python_scripts = [
-    "ntpclients/ntploggps.py",
     "ntpclients/ntpdig.py",
     "ntpclients/ntpkeygen.py",
-    "ntpclients/ntpmon.py",
     "ntpclients/ntpq.py",
     "ntpclients/ntpsweep.py",
     "ntpclients/ntptrace.py",
@@ -1012,6 +1002,7 @@ python_scripts = [
 
 
 def build(ctx):
+    from waflib.Logs import verbose
     ctx.load('waf', tooldir='wafhelpers/')
     ctx.load('asciidoc', tooldir='wafhelpers/')
     ctx.load('rtems_trace', tooldir='wafhelpers/')
@@ -1021,6 +1012,10 @@ def build(ctx):
         # .pyc and .pyo files) in a source directory, compilation to
         # the build directory never happens.  This is how we foil that.
         ctx.add_pre_fun(lambda ctx: ctx.exec_command("rm -f pylib/*.py[co]"))
+
+    if verbose > 0:  # Pass Verbosity to asciidoc and a2x
+        ctx.env.A2X_FLAGS += ["-v"]
+        ctx.env.ASCIIDOC_FLAGS += ["-v"]
 
     if ctx.env.ENABLE_DOC_USER:
         if ctx.variant != "main":
@@ -1040,6 +1035,11 @@ def build(ctx):
     ctx.recurse("pylib")
     ctx.recurse("attic")
     ctx.recurse("tests")
+
+    if ctx.env['PYTHON_CURSES']:
+        python_scripts.append("ntpclients/ntpmon.py")
+    if ctx.env['PYTHON_GPS']:
+        python_scripts.append("ntpclients/ntploggps.py")
 
     # Make sure the python scripts compile, but don't install them
     ctx(
@@ -1062,18 +1062,20 @@ def build(ctx):
     if ctx.cmd == 'clean':
         afterparty(ctx)
 
-    ctx.manpage(1, "ntpclients/ntploggps-man.txt")
-    ctx.manpage(1, "ntpclients/ntpdig-man.txt")
-    ctx.manpage(1, "ntpclients/ntpmon-man.txt")
-    ctx.manpage(1, "ntpclients/ntpq-man.txt")
-    ctx.manpage(1, "ntpclients/ntpsweep-man.txt")
-    ctx.manpage(1, "ntpclients/ntptrace-man.txt")
-    ctx.manpage(1, "ntpclients/ntpviz-man.txt")
-    ctx.manpage(1, "ntpclients/ntplogtemp-man.txt")
-    ctx.manpage(8, "ntpclients/ntpkeygen-man.txt")
-    ctx.manpage(8, "ntpclients/ntpleapfetch-man.txt")
-    ctx.manpage(8, "ntpclients/ntpwait-man.txt")
-    ctx.manpage(8, "ntpclients/ntpsnmpd-man.txt")
+    if ctx.env['PYTHON_GPS']:
+        ctx.manpage(1, "ntpclients/ntploggps-man.adoc")
+    ctx.manpage(1, "ntpclients/ntpdig-man.adoc")
+    if ctx.env['PYTHON_CURSES']:
+        ctx.manpage(1, "ntpclients/ntpmon-man.adoc")
+    ctx.manpage(1, "ntpclients/ntpq-man.adoc")
+    ctx.manpage(1, "ntpclients/ntpsweep-man.adoc")
+    ctx.manpage(1, "ntpclients/ntptrace-man.adoc")
+    ctx.manpage(1, "ntpclients/ntpviz-man.adoc")
+    ctx.manpage(1, "ntpclients/ntplogtemp-man.adoc")
+    ctx.manpage(8, "ntpclients/ntpkeygen-man.adoc")
+    ctx.manpage(8, "ntpclients/ntpleapfetch-man.adoc")
+    ctx.manpage(8, "ntpclients/ntpwait-man.adoc")
+    ctx.manpage(8, "ntpclients/ntpsnmpd-man.adoc")
 
     # Skip running unit tests on a cross compile build
     if not ctx.env.ENABLE_CROSS:
@@ -1082,8 +1084,11 @@ def build(ctx):
             ctx.options.all_tests = True
 
             # Print log if -v is supplied
-            if ctx.options.verbose:
+            if verbose > 0:
                 ctx.add_post_fun(test_print_log)
+
+        # Test binaries
+        ctx.add_post_fun(bin_test)
 
         # Write test log to a file
         ctx.add_post_fun(test_write_log)
@@ -1091,14 +1096,18 @@ def build(ctx):
         # Print a summary at the end
         ctx.add_post_fun(waf_unit_test.summary)
         ctx.add_post_fun(waf_unit_test.set_exit_code)
+        ctx.add_post_fun(bin_test_summary)
     else:
         pprint("YELLOW", "Unit test runner skipped on a cross-compiled build.")
         from waflib import Options
         Options.options.no_tests = True
 
     if ctx.cmd == "build":
-        if "PYTHONPATH" in os.environ:
+        if "PYTHONPATH" not in os.environ:
             print("--- PYTHONPATH is not set, "
+                  "loading the Python ntp library may be troublesome ---")
+        elif ctx.env.PYTHONARCHDIR not in os.environ["PYTHONPATH"]:
+            print("--- PYTHONARCHDIR not in PYTHONPATH, "
                   "loading the Python ntp library may be troublesome ---")
 
 #

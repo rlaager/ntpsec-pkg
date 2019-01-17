@@ -2,12 +2,12 @@
 .\"     Title: ntpkeygen
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 08/29/2018
+.\"      Date: 01/14/2019
 .\"    Manual: NTPsec
-.\"    Source: NTPsec 1.1.2+
+.\"    Source: NTPsec 1.1.3+
 .\"  Language: English
 .\"
-.TH "NTPKEYGEN" "8" "08/29/2018" "NTPsec 1\&.1\&.2+" "NTPsec"
+.TH "NTPKEYGEN" "8" "01/14/2019" "NTPsec 1\&.1\&.3+" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,7 +32,7 @@ ntpkeygen \- create and manage NTP host keys
 .SH "SYNOPSIS"
 .sp
 .nf
-ntpkeygen [\-M]
+ntpkeygen [\-MV]
 .fi
 .SH "DESCRIPTION"
 .sp
@@ -46,6 +46,11 @@ The keys file must be distributed and stored using secure means beyond the scope
 \-M, \-\-md5key
 .RS 4
 Dummy option for backward compatibility in old scripts\&. This program always runs in \-M mode\&.
+.RE
+.PP
+\-V, \-\-version
+.RS 4
+Print the version string and exit\&.
 .RE
 .SH "RUNNING THE PROGRAM"
 .sp
@@ -63,7 +68,7 @@ The simplest way to run the ntpkeygen program is logged in directly as root\&. T
 .ps -1
 .br
 .sp
-ntpkeygen uses the system randomness source\&. On a POSIX system this is usually /dev/urandom\&. Immediately after a reboot, on any OS, there may not be sufficient entropy available for this program to perform well\&. Do not run this program from any startup scripts\&. Only run this program on an active host with a lot of available entropy\&.
+ntpkeygen uses the system randomness source\&. On a POSIX system, this is usually /dev/urandom\&. Immediately after a reboot, on any OS, there may not be sufficient entropy available for this program to perform well\&. Do not run this program from any startup scripts\&. Only run this program on an active host with a lot of available entropy\&.
 .sp .5v
 .RE
 .SH "KEY FILE ACCESS AND LOCATION"
@@ -75,7 +80,7 @@ ntpkeygen also makes a soft link from ntp\&.keys to the generated file\&. ntp\&.
 .sp
 All key generation schemes must have means to randomize the entropy seed used to initialize the internal pseudo\-random number generator used by the library routines\&.
 .sp
-It is important to understand that entropy must be evolved for each generation, for otherwise the random number sequence would be predictable\&. Various means dependent on external events, such as keystroke intervals, can be used to do this and some systems have built\-in entropy sources\&.
+It is important to understand that entropy must be evolved for each generation, for otherwise the random number sequence would be predictable\&. Various means dependent on external events, such as keystroke intervals can be used to do this and some systems have built\-in entropy sources\&.
 .sp
 This implementation uses Python\(cqs random\&.SystemRandom class, which relies on os\&.urandom()\&. The security of os\&.urandom() is improved in Python 3\&.5+\&.
 .SH "CRYPTOGRAPHIC DATA FILES"
@@ -86,7 +91,7 @@ In order to use a shared key, the line to be used must also be setup on the targ
 .sp
 This file is also used to authenticate remote configuration commands used by the ntpq(1) utility\&.
 .sp
-Comments may appear in the file, and are preceded with the # character\&.
+Comments may appear in the file and are preceded with the # character\&.
 .sp
 Following any headers the keys are entered one per line in the format:
 .TS

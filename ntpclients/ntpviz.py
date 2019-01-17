@@ -58,13 +58,13 @@ ntpviz: can't find the Python argparse module
 
 if sys.version_info[0] == 2:
     import codecs
-    import sys
 
     # force UTF-8 strings, otherwise some systems crash on micro.
-    reload(sys)
+    reload(sys)           # why?
     sys.setdefaultencoding('utf8')
 
     def open(file, mode='r', buffering=-1, encoding=None, errors=None):
+        "Redefine open()"
         return(codecs.open(filename=file, mode=mode, encoding=encoding,
                errors=errors, buffering=buffering))
 
@@ -114,20 +114,20 @@ try:
     import ntp.statfiles
     import ntp.util
 except ImportError as e:
-    sys.stderr.write(
-        "ntpviz: can't find Python NTP library.\n")
-    sys.stderr.write("%s\n" % e)
+    sys.stderr.write("ntpviz: ERROR: can't find Python NTP library.\n%s\n"
+                     "Check your PYTHONPATH\n" % e)
     sys.exit(1)
 
 # check Python version
 Python26 = False
-if ((3 > sys.version_info[0]) and (7 > sys.version_info[1])):
+if (3 > sys.version_info[0]) and (7 > sys.version_info[1]):
     # running under Python version before 2.7
     Python26 = True
 
 
 # overload ArgumentParser
 class MyArgumentParser(argparse.ArgumentParser):
+    "class to parse arguments"
 
     def convert_arg_line_to_args(self, arg_line):
         '''Make options file more tolerant'''
@@ -158,7 +158,7 @@ def print_profile():
 # class to calc:
 #   Mean, Variance, Standard Deviation, Skewness and Kurtosis
 
-class RunningStats:
+class RunningStats(object):
     "Calculate mean, variance, sigma, skewness and kurtosis"
 
     def __init__(self, values):
@@ -197,6 +197,8 @@ class RunningStats:
 
 # class for calced values
 class VizStats(ntp.statfiles.NTPStats):
+    "Class for calculated values"
+
     percs = {}          # dictionary of percentages
     title = ''          # title
     unit = 's'          # display units: s, ppm, etc.
@@ -211,7 +213,7 @@ class VizStats(ntp.statfiles.NTPStats):
 
     table_head = """\
 <br>
-<table style="text-align:right;width:1300px;">
+<table>
 <thead>
   <tr style="font-weight:bold;text-align:left;">
     <td style="width:300px;"></td>
@@ -220,7 +222,6 @@ class VizStats(ntp.statfiles.NTPStats):
     <td colspan=3></td>
     <td style="text-align:right;">Skew-</td>
     <td style="text-align:right;">Kurt-</td>
-    <td ></td>
   </tr>
   <tr style="font-weight:bold;text-align:right;">
     <td style="text-align:left;">Name</td>
@@ -355,10 +356,10 @@ class VizStats(ntp.statfiles.NTPStats):
         # csv is raw, html table is autoranged
         self.csv = [x % self.percs for x in s]
         self.table = [x % self.percs_f for x in s]
-        self.table = "</td><td>".join(self.table)
+        self.table = "</td>\n <td>".join(self.table)
 
         self.table = '''\
-<tr style="vertical-align:top;">
+<tr>
  <td style="text-align:left;">%s</td>
 </tr>
 ''' % self.table
@@ -366,9 +367,9 @@ class VizStats(ntp.statfiles.NTPStats):
         return
 
 
-def gnuplot_fmt(min, max):
+def gnuplot_fmt(min_val, max_val):
     "return optimal gnuplot format"
-    span = max - min
+    span = max_val - min_val
     if 6 <= span:
         fmt = '%.0f'
     elif 0.6 <= span:
@@ -387,6 +388,7 @@ def gnuplot_fmt(min, max):
 
 def gnuplot(template, outfile=None):
     "Run a specified gnuplot program."
+
     if not len(template):
         # silently ignore empty plots
         return ''
@@ -732,7 +734,6 @@ component of frequency drift.</p>
 
         # build the output dictionary, because Python can not format
         # complex objects.
-        gps_data = ()
         values_nsat = []
         values_tdop = []
         plot_data = ""
@@ -860,7 +861,7 @@ line at 0ppm.  Expected values of 99%-1% percentiles: 0.4ppm</p>
 
     def loopstats_gnuplot(self, fld, title, legend, freq):
         "Generate gnuplot code of a given loopstats field"
-        if not len(self.loopstats):
+        if not self.loopstats:
             sys.stderr.write("ntpviz: WARNING: no loopstats to graph\n")
             return ''
 
@@ -934,15 +935,15 @@ plot \
         return self.loopstats_gnuplot(5, "Local RMS Frequency Jitter",
                                       "Stability", 1)
 
-    def peerstats_gnuplot(self, peerlist, fld, title, type):
+    def peerstats_gnuplot(self, peerlist, fld, title, ptype):
         "Plot a specified field from peerstats."
 
         peerdict = self.peersplit()
         if not peerlist:
             peerlist = list(peerdict.keys())
-        if not len(peerlist):
-            sys.stderr.write("ntpviz: WARNING: no peer data to graph\n")
-            return ''
+            if not peerlist:
+                sys.stderr.write("ntpviz: WARNING: no server data to graph\n")
+                return ''
         peerlist.sort()  # For stability of output
         namelist = []    # peer names
 
@@ -955,7 +956,7 @@ plot \
             try:
                 ip = socket.gethostbyname(key)
                 namelist.append(key)
-            except:
+            except socket.error:
                 # ignore it
                 ip = key
                 # socket.getfqdn() is also flakey...
@@ -965,7 +966,7 @@ plot \
                 ip_todo.append(ip)
             else:
                 # can this ever happen?
-                sys.stderr.write("ntpviz: ERROR: No such peer as %s" % key)
+                sys.stderr.write("ntpviz: ERROR: No such server as %s" % key)
                 raise SystemExit(1)
 
         rtt = 0
@@ -973,7 +974,7 @@ plot \
         stats = []
         if len(peerlist) == 1:
             # only one peer
-            if "offset" == type:
+            if "offset" == ptype:
                 # doing offset, not jitter
                 rtt = 1
                 if "127.127." == peerlist[0][:8]:
@@ -991,20 +992,20 @@ at 0s. Typical 90% ranges may be: local serial GPS 200 ms; local PPS
 <p>Clock Offset is field 5 in the peerstats log file.</p>
 """
                 else:
-                    title = "Peer Offset " + str(peerlist[0])
+                    title = "Server Offset " + str(peerlist[0])
                     exp = """\
-<p>The offset of a peer or server in seconds.  This is
+<p>The offset of a server in seconds.  This is
 useful to see how the measured offset is behaving.</p>
 
 <p>The chart also plots offset±rtt,  where rtt is the round trip time
-to the remote.  NTP can not really know the offset of a remote chimer,
+to the server.  NTP can not really know the offset of a remote chimer,
 NTP computes it by subtracting rtt/2 from the offset.  Plotting the
 offset±rtt reverses this calculation to more easily see the effects of
 rtt changes.</p>
 
 <p>Closer to 0s is better.  An ideal system would be a horizontal line
-at 0s. Typical 90% ranges may be: local LAN peer 80µs; 90% ranges for
-WAN servers may be 4ms and much larger. </p>
+at 0s. Typical 90% ranges may be: local LAN server 80µs; 90% ranges for
+WAN server may be 4ms and much larger. </p>
 
 <p>Clock Offset is field 5 in the peerstats log file.  The Round Trip
 Time (rtt) is field 6 in the peerstats log file.</p>
@@ -1025,9 +1026,9 @@ line at 0s.</p>
 <p>RMS Jitter is field 8 in the peerstats log file.</p>
 """
                 else:
-                    title = "Peer Jitter " + str(peerlist[0])
+                    title = "Server Jitter " + str(peerlist[0])
                     exp = """\
-<p>The RMS Jitter of a remote peer or server.  Jitter is the
+<p>The RMS Jitter of a server.  Jitter is the
 current estimated dispersion, in other words the variation in offset
 between samples.</p>
 
@@ -1037,7 +1038,7 @@ at 0s.</p>
 <p>RMS Jitter is field 8 in the peerstats log file.</p>
 """
 
-            if len(namelist[0]) and peerlist[0] != namelist[0]:
+            if namelist[0] and peerlist[0] != namelist[0]:
                 # append hostname, if we have it
                 # after stats to keep summary short
                 title += " (%s)" % namelist[0]
@@ -1046,19 +1047,19 @@ at 0s.</p>
             # many peers
             title += "s"
 
-            if "offset" == type:
-                title = "Peer Offsets"
+            if "offset" == ptype:
+                title = "Server Offsets"
                 exp = """\
-<p>The offset of all refclocks, peers and servers.
+<p>The offset of all refclocks and servers.
 This can be useful to see if offset changes are happening in
 a single clock or all clocks together.</p>
 
 <p>Clock Offset is field 5 in the peerstats log file.</p>
 """
             else:
-                title = "Peer Jitters"
+                title = "Server Jitters"
                 exp = """\
-<p>The RMS Jitter of all refclocks, peers and servers. Jitter is the
+<p>The RMS Jitter of all refclocks and servers. Jitter is the
 current estimated dispersion, in other words the variation in offset
 between samples.</p>
 
@@ -1078,14 +1079,14 @@ at 0s.</p>
             # actually use
             if rtt:
                 # fields: time, fld, and rtt
-                (p, v1, v2) = self.plot_slice(peerdict[ip], fld, 5)
-                plot_data += p
+                pt = self.plot_slice(peerdict[ip], fld, 5)
+                plot_data += pt[0]
             else:
                 # fields: time, fld
-                (p, v1) = self.plot_slice(peerdict[ip], fld)
-                plot_data += p
+                pt = self.plot_slice(peerdict[ip], fld)
+                plot_data += pt[0]
 
-        stats = VizStats(v1, title)
+        stats = VizStats(pt[1], title)
         if len(peerlist) == 1:
             percentages = " %(p50)s title '50th percentile', " % stats.percs
         else:
@@ -1149,16 +1150,18 @@ plot \
         return ret
 
     def peer_offsets_gnuplot(self, peerlist=None):
-        return self.peerstats_gnuplot(peerlist, 4, "Peer Clock Offset",
+        "gnuplot Peer Offsets"
+        return self.peerstats_gnuplot(peerlist, 4, "Server Offset",
                                       "offset")
 
     def peer_jitters_gnuplot(self, peerlist=None):
-        return self.peerstats_gnuplot(peerlist, 7, "Peer Clock Jitter",
+        "gnuplot Peer Jitters"
+        return self.peerstats_gnuplot(peerlist, 7, "Server Jitter",
                                       "jitter")
 
     def local_offset_histogram_gnuplot(self):
         "Plot a histogram of clock offset values from loopstats."
-        if not len(self.loopstats):
+        if not self.loopstats:
             sys.stderr.write("ntpviz: WARNING: no loopstats to graph\n")
             return ''
 
@@ -1278,7 +1281,8 @@ set key bottom right box
 plot \\
 ''' % out
     # FIXME: probably need to be more flexible about computing the plot label
-    sitenames = [os.path.basename(os.path.dirname(d)) for d in args.statsdirs]
+    sitenames = [os.path.basename(os.path.dirname(dr))
+                 for dr in args.statsdirs]
     for (i, stats) in enumerate(statlist):
         plot += '"-" using 1:($2*1000000) title "%s clock offset μs"  ' \
                 'with linespoints, \\\n' % (sitenames[i])
@@ -1288,8 +1292,8 @@ plot \\
     for stats in statlist:
         # speed up by only sending gnuplot the data it will actually use
         # fields: time, offset
-        (p, v) = NTPViz.plot_slice(stats.loopstats, 2)
-        plot_data += p
+        pt = NTPViz.plot_slice(stats.loopstats, 2)
+        plot_data += pt[0]
 
     ret = {'html': '', 'stats': []}
     ret['title'] = "Multiplot"
@@ -1479,7 +1483,7 @@ Python by ESR, concept and gnuplot code by Dan Drown.
                             action="store_true",
                             dest='nice',
                             help="Run as lowest priority")
-    except:
+    except OSError:
         pass
 
     parser.add_argument('-V', '--version',
@@ -1517,14 +1521,14 @@ Python by ESR, concept and gnuplot code by Dan Drown.
 
     if args.show_peer_offsets is True:
         args.show_peer_offsets = []
-    elif 0 < len(args.peer_offsets):
+    elif args.peer_offsets:
         args.show_peer_offsets = args.peer_offsets.split(",")
     else:
         args.show_peer_offsets = None
 
     if args.show_peer_jitters is True:
         args.show_peer_jitters = []
-    elif 0 < len(args.peer_jitters):
+    elif args.peer_jitters:
         args.show_peer_jitters = args.peer_jitters.split(",")
     else:
         args.show_peer_jitters = None
@@ -1593,7 +1597,7 @@ Python by ESR, concept and gnuplot code by Dan Drown.
            args.show_local_jitter or \
            args.show_local_stability or \
            args.show_local_offset_histogram:
-            if not len(stats.loopstats):
+            if not stats.loopstats:
                 sys.stderr.write("ntpviz: ERROR: missing loopstats data\n")
                 raise SystemExit(1)
 
@@ -1610,7 +1614,7 @@ Python by ESR, concept and gnuplot code by Dan Drown.
 
         if args.show_peer_offsets is not None or \
            args.show_peer_jitters is not None:
-            if not len(stats.peerstats):
+            if not stats.peerstats:
                 sys.stderr.write("ntpviz: ERROR:  missing peerstats data\n")
                 raise SystemExit(1)
             if args.show_peer_offsets is not None:
@@ -1619,19 +1623,19 @@ Python by ESR, concept and gnuplot code by Dan Drown.
                 plot = stats.peer_jitters_gnuplot(args.show_peer_jitters)
 
         if args.show_freq_temps:
-            if not len(stats.temps):
+            if not stats.temps:
                 sys.stderr.write("ntpviz: ERROR: missing temps data\n")
                 raise SystemExit(1)
             plot = stats.local_freq_temps_plot()
 
         if args.show_temps:
-            if not len(stats.temps):
+            if not stats.temps:
                 sys.stderr.write("ntpviz: ERROR: missing temps data\n")
                 raise SystemExit(1)
             plot = stats.local_temps_gnuplot()
 
         if args.show_gps:
-            if not len(stats.gpsd):
+            if not stats.gpsd:
                 sys.stderr.write("ntpviz: ERROR: missing gps data\n")
                 raise SystemExit(1)
             plot = stats.local_gps_gnuplot()
@@ -1692,12 +1696,28 @@ dd {
     margin-top: 4px;
     margin-bottom: 10px;
 }
+table {
+    text-align: right;
+    width: 1300px;
+    border-collapse: collapse;
+}
+thead {
+    font-weight: bold;
+}
+tbody tr {
+    vertical-align: top;
+}
+tbody tr:nth-child(6n+4),
+tbody tr:nth-child(6n+5),
+tbody tr:nth-child(6n+6) {
+    background-color: rgba(0,255,0,0.2);
+}
 .section {
     color: #000000;
     text-decoration: none;
-    .site-title:visited {
-        color: #000000; }
-        text-decoration: none;
+}
+.section .site-title:visited {
+    color: #000000;
 }
 </style>
 </head>
@@ -1721,7 +1741,7 @@ dd {
         index_header += '<b>Start Time:</b> %s UTC<br>\n' \
                         '<b>End Time:</b> %s UTC<br>\n' \
             % (start_time, end_time)
-        if (1 > stats.period):
+        if 1 > stats.period:
             # less than a day, report hours
             index_header += ('<b>Report Period:</b> %1.1f hours <br>\n' %
                              (float(stats.period) / (24 * 60)))
@@ -1748,7 +1768,7 @@ system clock frequency (usually in parts per million, ppm)</dd>
 
 <dt>jitter, dispersion:</dt>
 <dd>The short term change in a value.  NTP measures Local Time Jitter,
-Refclock Jitter, and Peer Jitter in seconds.  Local Frequency Jitter is
+Refclock Jitter, and Server Jitter in seconds.  Local Frequency Jitter is
 in ppm or ppb.
 </dd>
 
@@ -1817,7 +1837,7 @@ interpretation of the skew is complicated and unintuitive."<br> A normal
 distribution has a skewness of zero. </dd>
 
 <dt>upstream clock:</dt>
-<dd>Any remote clock or reference clock used as a source of time.</dd>
+<dd>Any server or reference clock used as a source of time.</dd>
 
 <dt>µs, us, microsecond:</dt>
 <dd>One millionth of a second, also one thousandth of a millisecond,
@@ -1867,7 +1887,7 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
     if len(statlist) > 1:
         index_buffer += local_offset_multiplot(statlist)
     else:
-        # imagepairs in the order of the heml entries
+        # imagepairs in the order of the html entries
         imagepairs = [
             ("local-offset", stats.local_offset_gnuplot()),
             # skipa next one, redundant to one above
@@ -1902,15 +1922,17 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
                 sys.stderr.write("ntpviz: plotting %s\n" % image['title'])
             stats.append(image['stats'])
             # give each H2 an unique ID.
-            id = image['title'].lower()
-            id = id.replace(' ', '_').replace(':', '_')
+            div_id = image['title'].lower().replace(' ', '_').replace(':', '_')
+
             index_buffer += """\
 <div id="%s">\n<h2><a class="section" href="#%s">%s</a></h2>
-""" % (id, id, image['title'])
+""" % (div_id, div_id, image['title'])
 
             div_name = imagename.replace('-', ' ')
-            index_buffer += imagewrapper % \
-                (imagename.replace(':', '%3A'), div_name)
+            # Windows hates colons in filename
+            imagename = imagename.replace(':', '-')
+            index_buffer += imagewrapper % (imagename, div_name)
+
             if image['html']:
                 index_buffer += "<div>\n%s</div>\n" % image['html']
             index_buffer += "<br><br>\n"
@@ -1920,29 +1942,29 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
 
     # dump stats
     csvs = []
-    if True:
-        stats_to_output = {}
-        for stat in stats:
-            if [] == stat:
+
+    stats_to_output = {}
+    for stat in stats:
+        if [] == stat:
+            continue
+        for sta in stat:
+            if sta.skip_summary:
                 continue
-            for sta in stat:
-                if sta.skip_summary:
-                    continue
-                # This removes duplicates
-                stats_to_output[sta.title] = sta
+            # This removes duplicates
+            stats_to_output[sta.title] = sta
 
-        index_buffer += '<div id="Summary">\n' \
-            '<h2><a class="section" href="#Summary">Summary</a></h2>\n'
-        index_buffer += VizStats.table_head
+    index_buffer += '<div id="Summary">\n' \
+        '<h2><a class="section" href="#Summary">Summary</a></h2>\n'
+    index_buffer += VizStats.table_head
 
-        for key in sorted(stats_to_output.keys()):
-            index_buffer += str(stats_to_output[key].table)
-            csvs.append(stats_to_output[key].csv)
+    for key in sorted(stats_to_output.keys()):
+        index_buffer += str(stats_to_output[key].table)
+        csvs.append(stats_to_output[key].csv)
 
-        # RFC 4180 specifies the mime-type of a csv: text/csv
-        # your webserver should be programmed the same
-        index_buffer += VizStats.table_tail
-        index_buffer += """\
+    # RFC 4180 specifies the mime-type of a csv: text/csv
+    # your webserver should be programmed the same
+    index_buffer += VizStats.table_tail
+    index_buffer += """\
 <a href="summary.csv" target="_blank"
   type="text/csv;charset=UTF-8;header=present">Summary as CSV file</a><br>
 </div>
@@ -1977,7 +1999,7 @@ ntpviz</a>, part of the <a href="https://www.ntpsec.org/">NTPsec project</a>
     try:
         os.remove(csv_filename)
         os.remove(index_filename)
-    except:
+    except OSError:
         pass
 
     os.rename(csv_filename + ".tmp", csv_filename)

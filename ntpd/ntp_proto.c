@@ -470,6 +470,7 @@ handle_procpkt(
 	struct peer *peer
 	)
 {
+	int outcount = peer->outcount;
 
 	/* Shouldn't happen, but include this for safety. */
 	if(peer == NULL) { return; }
@@ -485,7 +486,7 @@ handle_procpkt(
 
 	/* Origin timestamp validation */
 	if(PKT_MODE(rbufp->pkt.li_vn_mode) == MODE_SERVER) {
-		if(peer->outcount == 0) {
+		if(outcount == 0) {
 			peer->flash |= BOGON1;
 			peer->oldpkt++;
 			return;
@@ -512,6 +513,7 @@ handle_procpkt(
 	*/
 
 	peer->outcount = 0;
+	outcount--;
 
 	if(is_kod(rbufp)) {
 		if(!memcmp(rbufp->pkt.refid, "RATE", REFIDLEN)) {
@@ -605,7 +607,7 @@ handle_procpkt(
 			 rbufp->pkt.rootdelay, rbufp->pkt.rootdisp,
 			 /* FIXME: this cast is disgusting */
 			 *(const uint32_t*)rbufp->pkt.refid,
-			 peer->outcount);
+			 outcount);
 
 	/* If either burst mode is armed, enable the burst.
 	 * Compute the headway for the next packet and delay if
@@ -653,13 +655,7 @@ receive(
 
 /* FIXME: This is lots more cleanup to do in this area. */
 
-#ifdef REFCLOCK
-	restrict_mask = rbufp->network_packet ?
-	    restrictions(&rbufp->recv_srcadr) :
-	    0;
-#else
 	restrict_mask = restrictions(&rbufp->recv_srcadr);
-#endif
 
 	if(check_early_restrictions(rbufp, restrict_mask)) {
 		stat_count.sys_restricted++;
@@ -743,6 +739,7 @@ receive(
 			stat_count.sys_badauth++;
 			if(peer != NULL) {
 				peer->badauth++;
+				peer->cfg.flags &= ~FLAG_AUTHENTIC;
 				peer->flash |= BOGON5;
 			}
 			goto done;
@@ -751,6 +748,7 @@ receive(
 
 	if (peer != NULL) {
 	    	peer->received++;
+		peer->cfg.flags |= FLAG_AUTHENTIC;
 		peer->timereceived = current_time;
 	}
 

@@ -2,12 +2,12 @@
 .\"     Title: ntptrace
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 08/29/2018
+.\"      Date: 01/14/2019
 .\"    Manual: NTPsec
-.\"    Source: NTPsec 1.1.2+
+.\"    Source: NTPsec 1.1.3+
 .\"  Language: English
 .\"
-.TH "NTPTRACE" "1" "08/29/2018" "NTPsec 1\&.1\&.2+" "NTPsec"
+.TH "NTPTRACE" "1" "01/14/2019" "NTPsec 1\&.1\&.3+" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -32,7 +32,7 @@ ntptrace \- trace peers of an NTP server
 .SH "SYNOPSIS"
 .sp
 .nf
-ntptrace [\-n |\-\-numeric]
+ntptrace [\-V | \-\-version] [\-n |\-\-numeric]
     [\-m \fInumber\fR | \-\-max\-hosts=\fInumber\fR]
     [\-r \fIhost\fR | \-\-host=\fIremote\fR]
     \fIhostname\fR
@@ -78,6 +78,11 @@ for this option is 99\&.
 \-r string, \-\-host=\fIstring\fR
 .RS 4
 Trace a single remote host\&.
+.RE
+.PP
+\-V, \-\-version
+.RS 4
+Print the version string and exit\&.
 .RE
 .SH "EXIT STATUS"
 .sp

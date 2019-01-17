@@ -1,3 +1,6 @@
+from waflib.Logs import pprint
+
+
 def options(opt):
     opt.load('python')
 
@@ -7,6 +10,18 @@ def configure(conf):
     if not conf.env.ENABLE_CROSS:
         conf.check_python_version((2, 6, 0))
     conf.check_python_headers(features='pyext')  # Extension-only, no embedded
+    try:
+        conf.check_python_module('curses')
+        conf.env['PYTHON_CURSES'] = True
+    except conf.errors.ConfigurationError:
+        pprint("YELLOW", "WARNING: ntpmon will not be built/installed since "
+               "python curses module was not found")
+    try:
+        conf.check_python_module('gps', condition="ver >= num(3, 18)")
+        conf.env['PYTHON_GPS'] = True
+    except conf.errors.ConfigurationError:
+        pprint("YELLOW", "WARNING: ntploggps will not be built/installed since "
+               "python gps module >= 3.18 was not found")
 
 
 def build(ctx):
@@ -18,9 +33,18 @@ def build(ctx):
     sources = srcnode.ant_glob('*.py')
     builds = [x.get_bld() for x in sources]
 
-    # Remove generated files to ensure they are properly updated
-    ctx.exec_command("rm -f %s" % target1.abspath())
-    ctx.exec_command("rm -f %s" % target2.abspath())
+    # The rm's here were added to fix a reported (but underdocumented) problem
+    # where the results of pythonize-header were not updated when needed,
+    # though there is as yet no explanation for why this had occurred, and the
+    # alleged failure only occurred when changing the code between 'configure'
+    # and 'build', which is not a legal action, anyway.
+    # These rm's were causing unnecessary reruns of pythonize-header,
+    # including during 'install'. They are now disabled but retained as a
+    # comment.
+
+    ## Remove generated files to ensure they are properly updated
+    #ctx.exec_command("rm -f %s" % target1.abspath())
+    #ctx.exec_command("rm -f %s" % target2.abspath())
 
     # Make sure Python sees .py as well as .pyc/.pyo
     ctx(

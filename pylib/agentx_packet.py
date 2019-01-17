@@ -5,73 +5,8 @@
 from __future__ import print_function
 
 import struct
+import ntp.poly
 from ntp.util import slicedata
-
-master_encoding = 'latin-1'
-
-if str is bytes:  # pragma: no cover
-    # Python 2
-    polystr = str
-    polybytes = bytes
-    polyord = ord
-    polychr = str
-    input = raw_input
-
-    def string_escape(s):
-        return s.decode('string_escape')
-
-else:  # pragma: no cover
-    # Python 3
-    import io
-
-    def polystr(o):
-        "Polymorphic string factory function"
-        if isinstance(o, str):
-            return o
-        if not isinstance(o, bytes):
-            return str(o)
-        return str(o, encoding=master_encoding)
-
-    def polybytes(s):
-        "Polymorphic string encoding function"
-        if isinstance(s, bytes):
-            return s
-        if not isinstance(s, str):
-            return bytes(s)
-        return bytes(s, encoding=master_encoding)
-
-    def polyord(c):
-        "Polymorphic ord() function"
-        if isinstance(c, str):
-            return ord(c)
-        else:
-            return c
-
-    def polychr(c):
-        "Polymorphic chr() function"
-        if isinstance(c, int):
-            return chr(c)
-        else:
-            return c
-
-    def string_escape(s):
-        "Polymorphic string_escape/unicode_escape"
-        # This hack is necessary because Unicode strings in Python 3 don't
-        # have a decode method, so there's no simple way to ask it for the
-        # equivalent of decode('string_escape') in Python 2. This function
-        # assumes that it will be called with a Python 3 'str' instance
-        return s.encode(master_encoding).decode('unicode_escape')
-
-    def make_std_wrapper(stream):
-        "Standard input/output wrapper factory function"
-        # This ensures that the encoding of standard output and standard
-        # error on Python 3 matches the master encoding we use to turn
-        # bytes to Unicode in polystr above
-        # line_buffering=True ensures that interactive
-        # command sessions work as expected
-        return io.TextIOWrapper(stream.buffer,
-                                encoding=master_encoding, newline="\n",
-                                line_buffering=True)
 
 
 internetPrefix = (1, 3, 6, 1)  # Used by the prefix option of OID headers
@@ -207,7 +142,7 @@ class AgentXPDU:
 def decode_OpenPDU(data, header):
     flags = header["flags"]
     temp, data = slicedata(data, 4)
-    timeout = struct.unpack("Bxxx", polybytes(temp))[0]
+    timeout = struct.unpack("Bxxx", ntp.poly.polybytes(temp))[0]
     oid, data = decode_OID(data, header)
     description = decode_octetstr(data, header)[0]
     result = OpenPDU(flags["bigEndian"], header["session_id"],
@@ -286,11 +221,12 @@ def decode_xRegisterPDU(data, header):
     context, data = decode_context(data, header)
     temp, data = slicedata(data, 4)
     timeout, priority, rangeSubid = struct.unpack(endianToken + "BBBx",
-                                                  polybytes(temp))
+                                                  ntp.poly.polybytes(temp))
     oid, data = decode_OID(data, header)
     if rangeSubid != 0:
         temp, data = slicedata(data, 4)
-        upperBound = struct.unpack(endianToken + "I", polybytes(temp))[0]
+        upperBound = struct.unpack(endianToken + "I",
+                                   ntp.poly.polybytes(temp))[0]
     else:
         upperBound = None
     if header["type"] == PDU_REGISTER:
@@ -417,7 +353,8 @@ def decode_GetBulkPDU(data, header):
     endianToken = getendian(flags["bigEndian"])
     context, data = decode_context(data, header)
     temp, data = slicedata(data, 4)
-    nonReps, maxReps = struct.unpack(endianToken + "HH", polybytes(temp))
+    nonReps, maxReps = struct.unpack(endianToken + "HH",
+                                     ntp.poly.polybytes(temp))
     oidranges = decode_searchrange_list(data, header)
     result = GetBulkPDU(flags["bigEndian"], header["session_id"],
                         header["transaction_id"], header["packet_id"],
@@ -735,7 +672,7 @@ def decode_ResponsePDU(data, header):
     endianToken = getendian(flags["bigEndian"])
     temp, data = slicedata(data, 8)
     sysUptime, resError, resIndex = struct.unpack(endianToken + "IHH",
-                                                  polybytes(temp))
+                                                  ntp.poly.polybytes(temp))
     if len(data) > 0:
         varbinds = decode_varbindlist(data, header)
     else:
@@ -803,7 +740,7 @@ def decode_OID(data, header):
     flags = header["flags"]
     # Need to split off the header to get the subid count
     header, data = slicedata(data, 4)
-    n_subid, prefix, include = struct.unpack("BBBx", polybytes(header))
+    n_subid, prefix, include = struct.unpack("BBBx", ntp.poly.polybytes(header))
     if prefix != 0:
         subids = internetPrefix + (prefix,)
     else:
@@ -817,7 +754,7 @@ def decode_OID(data, header):
     data, rest = slicedata(data, byteCount)
     endianToken = getendian(flags["bigEndian"])
     formatString = endianToken + ("I" * n_subid)
-    subids += struct.unpack(formatString, polybytes(data))
+    subids += struct.unpack(formatString, ntp.poly.polybytes(data))
     result = OID(subids, include)
     return (result, rest)
 
@@ -926,7 +863,7 @@ def encode_octetstr(bigEndian, octets):
         pad = 4 - pad
     pad = b"\x00" * pad
     if type(octets) is str:
-        octets = polybytes(octets)
+        octets = ntp.poly.polybytes(octets)
         data = header + octets + pad
     else:
         fmt = "B" * numoctets
@@ -939,13 +876,13 @@ def decode_octetstr(data, header):
     flags = header["flags"]
     header, data = slicedata(data, 4)
     endianToken = getendian(flags["bigEndian"])
-    numoctets = struct.unpack(endianToken + "I", polybytes(header))[0]
+    numoctets = struct.unpack(endianToken + "I", ntp.poly.polybytes(header))[0]
     if len(data) < numoctets:
         raise ValueError("Octet string shorter than length")
     pad = numoctets % 4
     if pad > 0:  # Pad out the data to word boundary
         pad = 4 - pad
-    return polystr(data[:numoctets]), data[numoctets + pad:]
+    return ntp.poly.polystr(data[:numoctets]), data[numoctets + pad:]
 
 
 def sanity_octetstr(data):
@@ -963,7 +900,8 @@ def decode_Varbind(data, header):
     flags = header["flags"]
     bindheader, data = slicedata(data, 4)
     endianToken = getendian(flags["bigEndian"])
-    valType = struct.unpack(endianToken + "Hxx", polybytes(bindheader))[0]
+    valType = struct.unpack(endianToken + "Hxx",
+                            ntp.poly.polybytes(bindheader))[0]
     name, data = decode_OID(data, header)
     if valType not in definedValueTypes.keys():
         raise ValueError("Value type %s not in defined types" % valType)
@@ -1078,7 +1016,7 @@ def decode_integer64(data, header):
     flags = header["flags"]
     endianToken = getendian(flags["bigEndian"])
     num, data = slicedata(data, 8)
-    num = struct.unpack(endianToken + "Q", polybytes(num))[0]
+    num = struct.unpack(endianToken + "Q", ntp.poly.polybytes(num))[0]
     return (num, data)
 
 
@@ -1094,7 +1032,7 @@ def encode_ipaddr(bigEndian, octets):
 
 def decode_ipaddr(data, header):
     addr, data = decode_octetstr(data, header)
-    addr = struct.unpack("BBBB", polybytes(addr))
+    addr = struct.unpack("BBBB", ntp.poly.polybytes(addr))
     return addr, data
 
 
@@ -1239,14 +1177,16 @@ def encode_pduheader(pduType, instanceRegistration, newIndex,
 
 def decode_pduheader(data):  # Endianness is controlled from the PDU header
     lineone, data = slicedata(data, 4)
-    version, pduType, flags = struct.unpack(">BBBx", polybytes(lineone))
+    version, pduType, flags = struct.unpack(">BBBx",
+                                            ntp.poly.polybytes(lineone))
     # Slice up the flags
     flagDict = decode_flagbyte(flags)
     # Chop the remaining parts of the header from the rest of the datastream
     # then parse them
     fmt = getendian(flagDict["bigEndian"]) + "IIII"
     linen, data = slicedata(data, 16)  # 4 x 4-byte variables
-    sID, tactionID, pktID, dataLen = struct.unpack(fmt, polybytes(linen))
+    sID, tactionID, pktID, dataLen = struct.unpack(fmt,
+                                                   ntp.poly.polybytes(linen))
     result = {"version": version, "type": pduType, "flags": flagDict,
               "session_id": sID, "transaction_id": tactionID,
               "packet_id": pktID, "length": dataLen}
@@ -1278,7 +1218,7 @@ def decode_packet(data):
     header, newData = slicedata(data, 20)
     header = decode_pduheader(header)
     if header["length"] > len(newData):
-        raise ParseDataLengthError("Packet data too short", header)
+        return None, False, data  # pkt, isFull?, buffer
     packetSlice, newData = slicedata(newData, header["length"])
     if header["version"] != 1:
         raise ParseVersionError("Unknown packet version %i" %
@@ -1294,7 +1234,7 @@ def decode_packet(data):
     except Exception:  # pragma: no cover
         err = ParseError("Body parsing error", header, packetSlice, newData)
         raise err
-    return parsedPkt, newData
+    return parsedPkt, True, newData  # pkt, isFull?, buffer
 
 
 def bits2Bools(bitString, cropLength=None):
