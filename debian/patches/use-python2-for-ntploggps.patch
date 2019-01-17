@@ -6,7 +6,7 @@ Description: Use python2 for ntploggps
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2018-08-31
+Last-Update: 2019-01-17
 --- a/ntpclients/ntploggps.py
 +++ b/ntpclients/ntploggps.py
 @@ -1,4 +1,4 @@
@@ -41,3 +41,19 @@ Last-Update: 2018-08-31
  args = parser.parse_args()
  
  if args.verbose:
+--- a/pylib/wscript
++++ b/pylib/wscript
+@@ -16,12 +16,7 @@
+     except conf.errors.ConfigurationError:
+         pprint("YELLOW", "WARNING: ntpmon will not be built/installed since "
+                "python curses module was not found")
+-    try:
+-        conf.check_python_module('gps', condition="ver >= num(3, 18)")
+-        conf.env['PYTHON_GPS'] = True
+-    except conf.errors.ConfigurationError:
+-        pprint("YELLOW", "WARNING: ntploggps will not be built/installed since "
+-               "python gps module >= 3.18 was not found")
++    conf.env['PYTHON_GPS'] = True
+ 
+ 
+ def build(ctx):
