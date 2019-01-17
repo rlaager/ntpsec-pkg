@@ -56,10 +56,12 @@ Chew(struct timespec *tsa, struct timespec *tsc, unsigned sa, unsigned sc)
 	fflush(stdout);
 }
 
-static int err(int out, const char *legend)
+void err(const char *legend)
 {
-    fprintf(stderr, "ntpfrob: %s\n", legend);
-    exit(out);
+    fflush(stdout);
+    fprintf(stderr, "ntpfrob: %s: %s\n", legend, strerror(errno));
+    fflush(stderr);
+    exit(1);
 }
 #endif /* HAVE_SYS_TIMEPPS_H */
 
@@ -74,8 +76,9 @@ void ppscheck(const char *device)
 	pps_info_t pi;
 	pps_params_t pp;
 	pps_handle_t ph = 0;    /* 0 to prevent spurious uninialized warning */
-	int i, mode;
-	unsigned int olda = 0, oldc = 0;
+	int mode;               /* PPS capabilities */
+	unsigned int olda = 0;  /* old assert sequence */
+	unsigned int oldc = 0;  /* old clear sequence */
 	struct timespec to;
 
 	if (device == NULL)
@@ -83,14 +86,12 @@ void ppscheck(const char *device)
 	setbuf(stdout, 0);
 	fd = open(device, O_RDONLY);
 	if (fd < 0)
-		err(1, device);
-	i = time_pps_create(fd, &ph);
-	if (i < 0)
-		err(1, "time_pps_create");
+		err("Trying to open() PPS device");
+	if (time_pps_create(fd, &ph) < 0)
+		err("return handle to time_pps_create() device");
 
-	i = time_pps_getcap(ph, &mode);
-	if (i < 0)
-		err(1, "time_pps_getcap");
+	if (time_pps_getcap(ph, &mode) < 0)
+		err("return time_pps_getcap() implementation capabilities");
 
         memset(&pp, 0, sizeof(pp));
 	/* pp.mode = PPS_CAPTUREASSERT | PPS_ECHOASSERT; */
@@ -104,16 +105,14 @@ void ppscheck(const char *device)
         pp.api_version = 1;
 #endif
 
-	i = time_pps_setparams(ph, &pp);
-	if (i < 0)
-		err(1, "time_pps_setparams");
+	if (time_pps_setparams(ph, &pp) < 0)
+		err("return time_pps_setparams() parameters to interface");
 
 	while (1) {
 		to.tv_nsec = 0;
 		to.tv_sec = 0;
-		i = time_pps_fetch(ph, PPS_TSFMT_TSPEC, &pi, &to);
-		if (i < 0)
-			err(1, "time_pps_fetch");
+		if (time_pps_fetch(ph, PPS_TSFMT_TSPEC, &pi, &to) < 0)
+			err("return timestamp associated with time_pps_fetch() instance");
 		if (olda == pi.assert_sequence &&
 		    oldc == pi.clear_sequence) {
 			/* used to be usleep(10000) - 0.1 sec */

@@ -2,7 +2,7 @@ from waflib.Configure import conf
 from waflib.Logs import pprint
 
 # Note: When you change this list. also check the following files:
-# doc/refclock.txt
+# doc/refclock.adoc
 # include/ntp_refclock.h
 # ntpd/refclock_conf.c
 
@@ -111,8 +111,6 @@ refclock_map = {
 
 @conf
 def refclock_config(ctx):
-    from wafhelpers.refclock import refclock_map
-
     if ctx.options.refclocks == "all":
         ids = refclock_map.keys()
     else:

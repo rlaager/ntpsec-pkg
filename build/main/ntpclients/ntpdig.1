@@ -2,12 +2,12 @@
 .\"     Title: ntpdig
 .\"    Author: [see the "AUTHORS" section]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 08/29/2018
+.\"      Date: 01/14/2019
 .\"    Manual: NTPsec
-.\"    Source: NTPsec 1.1.2+
+.\"    Source: NTPsec 1.1.3+
 .\"  Language: English
 .\"
-.TH "NTPDIG" "1" "08/29/2018" "NTPsec 1\&.1\&.2+" "NTPsec"
+.TH "NTPDIG" "1" "01/14/2019" "NTPsec 1\&.1\&.3+" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -40,7 +40,7 @@ ntpdig
 .fi
 .SH "DESCRIPTION"
 .sp
-ntpdig can be used as an SNTP client to query a NTP or SNTP server and either display the time or set the local system\(cqs time (given suitable privilege)\&. It can be run as an interactive command or from a \fIcron\fR job\&. NTP (the Network Time Protocol) and SNTP (the Simple Network Time Protocol) are defined and described by RFC 5905\&.
+ntpdig can be used as an SNTP client to query an NTP or SNTP server and either display the time or set the local system\(cqs time (given suitable privilege)\&. It can be run as an interactive command or from a \fIcron\fR job\&. NTP (the Network Time Protocol) and SNTP (the Simple Network Time Protocol) are defined and described by RFC 5905\&.
 .sp
 The default is to write the estimated correct local date and time (i\&.e\&. not UTC) to the standard output in a format like:
 .sp
@@ -189,7 +189,7 @@ or local equivalent\&. The default value is 0, which means all adjustments will 
 .PP
 \-p, \-\-samples
 .RS 4
-Number of samples to take (default 1)\&. The best one (chosen by, among other criteria, sync distance) is selected for display or use\&.
+The number of samples to take (default 1)\&. The best one (chosen by, among other criteria, sync distance) is selected for display or use\&.
 .RE
 .PP
 \-S, \-\-step

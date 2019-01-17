@@ -28,6 +28,7 @@ Any keystroke causes a poll and update. Keystroke commands:
 from __future__ import print_function, division
 
 import getopt
+import re
 import sys
 import time
 
@@ -39,11 +40,13 @@ try:
     import ntp.util
 except ImportError as e:
     sys.stderr.write(
-        "ntpmon: can't find Python NTP library -- check PYTHONPATH.\n")
+        "ntpmon: can't load Python NTP libraries -- check PYTHONPATH.\n")
     sys.stderr.write("%s\n" % e)
     sys.exit(1)
 
-
+# This used to force UTF-8 encoding, but that breaks the readline system.
+# Unfortunately sometimes sys.stdout.encoding lies about the encoding,
+# so expect random false positives.
 # LANG=C or LANG=POSIX refuse unicode when combined with curses
 disableunicode = ntp.util.check_unicode()
 
@@ -68,17 +71,18 @@ stdscr = None
 
 
 def iso8601(t):
-    "ISO8601 string from Unix time, including fractional second."
-    return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(time.time()))
+    "ISO8601 string from Unix time."
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(t))
 
 
 def statline(_peerlist, _mrulist, nyquist):
     "Generate a status line"
     # We don't use stdversion here because the presence of a date is confusing
     leader = sysvars['version'][0]
+    leader = re.sub(r" \([^\)]*\)", "", leader)
     if span.entries:
         trailer = "Updated: %s (%s)" \
-                  % (iso8601(span.entries[0].last),
+                  % (iso8601(int(ntp.ntpc.lfptofloat(span.entries[0].last))),
                      ntp.util.PeerSummary.prettyinterval(nyquist))
     else:
         trailer = ""
@@ -193,26 +197,26 @@ class OutputContext:
 
 
 usage = '''
-USAGE: ntpmon [-nudV] [-l logfile] [-D lvl] [host]
+USAGE: ntpmon [-dhnuV] [-D lvl] [-l logfile] [host]
   Flg Arg Option-Name    Description
-   -n no  numeric         Numeric host addresses
-   -u no  units           Display time with units.
    -d no  debug-level     Increase output debug message level
                                 - may appear multiple times
    -D Int set-debug-level Set the output debug message level
                                 - may appear multiple times
-   -l Str logfile         Logs debug messages to the provided filename
    -h no  help            Print a usage message.
+   -l Str logfile         Logs debug messages to the provided filename
+   -n no  numeric         Numeric host addresses
+   -u no  units           Display time with units.
    -V opt version         Output version information and exit
 '''
 
 if __name__ == '__main__':
     try:
         (options, arguments) = getopt.getopt(sys.argv[1:],
-                                             "VhnudD:l:",
-                                             ["version", "numeric", "units",
-                                              "debug", "set-debug-level=",
-                                              "logfile=", "help"])
+                                             "dD:hl:nuV",
+                                             ["debug", "help", "logfile=",
+                                              "numeric", "units",
+                                              "set-debug-level=", "version"])
     except getopt.GetoptError as e:
         sys.stderr.write("%s\n" % e)
         sys.stderr.write(usage)
@@ -230,25 +234,25 @@ if __name__ == '__main__':
     defaultlog = "ntpmon.log"
 
     for (switch, val) in options:
-        if switch in ("-V", "--version"):
-            print("ntpmon %s" % ntp.util.stdversion())
-            raise SystemExit(0)
-        elif switch in ("-h", "--help"):
-            print(usage)
-            raise SystemExit(0)
-        elif switch in ("-n", "--numeric"):
-            showhostnames = False
-        elif switch in ("-u", "--units"):
-            showunits = True
-        elif switch in ("-d", "--debug"):
+        if switch in ("-d", "--debug"):
             debug += 1
         elif switch in ("-D", "--set-debug-level"):
             errmsg = "Error: -D parameter '%s' not a number\n"
             debug = ntp.util.safeargcast(val, int, errmsg, usage)
+        elif switch in ("-h", "--help"):
+            print(usage)
+            raise SystemExit(0)
         elif switch in ("-l", "--logfile"):
             if logfp is not None:
                 logfp.close()
             logfp = open(val, "a", 1)  # 1 => line buffered
+        elif switch in ("-n", "--numeric"):
+            showhostnames = False
+        elif switch in ("-u", "--units"):
+            showunits = True
+        elif switch in ("-V", "--version"):
+            print("ntpmon %s" % ntp.util.stdversion())
+            raise SystemExit(0)
 
     if (logfp is None) and (debug > 0):
         logfp = open(defaultlog, "a", 1)

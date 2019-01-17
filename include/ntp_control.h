@@ -1,5 +1,9 @@
 /*
  * ntp_control.h - definitions related to NTP mode 6 control messages
+ *
+ * mode 6 messages are defined in:
+ * https://datatracker.ietf.org/doc/draft-ietf-ntp-mode-6-cmds/
+ *
  */
 #ifndef GUARD_NTP_CONTROL_H
 #define GUARD_NTP_CONTROL_H
@@ -9,7 +13,7 @@
 /* The attribute after this structure is a gcc/clang extension that forces
  * the beginning of a structure instance to be 32-bit aligned.  Without this
  * attempting to compile on a 32-bit host may throw warnings or errors when
- * a pointer to this tructure is passed to authdecrypt/authencrypt, both of
+ * a pointer to this structure is passed to authdecrypt/authencrypt, both of
  * which expect to be able to treat the structure as an array of uint32_t
  * elements.  Ideally, we'd get rid of that nasty type punning. */
 struct ntp_control {
@@ -19,8 +23,9 @@ struct ntp_control {
 	uint16_t status;		/* status word for association */
 	uint16_t associd;		/* association ID (associd_t) */
 	uint16_t offset;		/* offset of this batch of data */
-	uint16_t count;			/* count of data in this packet */
-	uint8_t data[480 + MAX_MAC_LEN]; /* data + auth */
+        /* the draft RFC says 0 <= count <= 468 */
+	uint16_t count;			/* byte count of data in this packet */
+	uint8_t data[480 + MAX_MAC_LEN]; /* data + padding + auth */
 } __attribute__((aligned(32)));
 
 /*

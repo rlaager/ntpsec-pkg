@@ -7,6 +7,8 @@
  *
  * Each half is further divided into sections for each source file.
  */
+#ifndef GUARD_NTPD_H
+#define GUARD_NTPD_H
 
 #include "ntp.h"
 #include "ntp_stdlib.h"
@@ -95,9 +97,6 @@ extern	void	init_io 	(void);
 extern	void	io_open_sockets	(void);
 extern	void	io_clr_stats	(void);
 extern	void	sendpkt 	(sockaddr_u *, endpt *, void *, int);
-#ifdef ENABLE_DEBUG_TIMING
-extern	void	collect_timing  (struct recvbuf *, const char *, int, l_fp);
-#endif
 extern const char * latoa(endpt *);
 
 /* ntp_loopfilter.c */
@@ -193,13 +192,10 @@ extern	void	record_raw_stats (struct peer *,
 				  double root_dispersion, uint32_t refid,
 				  unsigned int outcount);
 extern	void	check_leap_file	(bool is_daily_check, time_t systime);
-#ifdef ENABLE_DEBUG_TIMING
-extern	void	record_timing_stats (const char *);
-#endif
 
 /* packetstamp.c */
 extern void	enable_packetstamps(int, sockaddr_u *);
-extern l_fp	fetch_packetstamp(struct recvbuf *, struct msghdr *, l_fp);
+extern l_fp	fetch_packetstamp(struct msghdr *);
 
 /*
  * Signals we catch for debugging.
@@ -423,3 +419,4 @@ extern struct refclock * const refclock_conf[];
 extern const uint8_t	num_refclock_conf;
 #endif
 
+#endif	/* GUARD_NTPD_H */

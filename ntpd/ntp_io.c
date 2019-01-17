@@ -38,17 +38,6 @@
 #define IFS_CREATED     2       /* was just created */
 #define IFS_DELETED     3       /* was just delete */
 
-/*
- * setsockopt does not always have the same arg declaration
- * across all platforms. If it's not defined we make it empty
- * UNUSED
- *
- * #ifndef SETSOCKOPT_ARG_CAST
- * #define SETSOCKOPT_ARG_CAST
- * #endif
- */
-
-
 #ifndef IPTOS_DSCP_EF
 #define IPTOS_DSCP_EF 0xb8
 #endif
@@ -257,10 +246,10 @@ static void		maintain_activefds(int fd, bool closing);
 /*
  * Routines to read the ntp packets
  */
-static int	read_network_packet	(SOCKET, endpt *, l_fp);
-static void input_handler (fd_set *, l_fp *);
+static int	read_network_packet	(SOCKET, endpt *);
+static void input_handler (fd_set *);
 #ifdef REFCLOCK
-static int	read_refclock_packet	(SOCKET, struct refclockio *, l_fp);
+static int	read_refclock_packet	(SOCKET, struct refclockio *);
 #endif
 
 /*
@@ -305,30 +294,6 @@ maintain_activefds(
 	}
 }
 
-
-#ifdef ENABLE_DEBUG_TIMING
-/*
- * collect timing information for various processing
- * paths. currently we only pass them on to the file
- * for later processing. this could also do histogram
- * based analysis in order to reduce the load (and skew)
- * due to the file output
- */
-void
-collect_timing(struct recvbuf *rb, const char *tag, int count, l_fp dts)
-{
-	char buf[256];
-
-	snprintf(buf, sizeof(buf), "%s %d %s %s",
-		 (rb != NULL)
-		     ? ((rb->dstadr != NULL)
-			    ? socktoa(&rb->recv_srcadr)
-			    : "-REFCLOCK-")
-		     : "-",
-		 count, lfptoa(dts, 9), tag);
-	record_timing_stats(buf);
-}
-#endif
 
 /*
  * About dynamic interfaces, sockets, reception and more...
@@ -2084,8 +2049,7 @@ sendpkt(
 static int
 read_refclock_packet(
 	SOCKET			fd,
-	struct refclockio *	rp,
-	l_fp			ts
+	struct refclockio *	rp
 	)
 {
 	size_t			i;
@@ -2093,6 +2057,13 @@ read_refclock_packet(
 	int			saved_errno;
 	int			consumed;
 	struct recvbuf *	rb;
+	l_fp			ts;
+
+	/* Could read earlier in normal case,
+	 * but too early gets wrong time if data arrives
+	 * while we are busy processing other packets.
+	 */
+	get_systime(&ts);
 
 	rb = get_free_recv_buffer();
 
@@ -2131,12 +2102,11 @@ read_refclock_packet(
 	rb->dstadr = 0;
 	rb->fd = fd;
 	rb->recv_time = ts;
-	rb->receiver = rp->clock_recv;
-	rb->network_packet = false;
 
 	consumed = indicate_refclock_packet(rp, rb);
 	if (!consumed) {
 		rp->recvcount++;
+		// FIXME: should have separate slot for refclock packets
 		pkt_count.packets_received++;
 	}
 
@@ -2152,8 +2122,7 @@ read_refclock_packet(
 static int
 read_network_packet(
 	SOCKET			fd,
-	endpt *	itf,
-	l_fp			ts
+	endpt *	itf
 	)
 {
 	socklen_t fromlen;
@@ -2262,14 +2231,10 @@ read_network_packet(
 	 */
 	rb->dstadr = itf;
 	rb->fd = fd;
-	ts = fetch_packetstamp(rb, &msghdr, ts);
-	rb->recv_time = ts;
-	rb->receiver = receive;
-#ifdef REFCLOCK
-	rb->network_packet = true;
-#endif /* REFCLOCK */
+	rb->recv_time = fetch_packetstamp(&msghdr);
 
-	add_full_recv_buffer(rb);
+	receive(rb);
+	freerecvbuf(rb);
 
 	itf->received++;
 	pkt_count.packets_received++;
@@ -2292,7 +2257,11 @@ io_handler(void)
 	 * time.  select() will terminate on SIGALARM or on the
 	 * reception of input.
 	 */
+#ifdef ENABLE_DNS_LOOKUP
 	pthread_sigmask(SIG_BLOCK, &blockMask, &runMask);
+#else
+	sigprocmask(SIG_BLOCK, &blockMask, &runMask);
+#endif
 	flag = sig_flags.sawALRM || sig_flags.sawQuit || sig_flags.sawHUP || \
 	  sig_flags.sawDNS;
 	if (!flag) {
@@ -2302,14 +2271,14 @@ io_handler(void)
 	  nfound = -1;
 	  errno = EINTR;
 	}
+#ifdef ENABLE_DNS_LOOKUP
 	pthread_sigmask(SIG_SETMASK, &runMask, NULL);
+#else
+	sigprocmask(SIG_SETMASK, &runMask, NULL);
+#endif  
 
 	if (nfound > 0) {
-		l_fp ts;
-
-		get_systime(&ts);
-
-		input_handler(&rdfdes, &ts);
+		input_handler(&rdfdes);
 	} else if (nfound == -1 && errno != EINTR) {
 		msyslog(LOG_ERR, "IO: select() error: %m");
 	}
@@ -2327,16 +2296,11 @@ io_handler(void)
  */
 static void
 input_handler(
-	fd_set *	fds,
-	l_fp *	cts
+	fd_set *	fds
 	)
 {
 	int		buflen;
 	SOCKET		fd;
-	l_fp		ts;	/* Timestamp at BOselect() gob */
-#ifdef ENABLE_DEBUG_TIMING
-	l_fp		ts_e;	/* Timestamp at EOselect() gob */
-#endif
 	size_t		select_count;
 	endpt *		ep;
 #ifdef REFCLOCK
@@ -2356,7 +2320,6 @@ input_handler(
 	 * If we have something to do, freeze a timestamp.
 	 * See below for the other cases (nothing left to do or error)
 	 */
-	ts = *cts;
 
 	++pkt_count.handler_pkts;
 
@@ -2365,39 +2328,37 @@ input_handler(
 	 * Check out the reference clocks first, if any
 	 */
 
-	if (refio != NULL) {
-		for (rp = refio; rp != NULL; rp = rp->next) {
-			fd = rp->fd;
+	for (rp = refio; rp != NULL; rp = rp->next) {
+		fd = rp->fd;
 
-			if (!FD_ISSET(fd, fds))
-				continue;
-			++select_count;
-			buflen = read_refclock_packet(fd, rp, ts);
-			/*
-			 * The first read must succeed after select()
-			 * indicates readability, or we've reached
-			 * a permanent EOF.  http://bugs.ntp.org/1732
-			 * reported ntpd munching CPU after a USB GPS
-			 * was unplugged because select was indicating
-			 * EOF but ntpd didn't remove the descriptor
-			 * from the activefds set.
-			 */
-			if (buflen < 0 && EAGAIN != errno) {
-				saved_errno = errno;
-				clk = refclock_name(rp->srcclock);
-				errno = saved_errno;
-				msyslog(LOG_ERR, "IO: %s read: %m", clk);
-				maintain_activefds(fd, true);
-			} else if (0 == buflen) {
-				clk = refclock_name(rp->srcclock);
-				msyslog(LOG_ERR, "IO: %s read EOF", clk);
-				maintain_activefds(fd, true);
-			} else {
-				/* drain any remaining refclock input */
-				do {
-					buflen = read_refclock_packet(fd, rp, ts);
-				} while (buflen > 0);
-			}
+		if (!FD_ISSET(fd, fds))
+			continue;
+		++select_count;
+		buflen = read_refclock_packet(fd, rp);
+		/*
+		 * The first read must succeed after select()
+		 * indicates readability, or we've reached
+		 * a permanent EOF.  http://bugs.ntp.org/1732
+		 * reported ntpd munching CPU after a USB GPS
+		 * was unplugged because select was indicating
+		 * EOF but ntpd didn't remove the descriptor
+		 * from the activefds set.
+		 */
+		if (buflen < 0 && EAGAIN != errno) {
+			saved_errno = errno;
+			clk = refclock_name(rp->srcclock);
+			errno = saved_errno;
+			msyslog(LOG_ERR, "IO: %s read: %m", clk);
+			maintain_activefds(fd, true);
+		} else if (0 == buflen) {
+			clk = refclock_name(rp->srcclock);
+			msyslog(LOG_ERR, "IO: %s read EOF", clk);
+			maintain_activefds(fd, true);
+		} else {
+			/* drain any remaining refclock input */
+			do {
+				buflen = read_refclock_packet(fd, rp);
+			} while (buflen > 0);
 		}
 	}
 #endif /* REFCLOCK */
@@ -2410,7 +2371,7 @@ input_handler(
 		if (FD_ISSET(fd, fds))
 			do {
 				++select_count;
-				buflen = read_network_packet(fd, ep, ts);
+				buflen = read_network_packet(fd, ep);
 			} while (buflen > 0);
 	}
 
@@ -2444,19 +2405,6 @@ input_handler(
 		return;
 	}
 	/* We've done our work */
-#ifdef ENABLE_DEBUG_TIMING
-	get_systime(&ts_e);
-	/*
-	 * (ts_e - ts) is the amount of time we spent processing this
-	 * gob of file descriptors.  Log it.
-	 */
-	ts_e -= ts;
-	collect_timing(NULL, "input handler", 1, ts_e);
-	if (debug > 3) /* SPECIAL DEBUG */
-		msyslog(LOG_DEBUG,
-			"IO: input_handler: Processed a gob of fd's in %s msec",
-			lfptoms(ts_e, 6));
-#endif /* ENABLE_DEBUG_TIMING */
 	/* We're done... */
 	return;
 }
@@ -2859,7 +2807,6 @@ io_closeclock(
 	rio->active = false;
 	UNLINK_SLIST(unlinked, refio, rio, next, struct refclockio);
 	if (NULL != unlinked) {
-		purge_recv_buffers_for_fd(rio->fd);
 		/*
 		 * Close the descriptor.
 		 */

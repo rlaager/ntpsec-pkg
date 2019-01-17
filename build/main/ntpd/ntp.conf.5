@@ -2,12 +2,12 @@
 .\"     Title: ntp.conf
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 08/29/2018
+.\"      Date: 01/14/2019
 .\"    Manual: NTPsec
-.\"    Source: NTPsec 1.1.2+
+.\"    Source: NTPsec 1.1.3+
 .\"  Language: English
 .\"
-.TH "NTP\&.CONF" "5" "08/29/2018" "NTPsec 1\&.1\&.2+" "NTPsec"
+.TH "NTP\&.CONF" "5" "01/14/2019" "NTPsec 1\&.1\&.3+" "NTPsec"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -34,7 +34,7 @@ ntp.conf \- Network Time Protocol (NTP) daemon configuration file format
 /etc/ntp\&.conf
 .SH "DESCRIPTION"
 .sp
-The ntp\&.conf configuration file is read at initial startup by the ntpd(8) daemon in order to specify the synchronization sources, modes and other related information\&. Usually, it is installed in the /etc directory, but could be installed elsewhere (see the daemon\(cqs \-c command line option)\&.
+The ntp\&.conf configuration file is read at initial startup by the ntpd(8) daemon in order to specify the synchronization sources, modes, and other related information\&. Usually, it is installed in the /etc directory, but could be installed elsewhere (see the daemon\(cqs \-c command line option)\&.
 .sp
 The file format is similar to other UNIX configuration files\&. Comments begin with a \(oq#\(cq character and extend to the end of the line; blank lines are ignored\&. Configuration commands consist of an initial keyword followed by a list of arguments, some of which may be optional, separated by whitespace\&. Commands may not be continued over multiple lines\&. Arguments may be host names, host addresses written in numeric, dotted\-quad form, integers, floating point numbers (when specifying times in seconds) and text strings\&.
 .sp
@@ -165,21 +165,21 @@ config\-from\-file\&.
 .PP
 bias
 .RS 4
-Add the command argument, a floating\-point value in seconds, to the time offset () computed for this server\&. May be useful if you are a client on a network connection such as an ADSL line where there is a predictable asymmetry between upstream and downstream flight times\&. One way you might see this is if you use a fixed set of others and one has a stable offset that is an outlier from the others; in that case you might want to use
+Add the command argument, a floating\-point value in seconds, to the time offset () computed for this server; this may be useful if you are a client on a network connection such as an ADSL line where there is a predictable asymmetry between upstream and downstream flight times\&. One way you might see this is if you use a fixed set of others and one has a stable offset that is an outlier from the others; in that case, you might want to use
 bias
 to compensate out the offset\&.
 .RE
 .PP
 burst
 .RS 4
-when the server is reachable, send a burst of eight packets instead of the usual one\&. The packet spacing is normally 2 s; however, the spacing between the first and second packets can be changed with the calldelay command to allow additional time for a modem or ISDN call to complete\&. This is designed to improve timekeeping quality with the
+When the server is reachable, send a burst of eight packets instead of the usual one\&. The packet spacing is normally 2 s; however, the spacing between the first and second packets can be changed with the calldelay command to allow additional time for a modem or ISDN call to complete; this is designed to improve timekeeping quality with the
 server
 command\&.
 .RE
 .PP
 iburst
 .RS 4
-When the server is unreachable, send a burst of six packets instead of the usual one\&. The packet spacing is normally 2 s; however, the spacing between the first and second packets can be changed with the calldelay command to allow additional time for a modem or ISDN call to complete\&. This is designed to speed the initial synchronization acquisition with the
+When the server is unreachable, send a burst of six packets instead of the usual one\&. The packet spacing is normally 2 s; however, the spacing between the first and second packets can be changed with the calldelay command to allow additional time for a modem or ISDN call to complete; this is designed to speed the initial synchronization acquisition with the
 server
 command, and when ntpd(8) is started with the
 \-q
@@ -221,7 +221,7 @@ Marks the server as preferred\&. All other things being equal, this host will be
 .PP
 true
 .RS 4
-Mark the association to assume truechimer status; that is, always survive the selection and clustering algorithms\&. This option can be used with any association, but is most useful for reference clocks with large jitter on the serial port and precision pulse\-per\-second (PPS) signals\&. Caution: this option defeats the algorithms designed to cast out falsetickers and can allow these sources to set the system clock\&. This option is valid only with the
+Mark the association to assume truechimer status; that is, always survive the selection and clustering algorithms\&. This option can be used with any association but is most useful for reference clocks with large jitter on the serial port and precision pulse\-per\-second (PPS) signals\&. Caution: this option defeats the algorithms designed to cast out falsetickers and can allow these sources to set the system clock\&. This option is valid only with the
 server
 command\&.
 .RE
@@ -336,7 +336,7 @@ timecode (format varies by refclock)
 T}
 .TE
 .sp 1
-The first two fields show the date (Modified Julian Day) and time (seconds and fraction past UTC midnight)\&. The next normally shows clock type and unit (but if you are running in strict Classic compatibility mode it will show the magic clock address in dotted\-quad notation)\&. The final field last timecode received from the clock in decoded ASCII format, where meaningful\&. In some clock drivers a good deal of additional information can be gathered and displayed as well\&. See information specific to each clock for further details\&.
+The first two fields show the date (Modified Julian Day) and time (seconds and fraction past UTC midnight)\&. The next normally shows clock type and unit (but if you are running in strict Classic compatibility mode it will show the magic clock address in dotted\-quad notation)\&. The final field is the last timecode received from the clock in decoded ASCII format, where meaningful\&. For some clock drivers, a good deal of additional information can be gathered and displayed as well\&. See information specific to each clock for further details\&.
 .RE
 .PP
 loopstats
@@ -501,7 +501,7 @@ field are described on the "Event Messages and Status Words" page\&.
 .PP
 peerstats
 .RS 4
-Enables recording of peer statistics information\&. This includes statistics records of all peers of a NTP server and of special signals, where present and configured\&. Each valid update appends a line of the following form to the current element of a file generation set named
+Enables recording of peer statistics information\&. This includes statistics records of all peers of an NTP server and of special signals, where present and configured\&. Each valid update appends a line of the following form to the current element of a file generation set named
 \fIpeerstats\fR:
 .sp
 .if n \{\
@@ -596,7 +596,7 @@ The first two fields show the date (Modified Julian Day) and time (seconds and f
 .PP
 rawstats
 .RS 4
-Enables recording of raw\-timestamp statistics information\&. This includes statistics records of all peers of a NTP server and of special signals, where present and configured\&. Each NTP message received from a peer or clock driver appends a line of the following form to the file generation set named
+Enables recording of raw\-timestamp statistics information\&. This includes statistics records of all peers of an NTP server and of special signals, where present and configured\&. Each NTP message received from a peer or clock driver appends a line of the following form to the file generation set named
 \fIrawstats\fR:
 .sp
 .if n \{\
@@ -1050,74 +1050,6 @@ The first two fields show the date (Modified Julian Day) and time (seconds and f
 man getrusage
 for details\&. (The NetBSD and FreeBSD man pages have more details\&.) The maxrss column is the high water mark since the process was started\&. The remaining fields show the values used since the last report\&.
 .RE
-.PP
-timingstats
-.RS 4
-(Only available when the daemon is compiled with process time debugging support (\-\-enable\-debug\-timing
-\- costs performance)\&. Record processing time statistics for various selected code paths\&.
-.sp
-53876 36\&.920 10\&.0\&.3\&.5 1 0\&.000014592 input processing delay
-.TS
-allbox tab(:);
-lt lt lt
-lt lt lt
-lt lt lt
-lt lt lt
-lt lt lt
-lt lt lt
-lt lt lt.
-T{
-Item
-T}:T{
-Units
-T}:T{
-Description
-T}
-T{
-53876
-T}:T{
-MJD
-T}:T{
-date
-T}
-T{
-36\&.920
-T}:T{
-s
-T}:T{
-time past midnight
-T}
-T{
-10\&.0\&.3\&.5
-T}:T{
-IP
-T}:T{
-server address
-T}
-T{
-1
-T}:T{
-#
-T}:T{
-event count
-T}
-T{
-0\&.000014592
-T}:T{
-s
-T}:T{
-total time
-T}
-T{
-\fImessage\fR
-T}:T{
-text
-T}:T{
-code path description (see source)
-T}
-.TE
-.sp 1
-.RE
 .RE
 .PP
 statsdir \fIdirectory_path\fR
@@ -1129,7 +1061,7 @@ filename prefix to be modified for file generation sets, which is useful for han
 .PP
 filegen \fIname\fR [file \fIfilename\fR] [type \fItypename\fR] [link | nolink] [enable | disable]
 .RS 4
-Configures setting of generation file set name\&. Generation file sets provide a means for handling files that are continuously growing during the lifetime of a server\&. Server statistics are a typical example for such files\&. Generation file sets provide access to a set of files used to store the actual data\&. At any time at most one element of the set is being written to\&. The type given specifies when and how data will be directed to a new element of the set\&. This way, information stored in elements of a file set that are currently unused are available for administrative operations without the risk of disturbing the operation of ntpd\&. (Most important: they can be removed to free space for new data produced\&.)
+Configures setting of the generation file set name\&. Generation file sets provide a means for handling files that are continuously growing during the lifetime of a server\&. Server statistics are a typical example for such files\&. Generation file sets provide access to a set of files used to store the actual data\&. At any time at most one element of the set is being written to\&. The type given specifies when and how data will be directed to a new element of the set\&. This way, information stored in elements of a file set that are currently unused are available for administrative operations without the risk of disturbing the operation of ntpd\&. (Most important: they can be removed to free space for new data produced\&.)
 .sp
 Note that this command can be sent from the ntpq(1) program running at a remote location\&.
 .PP
@@ -1314,7 +1246,7 @@ monitor
 Specify the probability of being recorded for packets that overflow the MRU list size limit set by
 mru maxmem
 or
-mru maxdepth\&. This is a performance optimization for servers with aggregate arrivals of 1000 packets per second or more\&.
+mru maxdepth; this is a performance optimization for servers with aggregate arrivals of 1000 packets per second or more\&.
 .RE
 .RE
 .PP
@@ -1329,19 +1261,18 @@ argument can be a valid host DNS name\&. The
 argument expressed in IPv4 or IPv6 numeric address form defaults to all mask bits on, meaning that the
 \fIaddress\fR
 is treated as the address of an individual host\&. Instead of an explicit
-\fImask\fR
-the
+\fImask\fR, the
 \fIaddress/cidr\fR
 may be specified in CIDR notation\&. A default entry (address
 0\&.0\&.0\&.0, mask
 0\&.0\&.0\&.0) is always included and is always the first entry in the list\&. Note that text string
 \fIdefault\fR, with no mask option, may be used to indicate the default entry\&. In the current implementation,
 \fIflag\fR
-always restricts access, i\&.e\&., an entry with no flags indicates that free access to the server is to be given\&. The flags are not orthogonal, in that more restrictive flags will often make less restrictive ones redundant\&. The flags can generally be classed into two categories, those which restrict time service and those which restrict informational queries and attempts to do run\-time reconfiguration of the server\&. One or more of the following flags may be specified:
+always restricts access, i\&.e\&., an entry with no flags indicates that free access to the server is to be given\&. The flags are not orthogonal, in that more restrictive flags will often make less restrictive ones redundant\&. The flags can generally be classed into two categories, those which restrict time service and those which restrict informational queries and attempts to do a run\-time reconfiguration of the server\&. One or more of the following flags may be specified:
 .PP
 flake
 .RS 4
-Discard received NTP packets with probability 0\&.1; that is, on average drop one packet in ten\&. This is for testing and amusement\&. The name comes from Bob Braden\(cqs
+Discard received NTP packets with probability 0\&.1; that is, on average drop one packet in ten\&. This flag is for testing and amusement\&. The name comes from Bob Braden\(cqs
 \fIflakeway\fR, which once did a similar thing for early Internet testing\&.
 .RE
 .PP
@@ -1378,11 +1309,11 @@ Deny ntpq(1) queries\&. Time service is not affected\&.
 .PP
 nopeer
 .RS 4
-Deny packets which would result in mobilizing a new association\&. This includes symmetric active packets when a configured association does not exist\&. That used to happen when the remote client used the
+Deny packets which would result in mobilizing a new association; this includes symmetric active packets when a configured association does not exist\&. That used to happen when the remote client used the
 peer
 command in its config file\&. We don\(cqt support that mode\&. It used to include
 \fIpool\fR
-servers but they now poke a hole in any restrictions\&.
+servers, but they now poke a hole in any restrictions\&.
 .RE
 .PP
 noserve
@@ -1397,7 +1328,7 @@ Deny service unless the packet is cryptographically authenticated\&.
 .PP
 ntpport
 .RS 4
-This is actually a match algorithm modifier, rather than a restriction flag\&. Its presence causes the restriction entry to be matched only if the source port in the packet is the standard NTP UDP port (123)\&. Both
+This is a match algorithm modifier, rather than a restriction flag\&. Its presence causes the restriction entry to be matched if the source port in the packet is the standard NTP UDP port (123)\&. Both
 ntpport
 and
 non\-ntpport
@@ -1408,7 +1339,7 @@ is considered more specific and is sorted later in the list\&.
 .PP
 nomrulist
 .RS 4
-Do not accept MRU\-list requests\&. These can be expensive to service, and may generate a high volume of response traffic\&.
+Do not accept MRU\-list requests\&. These can be expensive to service and may generate a high volume of response traffic\&.
 .RE
 .PP
 version
@@ -1478,7 +1409,7 @@ refclock \fIdrivername\fR [unit \fIu\fR] [prefer] [subtype \fIint\fR] [mode \fIi
 .RS 4
 This command is used to configure reference clocks\&. The required
 \fIdrivername\fR
-argument is the shortname of a driver type (e\&.g\&.
+argument is the shortname of a driver type (e\&.g\&.,
 shm,
 nmea,
 generic; see the
@@ -1487,7 +1418,7 @@ page for a full list\&. The options are interpreted as follows:
 .PP
 unit
 .RS 4
-The 0\-origin unit number of the device\&. Modifies the devicename\&. If not specified, defaults to zero\&.
+The 0\-origin unit number of the device; this modifies the devicename\&. If not specified, defaults to zero\&.
 .RE
 .PP
 prefer
@@ -1521,7 +1452,7 @@ defaults to 14 (4\&.5 hours)\&. The allowable range is 0 (1 sec) to 17 (36\&.4 h
 .PP
 time1 \fIsec\fR
 .RS 4
-Specifies a constant to be added to the time offset produced by the driver, a fixed\-point decimal number in seconds\&. This is used as a calibration constant to adjust the nominal time offset of a particular clock to agree with an external standard, such as a precision PPS signal\&. It also provides a way to correct a systematic error or bias due to serial port or operating system latencies, different cable lengths or receiver internal delay\&. The specified offset is in addition to the propagation delay provided by other means, such as internal DIP switches\&. Where a calibration for an individual system and driver is available, an approximate correction is noted in the driver documentation pages\&. Note: in order to facilitate calibration when more than one radio clock or PPS signal is supported, a special calibration feature is available\&. It takes the form of an argument to the
+Specifies a constant to be added to the time offset produced by the driver, a fixed\-point decimal number in seconds\&. This is used as a calibration constant to adjust the nominal time offset of a particular clock to agree with an external standard, such as a precision PPS signal\&. It also provides a way to correct a systematic error or bias due to serial port or operating system latencies, different cable lengths or receiver internal delay\&. The specified offset is in addition to the propagation delay provided by other means, such as internal DIP switches\&. Where a calibration for an individual system and driver is available, an approximate correction is noted in the driver documentation pages\&. Note: To facilitate calibration when more than one radio clock or PPS signal is supported, a special calibration feature is available\&. It takes the form of an argument to the
 enable
 command described in "Miscellaneous Options" page and operates as described in the "Reference Clock Drivers" page\&.
 .RE
@@ -1578,13 +1509,13 @@ This option controls the delay in seconds between the first and second packets s
 .PP
 driftfile \fIdriftfile\fR
 .RS 4
-This command specifies the complete path and name of the file used to record the frequency of the local clock oscillator\&. This is the same operation as the
+This command specifies the complete path and name of the file used to record the frequency of the local clock oscillator; this is the same operation as the
 \-f
-command line option\&. If the file exists, it is read at startup in order to set the initial frequency and then updated once per hour with the current frequency computed by the daemon\&. If the file name is specified, but the file itself does not exist,
+command line option\&. If the file exists, it is read at startup to set the initial frequency and then updated once per hour with the current frequency computed by the daemon\&. If the file name is specified, but the file itself does not exist,
 ntpd
 starts with an initial frequency of zero and creates the file when writing it for the first time\&. If this command is not given, the daemon will always start with an initial frequency of zero\&.
 .sp
-The file format consists of a single line containing a single floating point number, which records the frequency offset measured in parts\-per\-million (PPM)\&. The file is updated by first writing the current drift value into a temporary file and then renaming this file to replace the old version\&. This implies that ntpd(8) must have write permission for the directory the drift file is located in, and that file system links, symbolic or otherwise, should be avoided\&.
+The file format consists of a single line containing a single floating point number, which records the frequency offset measured in parts\-per\-million (PPM)\&. The file is updated by first writing the current drift value into a temporary file and then renaming this file to replace the old version; this implies that ntpd(8) must have write permission for the directory the drift file is located in, and that file system links, symbolic or otherwise, should be avoided\&.
 .RE
 .PP
 enable [auth | calibrate | kernel | monitor | ntp | stats]; disable [auth | calibrate | kernel | monitor | ntp | stats]
@@ -1639,7 +1570,7 @@ interface [listen | ignore | drop] [all | ipv4 | ipv6 | wildcard | \fIname\fR | 
 .RS 4
 This command controls which network addresses
 ntpd
-opens, and whether input is dropped without processing\&. The first parameter determines the action for addresses which match the second parameter\&. That parameter specifies a class of addresses, or a specific interface name, or an address\&. In the address case,
+opens, and whether the input is dropped without processing\&. The first parameter determines the action on addresses which match the second parameter\&. That parameter specifies a class of addresses, or a specific interface name, or an address\&. In the address case,
 \fIprefixlen\fR
 determines how many bits must match for this rule to apply\&.
 ignore
@@ -1655,7 +1586,7 @@ commands are disabled if any of the
 \-I,
 \-\-interface,\-L, or
 \-\-novirtualips
-command\-line options are used\&. If none of those options are used and no
+command\-line options are used\&. If none of those options are used, and no
 interface
 actions are specified in the configuration file, all available network addresses are opened\&. The
 nic
@@ -1665,10 +1596,8 @@ interface\&.
 .PP
 leapfile \fIleapfile\fR
 .RS 4
-This command loads the NIST leapseconds file and initializes the leapsecond values for the next leapsecond time, expiration time and TAI offset\&. The file can be obtained directly from NIST national time servers using
-ftp
-as the ASCII file
-pub/leap\-seconds\&.list\&.
+This command loads the NIST leap seconds file and initializes the leapsecond values for the next leap second time, expiration time and TAI offset\&. The file can be obtained using
+ntpleapfetch\&.
 .sp
 The
 \fIleapfile\fR
@@ -1741,7 +1670,7 @@ logfile \fIlogfile\fR
 .RS 4
 This command specifies the location of an alternate log file to be used instead of the default system
 \fIsyslog(3)\fR
-facility\&. This is the same operation as the \-l command line option\&.
+facility; this is the same operation as the \-l command line option\&.
 .RE
 .sp
 If your ntpd runs for a long time, you probably want to use logrotate or newsyslog to switch to a new log file occasionally\&. SIGHUP will reopen the log file\&.
@@ -1767,7 +1696,7 @@ are used, the last one used controls\&. The default is 1024 kilobytes\&.
 .PP
 mindepth \fIcount\fR
 .RS 4
-Lower limit on the MRU list size\&. When the MRU list has fewer than
+The lower limit on the MRU list size\&. When the MRU list has fewer than
 mindepth
 entries, existing entries are never removed to make room for newer ones, regardless of their age\&. The default is 600 entries\&.
 .RE
@@ -1786,7 +1715,7 @@ If an address is not in the list, there are several possible ways to find a slot
 .\}
 If the list has fewer than
 mindepth
-entries, a slot is allocated from the free list\&. This is the normal case for a server without a lot of clients\&. If clients come and go, for example, laptops going between home and work, the default setup shows only the long term average\&.
+entries, a slot is allocated from the free list; this is the normal case for a server without a lot of clients\&. If clients come and go, for example, laptops going between home and work, the default setup shows only the long term average\&.
 .RE
 .sp
 .RS 4
@@ -1820,7 +1749,7 @@ If the freelist is not empty, a slot is allocated from the free list\&.
 .sp -1
 .IP "  4." 4.2
 .\}
-If the freelist is empty but not full (see maxmem), more memory is allocated (see incmem) and a new slot is used\&.
+If the freelist is empty but not full (see maxmem), more memory is allocated (see incmem) and, a new slot is used\&.
 .RE
 .sp
 .RS 4
@@ -1862,9 +1791,9 @@ nonvolatile \fIthreshold\fR
 .RS 4
 Specify the
 \fIthreshold\fR
-in seconds to write the frequency file, with default of 1e\-7 (0\&.1 PPM)\&. The frequency file is inspected each hour\&. If the difference between the current frequency and the last value written exceeds the threshold, the file is written and the
+in seconds to write the frequency file, with a default of 1e\-7 (0\&.1 PPM)\&. The frequency file is inspected each hour\&. If the difference between the current frequency and the last value written exceeds the threshold, the file is written, and the
 threshold
-becomes the new threshold value\&. If the threshold is not exceeded, it is reduced by half\&. This is intended to reduce the frequency of unnecessary file writes for embedded systems with nonvolatile memory\&.
+becomes the new threshold value\&. If the threshold is not exceeded, it is reduced by half; this is intended to reduce the frequency of unnecessary file writes for embedded systems with nonvolatile memory\&.
 .RE
 .PP
 phone \fIdial \&...\fR
@@ -1880,7 +1809,7 @@ ntpq\&.
 .PP
 setvar \fIvariable\fR [\fIdefault\fR]
 .RS 4
-This command adds an additional system variable\&. These variables can be used to distribute additional information such as the access policy\&. If the variable of the form
+This command adds a system variable\&. These variables can be used to distribute additional information such as the access policy\&. If the variable of the form
 \fIname=value\fR
 is followed by the
 default
@@ -1897,7 +1826,7 @@ holds the names of the reference clock variables\&.
 .PP
 tinker [allan \fIallan\fR | dispersion \fIdispersion\fR | freq \fIfreq\fR | huffpuff \fIhuffpuff\fR | panic \fIpanic\fR | step \fIstep\fR | stepback \fIstepback\fR | stepfwd \fIstepfwd\fR | stepout \fIstepout\fR]
 .RS 4
-This command can be used to alter several system variables in very exceptional circumstances\&. It should occur in the configuration file before any other configuration options\&. The default values of these variables have been carefully optimized for a wide range of network speeds and reliability expectations\&. In general, they interact in intricate ways that are hard to predict and some combinations can result in some very nasty behavior\&. Very rarely is it necessary to change the default values; but, some folks cannot resist twisting the knobs anyway and this command is for them\&. Emphasis added: twisters are on their own and can expect no help from the support group\&.
+This command can be used to alter several system variables in very exceptional circumstances\&. It should occur in the configuration file before any other configuration options\&. The default values of these variables have been carefully optimized for a wide range of network speeds and reliability expectations\&. In general, they interact in intricate ways that are hard to predict, and some combinations can result in some very nasty behavior\&. Very rarely is it necessary to change the default values; but, some folks cannot resist twisting the knobs anyway, and this command is for them\&. Emphasis added: twisters are on their own and can expect no help from the support group\&.
 .sp
 The variables operate as follows:
 .PP
@@ -1913,17 +1842,17 @@ The argument becomes the new value for the dispersion increase rate, normally \&
 .PP
 freq \fIfreq\fR
 .RS 4
-The argument becomes the initial value of the frequency offset in parts\-per\-million\&. This overrides the value in the frequency file, if present, and avoids the initial training state if it is not\&.
+The argument becomes the initial value of the frequency offset in parts\-per\-million; this overrides the value in the frequency file, if present, and avoids the initial training state if it is not\&.
 .RE
 .PP
 huffpuff \fIhuffpuff\fR
 .RS 4
-The argument becomes the new value for the experimental huff\-n\*(Aq\-puff filter span, which determines the most recent interval the algorithm will search for a minimum delay\&. The lower limit is 900 s (15 m), but a more reasonable value is 7200 (2 hours)\&. There is no default, since the filter is not enabled unless this command is given\&.
+The argument becomes the new value for the experimental huff\-n\*(Aq\-puff filter span, which determines the most recent interval the algorithm will search for a minimum delay\&. The lower limit is 900 s (15 m), but a more reasonable value is 7200 (2 hours)\&. There is no default since the filter is not enabled unless this command is given\&.
 .RE
 .PP
 panic \fIpanic\fR
 .RS 4
-The argument is the panic threshold, normally 1000 s\&. If set to zero, the panic sanity check is disabled and a clock offset of any value will be accepted\&.
+The argument is the panic threshold, normally 1000 s\&. If set to zero, the panic sanity check is disabled, and a clock offset of any value will be accepted\&.
 .RE
 .PP
 step \fIstep\fR
