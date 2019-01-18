@@ -2,3 +2,5 @@
 ntpsec: possible-gpl-code-linked-with-openssl
 # ntp-wait.service intentionally and correctly has WantedBy=time-sync.target.
 ntpsec: systemd-service-file-refers-to-unusual-wantedby-target
+# These are included manually, as the postinst needs custom ordering.
+ntpsec: maintainer-script-should-not-use-dpkg-maintscript-helper
