@@ -1,7 +1,8 @@
 Source: ntpsec
 Section: net
 Priority: optional
-Maintainer: Richard Laager <rlaager@wiktel.com>
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: Richard Laager <rlaager@wiktel.com>
 Uploaders: tony mancill <tmancill@debian.org>
 Build-Depends: asciidoc,
                bison,

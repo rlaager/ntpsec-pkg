@@ -1,3 +1,8 @@
+# Accepted upstream
+ntp_control-Check-for-count-too-big-in-control-packet.patch
+ntp_control-Stop-potentially-dereferencing-a-NULL-pointer.patch
+ntp_parser.y-Fix-a-potential-overflow-in-err_msg.patch
+
 # Forwarding not needed
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
