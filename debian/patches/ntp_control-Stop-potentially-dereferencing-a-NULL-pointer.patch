@@ -8,11 +8,9 @@ Subject: [PATCH] ntp_control: Stop potentially dereferencing a NULL pointer.
  ntpd/ntp_control.c | 4 ++++
  1 file changed, 4 insertions(+)
 
-diff --git a/ntpd/ntp_control.c b/ntpd/ntp_control.c
-index 312146f12..b206b4364 100644
 --- a/ntpd/ntp_control.c
 +++ b/ntpd/ntp_control.c
-@@ -2892,6 +2892,7 @@ write_variables(
+@@ -2855,6 +2855,7 @@
  	const struct ctl_var *v;
  	int ext_var;
  	char *valuep;
@@ -20,7 +18,7 @@ index 312146f12..b206b4364 100644
  	long val;
  	size_t octets;
  	char *vareqv;
-@@ -2936,6 +2937,9 @@ write_variables(
+@@ -2900,6 +2901,9 @@
  			ctl_error(CERR_PERMISSION);
  			return;
  		}
@@ -28,8 +26,5 @@ index 312146f12..b206b4364 100644
 +			valuep = nulltxt;
 +
  		errno = 0;
- 		if (!ext_var &&
-                     (*valuep == '\0' ||
--- 
-2.18.1
-
+ 		if (!ext_var && (*valuep == '\0'
+ 				 || (val = strtol(valuep, NULL, 10), errno != 0))) {
