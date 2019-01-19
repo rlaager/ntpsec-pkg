@@ -1,0 +1,65 @@
+Origin: upstream, https://gitlab.com/NTPsec/ntpsec/commit/a619d39ac2b6d3b435edd2f6f527c7cc81f78d02
+Bug: https://gitlab.com/NTPsec/ntpsec/issues/510
+From: "Gary E. Miller" <gem@rellim.com>
+Date: Mon, 22 Oct 2018 15:16:46 -0700
+Subject: [PATCH] ntp_parser.y: Fix a potential overflow in err_msg.
+
+---
+ ntpd/ntp_parser.y | 41 ++++++++++++++++++++++++++++-------------
+ 1 file changed, 28 insertions(+), 13 deletions(-)
+
+diff --git a/ntpd/ntp_parser.y b/ntpd/ntp_parser.y
+index 529601f0f..3794e03b3 100644
+--- a/ntpd/ntp_parser.y
++++ b/ntpd/ntp_parser.y
+@@ -1413,19 +1413,34 @@ yyerror(
+ 
+ 	msyslog(LOG_ERR, "CONFIG: line %d column %d %s",
+ 		ip_ctx->errpos.nline, ip_ctx->errpos.ncol, msg);
+-	if (!lex_from_file()) {
+-		/* Save the error message in the correct buffer */
+-		retval = snprintf(remote_config.err_msg + remote_config.err_pos,
+-				  (size_t)(MAXLINE - remote_config.err_pos),
+-				  "column %d %s",
+-				  ip_ctx->errpos.ncol, msg);
+-
+-		/* Increment the value of err_pos */
+-		if (retval > 0)
+-			remote_config.err_pos += retval;
+-
+-		/* Increment the number of errors */
+-		++remote_config.no_errors;
++	if (lex_from_file()) {
++                /* all is good, so far */
++                return;
++        }
++        /* Uh, oh, got an error */
++
++	/* Increment the number of errors */
++	++remote_config.no_errors;
++
++	/* Save the error message in the correct buffer */
++	if ((MAXLINE - 10) < remote_config.err_pos) {
++		/* err_msg already full, ignore this */
++		return;
++	}
++	retval = snprintf(remote_config.err_msg + remote_config.err_pos,
++			  (size_t)(MAXLINE - remote_config.err_pos),
++			  "column %d %s", ip_ctx->errpos.ncol, msg);
++
++	/* Increment the value of err_pos */
++	if (retval > 0) {
++		/* careful, retval is not bytes written, it is
++		 * bytes that would have been written if space had
++                 * been available */
++		remote_config.err_pos += retval;
++		if (MAXLINE < remote_config.err_pos) {
++			/* err_msg overflowed! */
++			remote_config.err_pos = MAXLINE;
++		}
+ 	}
+ }
+ 
+-- 
+2.18.1
+
