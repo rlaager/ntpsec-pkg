@@ -14,6 +14,9 @@
 0002-Some-suggested-edits.patch
 0003-Simplify-server-pool-to-merely-pool-.-Fix-a-grammar-.patch
 0004-typo.patch
+## Add security fixes to NEWS
+0001-Add-security-fixes-to-NEWS.patch
+0002-Male-our-CVE-cite-format-uniform-with-the-way-we-ve-.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch
