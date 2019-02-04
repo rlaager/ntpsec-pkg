@@ -1,2 +1,2 @@
 debian/tmp/usr/lib/python3/dist-packages/ntp
-debian/tmp/usr/lib/python3/dist-packages/ntp/ntpc.*.so
+debian/tmp/usr/lib/python3/dist-packages/ntp*.egg-info

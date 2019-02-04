@@ -1,0 +1,61 @@
+From ff0000510e5e98a396b3fff6bac65f7d78b4f803 Mon Sep 17 00:00:00 2001
+From: James Browning <JamesB.fe80@gmail.com>
+Date: Mon, 1 Oct 2018 09:01:52 -0700
+Subject: [PATCH] Issue 503 PEP 241 compliance
+
+---
+ pylib/ntp-in.info | 22 ++++++++++++++++++++++
+ pylib/wscript     | 10 ++++++++++
+ 2 files changed, 32 insertions(+)
+ create mode 100644 pylib/ntp-in.info
+
+diff --git a/pylib/ntp-in.info b/pylib/ntp-in.info
+new file mode 100644
+index 000000000..b820f14bf
+--- /dev/null
++++ b/pylib/ntp-in.info
+@@ -0,0 +1,22 @@
++Metadata-Version: 1.0
++Name: ntpsec
++Version: @NTPSEC_VERSION_EXTENDED@
++Platform: POSIX
++Summary: The NTP reference implementation, refactored
++Home-page: https://ntpsec.org/
++License: HPND MIT BSD-2 BSD CC-BY-SA-4.0
++Description: 
++         NTPsec, as its name implies, is a more secure Network Time Protocol
++         suite. Which synchronizes your computers clock with sources on the
++         Internet, your intranet or any reference clocks you might have. Our
++         goal is to deliver code that can be used with confidence in 
++         deployments with the most stringent security, availability, and
++         assurance requirements. Towards that end we apply best practices and
++         state-of-the art technology in code auditing, verification, and
++         testing. We begin with the most important best practice: true open-
++         source code review. The NTPsec code is available in a public git 
++         repository. One of our goals is to support broader community
++         participation.
++Author: the NTPsec project
++Author-email: devel@ntpsec.org
++Keywords: 
+\ No newline at end of file
+diff --git a/pylib/wscript b/pylib/wscript
+index 1418bd2e5..be933afc7 100644
+--- a/pylib/wscript
++++ b/pylib/wscript
+@@ -78,3 +78,13 @@ def build(ctx):
+         install_from=bldnode,
+         install_path='${PYTHONARCHDIR}/ntp'
+     )
++
++    # pep241  lay an egg
++    egg = ['ntp-%s.info' % ctx.env.NTPSEC_VERSION]
++    ctx(
++        features="subst",
++        is_copy=True,
++        source=['ntp-in.info'],
++        target=egg
++    )
++    ctx.install_files(ctx.env.PYTHONARCHDIR, egg)
+-- 
+2.17.1
+

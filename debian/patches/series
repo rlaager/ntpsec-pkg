@@ -34,6 +34,11 @@
 0001-Typo-markup-fix.patch
 0001-Typos-in-comments-and-documentation.patch
 0001-Fix-a-typo.patch
+## Python egg
+0001-Issue-503-PEP-241-compliance.patch
+0001-issue-546.patch
+0001-Make-sure-PEP241-egg-gets-variables-substituted.patch
+0001-Use-.egg-info-for-the-Python-info-file.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch

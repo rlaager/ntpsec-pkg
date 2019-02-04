@@ -1,0 +1,39 @@
+From 9d0775388b0a3b5abe676b3f43f4ab45eac6f0fe Mon Sep 17 00:00:00 2001
+From: James Browning <JamesB.fe80@gmail.com>
+Date: Sun, 3 Feb 2019 14:57:44 -0800
+Subject: [PATCH] issue 546
+
+---
+ pylib/ntp-in.info | 14 ++------------
+ 1 file changed, 2 insertions(+), 12 deletions(-)
+
+diff --git a/pylib/ntp-in.info b/pylib/ntp-in.info
+index b820f14bf..b672a8431 100644
+--- a/pylib/ntp-in.info
++++ b/pylib/ntp-in.info
+@@ -4,19 +4,9 @@ Version: @NTPSEC_VERSION_EXTENDED@
+ Platform: POSIX
+ Summary: The NTP reference implementation, refactored
+ Home-page: https://ntpsec.org/
+-License: HPND MIT BSD-2 BSD CC-BY-SA-4.0
++License:  Beerware, BSD-2-Clause, BSD-3-Clause, BSD-4-Clause, CC-BY-4.0, ISC, MIT, NTP
+ Description: 
+-         NTPsec, as its name implies, is a more secure Network Time Protocol
+-         suite. Which synchronizes your computers clock with sources on the
+-         Internet, your intranet or any reference clocks you might have. Our
+-         goal is to deliver code that can be used with confidence in 
+-         deployments with the most stringent security, availability, and
+-         assurance requirements. Towards that end we apply best practices and
+-         state-of-the art technology in code auditing, verification, and
+-         testing. We begin with the most important best practice: true open-
+-         source code review. The NTPsec code is available in a public git 
+-         repository. One of our goals is to support broader community
+-         participation.
++         The Network Time Protocol suite, refactored
+ Author: the NTPsec project
+ Author-email: devel@ntpsec.org
+ Keywords: 
+\ No newline at end of file
+-- 
+2.17.1
+
