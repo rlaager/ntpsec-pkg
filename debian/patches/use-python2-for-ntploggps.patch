@@ -6,7 +6,7 @@ Description: Use python2 for ntploggps
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2019-01-17
+Last-Update: 2019-02-03
 --- a/ntpclients/ntploggps.py
 +++ b/ntpclients/ntploggps.py
 @@ -1,4 +1,4 @@
@@ -15,32 +15,6 @@ Last-Update: 2019-01-17
  # -*- coding: utf-8 -*-
  
  """\
-@@ -44,14 +44,6 @@
-     sys.stderr.write("%s\n" % e)
-     sys.exit(1)
- 
--try:
--    import ntp.util
--except ImportError as e:
--    sys.stderr.write(
--        "ntploggps: can't find Python NTP library -- check PYTHONPATH.\n")
--    sys.stderr.write("%s\n" % e)
--    sys.exit(1)
--
- 
- def logging_setup():
-     "Create logging object"
-@@ -105,10 +97,6 @@
-                     dest='verbose',
-                     help="be verbose")
- 
--parser.add_argument('-V', '--version',
--                    action="version",
--                    version="ntploggps %s" % ntp.util.stdversion())
--
- args = parser.parse_args()
- 
- if args.verbose:
 --- a/pylib/wscript
 +++ b/pylib/wscript
 @@ -16,12 +16,7 @@

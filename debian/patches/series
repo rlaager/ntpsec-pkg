@@ -19,6 +19,8 @@
 0002-Male-our-CVE-cite-format-uniform-with-the-way-we-ve-.patch
 ## Neoclock fix
 0001-Prevent-possible-NULL-deref-during-shutdown-of-neocl.patch
+## ntpkeygen / ntploggps version fixes
+0001-replace-unnecessary-ntp.util-imports.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch
