@@ -1,3 +1,32 @@
+ntpsec (1.1.3+dfsg1-2) unstable; urgency=medium
+
+  * Suppress lintian warning
+  * Backport a KOD rate-limiting fix
+  * Backport control key error handling in ntpq
+  * Backport PPS doc updates and "prefer" support
+  * Backport pool documentation updates
+  * Backport "Add security fixes to NEWS"
+  * Backport neoclock crash fix
+  * Backport ntpkeygen/ntploggps versioning fix
+  * Backport strncpy/strncat => strlcpy/strlcat fixes
+  * Backport various documentation fixes
+  * Bump Standards-Version to 4.3.0 (no changes)
+  * Backport Python egg .info file
+  * Fix broken version substitution in ntpleapfetch
+  * Use SOURCE_DATE_EPOCH from pkg-info.mk
+  * Make debian/upstream/signing-key.asc minimal
+  * Explain why the tarball is repacked
+  * Remove an unused lintian override
+  * Remove unused code from debian/rules
+  * Suppress lintian manpage warning
+  * Fix a spelling error
+  * Suppress lintian warnings for systemd [Install]
+  * Add Documentation= to ntp-wait.service
+  * Add Documentation= to ntpsec-systemd-netif.*
+  * Remove GPL/OpenSSL lintian override
+
+ -- Richard Laager <rlaager@wiktel.com>  Mon, 04 Feb 2019 01:38:48 -0600
+
 ntpsec (1.1.3+dfsg1-1) unstable; urgency=high
 
   * New upstream version (Closes: 919513)
