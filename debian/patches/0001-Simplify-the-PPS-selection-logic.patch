@@ -1,0 +1,30 @@
+From ee8ff57b0467d4740ef3e24ba11b1cc9002cf76b Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Sat, 12 Jan 2019 04:39:55 -0600
+Subject: [PATCH 1/5] Simplify the PPS selection logic
+
+If is_pps_driver is false, the left side of the || matches and the
+comparison is short-circuited. Thus, on the right side of the ||,
+is_pps_driver is guaranteed to be true.
+---
+ ntpd/ntp_proto.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ntpd/ntp_proto.c b/ntpd/ntp_proto.c
+index c0b93b200..331cf577c 100644
+--- a/ntpd/ntp_proto.c
++++ b/ntpd/ntp_proto.c
+@@ -1924,8 +1924,8 @@ clock_select(void)
+ 	 */
+ 	if (typepps != NULL && fabs(sys_offset) < 0.4 &&
+ 	    (!typepps->is_pps_driver ||
+-	    (typepps->is_pps_driver && (sys_prefer !=
+-	    NULL || (typesystem == NULL && sys_minsane == 0))))) {
++	     sys_prefer != NULL ||
++	     (typesystem == NULL && sys_minsane == 0))) {
+ 		typesystem = typepps;
+ 		sys_clockhop = 0;
+ 		typesystem->new_status = CTL_PST_SEL_PPS;
+-- 
+2.17.1
+

@@ -3,6 +3,12 @@
 0001-Fix-a-bug-in-handling-of-the-rate-limiting-KOD.patch
 ## control error checking
 0001-Added-tests-and-comments-to-Authenticator.control.patch
+## PPS fixes
+0001-Simplify-the-PPS-selection-logic.patch
+0002-Fix-PPS-documentation.patch
+0003-Fix-the-PPS-threshold-in-the-PPS-docs.patch
+0004-Cleanup-the-PPS-driver-docs.patch
+0005-Allow-prefer-on-a-pps-peer-to-use-it.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch
