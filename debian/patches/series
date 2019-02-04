@@ -43,6 +43,9 @@
 ## Fix a spelling error
 0001-Fix-a-typo.2.patch
 
+# Forwarded
+0001-Add-Documentation-to-ntp-wait.service.patch
+
 # Forwarding not needed
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
