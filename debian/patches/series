@@ -1,3 +1,7 @@
+# Applied upstream
+## KOD fix
+0001-Fix-a-bug-in-handling-of-the-rate-limiting-KOD.patch
+
 # Forwarding not needed
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch

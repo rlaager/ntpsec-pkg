@@ -1,0 +1,51 @@
+From 611ce34988a2c9eabaa84ff0af7d240a6b44a9dc Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Wed, 16 Jan 2019 01:59:43 -0500
+Subject: [PATCH] Fix a bug in handling of the rate-limiting KOD.
+
+The Classic code did the equivalent of this - not identical because
+some structures gave been refactored:
+
+	if (rbufp->pkt.ppoll > peer->cfg.minpoll)
+		peer->cfg.minpoll = peer->ppoll;
+	poll_update(peer, rbufp->pkt.ppoll);
+
+During the Great Refactoring of the protocol machine, Daniel changed
+it to this:
+
+	if (peer->cfg.minpoll < 10) { peer->cfg.minpoll = 10; }
+	poll_update(peer, 10);
+
+Thw second line prevented the polling rate from being set arbitrarily
+high by a malicious KOD from the server.  But the first line
+introduced a bug - on receipt of any rate-limiter KOD the client would
+get stuck at poll interval 10 and never recover.
+
+This change reverts to allowing the KOD to both adjust the poll
+interval and the minimum poll interval, but shortstops malicious
+attempts to set them to unhelpfully high values.
+---
+ ntpd/ntp_proto.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/ntpd/ntp_proto.c b/ntpd/ntp_proto.c
+index 42173b73d..6c54b0141 100644
+--- a/ntpd/ntp_proto.c
++++ b/ntpd/ntp_proto.c
+@@ -519,10 +519,11 @@ handle_procpkt(
+ 		if(!memcmp(rbufp->pkt.refid, "RATE", REFIDLEN)) {
+ 			peer->selbroken++;
+ 			report_event(PEVNT_RATE, peer, NULL);
+-			if (peer->cfg.minpoll < 10) { peer->cfg.minpoll = 10; }
+ 			peer->burst = peer->retry = 0;
+ 			peer->throttle = (NTP_SHIFT + 1) * (1 << peer->cfg.minpoll);
+-			poll_update(peer, 10);
++			if (rbufp->pkt.ppoll > peer->cfg.minpoll)
++			    peer->cfg.minpoll = min(peer->ppoll, 10);
++			poll_update(peer, min(rbufp->pkt.ppoll, 10));
+ 		}
+ 		return;
+ 	}
+-- 
+2.17.1
+
