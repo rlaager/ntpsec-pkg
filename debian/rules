@@ -196,5 +196,3 @@ override_dh_systemd_start:
 		ntplogtemp.timer \
 		ntpviz-daily.timer \
 		ntpviz-weekly.timer
-
-PKD  = $(abspath $(dir $(word 1,$(MAKEFILE_LIST))))
