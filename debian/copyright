@@ -1,6 +1,11 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: NTPsec
 Source: https://www.ntpsec.org
+Comment:
+ The tarball is repacked because upstream uses the waf build system, which is
+ shipped in the tarball as a binary blob.  The binary includes the source,
+ but Debian considers that backwards, so we run a debian/repack-waf script to
+ fix that.  See also: https://wiki.debian.org/UnpackWaf
 
 Files: *
 Copyright: 2011-2018 Network Time Foundation
