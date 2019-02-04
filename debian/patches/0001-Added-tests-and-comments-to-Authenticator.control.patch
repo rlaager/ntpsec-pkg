@@ -1,0 +1,100 @@
+From 121f461806bca542f370b11e9d7635c682477bbd Mon Sep 17 00:00:00 2001
+From: Ian Bruene <ianbruene@gmail.com>
+Date: Fri, 18 Jan 2019 04:34:21 +0000
+Subject: [PATCH] Added tests and comments to Authenticator.control()
+
+---
+ ntpclients/ntpq.py         |  9 +++++++++
+ pylib/packet.py            |  2 ++
+ tests/pylib/test_packet.py | 16 ++++++++++++++++
+ 3 files changed, 27 insertions(+)
+
+diff --git a/ntpclients/ntpq.py b/ntpclients/ntpq.py
+index 0a96c5aa8..4dab029c9 100644
+--- a/ntpclients/ntpq.py
++++ b/ntpclients/ntpq.py
+@@ -544,6 +544,8 @@ usage: poll [n] [verbose]
+             self.session.password()
+         except ntp.packet.ControlException as e:
+             self.warn(e.message + "\n")
++        except IOError:
++            print("***Can't read control key from /etc/ntp.conf")
+ 
+     def help_passwd(self):
+         self.say("""\
+@@ -1152,6 +1154,9 @@ usage: lopeers
+         except ntp.packet.ControlException as e:
+             self.warn(e.message + "\n")
+             return
++        except IOError:
++            print("***Can't read control key from /etc/ntp.conf")
++            return
+         if self.debug > 2:
+             self.warn("In Config\nKeyword = :config\nCommand = %s\n" % line)
+         try:
+@@ -1298,6 +1303,8 @@ usage: mrulist [tag=value] [tag=value] [tag=value] [tag=value]
+         except ntp.packet.ControlException as e:
+             self.warn(e.message + "\n")
+             return
++        except IOError:
++            print("***Can't read control key from /etc/ntp.conf")
+ 
+     def help_ifstats(self):
+         self.say("""\
+@@ -1321,6 +1328,8 @@ usage: ifstats
+         except ntp.packet.ControlException as e:
+             self.warn(e.message + "\n")
+             return
++        except IOError:
++            print("***Can't read control key from /etc/ntp.conf")
+ 
+     def help_reslist(self):
+         self.say("""\
+diff --git a/pylib/packet.py b/pylib/packet.py
+index 85efff9e2..284d93b72 100644
+--- a/pylib/packet.py
++++ b/pylib/packet.py
+@@ -1603,11 +1603,13 @@ class Authenticator:
+                 keyid = int(line.split()[1])
+                 (keytype, passwd) = self.passwords[keyid]
+                 if passwd is None:
++                    # Invalid key ID
+                     raise ValueError
+                 if len(passwd) > 20:
+                     passwd = ntp.util.hexstr2octets(passwd)
+                 return (keyid, keytype, passwd)
+         else:
++            # No control lines found
+             raise ValueError
+ 
+     @staticmethod
+diff --git a/tests/pylib/test_packet.py b/tests/pylib/test_packet.py
+index 0c23a0e70..2be1c044d 100644
+--- a/tests/pylib/test_packet.py
++++ b/tests/pylib/test_packet.py
+@@ -1919,6 +1919,22 @@ class TestAuthenticator(unittest.TestCase):
+             except ValueError:
+                 errored = True
+             self.assertEqual(errored, True)
++            # Malformed control line
++            self.open_data = ["control foo"]
++            try:
++                cls.control()
++                errored = False
++            except ValueError:
++                errored = True
++            self.assertEqual(errored, True)
++            # Non-existent key
++            self.open_data = ["control 42"]
++            try:
++                cls.control()
++                errored = False
++            except KeyError:
++                errored = True
++            self.assertEqual(errored, True)
+         finally:
+             ntpp.open = open
+ 
+-- 
+2.17.1
+

@@ -1,6 +1,8 @@
 # Applied upstream
 ## KOD fix
 0001-Fix-a-bug-in-handling-of-the-rate-limiting-KOD.patch
+## control error checking
+0001-Added-tests-and-comments-to-Authenticator.control.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch
