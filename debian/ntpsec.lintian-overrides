@@ -1,5 +1,3 @@
-# The apparmor configuration file is documented as GPL-2.
-ntpsec: possible-gpl-code-linked-with-openssl
 # This unit is launched by the corresponding timer unit:
 ntpsec: systemd-service-file-missing-install-key lib/systemd/system/ntpsec-rotate-stats.service
 # This unit is launched by the corresponding path unit:
