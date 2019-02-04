@@ -1,0 +1,3 @@
+# These units are launched by the corresponding timer units:
+ntpsec-ntpviz: systemd-service-file-missing-install-key lib/systemd/system/ntploggps.service
+ntpsec-ntpviz: systemd-service-file-missing-install-key lib/systemd/system/ntplogtemp.service

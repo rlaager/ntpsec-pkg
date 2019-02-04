@@ -1,5 +1,9 @@
 # The apparmor configuration file is documented as GPL-2.
 ntpsec: possible-gpl-code-linked-with-openssl
+# This unit is launched by the corresponding timer unit:
+ntpsec: systemd-service-file-missing-install-key lib/systemd/system/ntpsec-rotate-stats.service
+# This unit is launched by the corresponding path unit:
+ntpsec: systemd-service-file-missing-install-key lib/systemd/system/ntpsec-systemd-netif.service
 # ntp-wait.service intentionally and correctly has WantedBy=time-sync.target.
 ntpsec: systemd-service-file-refers-to-unusual-wantedby-target
 # These are included manually, as the postinst needs custom ordering.
