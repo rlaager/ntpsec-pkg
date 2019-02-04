@@ -9,6 +9,11 @@
 0003-Fix-the-PPS-threshold-in-the-PPS-docs.patch
 0004-Cleanup-the-PPS-driver-docs.patch
 0005-Allow-prefer-on-a-pps-peer-to-use-it.patch
+## Pool documentation fixes
+0001-Simplify-and-remove-redundancies-update-URL-to-SSL.patch
+0002-Some-suggested-edits.patch
+0003-Simplify-server-pool-to-merely-pool-.-Fix-a-grammar-.patch
+0004-typo.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch
