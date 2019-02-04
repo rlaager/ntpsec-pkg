@@ -39,6 +39,8 @@
 0001-issue-546.patch
 0001-Make-sure-PEP241-egg-gets-variables-substituted.patch
 0001-Use-.egg-info-for-the-Python-info-file.patch
+## Fix a spelling error
+0001-Fix-a-typo.2.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch
