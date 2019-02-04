@@ -1,6 +1,7 @@
 #!/usr/bin/make -f
 
 include /usr/share/dpkg/default.mk
+include /usr/share/dpkg/pkg-info.mk
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+bindnow,+pie
 export DEB_CFLAGS_MAINT_APPEND = -fno-strict-aliasing
@@ -49,7 +50,7 @@ endif
 		--enable-debug-gdb --enable-mssntp --enable-warnings \
 		--refclock=local,spectracom,generic,arbiter,nmea,pps,hpgps,shm,trimble,jjy,zyfer,neoclock \
 		--enable-doc --htmldir=/usr/share/doc/ntpsec/html \
-		--build-epoch=$(shell date -d "$(shell dpkg-parsechangelog --show-field=Date)" "+%s")
+		--build-epoch=$(SOURCE_DATE_EPOCH) \
 
 override_dh_auto_build:
 	python3 waf build -v
