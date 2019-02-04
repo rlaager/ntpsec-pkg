@@ -1,4 +1,4 @@
-ntpsec (1.1.3+dfsg1-2~wiktel1.16.04.1) xenial; urgency=medium
+ntpsec (1.1.3+dfsg1-2~wiktel1.18.04.1) bionic; urgency=medium
 
   * Suppress lintian warning
   * Backport a KOD rate-limiting fix
