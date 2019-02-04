@@ -5,7 +5,7 @@ debian/tmp/usr/bin/ntpq
 debian/tmp/usr/bin/ntptrace
 debian/tmp/usr/sbin/ntpd
 debian/tmp/usr/sbin/ntpkeygen
-debian/tmp/usr/sbin/ntpleapfetch
+debian/tmp/usr/bin/ntpleapfetch usr/sbin
 debian/tmp/usr/sbin/ntptime
 debian/tmp/usr/sbin/ntpwait
 debian/tmp/usr/share/man/man1/ntpmon.1

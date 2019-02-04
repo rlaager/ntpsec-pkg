@@ -85,7 +85,6 @@ override_dh_install:
 		debian/tmp/usr/bin/ntptrace
 	install -m 755 \
 		attic/ntpdate \
-		ntpclients/ntpleapfetch \
 		debian/tmp/usr/sbin
 	install -m 755 \
 		ntpclients/ntpwait.py \
