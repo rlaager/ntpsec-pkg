@@ -1,0 +1,34 @@
+From 50828a129d3f7dc2e9a6daaaee6986a67d8169f5 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Fri, 1 Feb 2019 09:15:05 -0500
+Subject: [PATCH] Typo fixes.
+
+---
+ docs/ntpsec.adoc | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/docs/ntpsec.adoc b/docs/ntpsec.adoc
+index b9cdc702e..4803dea7d 100644
+--- a/docs/ntpsec.adoc
++++ b/docs/ntpsec.adoc
+@@ -163,7 +163,7 @@ codebase has been outright removed, with less than 5% new code added.
+   system clock (e.g. at boot time on a system with missing or damaged
+   battery back up) without requiring sync to a remote peer.
+ 
+-* We've fixed bug inherited from Classic that could cause the jitter
++* We've fixed a bug inherited from Classic that could cause the jitter
+   of a bad peer to be incorrectly zeroed, possibly causing that peer
+   to be selected.  This probably accounts for some flakiness within
+   8 polling intervals of startup on older versions.
+@@ -212,7 +212,7 @@ codebase has been outright removed, with less than 5% new code added.
+   variable that is the root distance of the selected peer. This can
+   fill in the MIB's ntpEntTimeDistance entry.
+ 
+-* ntpq displays the root distance (aka. syncronization distance) in the
++* ntpq displays the root distance (aka. synchronization distance) in the
+   sysinfo command.
+ 
+ == Configuration Improvements ==
+-- 
+2.17.1
+

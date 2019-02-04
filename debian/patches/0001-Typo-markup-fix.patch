@@ -1,0 +1,31 @@
+From fe2a1213de71e8c6402c4097335ad8d652b88922 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Sat, 2 Feb 2019 22:59:26 -0500
+Subject: [PATCH] Typo/markup fix.
+
+---
+ docs/includes/ntp-conf-body.adoc | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/docs/includes/ntp-conf-body.adoc b/docs/includes/ntp-conf-body.adoc
+index 70296fa7c..e0afe9724 100644
+--- a/docs/includes/ntp-conf-body.adoc
++++ b/docs/includes/ntp-conf-body.adoc
+@@ -1,4 +1,4 @@
+-// This is the body of the manual page for ntpd.
++// This is the body of the manual page for ntpd.conf.
+ // It's included in two places: once for the docs/ HTML
+ // tree, and once to make an individual man page.
+ 
+@@ -78,7 +78,7 @@ include::../includes/assoc-options.adoc[]
+ 
+ include::../includes/assoc-auxcommands.adoc[]
+ 
+-== Authentication Commands ==
++=== Authentication Commands ===
+ 
+ include::../includes/auth-commands.adoc[]
+ 
+-- 
+2.17.1
+

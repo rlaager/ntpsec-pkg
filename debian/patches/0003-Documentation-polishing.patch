@@ -1,0 +1,168 @@
+From 7d9be2502ff7ea27f1dc24c8c9f4bccc3ae41707 Mon Sep 17 00:00:00 2001
+From: "Eric S. Raymond" <esr@thyrsus.com>
+Date: Fri, 1 Feb 2019 15:29:18 -0500
+Subject: [PATCH 3/5] Documentation polishing.
+
+---
+ docs/driver_spectracom.adoc |  2 +-
+ docs/history.adoc           |  2 +-
+ docs/ntpsec.adoc            | 15 +++++++--
+ docs/warp.adoc              | 63 ++++++++++++++++++++++++++++++++++++-
+ ntpclients/ntpkeygen.py     |  2 +-
+ 5 files changed, 78 insertions(+), 6 deletions(-)
+
+diff --git a/docs/driver_spectracom.adoc b/docs/driver_spectracom.adoc
+index e7fb1cf22..0b745579a 100644
+--- a/docs/driver_spectracom.adoc
++++ b/docs/driver_spectracom.adoc
+@@ -5,7 +5,7 @@ include::html.include[]
+ 
+ ["verse",subs="normal"]
+ Name: spectracom
+-Reference ID: +GPS+
++Reference ID: GPS
+ Serial Port: +/dev/spectracom+'u'; 9600 bps 8N1
+ Features: Optional PPS signal processing, +tty_clk+
+ Requires: Optional PPS signal processing requires the PPSAPI signal interface.
+diff --git a/docs/history.adoc b/docs/history.adoc
+index d8fcdfefb..391fb6759 100644
+--- a/docs/history.adoc
++++ b/docs/history.adoc
+@@ -43,7 +43,7 @@ model for precision timekeeping) described a new implementation and
+ interface in 1994. That implementation could keep time with a
+ precision of up to one microsecond.
+ 
+-Work for a Version 4 of NTP bagain around 1994. The first new
++Work for a Version 4 of NTP begain around 1994. The first new
+ specification was https://tools.ietf.org/rfc/rfc2030.txt[RFC 2030],
+ Simple Network Time Protocol (SNTP) version 4 for IPv4, IPv6 and OSI.
+ This issued in 1996.
+diff --git a/docs/ntpsec.adoc b/docs/ntpsec.adoc
+index 09465369e..6ce7ba73a 100644
+--- a/docs/ntpsec.adoc
++++ b/docs/ntpsec.adoc
+@@ -98,8 +98,14 @@ a build-time switch, not a run-time one).
+ == Security Improvements ==
+ 
+ We have spent more effort than anything else on reducing attack
+-surface and hardening code.  In toto, more than 70% of the NTP Classic
+-codebase has been outright removed, with less than 5% new code added.
++surface and hardening code.  In toto, more than 74% of the NTP Classic
++codebase has been outright removed, with less than 5% new code added
++to the security-critical core.
++
++* NTPsec conforms to the
++  https://datatracker.ietf.org/doc/draft-ietf-ntp-data-minimization/[NTP
++  Client Data Minimization] draft RFC, which changes the client-side
++  generation of some packet headers to prevent client fingerprinting.
+ 
+ * The deprecated ntpdc utility, long a chronic locus of security
+   vulnerabilities, has been removed.  Its function has been merged
+@@ -168,6 +174,11 @@ codebase has been outright removed, with less than 5% new code added.
+   to be selected.  This probably accounts for some flakiness within
+   8 polling intervals of startup on older versions.
+ 
++* Flagging a PPS peer with "prefer" allows its pulse-per-second input
++  to be used with any source. This capability had been claimed in the NTP
++  Classic documentation but if it was ever actually implemented that
++  code was lost without trace by the time NTPsec forked.
++
+ [[clients]]
+ == Client Tool Improvements ==
+ 
+diff --git a/docs/warp.adoc b/docs/warp.adoc
+index 9ab1f2be5..42980af29 100644
+--- a/docs/warp.adoc
++++ b/docs/warp.adoc
+@@ -11,6 +11,7 @@ include::includes/external.adoc[]
+ * link:#intro[Introduction and Overview]
+ * link:#scale[NTP Timescale and Data Formats]
+ * link:#arch[Architecture and Algorithms]
++* link:#standards[Standards Conformance]
+ 
+ '''''
+ 
+@@ -185,6 +186,66 @@ Research Project] page. For additional information on statistical
+ principles and performance metrics, see the link:stats.html[Performance
+ Metrics] page.
+ 
++[[standards]]
++== Standards Conformance ==
++
++The principal standard informing the NTPsec software is
++https://tools.ietf.org/html/rfc5905[RFC 5905].
++
++Older NTP RFCs such as https://tools.ietf.org/html/rfc1305[RFC 1305]
++are no longer relevant.
++
++Note that NTPsec has entirely dropped conformance with
++https://tools.ietf.org/html/rfc5905[RFC 5906].  Autokey never quite
++worked, and the design was unstable enough that if there was ever
++actually a time when it fully conformed to its RFC that span must have
++been pretty short.
++
++https://tools.ietf.org/rfc/rfc2030.txt[RFC 2030] describes
++Simple Network Time Protocol (SNTP) version 4.
++
++=== Divergences from RFC 5905 ===
++
++Code conformance was never quite exact even before the NTPsec fork.
++In this section we attempt to list divergences.  This list is probably
++not exhaustive.
++
++Modes 5 (Broadcast) and 6 (Broadcast client) are no longer implemented
++in NTPsec, as they were impossible to secure.  Mode 1 (Symmetric
++Active) is no longer implemented; such packets are treated as ordinary
++client (mode 3) packets. Mode 2 (Symmetric Passive) is still distinct
++from mode 3 but its only effect is on initial poll interval.
++
++In figure 8 of section 7.3, 128 bits (16 octets, corresponding to an
++MD5 digest) is not the only possible length for the MAC. This was
++a pre-NTPsec change present in NTP Classic versions after 2010.
++
++NTPsec conforms to the
++https://datatracker.ietf.org/doc/draft-ietf-ntp-data-minimization/[NTP
++Client Data Minimization] draft RFC, which changes the client-side
++generation of some packet headers.
++
++The table of reference identifiers in Figure 12 is largely obsolete
++and somewhat incomplete relative to the code.
++
++In the table of KISS codes (Figure 13), only RATE still exists and is
++implemented in NTPsec; others proved unnecessary or (in the cases of
++DENY and RSTR) outright dangerous. INIT and STEP are no lonkrt KoD types
++but persist as peer statuses that may be reported by {ntpqman}/{ntpmon}.
++
++The continuing relevance of much of Appendix A is doubtful.
++
++=== Divergences from RFC 2030 ===
++
++In the packet-format illustration of section 4 (NTP Message Format)
++128 is not the only possible bit length for a MAC.  However, this
++field is not shipped in SNTP operation, so the flaw is theoretical.
++
++Some packet mode values are, as previously noted, no longer
++implemented. Many External Reference Source types are obsolete.
++Multicast and anycast modes are no longer implemented.
++
++
+ '''''
+ 
+-include::includes/footer.adoc[]
++Include::includes/footer.adoc[]
+diff --git a/ntpclients/ntpkeygen.py b/ntpclients/ntpkeygen.py
+index b976d4db1..0f6eb8d44 100644
+--- a/ntpclients/ntpkeygen.py
++++ b/ntpclients/ntpkeygen.py
+@@ -15,7 +15,7 @@ AES (128-bit) keys used to compute CMAC mode authentcation
+ using shared key cryptography
+ 
+ The file can be edited by hand to support MD5 and SHA1 for
+-old digest mode authentcation.
++old digest mode authentication.
+ '''
+ 
+ from __future__ import print_function
+-- 
+2.17.1
+

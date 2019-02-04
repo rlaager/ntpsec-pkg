@@ -23,6 +23,17 @@
 0001-replace-unnecessary-ntp.util-imports.patch
 ## Replace banned string functions
 0001-Several-strncpy-strncat-strlcpy-strlcat-fix-542.patch
+## Documentation fixes
+0001-Typo-fixes.patch
+0001-Configuration-code-and-documentation-for-NTS-s-clien.patch
+0001-Documentation-polishing.patch
+0002-Trivial-link-fix.patch
+0003-Documentation-polishing.patch
+0004-Another-note-on-standards-conformance.patch
+0005-Documentation-polishing.patch
+0001-Typo-markup-fix.patch
+0001-Typos-in-comments-and-documentation.patch
+0001-Fix-a-typo.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch

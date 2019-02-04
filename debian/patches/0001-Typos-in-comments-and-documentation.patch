@@ -1,0 +1,173 @@
+Last-Update: 2019-02-03
+From 965043acdda2076b62e7f7e978065e305938000e Mon Sep 17 00:00:00 2001
+From: Matt Selsky <matthew.selsky@twosigma.com>
+Date: Fri, 1 Feb 2019 23:39:42 -0500
+Subject: [PATCH] Typos in comments and documentation
+
+---
+ docs/history.adoc                |  2 +-
+ docs/includes/ntpsnmpd-body.adoc |  4 ++--
+ docs/prefer.adoc                 |  2 +-
+ docs/top-asciidoc.css            |  2 +-
+ ntpclients/ntpleapfetch          | 10 +++++-----
+ ntpd/ntp_control.c               |  2 +-
+ ntpd/refclock_generic.c          |  2 +-
+ packaging/SUSE/ntpsec.changes    |  2 +-
+ pylib/agentx.py                  |  2 +-
+ tests/libntp/ntp_random.c        |  4 ++--
+ 10 files changed, 16 insertions(+), 16 deletions(-)
+
+--- a/docs/history.adoc
++++ b/docs/history.adoc
+@@ -43,7 +43,7 @@
+ interface in 1994. That implementation could keep time with a
+ precision of up to one microsecond.
+ 
+-Work for a Version 4 of NTP begain around 1994. The first new
++Work for a Version 4 of NTP began around 1994. The first new
+ specification was https://tools.ietf.org/rfc/rfc2030.txt[RFC 2030],
+ Simple Network Time Protocol (SNTP) version 4 for IPv4, IPv6 and OSI.
+ This issued in 1996.
+--- a/docs/includes/ntpsnmpd-body.adoc
++++ b/docs/includes/ntpsnmpd-body.adoc
+@@ -57,7 +57,7 @@
+ 
+ [[loglevel]]
+ +loglevel+ _level_::
+-  Threshold for log messages. Equivilent to -D
++  Threshold for log messages. Equivalent to -D
+ 
+ === /var/ntpsnmpd/notify.conf ===
+   This file is used to store the state of options that can be set
+@@ -104,7 +104,7 @@
+ 
+ == Known Deviations from RFC 5907 ==
+ 
+-The ntpEntStatusEntityUptime OID specifies a bizzare time formant. This
++The ntpEntStatusEntityUptime OID specifies a bizarre time format. This
+ does not match what the SNMP tools expect to see from a TimeTicks variable.
+ Instead the daemon returns a normal TimeTicks value.
+ 
+--- a/docs/prefer.adoc
++++ b/docs/prefer.adoc
+@@ -278,7 +278,7 @@
+ 
+ To achieve the same result when using the link:driver_pps.html[separate
+ "pps" driver], +minsane+ can be set to zero so the PPS signal disciplines
+-the system clock in the absense of other sources.
++the system clock in the absence of other sources.
+ 
+ '''''
+ 
+--- a/docs/top-asciidoc.css
++++ b/docs/top-asciidoc.css
+@@ -421,7 +421,7 @@
+ p.table {
+   margin-top: 0;
+ }
+-/* Because the table frame attribute is overriden by CSS in most browsers. */
++/* Because the table frame attribute is overridden by CSS in most browsers. */
+ div.tableblock > table[frame="void"] {
+   border-style: none;
+ }
+--- a/ntpclients/ntpleapfetch
++++ b/ntpclients/ntpleapfetch
+@@ -15,7 +15,7 @@
+ # This file needs to remain free of bash-isms.  Make sure it
+ # runs on plain POSIX shell.
+ 
+-# GNU sed has many extentions not on osX and FreeBSD.  If
++# GNU sed has many extensions not on macOS and FreeBSD.  If
+ # you change near sed, test on FreeBSD.
+ 
+ # ########## Default configuration ##########
+@@ -307,8 +307,8 @@
+     # Extract the file's hash. Restore any leading zeroes in hash segments.
+ 
+     # The sed [] includes a tab (\t) and space; #h is followed by a tab and space
+-    # or maybe a space and a tab.  remove the tab, whereever it may be.  Add some 0x
+-    # so it can be run throught printf to restore missing leading zeros.
++    # or maybe a space and a tab.  remove the tab, wherever it may be.  Add some 0x
++    # so it can be run through printf to restore missing leading zeros.
+     #
+     local FSHA1="`grep '^#h' $1 | tr -d '[:cntrl:]' | sed -e's/^#h//' -e's/ / 0x/g'`"
+     FSHA1=`printf '%08x%08x%08x%08x%08x' $FSHA1`
+@@ -404,12 +404,12 @@
+             fi
+             chmod --reference=$REFFILE $TMPFILE > /dev/null 2>&1
+             if  [ $? -ne 0 ] ; then
+-                # the above chmod fails on osX and BSD, just force it
++                # the above chmod fails on macOS and BSD, just force it
+                 chmod 644 $TMPFILE
+             fi
+             chown --reference=$REFFILE $TMPFILE > /dev/null 2>&1
+             if  [ $? -ne 0 ] ; then
+-                # the above chown fails on osX and BSD, just force it
++                # the above chown fails on macOS and BSD, just force it
+                 chown root:wheel $TMPFILE
+             fi
+             ( which selinuxenabled && selinuxenabled && which chcon ) >/dev/null 2>&1
+--- a/ntpd/ntp_control.c
++++ b/ntpd/ntp_control.c
+@@ -2639,7 +2639,7 @@
+ 	NLOG(NLOG_SYSEVENT)
+ 	    if (quiet_until <= current_time) {
+ 		    quiet_until = current_time + 300;
+-	/* The cast on SRCPORT is required to supress a warning on NetBSD 8.0
++	/* The cast on SRCPORT is required to suppress a warning on NetBSD 8.0
+ 	 * http://gnats.netbsd.org/cgi-bin/query-pr-single.pl?number=53618
+ 	 */
+ 		    msyslog(LOG_WARNING,
+--- a/ntpd/refclock_generic.c
++++ b/ntpd/refclock_generic.c
+@@ -1455,7 +1455,7 @@
+ static int ncltypes = sizeof(parse_clockinfo) / sizeof(struct parse_clockinfo);
+ 
+ #define CLK_REALTYPE(x) ((int)(((x)->cfg.mode) & 0x7F))
+-/* carefull, CLK_TYPE() in refclock_trimle.c is different */
++/* careful, CLK_TYPE() in refclock_trimble.c is different */
+ #define CLK_TYPE(x)	((CLK_REALTYPE(x) >= ncltypes) ? ~0 : CLK_REALTYPE(x))
+ #define CLK_PPS(x)	(((x)->cfg.mode) & 0x80)
+ 
+--- a/packaging/SUSE/ntpsec.changes
++++ b/packaging/SUSE/ntpsec.changes
+@@ -371,7 +371,7 @@
+ - Update to version 0.9.7+git20170422.4162ff742:
+   * Typo
+   * Fix typo in etc/ntplogtemp.service
+-  * waf: define EPOCH=[build-date], for reproducable builds.
++  * waf: define EPOCH=[build-date], for reproducible builds.
+   * EPOCH: remove REPRO_DATE and NTPD_IGNORE_BUILD_DATE.
+   * ntpcal_get_build_date: now uses EPOCH.
+   * ntp_calendar: add missing return.
+--- a/pylib/agentx.py
++++ b/pylib/agentx.py
+@@ -378,7 +378,7 @@
+                 binds.append(ax.Varbind(ax.VALUE_NO_SUCH_OBJECT, target))
+             else:
+                 vbind = reader(oid)
+-                if vbind is None:  # No data avaliable.
++                if vbind is None:  # No data available.
+                     # I am not certain that this is the correct response
+                     # when no data is available. snmpwalk appears to stop
+                     # calling a particular sub-agent when it gets to a NULL.
+--- a/tests/libntp/ntp_random.c
++++ b/tests/libntp/ntp_random.c
+@@ -19,7 +19,7 @@
+ 	/* This is just a crude sanity check.
+ 	 * It could fail when working correctly,
+ 	 * but the chances are pretty small.
+-	 * It won't be reproducable.  ;)
++	 * It won't be reproducible.  ;)
+ 	 * You can test this code by making the loop count smaller.
+ 	 */
+ 	for (i=0; i<99; i++) {
+@@ -40,7 +40,7 @@
+ 	/* This is just a crude sanity check.
+ 	 * It could fail when working correctly,
+ 	 * but the chances are pretty small.
+-	 * It won't be reproducable.  ;)
++	 * It won't be reproducible.  ;)
+ 	 * You can test this code by making the loop count smaller.
+ 	 */
+ 	for (i=0; i<99; i++) {
