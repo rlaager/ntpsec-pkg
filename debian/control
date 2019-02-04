@@ -20,7 +20,7 @@ Build-Depends: asciidoc,
 Build-Conflicts: libavahi-compat-libdnssd-dev,
                  libwww-dev,
                  libwww-ssl-dev
-Standards-Version: 4.2.1
+Standards-Version: 4.3.0
 Rules-Requires-Root: no
 Vcs-Browser: https://github.com/rlaager/ntpsec-pkg
 Vcs-Git: https://github.com/rlaager/ntpsec-pkg.git
