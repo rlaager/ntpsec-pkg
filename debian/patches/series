@@ -17,6 +17,8 @@
 ## Add security fixes to NEWS
 0001-Add-security-fixes-to-NEWS.patch
 0002-Male-our-CVE-cite-format-uniform-with-the-way-we-ve-.patch
+## Neoclock fix
+0001-Prevent-possible-NULL-deref-during-shutdown-of-neocl.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch
