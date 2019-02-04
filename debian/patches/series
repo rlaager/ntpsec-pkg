@@ -21,6 +21,8 @@
 0001-Prevent-possible-NULL-deref-during-shutdown-of-neocl.patch
 ## ntpkeygen / ntploggps version fixes
 0001-replace-unnecessary-ntp.util-imports.patch
+## Replace banned string functions
+0001-Several-strncpy-strncat-strlcpy-strlcat-fix-542.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch

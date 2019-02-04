@@ -1,0 +1,64 @@
+From c813ce90c9c4302afdc7d63b4661458ae2506da9 Mon Sep 17 00:00:00 2001
+From: Hal Murray <murray@shuksan.example.com>
+Date: Wed, 30 Jan 2019 20:56:23 -0800
+Subject: [PATCH] Several strncpy/strncat => strlcpy/strlcat, fix #542
+
+---
+ libntp/authreadkeys.c | 8 ++++----
+ libntp/prettydate.c   | 4 ++--
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/libntp/authreadkeys.c b/libntp/authreadkeys.c
+index 711299dda..04430630b 100644
+--- a/libntp/authreadkeys.c
++++ b/libntp/authreadkeys.c
+@@ -66,9 +66,9 @@ nexttok(
+ 
+ static char*
+ try_cmac(const char *upcased, char* namebuf) {
+-	strncpy(namebuf, upcased, NAMEBUFSIZE);
++	strlcpy(namebuf, upcased, NAMEBUFSIZE);
+ 	if ((strcmp(namebuf, "AES") == 0) || (strcmp(namebuf, "AES128CMAC") == 0))
+-		strncpy(namebuf, "AES-128", NAMEBUFSIZE);
++		strlcpy(namebuf, "AES-128", NAMEBUFSIZE);
+ 	strlcat(namebuf, "-CBC", NAMEBUFSIZE);
+ 	namebuf[NAMEBUFSIZE-1] = '\0';
+ 	if (0) msyslog(LOG_INFO, "DEBUG try_cmac: %s=>%s", upcased, namebuf);
+@@ -79,12 +79,12 @@ try_cmac(const char *upcased, char* namebuf) {
+ 
+ static char*
+ try_digest(char *upcased, char *namebuf) {
+-	strncpy(namebuf, upcased, NAMEBUFSIZE);
++	strlcpy(namebuf, upcased, NAMEBUFSIZE);
+ 	if (EVP_get_digestbyname(namebuf) != NULL)
+ 	  return namebuf;
+ 	if ('M' == upcased[0]) {
+ 		/* hack for backward compatibility */
+-		strncpy(namebuf, "MD5", NAMEBUFSIZE);
++		strlcpy(namebuf, "MD5", NAMEBUFSIZE);
+ 		if (EVP_get_digestbyname(namebuf) != NULL)
+ 	 		return namebuf;
+ 	}
+diff --git a/libntp/prettydate.c b/libntp/prettydate.c
+index a397b088f..cf3322d33 100644
+--- a/libntp/prettydate.c
++++ b/libntp/prettydate.c
+@@ -157,13 +157,13 @@ common_prettydate(
+ 			 (unsigned long)lfpuint(ts), (unsigned long)lfpfrac(ts),
+ 			 jd.year, jd.month, jd.monthday,
+ 			 jd.hour, jd.minute, jd.second, msec);
+-		strncat(bp, "Z",  LIB_BUFLENGTH);
++		strlcat(bp, "Z",  LIB_BUFLENGTH);
+ 	} else {
+ 		snprintf(bp, LIB_BUFLENGTH, pfmt,
+ 			 (unsigned long)lfpuint(ts), (unsigned long)lfpfrac(ts),
+ 			 1900 + tm->tm_year, tm->tm_mon+1, tm->tm_mday,
+ 			 tm->tm_hour, tm->tm_min, tm->tm_sec, msec);
+-		strncat(bp, "Z", LIB_BUFLENGTH);
++		strlcat(bp, "Z", LIB_BUFLENGTH);
+ 	}
+ 	return bp;
+ }
+-- 
+2.17.1
+
