@@ -1,0 +1,56 @@
+From bf3dfbe30ad16b4d345dfe9d6c6d842d9321355f Mon Sep 17 00:00:00 2001
+From: Hal Murray <murray@shuksan.example.com>
+Date: Sat, 16 Mar 2019 11:07:41 -0700
+Subject: [PATCH] Fix for #577, DNS retry sloth
+
+There is only one thread for DNS (and NTS-KE) work.  If an attempt
+was made while the thread was busy, it waited for the retry timer
+rather than trying again as soon as the previous DNS work finished.
+---
+ ntpd/ntp_proto.c | 20 +++++++++++++++++---
+ 1 file changed, 17 insertions(+), 3 deletions(-)
+
+--- a/ntpd/ntp_proto.c
++++ b/ntpd/ntp_proto.c
+@@ -811,7 +811,11 @@
+ 		if ((peer_associations <= 2 * sys_maxclock) &&
+ 		    (peer_associations < sys_maxclock ||
+ 		     sys_survivors < sys_minclock))
+-			if (!dns_probe(peer)) return;
++			if (!dns_probe(peer)) {
++			    /* DNS thread busy, try again soon */
++			    peer->nextdate = current_time;
++			    return;
++                     }
+ 		poll_update(peer, hpoll);
+ 		return;
+ 	}
+@@ -819,7 +823,10 @@
+ 	/* Does server need DNS lookup? */
+ 	if (peer->cfg.flags & FLAG_DNS) {
+ 		peer->outdate = current_time;
+-		if (!dns_probe(peer)) return;
++		if (!dns_probe(peer)) {
++			peer->nextdate = current_time;
++			return;
++		}
+ 		poll_update(peer, hpoll);
+ 		return;
+         }
+@@ -2419,8 +2426,15 @@
+ 				hpoll = 8;
+ 			break;
+ 		case DNS_temp:
++			/* DNS not working yet.  ??
++			 * Want to retry soon,
++			 * but also want to avoid log clutter.
++			 * Beware, Fedora 29 lies:
++			 *   What I expect to be temp (no Wifi)
++			 *   gets EAI_NONAME, Name or service not known
++			 */
+ 			txt = "temp";
+-			hpoll += 1;
++			hpoll = 3;
+ 			break;
+ 		case DNS_error:
+ 			txt = "error";

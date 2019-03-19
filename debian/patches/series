@@ -42,6 +42,8 @@
 0001-Use-.egg-info-for-the-Python-info-file.patch
 ## Fix a spelling error
 0001-Fix-a-typo.2.patch
+## Fix DNS timeouts
+0001-Fix-for-577-DNS-retry-sloth.patch
 
 # Forwarded
 0001-Add-Documentation-to-ntp-wait.service.patch
