@@ -12,8 +12,6 @@ ntpdate \- set the date and time via NTP
 .IR keyfile \|]
 .RB [\| \-o
 .IR version \|]
-.RB [\| \-p
-.IR samples \|]
 .RB [\| \-t
 .IR timeout \|]
 .I server
@@ -107,11 +105,6 @@ the format described in ntpd.
 Specify the NTP version for outgoing packets as the integer version, which
 can be 1, 2, 3 or 4. The default is 4. This allows ntpdate to be used with
 older NTP versions.
-.TP
-.BI \-p \ samples
-Specify the number of samples to be acquired from each server
-as the integer samples, with values from 1 to 8 inclusive. The
-default is 4.
 .TP
 .B \-q
 Query only \(en don't set the clock.
