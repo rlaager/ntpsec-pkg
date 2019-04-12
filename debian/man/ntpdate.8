@@ -6,8 +6,6 @@ ntpdate \- set the date and time via NTP
 .RB [\| \-46bBdqsuv \|]
 .RB [\| \-a
 .IR key \|]
-.RB [\| \-e
-.IR authdelay \|]
 .RB [\| \-k
 .IR keyfile \|]
 .RB [\| \-o
@@ -88,13 +86,6 @@ file at boot time.
 Enable the debugging mode, in which ntpdate will go through all the steps,
 but not adjust the local clock and using an unprivileged port. Information
 useful for general debugging will also be printed.
-.TP
-.BI \-e \ authdelay
-Specify the processing delay to perform an authentication
-function as the value authdelay, in seconds and fraction (see
-ntpd for details). This number is usually small enough to be
-negligible for most purposes, though specifying a value may
-improve timekeeping on very slow CPU's.
 .TP
 .BI \-k \ keyfile
 Specify the path for the authentication key file as the string
