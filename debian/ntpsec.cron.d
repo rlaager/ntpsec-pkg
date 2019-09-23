@@ -1,1 +1,1 @@
-25 6     * * * root [ ! -d /run/systemd/system ] && [ -x /usr/lib/ntp/rotate-stats ] && /usr/lib/ntp/rotate-stats
+25 6     * * * root if [ ! -d /run/systemd/system ] && [ -x /usr/lib/ntp/rotate-stats ] ; then /usr/lib/ntp/rotate-stats ; fi
