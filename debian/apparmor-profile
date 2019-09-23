@@ -52,6 +52,7 @@
 
   /var/lib/ntpsec/ntp.drift rw,
   /var/lib/ntpsec/ntp.drift-tmp rw,
+  /var/lib/ntpsec/nts-keys rw,
   /usr/share/zoneinfo/leap-seconds.list rw,
 
   /var/log/ntp w,
