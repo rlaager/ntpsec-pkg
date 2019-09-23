@@ -16,7 +16,7 @@ USAGE: ntpsweep [-<flag> [<val>] | --<name>[{=| }<val>]]... [hostfile]
 Options are specified by doubled hyphens and their name or by a single
 hyphen and the flag character.
 """
-# SPDX-License-Identifier: BSD-2-clause
+# SPDX-License-Identifier: BSD-2-Clause
 #
 # Python translation by ESR of a Perl script written long ago by
 # Hans Lambermont <ntpsweep@lambermont.dyndns.org>
@@ -149,6 +149,11 @@ def scan_host(host, level):
 
 
 if __name__ == '__main__':
+    bin_ver = "ntpsec-@NTPSEC_VERSION_EXTENDED@"
+    if ntp.util.stdversion() != bin_ver:
+        sys.stderr.write("Module/Binary version mismatch\n")
+        sys.stderr.write("Binary: %s\n" % bin_ver)
+        sys.stderr.write("Module: %s\n" % ntp.util.stdversion())
     try:
         (options, arguments) = getopt.getopt(
             sys.argv[1:], "h:l:m:ps:?V",

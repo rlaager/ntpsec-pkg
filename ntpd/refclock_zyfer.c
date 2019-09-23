@@ -184,10 +184,10 @@ zyfer_receive(
 	peer = rbufp->recv_peer;
 	pp = peer->procptr;
 	up = pp->unitptr;
-	p = (uint8_t *) &rbufp->recv_space;
+	p = (uint8_t *) &rbufp->recv_buffer;
 	/*
 	 * If lencode is 0:
-	 * - if *rbufp->recv_space is !
+	 * - if *rbufp->recv_buffer is !
 	 * - - call refclock_gtlin to get things going
 	 * - else flush
 	 * else stuff it on the end of lastcode
@@ -290,10 +290,11 @@ zyfer_poll(
 	 */
 	pp = peer->procptr;
 	up = pp->unitptr;
-	if (!up->pollcnt)
+	if (!up->pollcnt) {
 		refclock_report(peer, CEVNT_TIMEOUT);
-	else
+	} else {
 		up->pollcnt--;
+	}
 	pp->polls++;
 	up->polled = 1;
 }

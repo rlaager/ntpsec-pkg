@@ -31,13 +31,16 @@ import subprocess
 import sys
 import time
 
-try:
-    import ntp.util
-except ImportError as e:
-    sys.stderr.write(
-        "ntplogtemp: can't find Python NTP library -- check PYTHONPATH.\n")
-    sys.stderr.write("%s\n" % e)
-    sys.exit(1)
+
+class logfile_header_class(logging.handlers.TimedRotatingFileHandler):
+    'A class to modify the file logging handler.'
+    def doRollover(self):
+        'function to add header to new file on rotaion.'
+        if str is bytes:
+            super(logfile_header_class, self).doRollover()
+        else:
+            super().doRollover()
+        self.stream.write('# time, sensor, value\n')
 
 
 def run_binary(cmd):
@@ -185,7 +188,7 @@ class Temper:
                 if args.verbose:
                     sys.stderr.write("TEMPer-poll failed\n")
 
-        if 0 == len(data):
+        if not data:
             self.has_temper = False
         return data
 
@@ -241,7 +244,7 @@ parser.add_argument('-w', '--wait',
                     type=int)
 parser.add_argument('-V', '--version',
                     action="version",
-                    version="ntplogtemp %s" % ntp.util.stdversion())
+                    version="ntplogtemp ntpsec-@NTPSEC_VERSION_EXTENDED@")
 args = parser.parse_args()
 
 
@@ -254,8 +257,9 @@ def logging_setup():
     # Create file handler
     if args.logfile:
         # log to logfile
-        file = logging.handlers.TimedRotatingFileHandler(
+        file = logfile_header_class(
             args.logfile[0],
+            utc=True,
             when='midnight',
             interval=1)
     else:

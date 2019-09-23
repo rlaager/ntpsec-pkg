@@ -16,6 +16,39 @@ env = %(env)r
 status = subprocess.call(cmd, env=env, cwd=%(cwd)r, shell=isinstance(cmd, str))
 sys.exit(status)
 """
+@taskgen_method
+def handle_ut_cwd(self,key):
+	cwd=getattr(self,key,None)
+	if cwd:
+		if isinstance(cwd,str):
+			if os.path.isabs(cwd):
+				self.ut_cwd=self.bld.root.make_node(cwd)
+			else:
+				self.ut_cwd=self.path.make_node(cwd)
+@feature('test_scripts')
+def make_interpreted_test(self):
+	for x in['test_scripts_source','test_scripts_template']:
+		if not hasattr(self,x):
+			Logs.warn('a test_scripts taskgen i missing %s'%x)
+			return
+	self.ut_run,lst=Task.compile_fun(self.test_scripts_template,shell=getattr(self,'test_scripts_shell',False))
+	script_nodes=self.to_nodes(self.test_scripts_source)
+	for script_node in script_nodes:
+		tsk=self.create_task('utest',[script_node])
+		tsk.vars=lst+tsk.vars
+		tsk.env['SCRIPT']=script_node.path_from(tsk.get_cwd())
+	self.handle_ut_cwd('test_scripts_cwd')
+	env=getattr(self,'test_scripts_env',None)
+	if env:
+		self.ut_env=env
+	else:
+		self.ut_env=dict(os.environ)
+	paths=getattr(self,'test_scripts_paths',{})
+	for(k,v)in paths.items():
+		p=self.ut_env.get(k,'').split(os.pathsep)
+		if isinstance(v,str):
+			v=v.split(os.pathsep)
+		self.ut_env[k]=os.pathsep.join(p+v)
 @feature('test')
 @after_method('apply_link','process_use')
 def make_test(self):
@@ -25,14 +58,7 @@ def make_test(self):
 	if getattr(self,'ut_str',None):
 		self.ut_run,lst=Task.compile_fun(self.ut_str,shell=getattr(self,'ut_shell',False))
 		tsk.vars=lst+tsk.vars
-	if getattr(self,'ut_cwd',None):
-		if isinstance(self.ut_cwd,str):
-			if os.path.isabs(self.ut_cwd):
-				self.ut_cwd=self.bld.root.make_node(self.ut_cwd)
-			else:
-				self.ut_cwd=self.path.make_node(self.ut_cwd)
-	else:
-		self.ut_cwd=tsk.inputs[0].parent
+	self.handle_ut_cwd('ut_cwd')
 	if not hasattr(self,'ut_paths'):
 		paths=[]
 		for x in self.tmp_use_sorted:
@@ -55,14 +81,20 @@ def make_test(self):
 			add_path('LD_LIBRARY_PATH')
 		else:
 			add_path('LD_LIBRARY_PATH')
+	if not hasattr(self,'ut_cmd'):
+		self.ut_cmd=getattr(Options.options,'testcmd',False)
 @taskgen_method
 def add_test_results(self,tup):
 	Logs.debug("ut: %r",tup)
-	self.utest_result=tup
+	try:
+		self.utest_results.append(tup)
+	except AttributeError:
+		self.utest_results=[tup]
 	try:
 		self.bld.utest_results.append(tup)
 	except AttributeError:
 		self.bld.utest_results=[tup]
+@Task.deep_inputs
 class utest(Task.Task):
 	color='PINK'
 	after=['vnum','inst']
@@ -85,19 +117,16 @@ class utest(Task.Task):
 		if hasattr(self.generator,'ut_run'):
 			return self.generator.ut_run(self)
 		self.ut_exec=getattr(self.generator,'ut_exec',[self.inputs[0].abspath()])
-		if getattr(self.generator,'ut_fun',None):
-			self.generator.ut_fun(self)
-		testcmd=getattr(self.generator,'ut_cmd',False)or getattr(Options.options,'testcmd',False)
-		if testcmd:
-			self.ut_exec=shlex.split(testcmd%' '.join(self.ut_exec))
+		ut_cmd=getattr(self.generator,'ut_cmd',False)
+		if ut_cmd:
+			self.ut_exec=shlex.split(ut_cmd%' '.join(self.ut_exec))
 		return self.exec_command(self.ut_exec)
 	def exec_command(self,cmd,**kw):
-		Logs.debug('runner: %r',cmd)
+		self.generator.bld.log_command(cmd,kw)
 		if getattr(Options.options,'dump_test_scripts',False):
-			global SCRIPT_TEMPLATE
 			script_code=SCRIPT_TEMPLATE%{'python':sys.executable,'env':self.get_test_env(),'cwd':self.get_cwd().abspath(),'cmd':cmd}
 			script_file=self.inputs[0].abspath()+'_run.py'
-			Utils.writef(script_file,script_code)
+			Utils.writef(script_file,script_code,encoding='utf-8')
 			os.chmod(script_file,Utils.O755)
 			if Logs.verbose>1:
 				Logs.info('Test debug file written as %r'%script_file)
@@ -110,25 +139,21 @@ class utest(Task.Task):
 		finally:
 			testlock.release()
 	def get_cwd(self):
-		return self.generator.ut_cwd
-	def sig_explicit_deps(self):
-		lst=[os.stat(node.abspath()).st_mtime for node in self.inputs]
-		self.m.update(Utils.h_list(lst))
-		return super(utest,self).sig_explicit_deps()
+		return getattr(self.generator,'ut_cwd',self.inputs[0].parent)
 def summary(bld):
 	lst=getattr(bld,'utest_results',[])
 	if lst:
 		Logs.pprint('CYAN','execution summary')
 		total=len(lst)
 		tfail=len([x for x in lst if x[1]])
-		Logs.pprint('CYAN','  tests that pass %d/%d'%(total-tfail,total))
+		Logs.pprint('GREEN','  tests that pass %d/%d'%(total-tfail,total))
 		for(f,code,out,err)in lst:
 			if not code:
-				Logs.pprint('CYAN','    %s'%f)
-		Logs.pprint('CYAN','  tests that fail %d/%d'%(tfail,total))
+				Logs.pprint('GREEN','    %s'%f)
+		Logs.pprint('GREEN'if tfail==0 else'RED','  tests that fail %d/%d'%(tfail,total))
 		for(f,code,out,err)in lst:
 			if code:
-				Logs.pprint('CYAN','    %s'%f)
+				Logs.pprint('RED','    %s'%f)
 def set_exit_code(bld):
 	lst=getattr(bld,'utest_results',[])
 	for(f,code,out,err)in lst:

@@ -4,15 +4,25 @@
 
 import os,tempfile,optparse,sys,re
 from waflib import Logs,Utils,Context,Errors
-options={}
+options=optparse.Values()
 commands=[]
 envvars=[]
 lockfile=os.environ.get('WAFLOCK','.lock-waf_%s_build'%sys.platform)
 class opt_parser(optparse.OptionParser):
-	def __init__(self,ctx):
-		optparse.OptionParser.__init__(self,conflict_handler="resolve",version='waf %s (%s)'%(Context.WAFVERSION,Context.WAFREVISION))
+	def __init__(self,ctx,allow_unknown=False):
+		optparse.OptionParser.__init__(self,conflict_handler='resolve',add_help_option=False,version='waf %s (%s)'%(Context.WAFVERSION,Context.WAFREVISION))
 		self.formatter.width=Logs.get_term_cols()
 		self.ctx=ctx
+		self.allow_unknown=allow_unknown
+	def _process_args(self,largs,rargs,values):
+		while rargs:
+			try:
+				optparse.OptionParser._process_args(self,largs,rargs,values)
+			except(optparse.BadOptionError,optparse.AmbiguousOptionError)as e:
+				if self.allow_unknown:
+					largs.append(e.opt_str)
+				else:
+					self.error(str(e))
 	def print_usage(self,file=None):
 		return self.print_help(file)
 	def get_usage(self):
@@ -59,7 +69,9 @@ class OptionsContext(Context.Context):
 		p('-k','--keep',dest='keep',default=0,action='count',help='continue despite errors (-kk to try harder)')
 		p('-v','--verbose',dest='verbose',default=0,action='count',help='verbosity level -v -vv or -vvv [default: 0]')
 		p('--zones',dest='zones',default='',action='store',help='debugging zones (task_gen, deps, tasks, etc)')
-		p('--profile',dest='profile',default='',action='store_true',help=optparse.SUPPRESS_HELP)
+		p('--profile',dest='profile',default=0,action='store_true',help=optparse.SUPPRESS_HELP)
+		p('--pdb',dest='pdb',default=0,action='store_true',help=optparse.SUPPRESS_HELP)
+		p('-h','--help',dest='whelp',default=0,action='store_true',help="show this help message and exit")
 		gr=self.add_option_group('Configuration options')
 		self.option_groups['configure options']=gr
 		gr.add_option('-o','--out',action='store',default='',help='build dir for the project',dest='out')
@@ -131,20 +143,57 @@ class OptionsContext(Context.Context):
 				if group.title==opt_str:
 					return group
 			return None
-	def parse_args(self,_args=None):
-		global options,commands,envvars
+	def sanitize_path(self,path,cwd=None):
+		if not cwd:
+			cwd=Context.launch_dir
+		p=os.path.expanduser(path)
+		p=os.path.join(cwd,p)
+		p=os.path.normpath(p)
+		p=os.path.abspath(p)
+		return p
+	def parse_cmd_args(self,_args=None,cwd=None,allow_unknown=False):
+		self.parser.allow_unknown=allow_unknown
 		(options,leftover_args)=self.parser.parse_args(args=_args)
+		envvars=[]
+		commands=[]
 		for arg in leftover_args:
 			if'='in arg:
 				envvars.append(arg)
-			else:
+			elif arg!='options':
 				commands.append(arg)
-		if options.destdir:
-			options.destdir=Utils.sane_path(options.destdir)
+		for name in'top out destdir prefix bindir libdir'.split():
+			if getattr(options,name,None):
+				path=self.sanitize_path(getattr(options,name),cwd)
+				setattr(options,name,path)
+		return options,commands,envvars
+	def init_module_vars(self,arg_options,arg_commands,arg_envvars):
+		options.__dict__.clear()
+		del commands[:]
+		del envvars[:]
+		options.__dict__.update(arg_options.__dict__)
+		commands.extend(arg_commands)
+		envvars.extend(arg_envvars)
+		for var in envvars:
+			(name,value)=var.split('=',1)
+			os.environ[name.strip()]=value
+	def init_logs(self,options,commands,envvars):
+		Logs.verbose=options.verbose
 		if options.verbose>=1:
 			self.load('errcheck')
 		colors={'yes':2,'auto':1,'no':0}[options.colors]
 		Logs.enable_colors(colors)
+		if options.zones:
+			Logs.zones=options.zones.split(',')
+			if not Logs.verbose:
+				Logs.verbose=1
+		elif Logs.verbose>0:
+			Logs.zones=['runner']
+		if Logs.verbose>2:
+			Logs.zones=['*']
+	def parse_args(self,_args=None):
+		options,commands,envvars=self.parse_cmd_args()
+		self.init_logs(options,commands,envvars)
+		self.init_module_vars(options,commands,envvars)
 	def execute(self):
 		super(OptionsContext,self).execute()
 		self.parse_args()

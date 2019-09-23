@@ -10,35 +10,10 @@ from waflib.Configure import conf
 WAF_CONFIG_H='config.h'
 DEFKEYS='define_key'
 INCKEYS='include_key'
-cfg_ver={'atleast-version':'>=','exact-version':'==','max-version':'<=',}
-SNIP_FUNCTION='''
-int main(int argc, char **argv) {
-	void (*p)();
-	(void)argc; (void)argv;
-	p=(void(*)())(%s);
-	return !p;
-}
-'''
-SNIP_TYPE='''
-int main(int argc, char **argv) {
-	(void)argc; (void)argv;
-	if ((%(type_name)s *) 0) return 0;
-	if (sizeof (%(type_name)s)) return 0;
-	return 1;
-}
-'''
 SNIP_EMPTY_PROGRAM='''
 int main(int argc, char **argv) {
 	(void)argc; (void)argv;
 	return 0;
-}
-'''
-SNIP_FIELD='''
-int main(int argc, char **argv) {
-	char *off;
-	(void)argc; (void)argv;
-	off = (char*) &((%(type_name)s*)0)->%(field_name)s;
-	return (size_t) off < sizeof(%(type_name)s);
 }
 '''
 MACRO_TO_DESTOS={'__linux__':'linux','__GNU__':'gnu','__FreeBSD__':'freebsd','__NetBSD__':'netbsd','__OpenBSD__':'openbsd','__sun':'sunos','__hpux':'hpux','__sgi':'irix','_AIX':'aix','__CYGWIN__':'cygwin','__MSYS__':'cygwin','_UWIN':'uwin','_WIN64':'win32','_WIN32':'win32','__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__':'darwin','__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__':'darwin','__QNX__':'qnx','__native_client__':'nacl'}
@@ -115,7 +90,7 @@ def parse_flags(self,line,uselib_store,env=None,force_static=False,posix=None):
 			static=False
 		elif x.startswith('-Wl')or x in('-rdynamic','-pie'):
 			app('LINKFLAGS',x)
-		elif x.startswith(('-m','-f','-dynamic','-O')):
+		elif x.startswith(('-m','-f','-dynamic','-O','-g')):
 			app('CFLAGS',x)
 			app('CXXFLAGS',x)
 		elif x.startswith('-bundle'):
@@ -138,40 +113,32 @@ def validate_cfg(self,kw):
 		if not self.env.PKGCONFIG:
 			self.find_program('pkg-config',var='PKGCONFIG')
 		kw['path']=self.env.PKGCONFIG
-	if'atleast_pkgconfig_version'in kw:
-		if not'msg'in kw:
+	s=('atleast_pkgconfig_version'in kw)+('modversion'in kw)+('package'in kw)
+	if s!=1:
+		raise ValueError('exactly one of atleast_pkgconfig_version, modversion and package must be set')
+	if not'msg'in kw:
+		if'atleast_pkgconfig_version'in kw:
 			kw['msg']='Checking for pkg-config version >= %r'%kw['atleast_pkgconfig_version']
-		return
-	if not'okmsg'in kw:
+		elif'modversion'in kw:
+			kw['msg']='Checking for %r version'%kw['modversion']
+		else:
+			kw['msg']='Checking for %r'%(kw['package'])
+	if not'okmsg'in kw and not'modversion'in kw:
 		kw['okmsg']='yes'
 	if not'errmsg'in kw:
 		kw['errmsg']='not found'
-	if'modversion'in kw:
-		if not'msg'in kw:
-			kw['msg']='Checking for %r version'%kw['modversion']
+	if'atleast_pkgconfig_version'in kw:
+		pass
+	elif'modversion'in kw:
 		if not'uselib_store'in kw:
 			kw['uselib_store']=kw['modversion']
 		if not'define_name'in kw:
 			kw['define_name']='%s_VERSION'%Utils.quote_define_name(kw['uselib_store'])
-		return
-	if not'package'in kw:
-		raise ValueError('a package name is required')
-	if not'uselib_store'in kw:
-		kw['uselib_store']=kw['package'].upper()
-	if not'define_name'in kw:
-		kw['define_name']=self.have_define(kw['uselib_store'])
-	if not'msg'in kw:
-		kw['msg']='Checking for %r'%(kw['package']or kw['path'])
-	for x in cfg_ver:
-		y=x.replace('-','_')
-		if y in kw:
-			package=kw['package']
-			if Logs.verbose:
-				Logs.warn('Passing %r to conf.check_cfg() is obsolete, pass parameters directly, eg:',y)
-				Logs.warn(" conf.check_cfg(package='%s', args=['--libs', '--cflags', '%s >= 1.6'])",package,package)
-			if not'msg'in kw:
-				kw['msg']='Checking for %r %s %s'%(package,cfg_ver[x],kw[y])
-			break
+	else:
+		if not'uselib_store'in kw:
+			kw['uselib_store']=Utils.to_list(kw['package'])[0].upper()
+		if not'define_name'in kw:
+			kw['define_name']=self.have_define(kw['uselib_store'])
 @conf
 def exec_cfg(self,kw):
 	path=Utils.to_list(kw['path'])
@@ -191,19 +158,11 @@ def exec_cfg(self,kw):
 	if'atleast_pkgconfig_version'in kw:
 		cmd=path+['--atleast-pkgconfig-version=%s'%kw['atleast_pkgconfig_version']]
 		self.cmd_and_log(cmd,env=env)
-		if not'okmsg'in kw:
-			kw['okmsg']='yes'
 		return
-	for x in cfg_ver:
-		y=x.replace('-','_')
-		if y in kw:
-			self.cmd_and_log(path+['--%s=%s'%(x,kw[y]),kw['package']],env=env)
-			if not'okmsg'in kw:
-				kw['okmsg']='yes'
-			define_it()
-			break
 	if'modversion'in kw:
 		version=self.cmd_and_log(path+['--modversion',kw['modversion']],env=env).strip()
+		if not'okmsg'in kw:
+			kw['okmsg']=version
 		self.define(kw['define_name'],version)
 		return version
 	lst=[]+path
@@ -226,34 +185,25 @@ def exec_cfg(self,kw):
 			val=self.cmd_and_log(lst+['--variable='+v],env=env).strip()
 			var='%s_%s'%(kw['uselib_store'],v)
 			v_env[var]=val
-		if not'okmsg'in kw:
-			kw['okmsg']='yes'
 		return
 	ret=self.cmd_and_log(lst,env=env)
-	if not'okmsg'in kw:
-		kw['okmsg']='yes'
 	define_it()
 	self.parse_flags(ret,kw['uselib_store'],kw.get('env',self.env),force_static=static,posix=kw.get('posix'))
 	return ret
 @conf
 def check_cfg(self,*k,**kw):
-	if k:
-		lst=k[0].split()
-		kw['package']=lst[0]
-		kw['args']=' '.join(lst[1:])
 	self.validate_cfg(kw)
 	if'msg'in kw:
 		self.start_msg(kw['msg'],**kw)
 	ret=None
 	try:
 		ret=self.exec_cfg(kw)
-	except self.errors.WafError:
+	except self.errors.WafError as e:
 		if'errmsg'in kw:
 			self.end_msg(kw['errmsg'],'YELLOW',**kw)
 		if Logs.verbose>1:
-			raise
-		else:
-			self.fatal('The configuration failed')
+			self.to_log('Command failure: %s'%e)
+		self.fatal('The configuration failed')
 	else:
 		if not ret:
 			ret=True
@@ -272,6 +222,9 @@ def build_fun(bld):
 		bld.conf.to_log("==>\n%s\n<=="%bld.kw['code'])
 @conf
 def validate_c(self,kw):
+	for x in('type_name','field_name','function_name'):
+		if x in kw:
+			Logs.warn('Invalid argument %r in test'%x)
 	if not'build_fun'in kw:
 		kw['build_fun']=build_fun
 	if not'env'in kw:
@@ -288,7 +241,7 @@ def validate_c(self,kw):
 				self.fatal('a c compiler is required')
 	if not'compile_mode'in kw:
 		kw['compile_mode']='c'
-		if'cxx'in Utils.to_list(kw.get('features',[]))or kw.get('compiler','')=='cxx':
+		if'cxx'in Utils.to_list(kw.get('features',[]))or kw.get('compiler')=='cxx':
 			kw['compile_mode']='cxx'
 	if not'type'in kw:
 		kw['type']='cprogram'
@@ -310,41 +263,14 @@ def validate_c(self,kw):
 		fwkname=kw['framework_name']
 		if not'uselib_store'in kw:
 			kw['uselib_store']=fwkname.upper()
-		if not kw.get('no_header',False):
-			if not'header_name'in kw:
-				kw['header_name']=[]
+		if not kw.get('no_header'):
 			fwk='%s/%s.h'%(fwkname,fwkname)
 			if kw.get('remove_dot_h'):
 				fwk=fwk[:-2]
-			kw['header_name']=Utils.to_list(kw['header_name'])+[fwk]
+			val=kw.get('header_name',[])
+			kw['header_name']=Utils.to_list(val)+[fwk]
 		kw['msg']='Checking for framework %s'%fwkname
 		kw['framework']=fwkname
-	if'function_name'in kw:
-		fu=kw['function_name']
-		if not'msg'in kw:
-			kw['msg']='Checking for function %s'%fu
-		kw['code']=to_header(kw)+SNIP_FUNCTION%fu
-		if not'uselib_store'in kw:
-			kw['uselib_store']=fu.upper()
-		if not'define_name'in kw:
-			kw['define_name']=self.have_define(fu)
-	elif'type_name'in kw:
-		tu=kw['type_name']
-		if not'header_name'in kw:
-			kw['header_name']='stdint.h'
-		if'field_name'in kw:
-			field=kw['field_name']
-			kw['code']=to_header(kw)+SNIP_FIELD%{'type_name':tu,'field_name':field}
-			if not'msg'in kw:
-				kw['msg']='Checking for field %s in %s'%(field,tu)
-			if not'define_name'in kw:
-				kw['define_name']=self.have_define((tu+'_'+field).upper())
-		else:
-			kw['code']=to_header(kw)+SNIP_TYPE%{'type_name':tu}
-			if not'msg'in kw:
-				kw['msg']='Checking for type %s'%tu
-			if not'define_name'in kw:
-				kw['define_name']=self.have_define(tu.upper())
 	elif'header_name'in kw:
 		if not'msg'in kw:
 			kw['msg']='Checking for header %s'%kw['header_name']
@@ -390,10 +316,11 @@ def validate_c(self,kw):
 		kw['code']=SNIP_EMPTY_PROGRAM
 	if self.env[INCKEYS]:
 		kw['code']='\n'.join(['#include <%s>'%x for x in self.env[INCKEYS]])+'\n'+kw['code']
-	if kw.get('merge_config_header',False)or env.merge_config_header:
+	if kw.get('merge_config_header')or env.merge_config_header:
 		kw['code']='%s\n\n%s'%(self.get_config_header(),kw['code'])
 		env.DEFINES=[]
-	if not kw.get('success'):kw['success']=None
+	if not kw.get('success'):
+		kw['success']=None
 	if'define_name'in kw:
 		self.undefine(kw['define_name'])
 	if not'msg'in kw:
@@ -403,7 +330,7 @@ def post_check(self,*k,**kw):
 	is_success=0
 	if kw['execute']:
 		if kw['success']is not None:
-			if kw.get('define_ret',False):
+			if kw.get('define_ret'):
 				is_success=kw['success']
 			else:
 				is_success=(kw['success']==0)
@@ -437,7 +364,7 @@ def post_check(self,*k,**kw):
 			else:
 				self.env[define_name]=int(is_success)
 	if'header_name'in kw:
-		if kw.get('auto_add_header_name',False):
+		if kw.get('auto_add_header_name'):
 			self.env.append_value(INCKEYS,Utils.to_list(kw['header_name']))
 	if is_success and'uselib_store'in kw:
 		from waflib.Tools import ccroot
@@ -475,20 +402,21 @@ def check(self,*k,**kw):
 class test_exec(Task.Task):
 	color='PINK'
 	def run(self):
+		cmd=[self.inputs[0].abspath()]+getattr(self.generator,'test_args',[])
 		if getattr(self.generator,'rpath',None):
 			if getattr(self.generator,'define_ret',False):
-				self.generator.bld.retval=self.generator.bld.cmd_and_log([self.inputs[0].abspath()])
+				self.generator.bld.retval=self.generator.bld.cmd_and_log(cmd)
 			else:
-				self.generator.bld.retval=self.generator.bld.exec_command([self.inputs[0].abspath()])
+				self.generator.bld.retval=self.generator.bld.exec_command(cmd)
 		else:
 			env=self.env.env or{}
 			env.update(dict(os.environ))
 			for var in('LD_LIBRARY_PATH','DYLD_LIBRARY_PATH','PATH'):
 				env[var]=self.inputs[0].parent.abspath()+os.path.pathsep+env.get(var,'')
 			if getattr(self.generator,'define_ret',False):
-				self.generator.bld.retval=self.generator.bld.cmd_and_log([self.inputs[0].abspath()],env=env)
+				self.generator.bld.retval=self.generator.bld.cmd_and_log(cmd,env=env)
 			else:
-				self.generator.bld.retval=self.generator.bld.exec_command([self.inputs[0].abspath()],env=env)
+				self.generator.bld.retval=self.generator.bld.exec_command(cmd,env=env)
 @feature('test_exec')
 @after_method('apply_link')
 def test_exec_fun(self):
@@ -642,7 +570,7 @@ def get_cc_version(conf,cc,gcc=False,icc=False,clang=False):
 	env=conf.env.env or None
 	try:
 		out,err=conf.cmd_and_log(cmd,output=0,input='\n'.encode(),env=env)
-	except Exception:
+	except Errors.WafError:
 		conf.fatal('Could not determine the compiler version %r'%cmd)
 	if gcc:
 		if out.find('__INTEL_COMPILER')>=0:
@@ -741,9 +669,9 @@ def get_suncc_version(conf,cc):
 def add_as_needed(self):
 	if self.env.DEST_BINFMT=='elf'and'gcc'in(self.env.CXX_NAME,self.env.CC_NAME):
 		self.env.append_unique('LINKFLAGS','-Wl,--as-needed')
-class cfgtask(Task.TaskBase):
+class cfgtask(Task.Task):
 	def __init__(self,*k,**kw):
-		Task.TaskBase.__init__(self,*k,**kw)
+		Task.Task.__init__(self,*k,**kw)
 		self.run_after=set()
 	def display(self):
 		return''
@@ -753,6 +681,8 @@ class cfgtask(Task.TaskBase):
 				return Task.ASK_LATER
 		return Task.RUN_ME
 	def uid(self):
+		return Utils.SIG_NIL
+	def signature(self):
 		return Utils.SIG_NIL
 	def run(self):
 		conf=self.conf
@@ -776,7 +706,7 @@ class cfgtask(Task.TaskBase):
 		except Exception:
 			return 1
 	def process(self):
-		Task.TaskBase.process(self)
+		Task.Task.process(self)
 		if'msg'in self.args:
 			with self.generator.bld.multicheck_lock:
 				self.conf.start_msg(self.args['msg'])
@@ -803,10 +733,11 @@ def multicheck(self,*k,**kw):
 			return
 	bld=par()
 	bld.keep=kw.get('run_all_tests',True)
+	bld.imp_sigs={}
 	tasks=[]
 	id_to_task={}
 	for dct in k:
-		x=Task.classes['cfgtask'](bld=bld)
+		x=Task.classes['cfgtask'](bld=bld,env=None)
 		tasks.append(x)
 		x.args=dct
 		x.bld=bld

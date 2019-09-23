@@ -3,7 +3,7 @@
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
 import os
-from waflib import Options,Utils,Task
+from waflib import Errors,Options,Task,Utils
 from waflib.TaskGen import before_method,feature,extension
 from waflib.Configure import conf
 @feature('rubyext')
@@ -24,12 +24,12 @@ def check_ruby_version(self,minver=()):
 	ruby=self.find_program('ruby',var='RUBY',value=Options.options.rubybinary)
 	try:
 		version=self.cmd_and_log(ruby+['-e','puts defined?(VERSION) ? VERSION : RUBY_VERSION']).strip()
-	except Exception:
+	except Errors.WafError:
 		self.fatal('could not determine ruby version')
 	self.env.RUBY_VERSION=version
 	try:
-		ver=tuple(map(int,version.split(".")))
-	except Exception:
+		ver=tuple(map(int,version.split('.')))
+	except Errors.WafError:
 		self.fatal('unsupported ruby version %r'%version)
 	cver=''
 	if minver:
@@ -82,7 +82,7 @@ def check_ruby_module(self,module_name):
 	self.start_msg('Ruby module %s'%module_name)
 	try:
 		self.cmd_and_log(self.env.RUBY+['-e','require \'%s\';puts 1'%module_name])
-	except Exception:
+	except Errors.WafError:
 		self.end_msg(False)
 		self.fatal('Could not find the ruby module %r'%module_name)
 	self.end_msg(True)

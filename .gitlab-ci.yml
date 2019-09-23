@@ -19,21 +19,8 @@ pages:
   tags:
     - gitlab-org
 
-#codequality:
-#  stage: test
-#  image: docker:latest
-#  variables:
-#    DOCKER_DRIVER: overlay
-#  services:
-#    - docker:dind
-#  script:
-#    - docker pull codeclimate/codeclimate
-#    - docker run --env CODECLIMATE_CODE="$PWD" --volume "$PWD":/code --volume /var/run/docker.sock:/var/run/docker.sock --volume /tmp/cc:/tmp/cc codeclimate/codeclimate analyze -f json > codeclimate.json
-#  allow_failure: true
-#  artifacts:
-#    paths: [codeclimate.json]
-#  tags:
-#    - docker
+include:
+  - template: Code-Quality.gitlab-ci.yml
 
 .job_template: &job_definition
   stage: build
@@ -56,7 +43,6 @@ pages:
       - build/main/ntpclients/ntpwait
       - build/main/ntpd/ntpd
       - build/main/ntpfrob/ntpfrob
-  retry: 2
 
 alpine-basic:
   <<: *job_definition
@@ -64,6 +50,15 @@ alpine-basic:
   script:
     - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev
     - python ./waf configure build
+  tags:
+    - gitlab-org
+
+alpine-refclocks:
+  <<: *job_definition
+  image: alpine
+  script:
+    - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev
+    - python ./waf configure --refclock=all build
   tags:
     - gitlab-org
 
@@ -77,22 +72,12 @@ alpine-edge-basic:
   tags:
     - gitlab-org
 
-debian-oldoldstable-basic:
+alpine-edge-refclocks:
   <<: *job_definition
-  image: debian:oldoldstable-slim
+  image: alpine:edge
+  allow_failure: true
   script:
-    - apt-get update
-    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
-    - python ./waf configure build
-  tags:
-    - gitlab-org
-
-debian-oldoldstable-refclocks:
-  <<: *job_definition
-  image: debian:oldoldstable-slim
-  script:
-    - apt-get update
-    - apt-get install -y netbase bison gcc libssl-dev libcap-dev pps-tools python-dev
+    - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev
     - python ./waf configure --refclock=all build
   tags:
     - gitlab-org
@@ -317,8 +302,8 @@ fedora-latest-basic:
   <<: *job_definition
   image: fedora:latest
   script:
-    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
-    - python ./waf configure build
+    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python3-devel
+    - python3 ./waf configure build
   tags:
     - gitlab-org
 
@@ -326,26 +311,8 @@ fedora-latest-refclocks:
   <<: *job_definition
   image: fedora:latest
   script:
-    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
-    - python ./waf configure --refclock=all build
-  tags:
-    - gitlab-org
-
-fedora-branched-basic:
-  <<: *job_definition
-  image: fedora:branched
-  script:
-    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
-    - python ./waf configure build
-  tags:
-    - gitlab-org
-
-fedora-branched-refclocks:
-  <<: *job_definition
-  image: fedora:branched
-  script:
-    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
-    - python ./waf configure --refclock=all build
+    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python3-devel
+    - python3 ./waf configure --refclock=all build
   tags:
     - gitlab-org
 
@@ -354,8 +321,8 @@ fedora-rawhide-basic:
   image: registry.fedoraproject.org/fedora:rawhide
   allow_failure: true
   script:
-    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
-    - python ./waf configure build
+    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python3-devel
+    - python3 ./waf configure build
   tags:
     - gitlab-org
 
@@ -364,8 +331,8 @@ fedora-rawhide-refclocks:
   image: registry.fedoraproject.org/fedora:rawhide
   allow_failure: true
   script:
-    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python-devel
-    - python ./waf configure --refclock=all build
+    - yum -y install bison gcc openssl-devel libcap-devel pps-tools-devel python3-devel
+    - python3 ./waf configure --refclock=all build
   tags:
     - gitlab-org
 
@@ -509,10 +476,7 @@ gentoo-basic:
   <<: *job_definition
   image: gentoo/stage3-amd64
   script:
-    - wget -q http://distfiles.gentoo.org/snapshots/portage-latest.tar.bz2
-    - wget -q http://distfiles.gentoo.org/snapshots/portage-latest.tar.bz2.md5sum
-    - md5sum -c portage-latest.tar.bz2.md5sum
-    - tar -xjf portage-latest.tar.bz2 -C /usr
+    - emerge-webrsync
     - emerge -q y sys-libs/libcap sys-devel/bison net-misc/pps-tools
     - python ./waf configure build
   tags:
@@ -522,10 +486,7 @@ gentoo-refclocks:
   <<: *job_definition
   image: gentoo/stage3-amd64
   script:
-    - wget -q http://distfiles.gentoo.org/snapshots/portage-latest.tar.bz2
-    - wget -q http://distfiles.gentoo.org/snapshots/portage-latest.tar.bz2.md5sum
-    - md5sum -c portage-latest.tar.bz2.md5sum
-    - tar -xjf portage-latest.tar.bz2 -C /usr
+    - emerge-webrsync
     - emerge -q y sys-libs/libcap sys-devel/bison net-misc/pps-tools
     - python ./waf configure --refclock=all build
   tags:
@@ -535,10 +496,7 @@ gentoo-hardened-basic:
   <<: *job_definition
   image: gentoo/stage3-amd64-hardened
   script:
-    - wget -q http://distfiles.gentoo.org/snapshots/portage-latest.tar.bz2
-    - wget -q http://distfiles.gentoo.org/snapshots/portage-latest.tar.bz2.md5sum
-    - md5sum -c portage-latest.tar.bz2.md5sum
-    - tar -xjf portage-latest.tar.bz2 -C /usr
+    - emerge-webrsync
     - emerge -q y sys-libs/libcap sys-devel/bison net-misc/pps-tools
     - python ./waf configure build
   tags:
@@ -548,10 +506,7 @@ gentoo-hardened-refclocks:
   <<: *job_definition
   image: gentoo/stage3-amd64-hardened
   script:
-    - wget -q http://distfiles.gentoo.org/snapshots/portage-latest.tar.bz2
-    - wget -q http://distfiles.gentoo.org/snapshots/portage-latest.tar.bz2.md5sum
-    - md5sum -c portage-latest.tar.bz2.md5sum
-    - tar -xjf portage-latest.tar.bz2 -C /usr
+    - emerge-webrsync
     - emerge -q y sys-libs/libcap sys-devel/bison net-misc/pps-tools
     - python ./waf configure --refclock=all build
   tags:
@@ -559,7 +514,7 @@ gentoo-hardened-refclocks:
 
 coverity-scan:
   script:
-    - ./waf configure
+    - ./waf configure --refclock=all
     - /opt/cov-analysis/bin/cov-build --dir cov-int ./waf build
     - tar czf ntpsec_coverity.tgz cov-int
     - curl --form token=$COVERITY_TOKEN --form email=security@ntpsec.org --form file=@ntpsec_coverity.tgz --form version="$(git rev-parse --short HEAD)" --form description="Automatic submission by gitlab-ci" https://scan.coverity.com/builds?project=ntpsec
@@ -585,3 +540,84 @@ macos-refclocks:
     - macos
   only:
     - branches@NTPsec/ntpsec
+
+feature-classic-mode:
+  <<: *job_definition
+  image: alpine
+  script:
+    - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev
+    - python ./waf configure --refclock=all --enable-classic-mode build
+  tags:
+    - gitlab-org
+
+feature-seccomp:
+  <<: *job_definition
+  image: alpine
+  script:
+    - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev libseccomp-dev
+    - python ./waf configure --refclock=all --enable-seccomp build
+  tags:
+    - gitlab-org
+
+feature-debug:
+  <<: *job_definition
+  image: alpine
+  script:
+    - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev
+    - python ./waf configure --refclock=all --enable-debug build
+  tags:
+    - gitlab-org
+
+feature-debug-gdb:
+  <<: *job_definition
+  image: alpine
+  script:
+    - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev
+    - python ./waf configure --refclock=all --enable-debug-gdb build
+  tags:
+    - gitlab-org
+
+feature-debug-timing:
+  <<: *job_definition
+  image: alpine
+  script:
+    - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev
+    - python ./waf configure --refclock=all --enable-debug-timing build
+  tags:
+    - gitlab-org
+
+feature-disable-droproot:
+  <<: *job_definition
+  image: alpine
+  script:
+    - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev
+    - python ./waf configure --refclock=all --disable-droproot build
+  tags:
+    - gitlab-org
+
+feature-early-droproot:
+  <<: *job_definition
+  image: alpine
+  script:
+    - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev
+    - python ./waf configure --refclock=all --enable-early-droproot build
+  tags:
+    - gitlab-org
+
+feature-leap-smear:
+  <<: *job_definition
+  image: alpine
+  script:
+    - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev
+    - python ./waf configure --refclock=all --enable-leap-smear build
+  tags:
+    - gitlab-org
+
+feature-mssntp:
+  <<: *job_definition
+  image: alpine
+  script:
+    - apk update && apk add gcc bison musl-dev openssl-dev libcap-dev python2-dev
+    - python ./waf configure --refclock=all --enable-mssntp build
+  tags:
+    - gitlab-org

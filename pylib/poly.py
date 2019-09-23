@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# SPDX-License-Identifier: BSD-2-clause
+# SPDX-License-Identifier: BSD-2-Clause
 """Handle bytes and strings in a polyglot fashion.
 
 copied from ../ntpclient/ntpq.py  which got it from
@@ -103,9 +103,9 @@ else:  # Python 3
                                 newline="\n", line_buffering=True)
 
     # This is the one situation where we *can* force unicode.
-    if "UTF-8" != sys.stdout.encoding:
+    if "utf-8" != sys.stdout.encoding.lower():
         forced_utf8 = True
         sys.stdout = make_std_wrapper(sys.stdout)
-    if "UTF-8" != sys.stderr.encoding:
+    if "utf-8" != sys.stderr.encoding.lower():
         forced_utf8 = True
         sys.stderr = make_std_wrapper(sys.stderr)

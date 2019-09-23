@@ -1,16 +1,16 @@
-= PPS Clock Discipline =
+= PPS Clock Discipline
 include::html.include[]
 
-== Synopsis ==
+== Synopsis
 
 ["verse",subs="normal"]
 Name: pps
 Reference ID: PPS
 Driver ID: PPS
 Serial or Parallel Port: /dev/pps__u__
-Requires: PPSAPI signal interface for PPS signal processing.
+Requires: link:kernpps.html[PPSAPI Interface for Precision Time Signals]
 
-== Description ==
+== Description
 
 This driver furnishes an interface for the pulse-per-second (PPS) signal
 produced by a cesium clock, radio clock or related devices. It can be
@@ -30,16 +30,16 @@ While this driver can discipline the time and frequency relative to the
 PPS source, it cannot number the seconds. For this purpose an auxiliary
 source is required; ordinarily a radio clock operated as a primary
 reference (stratum 1) source; however, another NTP time server can be
-used as well. For this purpose, the auxiliary source should be specified
+used as well. For this purpose, the auxiliary source must be specified
 as the prefer peer, as described in the link:prefer.html[Mitigation
 Rules and the +prefer+ Keyword] page.
 
-The driver requires the PPSAPI interface^1^, which is a proposed IETF
-standard. The interface consists of the +timepps.h+ header file and
-associated kernel support. Support for this interface is included in
-current versions of Solaris, FreeBSD and Linux and proprietary versions
-of Tru64 (Alpha) and SunOS. See the link:pps.html[Pulse-per-second
-(PPS) Signal Interfacing] page for further information.
+The driver requires the link:kernpps.html[PPSAPI interface], which is
+documented in RFC 2783.  The interface consists of the +timepps.h+
+header file and associated kernel support. Support for this interface is
+included in current versions of Solaris, FreeBSD, and Linux. See the
+link:pps.html[Pulse-Per-second (PPS) Signal Interfacing] page for
+further information.
 
 The PPS source can be connected via a serial or parallel port, depending
 on the hardware and operating system. A serial port can be dedicated to
@@ -71,10 +71,8 @@ enable the kernel PPS discipline if necessary.
 This driver is enabled only under one of two conditions (a) a prefer
 peer other than this driver is among the survivors of the mitigation
 algorithms or (b) there are no survivors and the +minsane+ option of the
-+tos+ command is 0. The prefer peer designates another source that can
-reliably number the seconds when available. However, if no sources are
-available, the system clock continues to be disciplined by the PPS
-driver on an indefinite basis.
++tos+ command is 0. In typical usage, the prefer peer designates another
+source that can reliably number the seconds when available.
 
 A scenario where the latter behavior can be most useful is a planetary
 orbiter fleet, for instance in the vicinity of Mars, where contact
@@ -89,7 +87,7 @@ In a similar scenario a PPS signal can be used to discipline the clock
 between updates produced by the modem driver. This would provide precise
 synchronization without needing the Internet at all.
 
-== Driver Options ==
+== Driver Options
 
 +unit+ 'number'::
   The driver unit number, defaulting to 0. Used as a distinguishing
@@ -126,7 +124,7 @@ synchronization without needing the Internet at all.
 +baud+ 'number'::
    Not used by this driver.
 
-== Configuration Example ==
+== Configuration Example
 
 ----------------------------------------------------------------------------
 refclock pps unit 0 flag2 1	# Capture PPS on trailing edge of pps0
@@ -137,7 +135,7 @@ active; thus no "refclock pps" is required unless you need to set a
 driver option. It is initialized by whatever other driver is using
 it, which will be one of generic, nmea, or spectracom.
 
-== Clockstats  ==
+== Clockstats
 
 If clockstats is enabled, the driver will log a few counters.  Examples:
 
@@ -169,18 +167,17 @@ your ntpd was built in strict Classic compatibility mode it will
 be a magic clock address expressing the same information in a more
 opaque way.
 
-== Additional Information ==
+== Additional Information
 
 link:refclock.html[Reference Clock Drivers]
 
-== Reference ==
+== Reference
 
-1.  Mogul, J., D. Mills, J. Brittenson, J. Stone and U. Windl.
-Pulse-per-second API for Unix-like operating systems, version 1. Request
-for Comments RFC 2783, Internet Engineering Task Force, March 2000, 31
-pp.
+RFC 2783::
+  Mogul, J., D. Mills, J. Brittenson, J. Stone and U. Windl, _Pulse-Per-Second
+  API for Unix-like Operating Systems, Version 1.0_, RFC 2783
 
-== Author ==
+== Author
 
 David L. Mills <mills@udel.edu>
 

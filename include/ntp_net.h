@@ -14,10 +14,10 @@
 
 #include "ntp_malloc.h"
 
-typedef union {
-	struct sockaddr		sa;
-	struct sockaddr_in	sa4;
-	struct sockaddr_in6	sa6;
+typedef union {				/* On Linux, these come from: */
+	struct sockaddr		sa;	/* /usr/include/bits/socket.h */
+	struct sockaddr_in	sa4;	/* /usr/include/linux/in.h */
+	struct sockaddr_in6	sa6;	/* /usr/include/linux/in6.h */
 } sockaddr_u;
 
 /*
@@ -179,10 +179,10 @@ typedef union {
 	(SOCK_UNSPEC(psau) && !SCOPE(psau))
 
 /* choose a default net interface (endpt) for v4 or v6 */
-#define ANY_INTERFACE_BYFAM(family)				\
-	((AF_INET == family)					\
-	     ? any_interface					\
-	     : any6_interface)
+#define ANY_INTERFACE_BYFAM(family) \
+	((AF_INET == family) \
+	     ? io_data.any_interface \
+	     : io_data.any6_interface)
 
 /* choose a default interface for addresses' protocol (addr family) */
 #define ANY_INTERFACE_CHOOSE(psau)				\

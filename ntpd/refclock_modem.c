@@ -276,8 +276,9 @@ modem_start(
 	up->bufptr = up->buf;
 	if (def_modem_setup == modem_setup) {
 		setup = get_ext_sys_var("modemsetup");
-		if (setup != NULL)
+		if (setup != NULL) {
 			modem_setup = estrdup(setup);
+		}
 	}
 
 	return true;
@@ -342,7 +343,7 @@ modem_receive(
 			if (*tptr == '*' || *tptr == '#') {
 				up->tstamp = pp->lastrec;
 				if (write(pp->io.fd, tptr, 1) < 0)
-					msyslog(LOG_ERR, "REFCLOCK: modem: write echo fails %m");
+					msyslog(LOG_ERR, "REFCLOCK: modem: write echo fails %s", strerror(errno));
 			}
 		}
 	}
@@ -404,10 +405,10 @@ modem_message(
 		mprintf_event(PEVNT_CLOCK, peer, "DIAL #%d %s",
 			      up->retry, sys_phone[up->retry]);
 		if (ioctl(pp->io.fd, TIOCMBIS, &dtr) < 0)
-			msyslog(LOG_ERR, "REFCLOCK: modem: ioctl(TIOCMBIS) failed: %m");
+			msyslog(LOG_ERR, "REFCLOCK: modem: ioctl(TIOCMBIS) failed: %s", strerror(errno));
 		if (write(pp->io.fd, sys_phone[up->retry],
 		    strlen(sys_phone[up->retry])) < 0)
-			msyslog(LOG_ERR, "REFCLOCK: modem: write DIAL fails %m");
+			msyslog(LOG_ERR, "REFCLOCK: modem: write DIAL fails %s", strerror(errno));
 		IGNORE(write(pp->io.fd, "\r", 1));
 		up->retry++;
 		up->state = S_CONNECT;
@@ -437,10 +438,11 @@ modem_message(
 	case S_MSG:
 		if (strcmp(tbuf, "NO") == 0)
 			report_event(PEVNT_CLOCK, peer, msg);
-		if (up->msgcnt < MAXCODE)
+		if (up->msgcnt < MAXCODE) {
 			modem_timecode(peer, msg);
-		else
+		} else {
 			modem_timeout(peer, S_MSG);
+		}
 		return;
 
         default:
@@ -505,7 +507,7 @@ modem_timeout(
 			snprintf(pidbuf, sizeof(pidbuf), "%u\n",
 			    (unsigned int)getpid());
 			if (write(fd, pidbuf, strlen(pidbuf)) < 0)
-				msyslog(LOG_ERR, "REFCLOCK: modem: write lock fails %m");
+				msyslog(LOG_ERR, "REFCLOCK: modem: write lock fails %s", strerror(errno));
 			close(fd);
 		}
 
@@ -515,9 +517,9 @@ modem_timeout(
 		snprintf(device, sizeof(device), DEVICE, up->unit);
 		fd = refclock_open(peer->cfg.path ? peer->cfg.path : device,
 				   peer->cfg.baud ? peer->cfg.baud : SPEED232,
-				   LDISC_ACTS | LDISC_RAW | LDISC_REMOTE);
+				   LDISC_RAW | LDISC_REMOTE);
 		if (fd < 0) {
-			msyslog(LOG_ERR, "REFCLOCK: modem: open fails %m");
+			msyslog(LOG_ERR, "REFCLOCK: modem: open fails %s", strerror(errno));
 			return;
 		}
 		pp->io.fd = fd;
@@ -536,7 +538,7 @@ modem_timeout(
 		 */
 		if (sys_phone[up->retry] == NULL) {
 			if (write(pp->io.fd, "T", 1) < 0)
-				msyslog(LOG_ERR, "REFCLOCK: modem: write T fails %m");
+				msyslog(LOG_ERR, "REFCLOCK: modem: write T fails %s", strerror(errno));
 			up->state = S_MSG;
 			up->timer = TIMECODE;
 			return;
@@ -550,7 +552,7 @@ modem_timeout(
 			      modem_setup);
 		rc = write(pp->io.fd, modem_setup, strlen(modem_setup));
 		if (rc < 0)
-			msyslog(LOG_ERR, "REFCLOCK: modem: write SETUP fails %m");
+			msyslog(LOG_ERR, "REFCLOCK: modem: write SETUP fails %s", strerror(errno));
 		IGNORE(write(pp->io.fd, "\r", 1));
 		up->state = S_SETUP;
 		up->timer = SETUP;
@@ -614,7 +616,7 @@ modem_close(
 		//report_event(PEVNT_CLOCK, peer, "close");
 		dtr = TIOCM_DTR;
 		if (ioctl(pp->io.fd, TIOCMBIC, &dtr) < 0)
-			msyslog(LOG_ERR, "REFCLOCK: modem: ioctl(TIOCMBIC) failed: %m");
+			msyslog(LOG_ERR, "REFCLOCK: modem: ioctl(TIOCMBIC) failed: %s", strerror(errno));
 		io_closeclock(&pp->io);
 		pp->io.fd = -1;
 	}
@@ -724,8 +726,9 @@ modem_timer(
 		}
 	} else {
 		up->timer--;
-		if (up->timer == 0)
+		if (up->timer == 0) {
 			modem_timeout(peer, (teModemState)up->state);
+		}
 	}
 }
 
@@ -775,8 +778,9 @@ modem_timecode(
 	 * itself. Be sure a timecode has been received.
 	 */
 	case 1:
-		if (*str == '*' && up->msgcnt > 0)
+		if (*str == '*' && up->msgcnt > 0) {
 			break;
+		}
 
 		return;
 
@@ -802,8 +806,9 @@ modem_timecode(
 		memcpy(&pp->refid, REFACTS, REFIDLEN);
 		peer->sstclktype = CTL_SST_TS_TELEPHONE;
 		up->msgcnt++;
-		if (flag != '#' && up->msgcnt < 10)
+		if (flag != '#' && up->msgcnt < 10) {
 			return;
+		}
 
 		break;
 
@@ -911,8 +916,9 @@ modem_timecode(
 	 */
 	peer->refid = pp->refid;
 	pp->lastrec = up->tstamp;
-	if (up->msgcnt == 0)
+	if (up->msgcnt == 0) {
 		return;
+	}
 
 	strlcpy(pp->a_lastcode, str, sizeof(pp->a_lastcode));
 	pp->lencode = (int)strlen(pp->a_lastcode);

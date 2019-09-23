@@ -42,7 +42,7 @@ def gxx_modifier_win32(conf):
 	v=conf.env
 	v.cxxprogram_PATTERN='%s.exe'
 	v.cxxshlib_PATTERN='%s.dll'
-	v.implib_PATTERN='lib%s.dll.a'
+	v.implib_PATTERN='%s.dll.a'
 	v.IMPLIB_ST='-Wl,--out-implib,%s'
 	v.CXXFLAGS_cxxshlib=[]
 	v.append_value('LINKFLAGS',['-Wl,--enable-auto-import'])

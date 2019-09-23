@@ -3,7 +3,7 @@
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
 import os,sys
-from waflib import Utils,Options,Errors,Logs,Task,Node
+from waflib import Errors,Logs,Node,Options,Task,Utils
 from waflib.TaskGen import extension,before_method,after_method,feature
 from waflib.Configure import conf
 FRAG='''
@@ -44,12 +44,16 @@ def feature_py(self):
 		self.install_32=True
 @extension('.py')
 def process_py(self,node):
-	assert(hasattr(self,'install_path')),'add features="py"'
+	assert(hasattr(self,'install_path')),'add features="py" for target "%s" in "%s/wscript".'%(self.target,self.path.nice_path())
+	self.install_from=getattr(self,'install_from',None)
+	relative_trick=getattr(self,'relative_trick',True)
+	if self.install_from:
+		assert isinstance(self.install_from,Node.Node),'add features="py" for target "%s" in "%s/wscript" (%s).'%(self.target,self.path.nice_path(),type(self.install_from))
 	if self.install_path:
 		if self.install_from:
-			self.add_install_files(install_to=self.install_path,install_from=node,cwd=self.install_from,relative_trick=True)
+			self.add_install_files(install_to=self.install_path,install_from=node,cwd=self.install_from,relative_trick=relative_trick)
 		else:
-			self.add_install_files(install_to=self.install_path,install_from=node,relative_trick=True)
+			self.add_install_files(install_to=self.install_path,install_from=node,relative_trick=relative_trick)
 	lst=[]
 	if self.env.PYC:
 		lst.append('pyc')
@@ -57,9 +61,11 @@ def process_py(self,node):
 		lst.append('pyo')
 	if self.install_path:
 		if self.install_from:
-			pyd=Utils.subst_vars("%s/%s"%(self.install_path,node.path_from(self.install_from)),self.env)
+			target_dir=node.path_from(self.install_from)if relative_trick else node.name
+			pyd=Utils.subst_vars("%s/%s"%(self.install_path,target_dir),self.env)
 		else:
-			pyd=Utils.subst_vars("%s/%s"%(self.install_path,node.path_from(self.path)),self.env)
+			target_dir=node.path_from(self.path)if relative_trick else node.name
+			pyd=Utils.subst_vars("%s/%s"%(self.install_path,target_dir),self.env)
 	else:
 		pyd=node.abspath()
 	for ext in lst:
@@ -72,7 +78,7 @@ def process_py(self,node):
 		tsk=self.create_task(ext,node,pyobj)
 		tsk.pyd=pyd
 		if self.install_path:
-			self.add_install_files(install_to=os.path.dirname(pyd),install_from=pyobj,cwd=node.parent.get_bld(),relative_trick=True)
+			self.add_install_files(install_to=os.path.dirname(pyd),install_from=pyobj,cwd=node.parent.get_bld(),relative_trick=relative_trick)
 class pyc(Task.Task):
 	color='PINK'
 	def __str__(self):
@@ -211,13 +217,19 @@ def check_python_headers(conf,features='pyembed pyext'):
 	num='.'.join(env.PYTHON_VERSION.split('.')[:2])
 	conf.find_program([''.join(pybin)+'-config','python%s-config'%num,'python-config-%s'%num,'python%sm-config'%num],var='PYTHON_CONFIG',msg="python-config",mandatory=False)
 	if env.PYTHON_CONFIG:
+		if conf.env.HAVE_PYTHON_H:
+			return
 		all_flags=[['--cflags','--libs','--ldflags']]
 		if sys.hexversion<0x2070000:
 			all_flags=[[k]for k in all_flags[0]]
 		xx=env.CXX_NAME and'cxx'or'c'
 		if'pyembed'in features:
 			for flags in all_flags:
-				conf.check_cfg(msg='Asking python-config for pyembed %r flags'%' '.join(flags),path=env.PYTHON_CONFIG,package='',uselib_store='PYEMBED',args=flags)
+				embedflags=flags+['--embed']
+				try:
+					conf.check_cfg(msg='Asking python-config for pyembed %r flags'%' '.join(embedflags),path=env.PYTHON_CONFIG,package='',uselib_store='PYEMBED',args=embedflags)
+				except conf.errors.ConfigurationError:
+					conf.check_cfg(msg='Asking python-config for pyembed %r flags'%' '.join(flags),path=env.PYTHON_CONFIG,package='',uselib_store='PYEMBED',args=flags)
 			try:
 				conf.test_pyembed(xx)
 			except conf.errors.ConfigurationError:
@@ -277,11 +289,11 @@ def check_python_headers(conf,features='pyembed pyext'):
 	env.INCLUDES_PYEXT=[dct['INCLUDEPY']]
 	env.INCLUDES_PYEMBED=[dct['INCLUDEPY']]
 	if env.CC_NAME=='gcc':
-		env.append_value('CFLAGS_PYEMBED',['-fno-strict-aliasing'])
-		env.append_value('CFLAGS_PYEXT',['-fno-strict-aliasing'])
+		env.append_unique('CFLAGS_PYEMBED',['-fno-strict-aliasing'])
+		env.append_unique('CFLAGS_PYEXT',['-fno-strict-aliasing'])
 	if env.CXX_NAME=='gcc':
-		env.append_value('CXXFLAGS_PYEMBED',['-fno-strict-aliasing'])
-		env.append_value('CXXFLAGS_PYEXT',['-fno-strict-aliasing'])
+		env.append_unique('CXXFLAGS_PYEMBED',['-fno-strict-aliasing'])
+		env.append_unique('CXXFLAGS_PYEXT',['-fno-strict-aliasing'])
 	if env.CC_NAME=="msvc":
 		from distutils.msvccompiler import MSVCCompiler
 		dist_compiler=MSVCCompiler()
@@ -357,7 +369,7 @@ def check_python_module(conf,module_name,condition=''):
 	conf.start_msg(msg)
 	try:
 		ret=conf.cmd_and_log(conf.env.PYTHON+['-c',PYTHON_MODULE_TEMPLATE%module_name])
-	except Exception:
+	except Errors.WafError:
 		conf.end_msg(False)
 		conf.fatal('Could not find the python module %r'%module_name)
 	ret=ret.strip()

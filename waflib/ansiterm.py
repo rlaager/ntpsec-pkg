@@ -175,7 +175,7 @@ else:
 			self._csinfo.bVisible=0
 			windll.kernel32.SetConsoleCursorInfo(self.hconsole,byref(self._csinfo))
 		ansi_command_table={'A':move_up,'B':move_down,'C':move_right,'D':move_left,'E':next_line,'F':prev_line,'G':set_column,'H':set_cursor,'f':set_cursor,'J':clear_screen,'K':clear_line,'h':show_cursor,'l':hide_cursor,'m':set_color,'s':push_cursor,'u':pop_cursor,}
-		ansi_tokens=re.compile('(?:\x1b\[([0-9?;]*)([a-zA-Z])|([^\x1b]+))')
+		ansi_tokens=re.compile(r'(?:\x1b\[([0-9?;]*)([a-zA-Z])|([^\x1b]+))')
 		def write(self,text):
 			try:
 				wlock.acquire()

@@ -40,31 +40,31 @@
 int ntp_adjtime_ns(struct timex *ntx)
 {
 #ifdef STA_NANO
-    static bool nanoseconds = false;
-    static int callcount = 0;
-    if (callcount++ == 0){
-	struct timex ztx;
-	memset(&ztx, '\0', sizeof(ztx));
-	ntp_adjtime(&ztx);
-	nanoseconds = (STA_NANO & ztx.status) != 0;
-    }
+	static bool nanoseconds = false;
+	static int callcount = 0;
+	if (callcount++ == 0){
+		struct timex ztx;
+		memset(&ztx, '\0', sizeof(ztx));
+		ntp_adjtime(&ztx);
+		nanoseconds = (STA_NANO & ztx.status) != 0;
+	}
 #endif
 
 #ifdef STA_NANO
-    if (!nanoseconds)
+	if (!nanoseconds)
 #endif
-	ntx->offset /= 1000;
-    int errval = ntp_adjtime(ntx);
+		ntx->offset /= 1000;
+	int errval = ntp_adjtime(ntx);
 #ifdef STA_NANO
-    nanoseconds = (STA_NANO & ntx->status) != 0;
-    if (!nanoseconds)
+	nanoseconds = (STA_NANO & ntx->status) != 0;
+	if (!nanoseconds)
 #endif
-    {
-	ntx->offset *= 1000;
-	//ntx->precision *= 1000;
-	ntx->jitter *= 1000;
-    }
-    return errval;
+	{
+		ntx->offset *= 1000;
+		//ntx->precision *= 1000;
+		ntx->jitter *= 1000;
+	}
+	return errval;
 }
 #endif /* HAVE_SYS_TIMEX_H */
 
@@ -80,9 +80,9 @@ ntp_set_tod(
 	errno = 0;
 	rc = clock_settime(CLOCK_REALTIME, tvs);
 	saved_errno = errno;
-	TPRINT(1, ("ntp_set_tod: clock_settime: %d %m\n", rc));
-	errno = saved_errno;	/* for %m below */
-	TPRINT(1, ("ntp_set_tod: Final result: clock_settime: %d %m\n", rc));
+	TPRINT(1, ("ntp_set_tod: clock_settime: %d %s\n", rc, strerror(errno)));
+	errno = saved_errno;	/* for strerror(errno)) below */
+	TPRINT(1, ("ntp_set_tod: Final result: clock_settime: %d %s\n", rc, strerror(errno)));
 
 	if (rc)
 		errno = saved_errno;

@@ -32,6 +32,8 @@ static FILE *	syslog_file;
 static char *	syslog_fname;
 static char *	syslog_abs_fname;
 
+int		debug;
+
 /* libntp default ntp_syslogmask is all bits lit */
 #define INIT_NTP_SYSLOGMASK	~(uint32_t)0
 uint32_t ntp_syslogmask = INIT_NTP_SYSLOGMASK;
@@ -39,91 +41,25 @@ uint32_t ntp_syslogmask = INIT_NTP_SYSLOGMASK;
 extern	char *	progname;
 
 /* Declare the local functions */
-static	int	mvfprintf(FILE *, const char *, va_list) NTP_PRINTF(2, 0);
-const char *	humanlogtime(void);
+#define TIMESTAMP_LEN  128
+static void	humanlogtime(char buf[TIMESTAMP_LEN]);
 static void	addto_syslog	(int, const char *);
-#ifndef VSNPRINTF_PERCENT_M
-static	void	errno_to_str(int, char *, size_t);
-void	format_errmsg	(char *, size_t, const char *, int);
-
-/* format_errmsg() is under #ifndef VSNPRINTF_PERCENT_M above */
-void
-format_errmsg(
-	char *		nfmt,
-	size_t		lennfmt,
-	const char *	fmt,
-	int		errval
-	)
-{
-	char errmsg[256];
-	char c;
-	char *n;
-	const char *f;
-	size_t len;
-
-	n = nfmt;
-	f = fmt;
-	while ((c = *f++) != '\0' && n < (nfmt + lennfmt - 1)) {
-		if (c != '%') {
-			*n++ = c;
-			continue;
-		}
-		if ((c = *f++) != 'm') {
-			*n++ = '%';
-			if ('\0' == c)
-				break;
-			*n++ = c;
-			continue;
-		}
-		errno_to_str(errval, errmsg, sizeof(errmsg));
-		len = strlen(errmsg);
-
-		/* Make sure we have enough space for the error message */
-		if ((n + len) < (nfmt + lennfmt - 1)) {
-			memcpy(n, errmsg, len);
-			n += len;
-		}
-	}
-	*n = '\0';
-}
-
-
-/*
- * errno_to_str() - a thread-safe strerror() replacement.
- *		    Hides the varied signatures of strerror_r().
- */
-static void
-errno_to_str(
-	int	err,
-	char *	buf,
-	size_t	bufsiz
-	)
-{
-	int rc;
-
-	rc = strerror_r(err, buf, bufsiz);
-	if (rc)
-		snprintf(buf, bufsiz, "strerror_r(%d): errno %d",
-			 err, errno);
-}
-#endif	/* VSNPRINTF_PERCENT_M */
 
 
 /* We don't want to clutter up the log with the year and day of the week,
    etc.; just the minimal date and time.  */
-const char *
-humanlogtime(void)
+static void
+humanlogtime(char buf[TIMESTAMP_LEN])
 {
-	char *		bp;
 	time_t		cursec;
 	struct tm	tmbuf, *tm;
 
 	cursec = time(NULL);
 	tm = localtime_r(&cursec, &tmbuf);
-	if (!tm)
-		return "-- --- --:--:--";
-
-	bp = lib_getbuf();
+	if (!tm) {
+		strlcpy(buf, "-- --- --:--:--", TIMESTAMP_LEN);
+		return;
+	}
 
 #ifdef ENABLE_CLASSIC_MODE
 	const char * const months[12] = {
@@ -131,17 +67,15 @@ humanlogtime(void)
 	    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 	};
 
-	snprintf(bp, LIB_BUFLENGTH, "%2d %s %02d:%02d:%02d",
+	snprintf(buf, TIMESTAMP_LEN, "%2d %s %02d:%02d:%02d",
 		 tm->tm_mday, months[tm->tm_mon],
 		 tm->tm_hour, tm->tm_min, tm->tm_sec);
 #else
 	/* ISO 8601 is a better format, sort order equals time order */
-	snprintf(bp, LIB_BUFLENGTH, "%04d-%02d-%02dT%02d:%02d:%02d",
+	snprintf(buf, TIMESTAMP_LEN, "%04d-%02d-%02dT%02d:%02d:%02d",
 		 tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday,
 		 tm->tm_hour, tm->tm_min, tm->tm_sec);
 #endif /* ENABLE_CLASSIC_MODE */
-
-	return bp;
 }
 
 
@@ -166,15 +100,17 @@ addto_syslog(
 	int		pid;
 	const char *	nl_or_empty;
 	const char *	human_time;
+	char            tbuf[TIMESTAMP_LEN];
 
 	/* setup program basename static var prog if needed */
 	if (progname != prevcall_progname) {
 		prevcall_progname = progname;
 		prog = strrchr(progname, DIR_SEP);
-		if (prog != NULL)
+		if (prog != NULL) {
 			prog++;
-		else
+		} else {
 			prog = progname;
+		}
 	}
 
 	log_to_term = termlogit;
@@ -192,9 +128,10 @@ addto_syslog(
 		return;
 
 	/* syslog() adds the timestamp, name, and pid */
-	if (msyslog_include_timestamp)
-		human_time = humanlogtime();
-	else	/* suppress gcc pot. uninit. warning */
+	if (msyslog_include_timestamp) {
+		humanlogtime(tbuf);
+		human_time = tbuf;
+	} else	/* suppress gcc pot. uninit. warning */
 		human_time = NULL;
 	if (termlogit_pid || log_to_file)
 		pid = getpid();
@@ -202,10 +139,11 @@ addto_syslog(
 		pid = -1;
 
 	/* syslog() adds trailing \n if not present */
-	if ('\n' != msg[strlen(msg) - 1])
+	if ('\n' != msg[strlen(msg) - 1]) {
 		nl_or_empty = nl;
-	else
+	} else {
 		nl_or_empty = empty;
+}
 
 	if (log_to_term) {
 		term_file = (level <= LOG_ERR)
@@ -220,85 +158,24 @@ addto_syslog(
 	}
 
 	if (log_to_file) {
+	 	/*
+		 * Thread-safe write, the de-facto way.  It's not
+		 * actually guaranteed by standards that a write of
+		 * PIPE_BUF chars or less is atomic anywhere but on a
+		 * pipe.  In ancient times this was 512 and happened to
+		 * be equal to the usual size of a hardware disk sector,
+		 * which was what really bounded atomicity. The actual
+		 * answer under POSIX is SSIZE_MAX, which is far larger
+		 * than we want or need to allocate here.
+		 */
+		char buf[PIPE_BUF];
+		buf[0] = '\0';
 		if (msyslog_include_timestamp)
-			fprintf(syslog_file, "%s ", human_time);
-		fprintf(syslog_file, "%s[%d]: %s%s", prog, pid, msg,
-			nl_or_empty);
-		fflush(syslog_file);
+			snprintf(buf, sizeof(buf), "%s ", human_time);
+		snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf) - 1,
+			 "%s[%d]: %s%s", prog, pid, msg, nl_or_empty);
+		IGNORE(write(fileno(syslog_file), buf, strlen(buf)));
 	}
-}
-
-
-int
-mvsnprintf(
-	char *		buf,
-	size_t		bufsiz,
-	const char *	fmt,
-	va_list		ap
-	)
-{
-#ifndef VSNPRINTF_PERCENT_M
-	char		nfmt[256];
-#else
-	const char *	nfmt = fmt;
-#endif
-	int		errval;
-
-	/*
-	 * Save the error value as soon as possible
-	 */
-	errval = errno;
-
-#ifndef VSNPRINTF_PERCENT_M
-	format_errmsg(nfmt, sizeof(nfmt), fmt, errval);
-#else
-	errno = errval;
-#endif
-	return vsnprintf(buf, bufsiz, nfmt, ap);
-}
-
-
-static int
-mvfprintf(
-	FILE *		fp,
-	const char *	fmt,
-	va_list		ap
-	)
-{
-#ifndef VSNPRINTF_PERCENT_M
-	char		nfmt[256];
-#else
-	const char *	nfmt = fmt;
-#endif
-	int		errval;
-
-	/*
-	 * Save the error value as soon as possible
-	 */
-	errval = errno;
-
-#ifndef VSNPRINTF_PERCENT_M
-	format_errmsg(nfmt, sizeof(nfmt), fmt, errval);
-#else
-	errno = errval;
-#endif
-	return vfprintf(fp, nfmt, ap);
-}
-
-int
-mprintf(
-	const char *	fmt,
-	...
-	)
-{
-	va_list		ap;
-	int		rc;
-
-	va_start(ap, fmt);
-	rc = mvfprintf(stdout, fmt, ap);
-	va_end(ap);
-
-	return rc;
 }
 
 
@@ -313,7 +190,7 @@ msyslog(
 	va_list	ap;
 
 	va_start(ap, fmt);
-	mvsnprintf(buf, sizeof(buf), fmt, ap);
+	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
 	addto_syslog(level, buf);
 }
@@ -355,10 +232,11 @@ init_logging(
 	 * to log with by using the basename
 	 */
 	cp = strrchr(name, DIR_SEP);
-	if (NULL == cp)
+	if (NULL == cp) {
 		pname = name;
-	else
+	} else {
 		pname = 1 + cp;	/* skip DIR_SEP */
+	}
 	progname = estrdup(pname);
 
 	if (is_daemon)
@@ -416,8 +294,9 @@ change_logfile(
 	 * and it's still open, there's nothing to do here.
 	 */
 	if (syslog_file != NULL && syslog_fname != NULL &&
-	    0 == strcmp(syslog_fname, log_fname))
+	    0 == strcmp(syslog_fname, log_fname)) {
 		return 0;
+	}
 
 	if (0 == strcmp(log_fname, "stderr")) {
 		new_file = stderr;
@@ -427,8 +306,9 @@ change_logfile(
 		abs_fname = estrdup(log_fname);
 	} else {
 		if (syslog_fname != NULL &&
-		    0 == strcmp(log_fname, syslog_fname))
+		    0 == strcmp(log_fname, syslog_fname)) {
 			log_fname = syslog_abs_fname;
+		}
 		if (log_fname != syslog_abs_fname &&
 		    DIR_SEP != log_fname[0] &&
 		    0 != strcmp(log_fname, "stderr") &&
@@ -465,17 +345,20 @@ change_logfile(
 
 	if (syslog_file != NULL &&
 	    syslog_file != stderr && syslog_file != stdout &&
-	    fileno(syslog_file) != fileno(new_file))
+	    fileno(syslog_file) != fileno(new_file)) {
 		fclose(syslog_file);
+	}
 	syslog_file = new_file;
 	if (log_fname == syslog_abs_fname) {
 		free(abs_fname);
 	} else {
 		if (syslog_abs_fname != NULL &&
-		    syslog_abs_fname != syslog_fname)
+		    syslog_abs_fname != syslog_fname) {
 			free(syslog_abs_fname);
-		if (syslog_fname != NULL)
+		}
+		if (syslog_fname != NULL) {
 			free(syslog_fname);
+		}
 		syslog_fname = estrdup(log_fname);
 		syslog_abs_fname = abs_fname;
 	}
@@ -508,16 +391,17 @@ setup_logfile(
 {
 	if (NULL == syslog_fname && NULL != name) {
 		if (-1 == change_logfile(name, true))
-			msyslog(LOG_ERR, "LOG: Cannot open log file %s, %m",
-				name);
+			msyslog(LOG_ERR, "LOG: Cannot open log file %s, %s",
+				name, strerror(errno));
 		return ;
 	}
-	if (NULL == syslog_fname)
+	if (NULL == syslog_fname) {
 		return;
+	}
 
 	if (-1 == change_logfile(syslog_fname, false))
-		msyslog(LOG_ERR, "LOG: Cannot reopen log file %s, %m",
-			syslog_fname);
+		msyslog(LOG_ERR, "LOG: Cannot reopen log file %s, %s",
+			syslog_fname, strerror(errno));
 }
 
 /*
@@ -538,8 +422,8 @@ reopen_logfile(void)
 
 	new_file = fopen(syslog_fname, "a");
 	if (NULL == new_file) {
-		msyslog(LOG_ERR, "LOG: reopen_logfile: couldn't open %s %m",
-                        syslog_fname);
+		msyslog(LOG_ERR, "LOG: reopen_logfile: couldn't open %s %s",
+                        syslog_fname, strerror(errno));
 		return;
 	}
 
@@ -561,5 +445,18 @@ reopen_logfile(void)
 	fclose(syslog_file);
 	syslog_file = new_file;
 	msyslog(LOG_INFO, "LOG: reopen_logfile: using %s", syslog_fname);
+}
+
+/* Hack because there are 2 APIs to strerror_r()  */
+void mystrerror(int errnum, char *buf, size_t buflen) {
+#ifdef STRERROR_CHAR
+	char *answer = strerror_r(errnum, buf, buflen);
+	if (answer != buf) {
+		strlcpy(buf, answer, buflen);
+	}
+#else
+	int answer = strerror_r(errnum, buf, buflen);
+	UNUSED_LOCAL(answer);
+#endif
 }
 

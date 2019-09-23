@@ -2,7 +2,7 @@
 # encoding: utf-8
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
-import os,shlex,sys,time,re,shutil
+import os,re,shlex,shutil,sys,time,traceback
 from waflib import ConfigSet,Utils,Options,Logs,Context,Build,Errors
 WAF_CONFIG_LOG='config.log'
 autoconfig=False
@@ -61,7 +61,7 @@ class ConfigurationContext(Context.Context):
 		self.bldnode=(os.path.isabs(out)and self.root or self.path).make_node(out)
 		self.bldnode.mkdir()
 		if not os.path.isdir(self.bldnode.abspath()):
-			conf.fatal('Could not create the build directory %s'%self.bldnode.abspath())
+			self.fatal('Could not create the build directory %s'%self.bldnode.abspath())
 	def execute(self):
 		self.init_dirs()
 		self.cachedir=self.bldnode.make_node(Build.CACHE_DIR)
@@ -96,6 +96,7 @@ class ConfigurationContext(Context.Context):
 		env.hash=self.hash
 		env.files=self.files
 		env.environ=dict(self.environ)
+		env.launch_dir=Context.launch_dir
 		if not(self.env.NO_LOCK_IN_RUN or env.environ.get('NO_LOCK_IN_RUN')or getattr(Options.options,'no_lock_in_run')):
 			env.store(os.path.join(Context.run_dir,Options.lockfile))
 		if not(self.env.NO_LOCK_IN_TOP or env.environ.get('NO_LOCK_IN_TOP')or getattr(Options.options,'no_lock_in_top')):
@@ -105,17 +106,17 @@ class ConfigurationContext(Context.Context):
 	def prepare_env(self,env):
 		if not env.PREFIX:
 			if Options.options.prefix or Utils.is_win32:
-				env.PREFIX=Utils.sane_path(Options.options.prefix)
+				env.PREFIX=Options.options.prefix
 			else:
-				env.PREFIX=''
+				env.PREFIX='/'
 		if not env.BINDIR:
 			if Options.options.bindir:
-				env.BINDIR=Utils.sane_path(Options.options.bindir)
+				env.BINDIR=Options.options.bindir
 			else:
 				env.BINDIR=Utils.subst_vars('${PREFIX}/bin',env)
 		if not env.LIBDIR:
 			if Options.options.libdir:
-				env.LIBDIR=Utils.sane_path(Options.options.libdir)
+				env.LIBDIR=Options.options.libdir
 			else:
 				env.LIBDIR=Utils.subst_vars('${PREFIX}/lib%s'%Utils.lib64(),env)
 	def store(self):
@@ -126,8 +127,8 @@ class ConfigurationContext(Context.Context):
 		for key in self.all_envs:
 			tmpenv=self.all_envs[key]
 			tmpenv.store(os.path.join(self.cachedir.abspath(),key+Build.CACHE_SUFFIX))
-	def load(self,input,tooldir=None,funs=None,with_sys_path=True,cache=False):
-		tools=Utils.to_list(input)
+	def load(self,tool_list,tooldir=None,funs=None,with_sys_path=True,cache=False):
+		tools=Utils.to_list(tool_list)
 		if tooldir:
 			tooldir=Utils.to_list(tooldir)
 		for tool in tools:
@@ -141,10 +142,10 @@ class ConfigurationContext(Context.Context):
 			try:
 				module=Context.load_tool(tool,tooldir,ctx=self,with_sys_path=with_sys_path)
 			except ImportError as e:
-				self.fatal('Could not load the Waf tool %r from %r\n%s'%(tool,sys.path,e))
+				self.fatal('Could not load the Waf tool %r from %r\n%s'%(tool,getattr(e,'waf_sys_path',sys.path),e))
 			except Exception as e:
 				self.to_log('imp %r (%r & %r)'%(tool,tooldir,funs))
-				self.to_log(Utils.ex_stack())
+				self.to_log(traceback.format_exc())
 				raise
 			if funs is not None:
 				self.eval_rules(funs)
@@ -169,10 +170,7 @@ class ConfigurationContext(Context.Context):
 			f()
 def conf(f):
 	def fun(*k,**kw):
-		mandatory=True
-		if'mandatory'in kw:
-			mandatory=kw['mandatory']
-			del kw['mandatory']
+		mandatory=kw.pop('mandatory',True)
 		try:
 			return f(*k,**kw)
 		except Errors.ConfigurationError:
@@ -204,7 +202,7 @@ def cmd_to_list(self,cmd):
 				return shlex.split(cmd)
 	return cmd
 @conf
-def check_waf_version(self,mini='1.8.99',maxi='2.0.0',**kw):
+def check_waf_version(self,mini='1.9.99',maxi='2.1.0',**kw):
 	self.start_msg('Checking for waf version in %s-%s'%(str(mini),str(maxi)),**kw)
 	ver=Context.HEXVERSION
 	if Utils.num2ver(mini)>ver:
@@ -285,9 +283,18 @@ def find_binary(self,filenames,exts,paths):
 	return None
 @conf
 def run_build(self,*k,**kw):
-	lst=[str(v)for(p,v)in kw.items()if p!='env']
-	h=Utils.h_list(lst)
+	buf=[]
+	for key in sorted(kw.keys()):
+		v=kw[key]
+		if hasattr(v,'__call__'):
+			buf.append(Utils.h_fun(v))
+		else:
+			buf.append(str(v))
+	h=Utils.h_list(buf)
 	dir=self.bldnode.abspath()+os.sep+(not Utils.is_win32 and'.'or'')+'conf_check_'+Utils.to_hex(h)
+	cachemode=kw.get('confcache',getattr(Options.options,'confcache',None))
+	if not cachemode and os.path.exists(dir):
+		shutil.rmtree(dir)
 	try:
 		os.makedirs(dir)
 	except OSError:
@@ -296,7 +303,6 @@ def run_build(self,*k,**kw):
 		os.stat(dir)
 	except OSError:
 		self.fatal('cannot use the configuration test folder %r'%dir)
-	cachemode=getattr(Options.options,'confcache',None)
 	if cachemode==1:
 		try:
 			proj=ConfigSet.ConfigSet(os.path.join(dir,'cache_run_build'))
@@ -326,12 +332,12 @@ def run_build(self,*k,**kw):
 		try:
 			bld.compile()
 		except Errors.WafError:
-			ret='Test does not build: %s'%Utils.ex_stack()
+			ret='Test does not build: %s'%traceback.format_exc()
 			self.fatal(ret)
 		else:
 			ret=getattr(bld,'retval',0)
 	finally:
-		if cachemode==1:
+		if cachemode:
 			proj=ConfigSet.ConfigSet()
 			proj['cache_run_build']=ret
 			proj.store(os.path.join(dir,'cache_run_build'))

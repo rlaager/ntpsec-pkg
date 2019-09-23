@@ -2,6 +2,7 @@
 # encoding: utf-8
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
+from waflib import Errors
 from waflib.Tools import ccroot,ar
 from waflib.Configure import conf
 @conf
@@ -10,7 +11,7 @@ def find_scc(conf):
 	cc=conf.find_program('cc',var='CC')
 	try:
 		conf.cmd_and_log(cc+['-flags'])
-	except Exception:
+	except Errors.WafError:
 		conf.fatal('%r is not a Sun compiler'%cc)
 	v.CC_NAME='sun'
 	conf.get_suncc_version(cc)

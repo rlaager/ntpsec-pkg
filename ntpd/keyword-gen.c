@@ -23,10 +23,12 @@ struct key_tok {
 
 struct key_tok ntp_keywords[] = {
 { "...",		T_Ellipsis,		FOLLBY_TOKEN },
+{ "aead",		T_Aead,			FOLLBY_STRING },
 { "allpeers",		T_Allpeers,		FOLLBY_TOKEN },
 { "bias",		T_Bias,			FOLLBY_TOKEN },
 { "baud",		T_Baud,			FOLLBY_TOKEN },
 { "clock",		T_Clock,		FOLLBY_STRING },
+{ "cookie",		T_Cookie,		FOLLBY_TOKEN },
 { "ctl",		T_Ctl,			FOLLBY_TOKEN },
 { "disable",		T_Disable,		FOLLBY_TOKEN },
 { "driftfile",		T_Driftfile,		FOLLBY_STRING },
@@ -195,6 +197,18 @@ struct key_tok ntp_keywords[] = {
 { "wildcard",		T_Wildcard,		FOLLBY_TOKEN },
 { "listen",		T_Listen,		FOLLBY_TOKEN },
 { "drop",		T_Drop,			FOLLBY_TOKEN },
+/* NTS */
+{ "nts",		T_Nts,			FOLLBY_TOKEN },
+{ "ask",		T_Ask,			FOLLBY_STRING },
+{ "require",		T_Require,		FOLLBY_STRING },
+{ "noval",		T_Noval,		FOLLBY_TOKEN },
+{ "expire",		T_Expire,		FOLLBY_TOKEN },
+{ "cert",		T_Cert,			FOLLBY_TOKEN },
+{ "ca",			T_Ca,			FOLLBY_TOKEN },
+{ "mintls",		T_Mintls,		FOLLBY_TOKEN },
+{ "maxtls",		T_Maxtls,		FOLLBY_TOKEN },
+{ "tlsciphers",		T_Tlsciphers,		FOLLBY_STRING },
+{ "tlsciphersuites",	T_Tlsciphersuites,	FOLLBY_STRING },
 };
 
 typedef struct big_scan_state_tag {
@@ -275,8 +289,9 @@ generate_preamble(void)
 
 	time(&now);
 	if (!strftime(timestamp, sizeof(timestamp),
-		      "%Y-%m-%d %H:%M:%S", gmtime_r(&now, &tmbuf)))
+		      "%Y-%m-%d %H:%M:%S", gmtime_r(&now, &tmbuf))) {
 		timestamp[0] = '\0';
+}
 
 	printf(preamble, timestamp);
 }
@@ -401,7 +416,7 @@ generate_fsm(void)
 			prefix_len = 0;
 			this_state = i;
 			do {
-				for (state = 1; state < sst_highwater; state++)
+				for (state = 1; state < sst_highwater; state++) {
 					if (sst[state].other_next_s == this_state) {
 						this_state = state;
 						break;
@@ -411,14 +426,16 @@ generate_fsm(void)
 						prefix_len++;
 						break;
 					}
+				}
 			} while (this_state != initial_state);
 
 			if (prefix_len) {
 				/* reverse rprefix into prefix */
 				p = prefix + prefix_len;
 				r = rprefix;
-				while (r < rprefix + prefix_len)
+				while (r < rprefix + prefix_len) {
 					*--p = *r++;
+				}
 			}
 			prefix[prefix_len] = '\0';
 
@@ -491,9 +508,9 @@ create_scan_states(
 			exit(2);
 		}
 	} else {
-		do
+		do {
 			my_state = sst_highwater++;
-		while (my_state < COUNTOF(sst)
+		} while (my_state < COUNTOF(sst)
 		       && sst[my_state].finishes_token);
 		if (my_state >= COUNTOF(sst)) {
 			fprintf(stderr,
@@ -508,10 +525,11 @@ create_scan_states(
 		sst[my_state].other_next_s = curr_char_s;
 		sst[my_state].followedby = FOLLBY_NON_ACCEPTING;
 
-		if (prev_char_s)
+		if (prev_char_s) {
 			sst[prev_char_s].other_next_s = my_state;
-		else
+		} else {
 			return_state = my_state;
+		}
 	}
 
 	/* Check if the next character is '\0'.
@@ -533,22 +551,24 @@ create_scan_states(
 		if (my_state != token) {
 			sst[token] = sst[my_state];
 			ZERO(sst[my_state]);
-			do
+			do {
 				sst_highwater--;
-			while (sst[sst_highwater].finishes_token);
+			} while (sst[sst_highwater].finishes_token);
 			my_state = token;
-			if (prev_char_s)
+			if (prev_char_s) {
 				sst[prev_char_s].other_next_s = my_state;
-			else
+			} else {
 				return_state = my_state;
+			}
 		}
-	} else
+	} else {
 		sst[my_state].match_next_s =
 		    create_scan_states(
 			&text[1],
 			token,
 			followedby,
 			sst[my_state].match_next_s);
+	}
 
 	return return_state;
 }
@@ -610,8 +630,9 @@ generate_token_text(void)
 			       id - lowest_id, id, symbname(id));
 			id++;
 		}
-		if (i > 0)
+		if (i > 0) {
 			printf(",");
+		}
 		printf("\n\t/* %-5d %5d %20s */\t\"%s\"",
 		       id - lowest_id, id, symbname(id),
 		       ntp_keywords[i].key);
@@ -675,7 +696,7 @@ populate_symb(
 		exit(4);
 	}
 
-	while (NULL != fgets(line, sizeof(line), yh))
+	while (NULL != fgets(line, sizeof(line), yh)) {
 		if (2 == sscanf(line, "#define %s %d", name, &token)
 		    && 'T' == name[0] && '_' == name[1] && token >= 0
 		    && token < (int)COUNTOF(symb)) {
@@ -689,6 +710,7 @@ populate_symb(
 				exit(10);
 			}
 		}
+	}
 	fclose(yh);
 }
 
