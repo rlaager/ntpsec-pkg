@@ -45,6 +45,7 @@
 ## Fix DNS timeouts
 0001-Fix-for-577-DNS-retry-sloth.patch
 0001-Add-Documentation-to-ntp-wait.service.patch
+0001-Fix-ntpdate-s-syslog.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch
