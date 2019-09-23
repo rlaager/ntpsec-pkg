@@ -1,5 +1,6 @@
 debian/ntp-systemd-wrapper usr/lib/ntp
 debian/rotate-stats usr/lib/ntp
+debian/tmp/lib/systemd/system/ntp-wait.service
 debian/tmp/usr/bin/ntpleapfetch usr/sbin
 debian/tmp/usr/bin/ntpmon
 debian/tmp/usr/bin/ntpq

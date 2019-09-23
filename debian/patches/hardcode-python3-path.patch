@@ -5,7 +5,7 @@ Description: Hardcode python3 path
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2019-01-17
+Last-Update: 2019-09-23
 --- a/attic/calc_tickadj/calc_tickadj
 +++ b/attic/calc_tickadj/calc_tickadj
 @@ -1,4 +1,4 @@
@@ -173,7 +173,7 @@ Last-Update: 2019-01-17
 +#!/usr/bin/python3
  # -*- coding: utf-8 -*-
  
- # SPDX-License-Identifier: BSD-2-clause
+ # SPDX-License-Identifier: BSD-2-Clause
 --- a/ntpclients/ntpq.py
 +++ b/ntpclients/ntpq.py
 @@ -1,4 +1,4 @@

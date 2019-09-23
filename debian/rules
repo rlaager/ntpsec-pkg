@@ -48,7 +48,7 @@ endif
 		python3 waf configure \
 		--prefix=/usr \
 		--enable-debug-gdb --enable-mssntp --enable-warnings \
-		--refclock=local,spectracom,generic,arbiter,nmea,pps,hpgps,shm,trimble,jjy,zyfer,neoclock \
+		--refclock=local,spectracom,generic,arbiter,nmea,pps,hpgps,shm,trimble,jjy,zyfer \
 		--enable-doc --htmldir=/usr/share/doc/ntpsec/html \
 		--build-epoch=$(SOURCE_DATE_EPOCH) \
 
@@ -93,12 +93,6 @@ override_dh_install:
 
 	install -d debian/ntpsec/lib/systemd/system
 	install -m 644 \
-		etc/ntpd.service \
-		debian/ntpsec/lib/systemd/system/ntpsec.service
-	install -m 644 \
-		etc/ntp-wait.service \
-		debian/ntpsec/lib/systemd/system/ntpsec-wait.service
-	install -m 644 \
 		debian/ntpsec.ntpsec-rotate-stats.service \
 		debian/ntpsec/lib/systemd/system/ntpsec-rotate-stats.service
 	install -m 644 \
@@ -107,14 +101,11 @@ override_dh_install:
 
 	install -d debian/ntpsec-ntpviz/lib/systemd/system
 	install -m 644 \
+		debian/tmp/lib/systemd/system/ntpd.service \
+		debian/ntpsec/lib/systemd/system/ntpsec.service
+	install -m 644 \
 		etc/ntploggps.service \
 		etc/ntploggps.timer \
-		etc/ntplogtemp.service \
-		etc/ntplogtemp.timer \
-		etc/ntpviz-daily.service \
-		etc/ntpviz-daily.timer \
-		etc/ntpviz-weekly.service \
-		etc/ntpviz-weekly.timer \
 		debian/ntpsec-ntpviz/lib/systemd/system/
 
 	install -d debian/ntpsec-ntpviz/etc/ntpviz/day

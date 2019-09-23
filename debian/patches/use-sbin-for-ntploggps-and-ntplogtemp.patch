@@ -4,26 +4,26 @@ Description: Use sbin for ntploggps and ntplogtemp
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2018-08-31
+Last-Update: 2019-09-23
 --- a/ntpclients/ntploggps-man.adoc
 +++ b/ntpclients/ntploggps-man.adoc
 @@ -1,4 +1,4 @@
--= ntploggps(1) =
-+= ntploggps(8) =
+-= ntploggps(1)
++= ntploggps(8)
  :man version: @NTPSEC_VERSION@
  include::../docs/manual.include[]
  
 --- a/ntpclients/ntplogtemp-man.adoc
 +++ b/ntpclients/ntplogtemp-man.adoc
 @@ -1,4 +1,4 @@
--= ntplogtemp(1) =
-+= ntplogtemp(8) =
+-= ntplogtemp(1)
++= ntplogtemp(8)
  :man version: @NTPSEC_VERSION@
  include::../docs/manual.include[]
  
 --- a/wscript
 +++ b/wscript
-@@ -1063,7 +1063,7 @@
+@@ -1090,7 +1090,7 @@
          afterparty(ctx)
  
      if ctx.env['PYTHON_GPS']:
@@ -32,7 +32,7 @@ Last-Update: 2018-08-31
      ctx.manpage(1, "ntpclients/ntpdig-man.adoc")
      if ctx.env['PYTHON_CURSES']:
          ctx.manpage(1, "ntpclients/ntpmon-man.adoc")
-@@ -1071,7 +1071,7 @@
+@@ -1098,7 +1098,7 @@
      ctx.manpage(1, "ntpclients/ntpsweep-man.adoc")
      ctx.manpage(1, "ntpclients/ntptrace-man.adoc")
      ctx.manpage(1, "ntpclients/ntpviz-man.adoc")
@@ -65,5 +65,5 @@ Last-Update: 2018-08-31
  
  [Service]
  Type=simple
--ExecStart=/usr/bin/ntplogtemp -o -l /var/log/ntpsec/temps
-+ExecStart=/usr/sbin/ntplogtemp -o -l /var/log/ntpsec/temps
+-ExecStart=@BINDIR@/ntplogtemp -o -l /var/log/ntpsec/temps
++ExecStart=@SBINDIR@/ntplogtemp -o -l /var/log/ntpsec/temps
