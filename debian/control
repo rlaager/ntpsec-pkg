@@ -66,8 +66,7 @@ Description: Network Time Protocol daemon and utility programs
 
 Package: ntpsec-ntpdate
 Architecture: any
-Depends: bsdutils,
-         netbase,
+Depends: netbase,
          python3 (>= 3.3),
          python3-ntp,
          ${misc:Depends},
