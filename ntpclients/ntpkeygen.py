@@ -14,8 +14,8 @@ ntpkey_AES_<hostname>.<filestamp>
 AES (128-bit) keys used to compute CMAC mode authentcation
 using shared key cryptography
 
-The file can be edited by hand to support MD5 and SHA1 for
-old digest mode authentcation.
+The file can be edited by hand to support MD5 and SHA-1 for
+old digest mode authentication.
 '''
 
 from __future__ import print_function
@@ -27,7 +27,6 @@ import random
 import time
 import getopt
 import stat
-import ntp.util
 
 #
 # Cryptodefines
@@ -99,7 +98,7 @@ if __name__ == '__main__':
             print("usage: ntpkeygen")
             raise SystemExit(0)
         elif switch in ("-V", "--version"):
-            print("ntpkeygen %s" % ntp.util.stdversion())
+            print("ntpkeygen ntpsec-@NTPSEC_VERSION_EXTENDED@")
             raise SystemExit(0)
 
     # The seed is ignored by random.SystemRandom,

@@ -89,12 +89,13 @@ main (
 	}
 
 	unit = (int)strtoul(argv[1], &argp, 10);
-	if (argp == argv[1])
+	if (argp == argv[1]) {
 		unit = 2;
-	else if (*argp == ':')
+	} else if (*argp == ':') {
 		argp++;
-	else
+	} else {
 		goto usage;
+	}
 
 	p=getShmTime(unit);
 	switch (*argp) {
@@ -128,8 +129,9 @@ again:
 			(long)p->receiveTimeStampSec,p->receiveTimeStampNSec);
 		printf ("  leap=%d, precision=%d, nsamples=%d, valid=%d\n",
 			p->leap, p->precision, p->nsamples, p->valid);
-		if (!p->valid)
+		if (!p->valid) {
 			printf ("***\n");
+		}
 		if (clear) {
 			p->valid=0;
 			printf ("cleared\n");
@@ -161,7 +163,7 @@ again:
 		else
 		{
 			time(&rcv_sec);
-			rcv_frc = (unsigned int)ntp_random() % 1000000000u;
+			rcv_frc = (unsigned int)ntp_random() % 1000000000U;
 		}
 		/* add a wobble of ~3.5msec to the clock time */
 		clk_sec = rcv_sec;

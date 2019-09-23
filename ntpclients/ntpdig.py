@@ -4,7 +4,7 @@
 ntpdig - simple SNTP client
 
 """
-# SPDX-License-Identifier: BSD-2-clause
+# SPDX-License-Identifier: BSD-2-Clause
 # This code runs identically under Python 2 and Python 3. Keep it that way!
 from __future__ import print_function, division
 import getopt
@@ -262,6 +262,11 @@ USAGE:  ntpdig [-<flag> [<val>] | --<name>[{=| }<val>]]...
 
 
 if __name__ == '__main__':
+    bin_ver = "ntpsec-@NTPSEC_VERSION_EXTENDED@"
+    if ntp.util.stdversion() != bin_ver:
+        sys.stderr.write("Module/Binary version mismatch\n")
+        sys.stderr.write("Binary: %s\n" % bin_ver)
+        sys.stderr.write("Module: %s\n" % ntp.util.stdversion())
     try:
         try:
             (options, arguments) = getopt.getopt(
@@ -349,7 +354,7 @@ if __name__ == '__main__':
                     print(usage)
                     raise SystemExit(0)
                 elif switch in ("-V", "--version"):
-                    print("ntpdig %s" % ntp.util.stdversion())
+                    print("ntpdig %s" % bin_ver)
                     raise SystemExit(0)
                 else:
                     sys.stderr.write(
@@ -397,7 +402,7 @@ if __name__ == '__main__':
             for s in range(samples):
                 if needgap and not firstloop:
                     time.sleep(gap)
-                if firstloop is True:
+                if firstloop:
                     firstloop = False
                 for server in concurrent_hosts:
                     try:

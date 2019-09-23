@@ -12,7 +12,6 @@ def h_file(self):
 	cache=self.ctx.hashes_md5_tstamp
 	if filename in cache and cache[filename][0]==st.st_mtime:
 		return cache[filename][1]
-	global STRONGEST
 	if STRONGEST:
 		ret=Utils.h_file(filename)
 	else:

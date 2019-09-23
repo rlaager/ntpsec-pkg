@@ -1,0 +1,221 @@
+= Quick way to get NTS working
+include::html.include[]
+
+[cols="10%,90%",frame="none",grid="none",style="verse"]
+|==============================
+|image:pic/beaver.gif[]|
+{millshome}pictures.html[from 'Pogo', Walt Kelly]
+
+For putting out compiler fires.
+
+|==============================
+
+
+NTS is a method for using TLS/SSL to authenticate NTP traffic on the net.
+That means that bad guys can't forge packets that will give your
+system bogus time.
+
+The RFC hasn't been published yet (June 2019).  Nothing has changed
+recently, but there may be minor adjustments when it is finalized.
+
+== ntp.conf (you are a client)
+
+Append the keyword `nts` to the end of your `server`
+lines.  Do these only for servers that speak NTS.  As of
+June 2019, the following should work:
+
+Public NTP servers supporting NTS:
+
+------------------------------------------------------------
+server time.cloudflare.com:1234 nts  # TLS1.3 only
+------------------------------------------------------------
+
+Development machines, so there may be gaps in availability:
+
+------------------------------------------------------------
+server ntpmon.dcs1.biz nts
+server pi4.rellim.com nts
+server ntp1.glypnod.com nts
+server ntp2.glypnod.com nts
+------------------------------------------------------------
+
+
+Note that you must use the same host name that was used to create
+the server's certificate.  IP Addresses will not work.
+
+This assumes that the server is using a certificate covered by
+your OS/distro's root server collection.
+
+Restart `ntpd`, and skip to <<Verification>>, below.
+
+
+== ntp.conf (you are a server)
+
+Being an NTS server requires a well-formed SSL certificate.  The
+easiest way to do this is to use LetsEncrypt.  It needs a FQDN.
+Please see the Certbot client site
+[[https://certbot.eff.org/]] for instructions.
+
+The following worked on Fedora:
+
+------------------------------------------------------------
+]$ sudo dnf install certbot
+  
+# Install
+]$ sudo certbot certonly --standalone
+
+# Renew
+]$ sudo certbot renew
+------------------------------------------------------------
+
+If you already have an SSL Cert for your server, and you are
+serving time using the same FQDN, you can reuse that Cert.
+
+Add the line:
+`nts enable`
+to your conf file.
+
+Locate the following two files:
+
+* Your Cert Private Key
+* Your Cert Public Key, fully chained up
+
+Then add the lines below to your ntp.conf, replacing
+with your pathnames.
+
+Example, using LetsEncrypt:
+
+------------------------------------------------------------
+nts key /etc/letsencrypt/live/ntpmon.dcs1.biz/privkey.pem
+nts cert /etc/letsencrypt/live/ntpmon.dcs1.biz/fullchain.pem
+------------------------------------------------------------
+
+Note that `ntpd` must be able to read both files and you want to
+make sure that the bad guys can't read your private key.  It may
+be simpler to copy those files over to `/etc/ntp/` and adjust
+their owner and mode so `ntpd` running as user `ntp` can read them.
+
+You may need to tell your system where to store the keys used
+to encrypt cookies.  The default is `/var/lib/ntp/nts-keys`.
+Some distros use `/var/db/` rather than `/var/lib/`.
+
+------------------------------------------------------------
+nts cookie /var/lib/ntp/nts-keys
+------------------------------------------------------------
+
+Restart your server, and skip to <<Verification>>, below.
+
+
+== Verification
+
+Check your log file.
+
+For each client, you should see lines like this:
+
+------------------------------------------------------------
+2019-03-22T08:06:33 ntpd[12915]: DNS: dns_probe: pi3.rellim.com, cast_flags:1, flags:21801
+2019-03-22T08:06:33 ntpd[12915]: NTSc: DNS lookup of pi3.rellim.com took 0.003 sec
+2019-03-22T08:06:33 ntpd[12915]: NTSc: nts_probe connecting to pi3.rellim.com:ntp => 204.17.205.23:123
+2019-03-22T08:06:34 ntpd[12915]: NTSc: Using TLSv1.2, AES256-GCM-SHA384 (256)
+2019-03-22T08:06:34 ntpd[12915]: NTSc: certificate subject name: /CN=pi3.rellim.com
+2019-03-22T08:06:34 ntpd[12915]: NTSc: certificate issuer name: /C=US/O=Let's Encrypt/CN=Let's Encrypt Authority X3
+2019-03-22T08:06:34 ntpd[12915]: NTSc: certificate is valid.
+2019-03-22T08:06:34 ntpd[12915]: NTSc: read 880 bytes
+2019-03-22T08:06:34 ntpd[12915]: NTSc: Got 8 cookies, length 104, aead=15.
+2019-03-22T08:06:34 ntpd[12915]: NTSc: NTS-KE req to pi3.rellim.com took 0.882 sec, OK
+------------------------------------------------------------
+
+For initializing a server, you should see lines like this:
+
+------------------------------------------------------------
+2019-03-22T08:06:32 ntpd[12915]: NTSs: starting NTS-KE server listening on port 123
+2019-03-22T08:06:32 ntpd[12915]: NTSs: loaded certificate (chain) from /etc/letsencrypt/live/ntpmon.dcs1.biz/fullchain.pem
+2019-03-22T08:06:32 ntpd[12915]: NTSs: loaded private key from /etc/letsencrypt/live/ntpmon.dcs1.biz/privkey.pem
+2019-03-22T08:06:32 ntpd[12915]: NTSs: Private Key OK
+2019-03-22T08:06:32 ntpd[12915]: NTSs: OpenSSL security level is 2
+2019-03-22T08:06:32 ntpd[12915]: NTSs: listen4 worked
+2019-03-22T08:06:32 ntpd[12915]: NTSs: listen6 worked
+2019-03-22T08:06:32 ntpd[12915]: NTSc: Using system default root certificates.
+------------------------------------------------------------
+
+On a server, each time a client uses TLS to setup cookies,
+you should see lines like this:
+
+------------------------------------------------------------
+10 Jun 04:50:39 ntpd[823]: NTSs: TCP accept-ed from 64.139.1.69:61561
+10 Jun 04:50:39 ntpd[823]: NTSs: Using TLSv1.3, TLS_AES_256_GCM_SHA384 (256)
+10 Jun 04:50:40 ntpd[823]: NTSs: Read 16, wrote 880 bytes.  AEAD=15
+10 Jun 04:50:40 ntpd[823]: NTSs: NTS-KE server took 1.569 sec
+------------------------------------------------------------
+
+Servers on the big bad internet will get a lot of garbage connections.
+Each one will produce log lines like this:
+
+------------------------------------------------------------
+10 Jun 04:55:11 ntpd[823]: NTSs: TCP accept-ed from 70.95.39.88:49176
+10 Jun 04:55:11 ntpd[823]: NTSs: SSL accept from 70.95.39.88:49176 failed, 0.006 sec
+10 Jun 04:55:11 ntpd[823]: NTS: error:1408F10B:SSL routines:ssl3_get_record:wrong version number
+------------------------------------------------------------
+
+The logging prefix *NTSs* is for the NTS Server component, eg
+initializing your keys.  The *NTSc* component is for the NTS Client
+part, where you are talking to *other* NTS servers.
+
+=== Check with ntpq
+
+The output of ntpq will be slightly different when NTS is in use,
+note the `t` column.  Example:
+
+------------------------------------------------------------
+root@ntpmon:/var/www/html/ntp# ntpq -p
+     remote                                   refid      st t when poll reach   delay   offset   jitter
+*SHM(1)                                  .PPS.            0 l   20   64  377   0.0000   0.0007   0.0281
+xSHM(0)                                  .GPS.            0 l   19   64  377   0.0000 233.3966  19.2212
++pi3.rellim.com                          .PPS.            1 8   56   64  371 197.4484   0.0932   0.9660
++kong.rellim.com                         204.17.205.17    2 8   17   64  273 210.7230  -1.3924   0.6086
+-ntp1.glypnod.com                        204.123.2.72     2 8   50   64  277 178.5749   3.8921   0.9611
+-ntp2.glypnod.com                        17.253.34.253    2 8    -   64  177 185.7582  -2.6534   0.0275
+ 2407:8000:8001:80::8                    .DNS.           16 u    - 1024    0   0.0000   0.0000   0.0005
+-navobs1.wustl.edu                       .GPS.            1 u  105   64  356 221.5282  -2.4354   0.0293
+------------------------------------------------------------
+
+The `t` column shows how many cookies your NTS client is holding for the
+appropriate servers.  The number should be 8. Lower numbers indicate dropped
+packets.  (7 could be a packet in flight.)
+
+The RFC calls for the server to rotate the private key used to
+encrypt cookies every 24 hours.  The server also saves the previous
+key so old cookies will work for at least 24 hours.  24 hours and 8 cookies
+will work for a polling interval of up to 3 hours.  That's much longer
+than the default max of 1024 seconds.  For testing, the server currently
+rotates keys every hour so cookies won't work if the polling interval
+gets over 450 seconds.  The largest power of 2 that will work is 256, or
+8 in the `ntpq -p` `poll` column.
+
+=== Check ntp variables
+
+Try `ntpq -c nts` . This will show various counters related
+to NTS.  This feature is under active development, so the
+format might change.  An example:
+
+------------------------------------------------------------
+root@ntpmon:/var/www/html/ntp# ntpq -c nts
+NTS client sends:            7491
+NTS client recvs:            6562
+NTS client recvs w error:    0
+NTS server recvs:            5591
+NTS server recvs w error:    38
+NTS server sends:            5553
+NTS make cookies:            6392
+NTS decode cookies:          4734
+NTS decode cookies old:      819
+NTS decode cookies too old:  0
+NTS decode cookies error:    0
+NTS KE probes:               8
+NTS KE probes_bad:           0
+NTS KE serves:               75
+NTS KE serves_bad:           56
+------------------------------------------------------------
+
+include::includes/footer.adoc[]
+

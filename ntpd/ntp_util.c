@@ -152,14 +152,13 @@ init_util(void)
  * There is no security problem with reading the drift file since
  * you can get the data via ntp_adjtime(2) or ntptime(8).
  */
-static void drift_write(char *driftfile, double drift)
-{
+static void drift_write(char *driftfile, double drift) {
 	FILE *new;
 	char tempfile[PATH_MAX];
 	strlcpy(tempfile, driftfile, sizeof(tempfile));
 	strlcat(tempfile, "-tmp", sizeof(tempfile));
 	if ((new = fopen(tempfile, "w")) == NULL) {
-	    msyslog(LOG_ERR, "LOG: frequency file %s: %m", tempfile);
+	    msyslog(LOG_ERR, "LOG: frequency file %s: %s", tempfile, strerror(errno));
 	    return;
 	}
 	fprintf(new, "%.6f\n", drift);
@@ -167,8 +166,8 @@ static void drift_write(char *driftfile, double drift)
 	/* atomic */
 	if (rename(tempfile, driftfile))
 	    msyslog(LOG_WARNING,
-		    "LOG: Unable to rename temp drift file %s to %s, %m",
-		    tempfile, driftfile);
+		    "LOG: Unable to rename temp drift file %s to %s, %s",
+		    tempfile, driftfile, strerror(errno));
 }
 
 
@@ -176,8 +175,7 @@ static void drift_write(char *driftfile, double drift)
  * write_stats - hourly: sysstats, usestats, and maybe drift
  */
 void
-write_stats(void)
-{
+write_stats(void) {
 	record_sys_stats();
 	record_use_stats();
 	if (stats_drift_file != 0) {
@@ -188,19 +186,19 @@ write_stats(void)
 		 * reduce the wander_resid by half each hour. When
 		 * the difference between the prev_drift_comp and
 		 * drift_comp is less than the wander_resid, update
-		 * the frequncy file. This minimizes the file writes to
+		 * the frequency file. This minimizes the file writes to
 		 * nonvolaile storage.
 		 */
 	        DPRINT(1, ("write_stats: frequency %.6lf thresh %.6lf, freq %.6lf\n",
-			   (prev_drift_comp - drift_comp) * US_PER_S,
-			   wander_resid * US_PER_S, drift_comp * US_PER_S));
-		if (fabs(prev_drift_comp - drift_comp) < wander_resid) {
+			   (prev_drift_comp - loop_data.drift_comp) * US_PER_S,
+			   wander_resid * US_PER_S, loop_data.drift_comp * US_PER_S));
+		if (fabs(prev_drift_comp - loop_data.drift_comp) < wander_resid) {
 			wander_resid *= 0.5;
 			return;
 		}
-		prev_drift_comp = drift_comp;
+		prev_drift_comp = loop_data.drift_comp;
 		wander_resid = wander_threshold;
-		drift_write(stats_drift_file, drift_comp * US_PER_S);
+		drift_write(stats_drift_file, loop_data.drift_comp * US_PER_S);
 	}
 }
 
@@ -245,8 +243,9 @@ stats_config(
 	 * Open and read frequency file.
 	 */
 	case STATS_FREQ_FILE:
-		if (!value || (len = strlen(value)) == 0)
+		if (!value || (len = strlen(value)) == 0) {
 			break;
+		}
 
 		stats_drift_file = erealloc(stats_drift_file, len + 1);
 		memcpy(stats_drift_file, value, len+1);
@@ -257,7 +256,7 @@ stats_config(
 		 */
 		if (drift_read(stats_drift_file, &new_drift)) {
 		    loop_config(LOOP_FREQ, new_drift);
-		    prev_drift_comp = drift_comp;
+		    prev_drift_comp = loop_data.drift_comp;
 		}
 		break;
 
@@ -298,8 +297,8 @@ stats_config(
 	 */
 	case STATS_PID_FILE:
 		if ((fp = fopen(value, "w")) == NULL) {
-			msyslog(LOG_ERR, "LOG: pid file %s: %m",
-			    value);
+			msyslog(LOG_ERR, "LOG: pid file %s: %s",
+			    value, strerror(errno));
 			break;
 		}
 		fprintf(fp, "%d", (int)getpid());
@@ -309,13 +308,14 @@ stats_config(
 	/*
 	 * Read leapseconds file.
 	 *
-	 * Note: Currently a leap file without SHA1 signature is
+	 * Note: Currently a leap file without SHA-1 signature is
 	 * accepted, but if there is a signature line, the signature
 	 * must be valid or the file is rejected.
 	 */
 	case STATS_LEAP_FILE:
-		if (!value || (len = strlen(value)) == 0)
+		if (!value || (len = strlen(value)) == 0) {
 			break;
+		}
 
 		leapfile_name = erealloc(leapfile_name, len + 1);
 		memcpy(leapfile_name, value, len + 1);
@@ -354,8 +354,7 @@ stats_config(
  */
 
 static char *
-timespec_to_MJDtime(const struct timespec *ts)
-{
+timespec_to_MJDtime(const struct timespec *ts) {
 	char *buf;
 	unsigned long	day, sec, msec;
 
@@ -371,8 +370,7 @@ timespec_to_MJDtime(const struct timespec *ts)
 
 
 static const char *
-peerlabel(const struct peer *peer)
-{
+peerlabel(const struct peer *peer) {
 #if defined(REFCLOCK) && !defined(ENABLE_CLASSIC_MODE)
 	if (peer->procptr != NULL)
 		return refclock_name(peer);
@@ -501,7 +499,7 @@ mprintf_clock_stats(
 	char	msg[512];
 
 	va_start(ap, fmt);
-	rc = mvsnprintf(msg, sizeof(msg), fmt, ap);
+	rc = vsnprintf(msg, sizeof(msg), fmt, ap);
 	va_end(ap);
 	if (stats_control)
 		record_clock_stats(peer, msg);
@@ -531,7 +529,7 @@ record_raw_stats(
 	int	precision,
 	double	root_delay,	/* seconds */
 	double	root_dispersion,/* seconds */
-	uint32_t	refid,
+	refid_t	refid,
 	unsigned int	outcount
 	)
 {
@@ -593,12 +591,11 @@ record_sys_stats(void)
 		fprintf(sysstats.fp,
 		    "%s %u %" PRIu64 " %" PRIu64 " %" PRIu64 " %" PRIu64 " %" PRIu64
 		    " %" PRIu64 " %" PRIu64 " %" PRIu64 " %" PRIu64 " %" PRIu64 "\n",
-		    timespec_to_MJDtime(&now), current_time - stat_count.sys_stattime,
-			stat_count.sys_received, stat_count.sys_processed,
-			stat_count.sys_newversion, stat_count.sys_oldversion,
-			stat_count.sys_restricted, stat_count.sys_badlength,
-		    stat_count.sys_badauth, stat_count.sys_declined,
-			stat_count.sys_limitrejected, stat_count.sys_kodsent);
+			timespec_to_MJDtime(&now), current_time - stat_stattime(),
+			stat_received(), stat_processed(), stat_newversion(),
+			stat_oldversion(), stat_restricted(), stat_badlength(),
+			stat_badauth(), stat_declined(), stat_limitrejected(),
+			stat_kodsent());
 		fflush(sysstats.fp);
 		proto_clr_stats();
 	}
@@ -637,7 +634,7 @@ void record_use_stats(void)
 		stimex += usage.ru_stime.tv_sec -  oldusage.ru_stime.tv_sec;
 		fprintf(usestats.fp,
 		    "%s %u %.3f %.3f %ld %ld %ld %ld %ld %ld %ld %ld %ld\n",
-		    timespec_to_MJDtime(&now), current_time - stat_count.use_stattime,
+		    timespec_to_MJDtime(&now), current_time - stat_stattime(),
 		    utime, stimex,
 		    usage.ru_minflt -   oldusage.ru_minflt,
 		    usage.ru_majflt -   oldusage.ru_majflt,
@@ -650,7 +647,7 @@ void record_use_stats(void)
 		    usage.ru_maxrss );
 		fflush(usestats.fp);
 		oldusage = usage;
-		stat_count.use_stattime = current_time;
+		set_use_stattime(current_time);
 	}
 }
 
@@ -690,7 +687,7 @@ record_proto_stats(
  * Returns: n/a
  *
  * Note: This loads a new leapfile on the fly. Currently a leap file
- * without SHA1 signature is accepted, but if there is a signature line,
+ * without SHA-1 signature is accepted, but if there is a signature line,
  * the signature must be valid or the file is rejected.
  */
 void
@@ -700,8 +697,9 @@ check_leap_file(
 	)
 {
 	/* just do nothing if there is no leap file */
-	if ( ! (leapfile_name && *leapfile_name))
+	if ( ! (leapfile_name && *leapfile_name)) {
 		return;
+	}
 
 	/* try to load leapfile, force it if no leapfile loaded yet */
 	if (leapsec_load_file(
@@ -759,8 +757,9 @@ getauthkeys(
 	size_t len;
 
 	len = strlen(keyfile);
-	if (!len)
+	if (!len) {
 		return;
+	}
 
 	key_file_name = erealloc(key_file_name, len + 1);
 	memcpy(key_file_name, keyfile, len + 1);
@@ -773,8 +772,7 @@ getauthkeys(
  * to do any one-time processing necessitated by the step.
  */
 void
-ntpd_time_stepped(void)
-{
+ntpd_time_stepped(void) {
 	unsigned int saved_mon_enabled;
 
 	/*

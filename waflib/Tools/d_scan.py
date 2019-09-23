@@ -73,8 +73,8 @@ def filter_comments(filename):
 class d_parser(object):
 	def __init__(self,env,incpaths):
 		self.allnames=[]
-		self.re_module=re.compile("module\s+([^;]+)")
-		self.re_import=re.compile("import\s+([^;]+)")
+		self.re_module=re.compile(r"module\s+([^;]+)")
+		self.re_import=re.compile(r"import\s+([^;]+)")
 		self.re_import_bindings=re.compile("([^:]+):(.*)")
 		self.re_import_alias=re.compile("[^=]+=(.+)")
 		self.env=env
@@ -97,11 +97,11 @@ class d_parser(object):
 		lst=[]
 		mod_name=self.re_module.search(code)
 		if mod_name:
-			self.module=re.sub('\s+','',mod_name.group(1))
+			self.module=re.sub(r'\s+','',mod_name.group(1))
 		import_iterator=self.re_import.finditer(code)
 		if import_iterator:
 			for import_match in import_iterator:
-				import_match_str=re.sub('\s+','',import_match.group(1))
+				import_match_str=re.sub(r'\s+','',import_match.group(1))
 				bindings_match=self.re_import_bindings.match(import_match_str)
 				if bindings_match:
 					import_match_str=bindings_match.group(1)

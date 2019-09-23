@@ -2,6 +2,7 @@
 # encoding: utf-8
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
+from __future__ import with_statement
 try:
 	from xml.sax import make_parser
 	from xml.sax.handler import ContentHandler
@@ -12,7 +13,7 @@ else:
 	has_xml=True
 import os,sys,re
 from waflib.Tools import cxx
-from waflib import Task,Utils,Options,Errors,Context
+from waflib import Build,Task,Utils,Options,Errors,Context
 from waflib.TaskGen import feature,after_method,extension,before_method
 from waflib.Configure import conf
 from waflib import Logs
@@ -48,7 +49,7 @@ class qxx(Task.classes['cxx']):
 			if self.generator:
 				self.generator.tasks.append(tsk)
 			gen=self.generator.bld.producer
-			gen.outstanding.appendleft(tsk)
+			gen.outstanding.append(tsk)
 			gen.total+=1
 			return tsk
 		else:
@@ -56,6 +57,8 @@ class qxx(Task.classes['cxx']):
 	def add_moc_tasks(self):
 		node=self.inputs[0]
 		bld=self.generator.bld
+		if bld.is_install==Build.UNINSTALL:
+			return
 		try:
 			self.signature()
 		except KeyError:
@@ -111,7 +114,7 @@ class XMLHandler(ContentHandler):
 		self.buf.append(cars)
 @extension(*EXT_RCC)
 def create_rcc_task(self,node):
-	rcnode=node.change_ext('_rc.cpp')
+	rcnode=node.change_ext('_rc.%d.cpp'%self.idx)
 	self.create_task('rcc',node,rcnode)
 	cpptask=self.create_task('cxx',rcnode,rcnode.change_ext('.o'))
 	try:
@@ -121,8 +124,13 @@ def create_rcc_task(self,node):
 	return cpptask
 @extension(*EXT_UI)
 def create_uic_task(self,node):
-	uictask=self.create_task('ui5',node)
-	uictask.outputs=[node.parent.find_or_declare(self.env.ui_PATTERN%node.name[:-3])]
+	try:
+		uic_cache=self.bld.uic_cache
+	except AttributeError:
+		uic_cache=self.bld.uic_cache={}
+	if node not in uic_cache:
+		uictask=uic_cache[node]=self.create_task('ui5',node)
+		uictask.outputs=[node.parent.find_or_declare(self.env.ui_PATTERN%node.name[:-3])]
 @extension('.ts')
 def add_lang(self,node):
 	self.lang=self.to_list(getattr(self,'lang',[]))+[node]
@@ -145,16 +153,16 @@ def apply_qt5(self):
 		for x in self.to_list(self.lang):
 			if isinstance(x,str):
 				x=self.path.find_resource(x+'.ts')
-			qmtasks.append(self.create_task('ts2qm',x,x.change_ext('.qm')))
+			qmtasks.append(self.create_task('ts2qm',x,x.change_ext('.%d.qm'%self.idx)))
 		if getattr(self,'update',None)and Options.options.trans_qt5:
-			cxxnodes=[a.inputs[0]for a in self.compiled_tasks]+[a.inputs[0]for a in self.tasks if getattr(a,'inputs',None)and a.inputs[0].name.endswith('.ui')]
+			cxxnodes=[a.inputs[0]for a in self.compiled_tasks]+[a.inputs[0]for a in self.tasks if a.inputs and a.inputs[0].name.endswith('.ui')]
 			for x in qmtasks:
 				self.create_task('trans_update',cxxnodes,x.inputs)
 		if getattr(self,'langname',None):
 			qmnodes=[x.outputs[0]for x in qmtasks]
 			rcnode=self.langname
 			if isinstance(rcnode,str):
-				rcnode=self.path.find_or_declare(rcnode+'.qrc')
+				rcnode=self.path.find_or_declare(rcnode+('.%d.qrc'%self.idx))
 			t=self.create_task('qm2rcc',qmnodes,rcnode)
 			k=create_rcc_task(self,t.outputs[0])
 			self.link_task.inputs.append(k.outputs[0])
@@ -185,11 +193,8 @@ class rcc(Task.Task):
 		parser=make_parser()
 		curHandler=XMLHandler()
 		parser.setContentHandler(curHandler)
-		fi=open(self.inputs[0].abspath(),'r')
-		try:
-			parser.parse(fi)
-		finally:
-			fi.close()
+		with open(self.inputs[0].abspath(),'r')as f:
+			parser.parse(f)
 		nodes=[]
 		names=[]
 		root=self.inputs[0].parent
@@ -200,9 +205,13 @@ class rcc(Task.Task):
 			else:
 				names.append(x)
 		return(nodes,names)
+	def quote_flag(self,x):
+		return x
 class moc(Task.Task):
 	color='BLUE'
 	run_str='${QT_MOC} ${MOC_FLAGS} ${MOCCPPPATH_ST:INCPATHS} ${MOCDEFINES_ST:DEFINES} ${SRC} ${MOC_ST} ${TGT}'
+	def quote_flag(self,x):
+		return x
 class ui5(Task.Task):
 	color='BLUE'
 	run_str='${QT_UIC} ${SRC} -o ${TGT}'
@@ -409,15 +418,13 @@ def find_qt5_libraries(self):
 					self.msg('Checking for %s'%i,False,'YELLOW')
 				env.append_unique('INCLUDES_'+uselib,os.path.join(env.QTLIBS,frameworkName,'Headers'))
 			else:
-				for j in('','d'):
-					k='_DEBUG'if j=='d'else''
-					ret=self.find_single_qt5_lib(i+j,uselib+k,env.QTLIBS,qtincludes,force_static)
-					if not force_static and not ret:
-						ret=self.find_single_qt5_lib(i+j,uselib+k,env.QTLIBS,qtincludes,True)
-					self.msg('Checking for %s'%(i+j),ret,'GREEN'if ret else'YELLOW')
+				ret=self.find_single_qt5_lib(i,uselib,env.QTLIBS,qtincludes,force_static)
+				if not force_static and not ret:
+					ret=self.find_single_qt5_lib(i,uselib,env.QTLIBS,qtincludes,True)
+				self.msg('Checking for %s'%i,ret,'GREEN'if ret else'YELLOW')
 	else:
 		path='%s:%s:%s/pkgconfig:/usr/lib/qt5/lib/pkgconfig:/opt/qt5/lib/pkgconfig:/usr/lib/qt5/lib:/opt/qt5/lib'%(self.environ.get('PKG_CONFIG_PATH',''),env.QTLIBS,env.QTLIBS)
-		for i in self.qt5_vars_debug+self.qt5_vars:
+		for i in self.qt5_vars:
 			self.check_cfg(package=i,args='--cflags --libs',mandatory=False,force_static=force_static,pkg_config_path=path)
 @conf
 def simplify_qt5_libs(self):
@@ -437,7 +444,6 @@ def simplify_qt5_libs(self):
 					accu.append(lib)
 				env['LIBPATH_'+var]=accu
 	process_lib(self.qt5_vars,'LIBPATH_QTCORE')
-	process_lib(self.qt5_vars_debug,'LIBPATH_QTCORE_DEBUG')
 @conf
 def add_qt5_rpath(self):
 	env=self.env
@@ -456,7 +462,6 @@ def add_qt5_rpath(self):
 						accu.append('-Wl,--rpath='+lib)
 					env['RPATH_'+var]=accu
 		process_rpath(self.qt5_vars,'LIBPATH_QTCORE')
-		process_rpath(self.qt5_vars_debug,'LIBPATH_QTCORE_DEBUG')
 @conf
 def set_qt5_libs_to_check(self):
 	self.qt5_vars=Utils.to_list(getattr(self,'qt5_vars',[]))
@@ -468,7 +473,7 @@ def set_qt5_libs_to_check(self):
 		if self.environ.get('QT5_FORCE_STATIC'):
 			pat=self.env.cxxstlib_PATTERN
 		if Utils.unversioned_sys_platform()=='darwin':
-			pat="%s\.framework"
+			pat=r"%s\.framework"
 		re_qt=re.compile(pat%'Qt5?(?P<name>.*)'+'$')
 		for x in dirlst:
 			m=re_qt.match(x)
@@ -479,9 +484,6 @@ def set_qt5_libs_to_check(self):
 	qtextralibs=getattr(Options.options,'qtextralibs',None)
 	if qtextralibs:
 		self.qt5_vars.extend(qtextralibs.split(','))
-	if not hasattr(self,'qt5_vars_debug'):
-		self.qt5_vars_debug=[a+'_DEBUG'for a in self.qt5_vars]
-	self.qt5_vars_debug=Utils.to_list(self.qt5_vars_debug)
 @conf
 def set_qt5_defines(self):
 	if sys.platform!='win32':
@@ -489,7 +491,6 @@ def set_qt5_defines(self):
 	for x in self.qt5_vars:
 		y=x.replace('Qt5','Qt')[2:].upper()
 		self.env.append_unique('DEFINES_%s'%x.upper(),'QT_%s_LIB'%y)
-		self.env.append_unique('DEFINES_%s_DEBUG'%x.upper(),'QT_%s_LIB'%y)
 def options(opt):
 	opt.add_option('--want-rpath',action='store_true',default=False,dest='want_rpath',help='enable the rpath for qt libraries')
 	for i in'qtdir qtbin qtlibs'.split():

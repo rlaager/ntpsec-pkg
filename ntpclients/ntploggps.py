@@ -44,13 +44,16 @@ except ImportError as e:
     sys.stderr.write("%s\n" % e)
     sys.exit(1)
 
-try:
-    import ntp.util
-except ImportError as e:
-    sys.stderr.write(
-        "ntploggps: can't find Python NTP library -- check PYTHONPATH.\n")
-    sys.stderr.write("%s\n" % e)
-    sys.exit(1)
+
+class logfile_header_class(logging.handlers.TimedRotatingFileHandler):
+    'A class to modify the file logging handler.'
+    def doRollover(self):
+        'function to add header to new file on rotaion.'
+        if str is bytes:
+            super(logfile_header_class, self).doRollover()
+        else:
+            super().doRollover()
+        self.stream.write('# Time       Device     TDOP     nSat\n')
 
 
 def logging_setup():
@@ -62,8 +65,9 @@ def logging_setup():
     # Create file handler
     if args.logfile:
         # log to logfile
-        file = logging.handlers.TimedRotatingFileHandler(
+        file = logfile_header_class(
             args.logfile[0],
+            utc=True,
             when='midnight',
             interval=1)
     else:
@@ -107,7 +111,7 @@ parser.add_argument('-v', '--verbose',
 
 parser.add_argument('-V', '--version',
                     action="version",
-                    version="ntploggps %s" % ntp.util.stdversion())
+                    version="ntploggps ntpsec-@NTPSEC_VERSION_EXTENDED@")
 
 args = parser.parse_args()
 

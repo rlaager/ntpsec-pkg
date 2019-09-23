@@ -44,7 +44,6 @@ static inline l_fp_w htonl_fp(l_fp lfp) {
 #define	CLEAR_TO_ZERO(p)	((char *)&((p)->clear_to_zero))
 #define	END_CLEAR_TO_ZERO(p)	((char *)&((p)->end_clear_to_zero))
 #define	LEN_CLEAR_TO_ZERO(p)	(END_CLEAR_TO_ZERO(p) - CLEAR_TO_ZERO(p))
-
 /*
  * traffic shaping parameters
  */
@@ -120,11 +119,9 @@ bool leap_sec_in_progress;
  * Nonspecified system state variables
  */
 l_fp	sys_authdelay;		/* authentication delay */
-double	sys_offset;	/* current local clock offset */
 double	sys_mindisp = MINDISPERSE; /* minimum distance (s) */
 static double	sys_maxdist = MAXDISTANCE; /* selection threshold */
 double	sys_maxdisp = MAXDISPERSE; /* maximum dispersion */
-double	sys_jitter;		/* system jitter */
 static unsigned long	sys_epoch;	/* last clock update time */
 static	double sys_clockhop;	/* clockhop threshold */
 static int leap_vote_ins;	/* leap consensus for insert */
@@ -148,7 +145,91 @@ static int sys_orphwait = NTP_ORPHWAIT; /* orphan wait */
  * Statistics counters - first the good, then the bad
  * These get reset every hour if sysstats is enabled.
  */
+struct statistics_counters {
+	uptime_t	sys_stattime;		/* time since sysstats reset */
+	uint64_t	sys_received;		/* packets received */
+	uint64_t	sys_processed;		/* packets for this host */
+	uint64_t	sys_restricted;		/* restricted packets */
+	uint64_t	sys_newversion;		/* current version  */
+	uint64_t	sys_oldversion;		/* old version */
+	uint64_t	sys_badlength;		/* bad length or format */
+	uint64_t	sys_badauth;		/* bad authentication */
+	uint64_t	sys_declined;		/* declined */
+	uint64_t	sys_limitrejected;	/* rate exceeded */
+	uint64_t	sys_kodsent;		/* KoD sent */
+	uptime_t	use_stattime;		/* time since usestats reset */
+};
 volatile struct statistics_counters stat_count;
+
+uptime_t stat_stattime(void)
+{
+  return stat_count.sys_stattime;
+}
+
+uint64_t stat_received(void)
+{
+  return stat_count.sys_received;
+}
+
+uint64_t stat_processed(void)
+{
+  return stat_count.sys_processed;
+}
+
+uint64_t stat_restricted(void)
+{
+  return stat_count.sys_restricted;
+}
+
+void increment_restricted(void)
+{
+  stat_count.sys_restricted++;
+}
+
+uint64_t stat_newversion(void)
+{
+  return stat_count.sys_newversion;
+}
+
+uint64_t stat_oldversion(void)
+{
+  return stat_count.sys_oldversion;
+}
+
+uint64_t stat_badlength(void)
+{
+  return stat_count.sys_badlength;
+}
+
+uint64_t stat_badauth(void)
+{
+  return stat_count.sys_badauth;
+}
+
+uint64_t stat_declined(void)
+{
+  return stat_count.sys_declined;
+}
+
+uint64_t stat_limitrejected(void)
+{
+  return stat_count.sys_limitrejected;
+}
+
+uint64_t stat_kodsent(void)
+{
+  return stat_count.sys_kodsent;
+}
+
+uptime_t stat_use_stattime(void)
+{
+  return stat_count.sys_stattime;
+}
+
+void set_use_stattime(uptime_t stime) {
+  stat_count.sys_stattime = stime;
+}
+
 
 double	measured_tick;		/* non-overridable sys_tick (s) */
 
@@ -162,7 +243,8 @@ static	double	measure_tick_fuzz(void);
 static	void	peer_xmit	(struct peer *);
 static	int	peer_unfit	(struct peer *);
 static	double	root_distance	(struct peer *);
-
+static	void	restart_nts_ke	(struct peer *);
+static	void	maybe_log_junk	(struct recvbuf *rbuf);
 
 void
 set_sys_leap(unsigned char new_sys_leap) {
@@ -201,10 +283,10 @@ is_vn_mode_acceptable(
 	)
 {
 	return rbufp->recv_length >= 1 &&
-	    PKT_VERSION(rbufp->recv_space.X_recv_buffer[0]) >= 1 &&
-	    PKT_VERSION(rbufp->recv_space.X_recv_buffer[0]) <= 4 &&
-	    PKT_MODE(rbufp->recv_space.X_recv_buffer[0]) != MODE_PRIVATE &&
-	    PKT_MODE(rbufp->recv_space.X_recv_buffer[0]) != MODE_UNSPEC;
+	    PKT_VERSION(rbufp->recv_buffer[0]) >= 1 &&
+	    PKT_VERSION(rbufp->recv_buffer[0]) <= 4 &&
+	    PKT_MODE(rbufp->recv_buffer[0]) != MODE_PRIVATE &&
+	    PKT_MODE(rbufp->recv_buffer[0]) != MODE_UNSPEC;
 }
 
 static bool
@@ -213,29 +295,10 @@ is_control_packet(
 	)
 {
 	return rbufp->recv_length >= 1 &&
-	    PKT_VERSION(rbufp->recv_space.X_recv_buffer[0]) <= 4 &&
-	    PKT_MODE(rbufp->recv_space.X_recv_buffer[0]) == MODE_CONTROL;
+	    PKT_VERSION(rbufp->recv_buffer[0]) <= 4 &&
+	    PKT_MODE(rbufp->recv_buffer[0]) == MODE_CONTROL;
 }
 
-/* There used to be a calloc/free for each received packet.
-   Now, the parse_pkt version lives in a recvbuf.
-   The alloc/free only happens for extensions and we don't support
-   any of them.
-*/
-static void
-free_extens(
-	struct recvbuf *rbufp
-	)
-{
-	if(rbufp->pkt.extensions != NULL) {
-		for(size_t i = 0; i < rbufp->pkt.num_extensions; i++) {
-			free(rbufp->pkt.extensions[i].body);
-			rbufp->pkt.extensions[i].body = NULL;
-		}
-		free(rbufp->pkt.extensions);
-		rbufp->pkt.extensions = NULL;
-	}
-}
 
 static bool
 parse_packet(
@@ -245,10 +308,10 @@ parse_packet(
 	REQUIRE(rbufp != NULL);
 
 	size_t recv_length = rbufp->recv_length;
-	uint8_t const* recv_buf = rbufp->recv_space.X_recv_buffer;
+	uint8_t const* recv_buf = rbufp->recv_buffer;
 
 	if(recv_length < LEN_PKT_NOMAC) {
-		/* Packet is too short to possibly be valid. */
+		/* Data is too short to possibly be a valid packet. */
 		return false;
 	}
 
@@ -268,53 +331,22 @@ parse_packet(
 	pkt->rec = ntp_be64dec(recv_buf + 32);
 	pkt->xmt = ntp_be64dec(recv_buf + 40);
 
-	/* Make sure these are clean before we might bail. */
-        pkt->num_extensions = 0;
-	pkt->extensions = NULL;
-
 	rbufp->keyid_present = false;
 	rbufp->keyid = 0;
 	rbufp->mac_len = 0;
 
+	rbufp->extens_present = false;
+	rbufp->ntspacket.valid = false;
+
 	if(PKT_VERSION(pkt->li_vn_mode) > 4) {
 		/* Unsupported version */
-		goto fail;
+		return false;
 	} else if(PKT_VERSION(pkt->li_vn_mode) == 4) {
 		/* Only version 4 packets support extensions. */
-
-		/* Count and validate extensions */
-		size_t ext_count = 0;
-		size_t extlen = 0;
-		while(bufptr <= recv_buf + recv_length - 28) {
-			extlen = ntp_be16dec(bufptr + 2);
-			if(extlen % 4 != 0 || extlen < 16) {
-				/* Illegal extension length */
-				goto fail;
-			}
-			if((size_t)(recv_buf + recv_length - bufptr) < extlen) {
-				/* Extension length field points past
-				 * end of packet */
-				goto fail;
-			}
-			bufptr += extlen;
-			ext_count++;
-		}
-
-		pkt->num_extensions = (unsigned int)ext_count;
-		pkt->extensions = calloc(ext_count, sizeof (struct exten));
-		if(pkt->extensions == NULL) { goto fail; }
-
-		/* Copy extensions */
-		bufptr = recv_buf + LEN_PKT_NOMAC;
-		for(size_t i = 0; i < ext_count; i++) {
-			pkt->extensions[i].type = ntp_be16dec(bufptr);
-			pkt->extensions[i].len = ntp_be16dec(bufptr + 2) - 4;
-			pkt->extensions[i].body =
-			    calloc(1, pkt->extensions[i].len);
-			if(pkt->extensions[i].body == NULL) { goto fail; }
-			memcpy(pkt->extensions[i].body, bufptr + 4,
-			       pkt->extensions[i].len);
-			bufptr += pkt->extensions[i].len + 4;
+		/* But they also support shared key authentication. */
+		if (recv_length > (LEN_PKT_NOMAC+MAX_MAC_LEN)) {
+			rbufp->extens_present = true;
+			return true;
 		}
 	}
 
@@ -330,7 +362,7 @@ parse_packet(
 		/* crypto-NAK */
 		if(PKT_VERSION(pkt->li_vn_mode) < 3) {
 			/* Only allowed as of NTPv3 */
-			goto fail;
+			return false;
 		}
 		rbufp->keyid_present = true;
 		rbufp->keyid = ntp_be32dec(bufptr);
@@ -339,7 +371,7 @@ parse_packet(
 	    case 6:
 		/* NTPv2 authenticator, which we allow but strip because
 		   we don't support it any more */
-		if(PKT_VERSION(pkt->li_vn_mode) != 2) { goto fail; }
+		if(PKT_VERSION(pkt->li_vn_mode) != 2) { return false; }
 		rbufp->keyid_present = false;
 		rbufp->keyid = 0;
 		rbufp->mac_len = 0;
@@ -348,7 +380,7 @@ parse_packet(
 		/* AES-128 CMAC, MD5 digest */
 		if(PKT_VERSION(pkt->li_vn_mode) < 3) {
 			/* Only allowed as of NTPv3 */
-			goto fail;
+			return false;
 		}
 		rbufp->keyid_present = true;
 		rbufp->keyid = ntp_be32dec(bufptr);
@@ -358,7 +390,7 @@ parse_packet(
 		/* SHA-1 digest */
 		if(PKT_VERSION(pkt->li_vn_mode) < 3) {
 			/* Only allowed as of NTPv3 */
-			goto fail;
+			return false;
 		}
 		rbufp->keyid_present = true;
 		rbufp->keyid = ntp_be32dec(bufptr);
@@ -368,7 +400,7 @@ parse_packet(
 		/* MS-SNTP */
 		if(PKT_VERSION(pkt->li_vn_mode) != 3) {
 			/* Only allowed for NTPv3 */
-			goto fail;
+			return false;
 		}
 
 		/* We don't deal with the MS-SNTP fields, so just strip
@@ -381,13 +413,10 @@ parse_packet(
 		break;
 	    default:
 		/* Any other length is illegal */
-		goto fail;
+		return false;
 	}
 
 	return true;
-  fail:
-	free_extens(rbufp);
-	return false;
 }
 
 /* Returns true if we should not accept any unauthenticated packets from
@@ -426,11 +455,11 @@ is_crypto_nak(
 }
 
 static bool is_kod(
-	struct recvbuf const* rbufp
+	struct parsed_pkt *pkt
 	)
 {
-	return PKT_LEAP(rbufp->pkt.li_vn_mode) == LEAP_NOTINSYNC &&
-	    PKT_TO_STRATUM(rbufp->pkt.stratum) == STRATUM_UNSPEC;
+	return PKT_LEAP(pkt->li_vn_mode) == LEAP_NOTINSYNC &&
+	    PKT_TO_STRATUM(pkt->stratum) == STRATUM_UNSPEC;
 }
 
 /* Check the restrictions which can be checked just based on the source
@@ -449,7 +478,7 @@ static bool check_early_restrictions(
 	    rbufp->recv_length < 1 ||
 	    ((restrict_mask & RES_VERSION) &&
 	     (rbufp->recv_length < 1 ||
-	      PKT_VERSION(rbufp->recv_space.X_recv_buffer[0]) != NTP_VERSION));
+	      PKT_VERSION(rbufp->recv_buffer[0]) != NTP_VERSION));
 }
 
 static void
@@ -471,9 +500,6 @@ handle_procpkt(
 	)
 {
 	int outcount = peer->outcount;
-
-	/* Shouldn't happen, but include this for safety. */
-	if(peer == NULL) { return; }
 
 	peer->flash &= ~PKT_BOGON_MASK;
 
@@ -515,14 +541,15 @@ handle_procpkt(
 	peer->outcount = 0;
 	outcount--;
 
-	if(is_kod(rbufp)) {
+	if(is_kod(&rbufp->pkt)) {
 		if(!memcmp(rbufp->pkt.refid, "RATE", REFIDLEN)) {
 			peer->selbroken++;
 			report_event(PEVNT_RATE, peer, NULL);
-			if (peer->cfg.minpoll < 10) { peer->cfg.minpoll = 10; }
 			peer->burst = peer->retry = 0;
 			peer->throttle = (NTP_SHIFT + 1) * (1 << peer->cfg.minpoll);
-			poll_update(peer, 10);
+			if (rbufp->pkt.ppoll > peer->cfg.minpoll)
+			    peer->cfg.minpoll = min(peer->ppoll, 10);
+			poll_update(peer, min(rbufp->pkt.ppoll, 10));
 		}
 		return;
 	}
@@ -559,7 +586,7 @@ handle_procpkt(
 	const double delta = fabs(t21 - t34);
 	const double epsilon = LOGTOD(sys_vars.sys_precision) +
 	    LOGTOD(peer->precision) +
-	    clock_phi * delta;
+	    loop_data.clock_phi * delta;
 
 	/* One final test before we touch any variables that could
 	   affect the clock: don't accept any packets with a round
@@ -650,28 +677,28 @@ receive(
 
 	if(!is_vn_mode_acceptable(rbufp)) {
 		stat_count.sys_badlength++;
-		goto done;
+		return;
 	}
 
-/* FIXME: This is lots more cleanup to do in this area. */
+	/* FIXME: This is lots more cleanup to do in this area. */
 
 	restrict_mask = restrictions(&rbufp->recv_srcadr);
 
 	if(check_early_restrictions(rbufp, restrict_mask)) {
 		stat_count.sys_restricted++;
-		goto done;
+		return;
 	}
 
 	restrict_mask = ntp_monitor(rbufp, restrict_mask);
 	if (restrict_mask & RES_LIMITED) {
 		stat_count.sys_limitrejected++;
-		if(!(restrict_mask & RES_KOD)) { goto done; }
+		if(!(restrict_mask & RES_KOD)) { return; }
 	}
 
 	if(is_control_packet(rbufp)) {
 		process_control(rbufp, restrict_mask);
 		stat_count.sys_processed++;
-		goto done;
+		return;
 	}
 
 	/*
@@ -687,13 +714,13 @@ receive(
 		stat_count.sys_oldversion++;		/* previous version */
 	} else {
 		stat_count.sys_badlength++;
-		goto done;			/* old version */
+		return;			/* old version */
 	}
 	}
 
 	if (!parse_packet(rbufp)) {
 		stat_count.sys_badlength++;
-		goto done;
+		return;
 	}
 
 	if (MODE_SERVER == PKT_MODE(rbufp->pkt.li_vn_mode)) {
@@ -704,7 +731,7 @@ receive(
 	    peer = findpeer(rbufp);
 	    if (NULL == peer) {
 		stat_count.sys_declined++;
-		goto done;
+		return;
 	    }
 	}
 
@@ -732,7 +759,7 @@ receive(
 			   have to do this screwy buffer-length
 			   arithmetic in order to call it. */
 			!authdecrypt(auth,
-				 (uint32_t*)rbufp->recv_space.X_recv_buffer,
+				 (uint32_t*)rbufp->recv_buffer,
 				 (int)(rbufp->recv_length - (rbufp->mac_len + 4)),
 				 (int)(rbufp->mac_len + 4))) {
 
@@ -742,23 +769,38 @@ receive(
 				peer->cfg.flags &= ~FLAG_AUTHENTIC;
 				peer->flash |= BOGON5;
 			}
-			goto done;
+			return;
 		}
-	}
-
-	if (peer != NULL) {
-	    	peer->received++;
-		peer->cfg.flags |= FLAG_AUTHENTIC;
-		peer->timereceived = current_time;
 	}
 
 	switch (PKT_MODE(rbufp->pkt.li_vn_mode)) {
 	    case MODE_ACTIVE:  /* remote site using "peer" in config file */
 	    case MODE_CLIENT:  /* Request for us as a server. */
+		if (rbufp->extens_present
+		    && !extens_server_recv(&rbufp->ntspacket,
+			  rbufp->recv_buffer, rbufp->recv_length)) {
+			stat_count.sys_declined++;
+			maybe_log_junk(rbufp);
+			break;
+		}
 		handle_fastxmit(rbufp, restrict_mask, auth);
 		stat_count.sys_processed++;
 		break;
-	    case MODE_SERVER:  /* Reply to our request. */
+	    case MODE_SERVER:  /* Reply to our request to a server. */
+		if (NULL == peer) {
+		    stat_count.sys_declined++;
+		    break;
+		}
+		if ((peer->cfg.flags & FLAG_NTS)
+		     && (!rbufp->extens_present || !extens_client_recv(peer,
+		          rbufp->recv_buffer, rbufp->recv_length))) {
+		    stat_count.sys_declined++;
+		    maybe_log_junk(rbufp);
+		    break;
+		}
+		peer->received++;
+		peer->cfg.flags |= FLAG_AUTHENTIC;
+		peer->timereceived = current_time;
 		handle_procpkt(rbufp, peer);
 		stat_count.sys_processed++;
 		peer->processed++;
@@ -772,8 +814,6 @@ receive(
 		break;
 	}
 
-  done:
-	free_extens(rbufp);
 }
 
 /*
@@ -804,25 +844,30 @@ transmit(
 	 * This was observed testing with pool, where sys_maxclock == 12
 	 * resulted in 60 associations without the hard limit.
 	 */
-#ifdef ENABLE_DNS_LOOKUP
 	if (peer->cast_flags & MDF_POOL) {
 		peer->outdate = current_time;
 		if ((peer_associations <= 2 * sys_maxclock) &&
 		    (peer_associations < sys_maxclock ||
 		     sys_survivors < sys_minclock))
-			if (!dns_probe(peer)) return;
+			if (!dns_probe(peer)) {
+			    /* DNS thread busy, try again soon */
+			    peer->nextdate = current_time;
+			    return;
+                     }
 		poll_update(peer, hpoll);
 		return;
 	}
 
-	/* Does server need DNS lookup? */
-	if (peer->cfg.flags & FLAG_DNS) {
+	/* Does server need DNS or NTS lookup? */
+	if (peer->cfg.flags & FLAG_LOOKUP) {
 		peer->outdate = current_time;
-		if (!dns_probe(peer)) return;
+		if (!dns_probe(peer)) {
+			peer->nextdate = current_time;
+			return;
+		}
 		poll_update(peer, hpoll);
 		return;
         }
-#endif
 
 	/*
 	 * In unicast modes the dance is much more intricate. It is
@@ -865,7 +910,7 @@ transmit(
 			 * Unreach is also reset for survivors in
 			 * clock_select().
 			 */
-			hpoll = sys_poll;
+			hpoll = clkstate.sys_poll;
 			if (!(peer->cfg.flags & FLAG_PREEMPT))
 				peer->unreach = 0;
 			if ((peer->cfg.flags & FLAG_BURST) && peer->retry ==
@@ -948,11 +993,11 @@ clock_update(
 	 */
 	sys_vars.sys_peer = peer;
 	sys_epoch = peer->epoch;
-	if (sys_poll < peer->cfg.minpoll)
-		sys_poll = peer->cfg.minpoll;
-	if (sys_poll > peer->cfg.maxpoll)
-		sys_poll = peer->cfg.maxpoll;
-	poll_update(peer, sys_poll);
+	if (clkstate.sys_poll < peer->cfg.minpoll)
+		clkstate.sys_poll = peer->cfg.minpoll;
+	if (clkstate.sys_poll > peer->cfg.maxpoll)
+		clkstate.sys_poll = peer->cfg.maxpoll;
+	poll_update(peer, clkstate.sys_poll);
 	sys_vars.sys_stratum = min(peer->stratum + 1, STRATUM_UNSPEC);
 	if (peer->stratum == STRATUM_REFCLOCK ||
 	    peer->stratum == STRATUM_UNSPEC)
@@ -979,9 +1024,9 @@ clock_update(
 	 */
 	dtemp	= peer->rootdisp
 		+ peer->disp
-		+ sys_jitter
-		+ clock_phi * (current_time - peer->update)
-		+ fabs(sys_offset);
+		+ clkstate.sys_jitter
+		+ loop_data.clock_phi * (current_time - peer->update)
+		+ fabs(clkstate.sys_offset);
 
 	if (dtemp > sys_mindisp)
 		sys_vars.sys_rootdisp = dtemp;
@@ -997,7 +1042,7 @@ clock_update(
 	 * Comes now the moment of truth. Crank the clock discipline and
 	 * see what comes out.
 	 */
-	switch (local_clock(peer, sys_offset)) {
+	switch (local_clock(peer, clkstate.sys_offset)) {
 
 	/*
 	 * Clock exceeds panic threshold. Life as we know it ends.
@@ -1020,7 +1065,8 @@ clock_update(
 				pause();
 		}
 #endif /* HAVE_LIBSCF_H */
-		msyslog(LOG_ERR, "CLOCK: Panic: offset too big: %.3f", sys_offset);
+		msyslog(LOG_ERR, "CLOCK: Panic: offset too big: %.3f",
+            clkstate.sys_offset);
 		exit (1);
 		/* not reached */
 
@@ -1035,7 +1081,7 @@ clock_update(
 		sys_vars.sys_rootdelay = 0;
 		sys_vars.sys_rootdisp = 0;
 		sys_vars.sys_reftime = 0;
-		sys_jitter = LOGTOD(sys_vars.sys_precision);
+		clkstate.sys_jitter = LOGTOD(sys_vars.sys_precision);
 		leapsec_reset_frame();
 		break;
 
@@ -1140,7 +1186,7 @@ poll_update(
 	 * reference clock, otherwise 2 s.
 	 */
 	utemp = current_time + (unsigned long)max(peer->throttle - (NTP_SHIFT - 1) *
-	    (1 << peer->cfg.minpoll), ntp_minpkt);
+	    (1 << peer->cfg.minpoll), rstrct.ntp_minpkt);
 	if (peer->burst > 0) {
 		if (peer->nextdate > current_time)
 			return;
@@ -1179,7 +1225,7 @@ poll_update(
 		else
 			peer->nextdate = utemp;
 		if (peer->throttle > (1 << peer->cfg.minpoll))
-			peer->nextdate += (unsigned long)ntp_minpkt;
+			peer->nextdate += (unsigned long)rstrct.ntp_minpkt;
 	}
 	DPRINT(2, ("poll_update: at %u %s poll %d burst %d retry %d head %d early %u next %u\n",
 		   current_time, socktoa(&peer->srcadr), peer->hpoll,
@@ -1238,7 +1284,7 @@ peer_clear(
 	if (initializing1) {
 		peer->nextdate += (unsigned long)peer_associations;
 	} else if (MODE_PASSIVE == peer->hmode) {
-		peer->nextdate += (unsigned long)ntp_minpkt;
+		peer->nextdate += (unsigned long)rstrct.ntp_minpkt;
 	} else {
 	    /*
 	     * Randomizing the next poll interval used to be done with
@@ -1305,7 +1351,7 @@ clock_filter(
 	 * less than the Allan intercept use the delay; otherwise, use
 	 * the sum of the delay and dispersion.
 	 */
-	dtemp = clock_phi * (current_time - peer->update);
+	dtemp = loop_data.clock_phi * (current_time - peer->update);
 	peer->update = current_time;
 	for (i = NTP_SHIFT - 1; i >= 0; i--) {
 		if (i != 0)
@@ -1314,7 +1360,7 @@ clock_filter(
 			peer->filter_disp[j] = sys_maxdisp;
 			dst[i] = sys_maxdisp;
 		} else if (peer->update - peer->filter_epoch[j] >
-		    (unsigned long)ULOGTOD(allan_xpt)) {
+		    (unsigned long)ULOGTOD(clkstate.allan_xpt)) {
 			dst[i] = peer->filter_delay[j] +
 			    peer->filter_disp[j];
 		} else {
@@ -1442,11 +1488,11 @@ clock_filter(
 /*
  * clock_select - find the pick-of-the-litter clock
  *
- * ENABLE_LOCKCLOCK: (1) If the local clock is the prefer peer, it will always
- * be enabled, even if declared falseticker, (2) only the prefer peer
- * can be selected as the system peer, (3) if the external source is
- * down, the system leap bits are set to 11 and the stratum set to
- * infinity.
+ * When lockclock is on: (1) If the local clock is the prefer peer, it
+ * will always be enabled, even if declared falseticker, (2) only the
+ * prefer peer can be selected as the system peer, (3) if the external
+ * source is down, the system leap bits are set to 11 and the stratum
+ * set to infinity.
  */
 void
 clock_select(void)
@@ -1484,19 +1530,20 @@ clock_select(void)
 	 */
 	osys_peer = sys_vars.sys_peer;
 	sys_survivors = 0;
-#ifdef ENABLE_LOCKCLOCK
-	set_sys_leap(LEAP_NOTINSYNC);
-	sys_vars.sys_stratum = STRATUM_UNSPEC;
-	memcpy(&sys_vars.sys_refid, "DOWN", REFIDLEN);
-#endif /* ENABLE_LOCKCLOCK */
+	if (loop_data.lockclock) {
+		set_sys_leap(LEAP_NOTINSYNC);
+		sys_vars.sys_stratum = STRATUM_UNSPEC;
+		memcpy(&sys_vars.sys_refid, "DOWN", REFIDLEN);
+	}
 
 	/*
 	 * Allocate dynamic space depending on the number of
 	 * associations.
 	 */
 	nlist = 1;
-	for (peer = peer_list; peer != NULL; peer = peer->p_link)
+	for (peer = peer_list; peer != NULL; peer = peer->p_link) {
 		nlist++;
+	}
 	endpoint_size = ALIGNED_SIZE((unsigned int)nlist * 2 * sizeof(*endpoint));
 	peers_size = ALIGNED_SIZE((unsigned int)nlist * sizeof(*peers));
 	indx_size = ALIGNED_SIZE((unsigned int)nlist * 2 * sizeof(*indx));
@@ -1523,8 +1570,9 @@ clock_select(void)
 		 * Leave the island immediately if the peer is
 		 * unfit to synchronize.
 		 */
-		if (peer_unfit(peer))
+		if (peer_unfit(peer)) {
 			continue;
+}
 
 		/*
 		 * If this peer is an orphan parent, elect the
@@ -1612,8 +1660,9 @@ clock_select(void)
 	 * Construct sorted indx[] of endpoint[] indexes ordered by
 	 * offset.
 	 */
-	for (i = 0; i < nl2; i++)
+	for (i = 0; i < nl2; i++) {
 		indx[i] = i;
+	}
 	for (i = 0; i < nl2; i++) {
 		endp = endpoint[indx[i]];
 		e = endp.val;
@@ -1669,15 +1718,17 @@ clock_select(void)
 		for (i = 0; i < nl2; i++) {
 			low = endpoint[indx[i]].val;
 			n -= endpoint[indx[i]].type;
-			if (n >= nlist - allow)
+			if (n >= nlist - allow) {
 				break;
+}
 		}
 		n = 0;
 		for (j = nl2 - 1; j >= 0; j--) {
 			high = endpoint[indx[j]].val;
 			n += endpoint[indx[j]].type;
-			if (n >= nlist - allow)
+			if (n >= nlist - allow) {
 				break;
+}
 		}
 
 		/*
@@ -1685,8 +1736,9 @@ clock_select(void)
 		 * If not, increase the number of falsetickers and go
 		 * around again.
 		 */
-		if (high > low)
+		if (high > low) {
 			break;
+}
 	}
 
 	/*
@@ -1725,8 +1777,9 @@ clock_select(void)
 		}
 #endif /* REFCLOCK */
 
-		if (j != i)
+		if (j != i) {
 			peers[j] = peers[i];
+		}
 		j++;
 	}
 	nlist = j;
@@ -1778,8 +1831,9 @@ clock_select(void)
 		g = 0; // Worst peer select jitter
 		k = 0; // Index of the worst peer
 		for (i = 0; i < nlist; i++) {
-			if (peers[i].error < d)
+			if (peers[i].error < d) {
 				d = peers[i].error;
+			}
 			peers[i].seljit = 0;
 			if (nlist > 1) {
 				f = 0;
@@ -1802,8 +1856,9 @@ clock_select(void)
 			   socktoa(&peers[k].peer->srcadr), g, d));
 		if (nlist > sys_maxclock)
 			peers[k].peer->new_status = CTL_PST_SEL_EXCESS;
-		for (j = k + 1; j < nlist; j++)
+		for (j = k + 1; j < nlist; j++) {
 			peers[j - 1] = peers[j];
+		}
 		nlist--;
 	}
 
@@ -1843,14 +1898,16 @@ clock_select(void)
 		if (peer->leap == LEAP_ADDSECOND) {
 			if (peer->cfg.flags & FLAG_REFCLOCK)
 				leap_vote_ins = nlist;
-			else if (leap_vote_ins < nlist)
+			else if (leap_vote_ins < nlist) {
 				leap_vote_ins++;
+			}
 		}
 		if (peer->leap == LEAP_DELSECOND) {
 			if (peer->cfg.flags & FLAG_REFCLOCK)
 				leap_vote_del = nlist;
-			else if (leap_vote_del < nlist)
+			else if (leap_vote_del < nlist) {
 				leap_vote_del++;
+			}
 		}
 		if (peer->cfg.flags & FLAG_PREFER)
 			sys_prefer = peer;
@@ -1877,16 +1934,18 @@ clock_select(void)
 			sys_clockhop = 0;
 		} else if ((x = fabs(typesystem->offset -
 		    osys_peer->offset)) < sys_mindisp) {
-			if ( D_ISZERO_NS(sys_clockhop) )
+			if ( D_ISZERO_NS(sys_clockhop) ) {
 				sys_clockhop = sys_mindisp;
-			else
+			} else {
 				sys_clockhop *= .5;
+			}
 			DPRINT(1, ("select: clockhop %d %.6f %.6f\n",
 				   j, x, sys_clockhop));
-			if (fabs(x) < sys_clockhop)
+			if (fabs(x) < sys_clockhop) {
 				typesystem = osys_peer;
-			else
+			} else {
 				sys_clockhop = 0;
+			}
 		} else {
 			sys_clockhop = 0;
 		}
@@ -1906,12 +1965,12 @@ clock_select(void)
 			typesystem = sys_prefer;
 			sys_clockhop = 0;
 			typesystem->new_status = CTL_PST_SEL_SYSPEER;
-			sys_offset = typesystem->offset;
-			sys_jitter = typesystem->jitter;
+			clkstate.sys_offset = typesystem->offset;
+			clkstate.sys_jitter = typesystem->jitter;
 			sys_vars.sys_rootdist = root_distance(typesystem);
 		}
 		DPRINT(1, ("select: combine offset %.9f jitter %.9f\n",
-			   sys_offset, sys_jitter));
+			   clkstate.sys_offset, clkstate.sys_jitter));
 	}
 #ifdef REFCLOCK
 	/*
@@ -1921,18 +1980,19 @@ clock_select(void)
 	 * if there is a prefer peer or there are no survivors and none
 	 * are required.
 	 */
-	if (typepps != NULL && fabs(sys_offset) < 0.4 &&
+	if (typepps != NULL && fabs(clkstate.sys_offset) < 0.4 &&
 	    (!typepps->is_pps_driver ||
-	    (typepps->is_pps_driver && (sys_prefer !=
-	    NULL || (typesystem == NULL && sys_minsane == 0))))) {
+	     sys_prefer != NULL ||
+	     (typesystem != NULL && typepps->cfg.flags & FLAG_PREFER) ||
+	     (typesystem == NULL && sys_minsane == 0))) {
 		typesystem = typepps;
 		sys_clockhop = 0;
 		typesystem->new_status = CTL_PST_SEL_PPS;
-		sys_offset = typesystem->offset;
-		sys_jitter = typesystem->jitter;
+		clkstate.sys_offset = typesystem->offset;
+		clkstate.sys_jitter = typesystem->jitter;
 		sys_vars.sys_rootdist = root_distance(typesystem);
 		DPRINT(1, ("select: pps offset %.9f jitter %.9f\n",
-			   sys_offset, sys_jitter));
+			   clkstate.sys_offset, clkstate.sys_jitter));
 	} else if ( typepps &&
                     ( CTL_PST_SEL_PPS == typepps->new_status )) {
                 /* uh, oh, it WAS a valid PPS, but no longer */
@@ -1993,8 +2053,8 @@ clock_combine(
 		w += x * DIFF(peers[i].peer->offset,
 		    peers[syspeer].peer->offset);
 	}
-	sys_offset = z / y;
-	sys_jitter = SQRT(w / y + SQUARE(peers[syspeer].seljit));
+	clkstate.sys_offset = z / y;
+	clkstate.sys_jitter = SQRT(w / y + SQUARE(peers[syspeer].seljit));
 	sys_vars.sys_rootdist = peers[syspeer].synch;
 }
 
@@ -2030,7 +2090,7 @@ root_distance(
 	dtemp = (peer->delay + peer->rootdelay) / 2
 		+ LOGTOD(peer->precision)
 		  + LOGTOD(sys_vars.sys_precision)
-		  + clock_phi * (current_time - peer->update)
+		  + loop_data.clock_phi * (current_time - peer->update)
 		+ peer->rootdisp
 		+ peer->jitter;
 	/*
@@ -2040,8 +2100,9 @@ root_distance(
 	 * cannot exceed the sys_maxdist, as this is the cutoff by the
 	 * selection algorithm.
 	 */
-	if (dtemp < sys_mindisp)
+	if (dtemp < sys_mindisp) {
 		dtemp = sys_mindisp;
+	}
 	return (dtemp);
 }
 
@@ -2094,14 +2155,22 @@ peer_xmit(
 		peer->org_rand = peer->org_ts;
 	}
 
+	/* FIXME bump org_ts to compensate for crypto */
 	xpkt.xmt = htonl_fp(peer->org_rand);	/* out in xmt, back in org */
 
-
-	/*
-	 * If the peer (aka server) was configured with a key, authenticate
-	 * the packet.  Else, the packet is not authenticated.
+	/* 3 way branch to add authentication:
+         *  1) NTS
+         *  2) Shared KEY
+         *  3) none
 	 */
-	if (0 != peer->cfg.peerkey) {
+	if (FLAG_NTS & peer->cfg.flags) {
+		if (0 < peer->nts_state.count)
+		  sendlen += extens_client_send(peer, &xpkt);
+		else {
+		  restart_nts_ke(peer);  /* out of cookies */
+		  return;
+		}
+        } else if (0 != peer->cfg.peerkey) {
 		auth_info *auth = authlookup(peer->cfg.peerkey, true);
 		if (NULL == auth) {
 			report_event(PEVNT_AUTH, peer, "no key");
@@ -2109,12 +2178,7 @@ peer_xmit(
 			peer->badauth++;
 			return;
 		}
-		/* Maybe bump peer->org_ts to account for crypto time */
 		sendlen += authencrypt(auth, (uint32_t *)&xpkt, sendlen);
-		if (sendlen > sizeof(xpkt)) {
-			msyslog(LOG_ERR, "PROTO: buffer overflow %u", sendlen);
-			exit(1);
-		}
 	}
 
 	sendpkt(&peer->srcadr, peer->dstadr, &xpkt, sendlen);
@@ -2177,7 +2241,7 @@ fast_xmit(
 		xpkt.li_vn_mode = PKT_LI_VN_MODE(LEAP_NOTINSYNC,
 		    PKT_VERSION(rbufp->pkt.li_vn_mode), xmode);
 		xpkt.stratum = STRATUM_PKT_UNSPEC;
-		xpkt.ppoll = max(rbufp->pkt.ppoll, ntp_minpoll);
+		xpkt.ppoll = max(rbufp->pkt.ppoll, rstrct.ntp_minpoll);
 		xpkt.precision = rbufp->pkt.precision;
 		memcpy(&xpkt.refid, "RATE", REFIDLEN);
 		xpkt.rootdelay = htonl(rbufp->pkt.rootdelay);
@@ -2213,7 +2277,7 @@ fast_xmit(
 		xpkt.li_vn_mode = PKT_LI_VN_MODE(sys_vars.sys_leap,
 		    PKT_VERSION(rbufp->pkt.li_vn_mode), xmode);
 		xpkt.stratum = STRATUM_TO_PKT(sys_vars.sys_stratum);
-		xpkt.ppoll = max(rbufp->pkt.ppoll, ntp_minpoll);
+		xpkt.ppoll = max(rbufp->pkt.ppoll, rstrct.ntp_minpoll);
 		xpkt.precision = sys_vars.sys_precision;
 		xpkt.refid = sys_vars.sys_refid;
 		xpkt.rootdelay = HTONS_FP(DTOUFP(sys_vars.sys_rootdelay));
@@ -2254,48 +2318,43 @@ fast_xmit(
 		xpkt.xmt = htonl_fp(xmt_tx);
 	}
 
+
 #ifdef ENABLE_MSSNTP
 	if (flags & RES_MSSNTP) {
 		keyid_t keyid = 0;
 		if (NULL != auth) keyid = auth->keyid;
+		// FIXME need counter
 		send_via_ntp_signd(rbufp, xmode, keyid, flags, &xpkt);
 		return;
 	}
 #endif /* ENABLE_MSSNTP */
 
-	/*
-	 * If the received packet contains a MAC, the transmitted packet
-	 * is authenticated and contains a MAC. If not, the transmitted
-	 * packet is not authenticated.
+
+	/* 3 way branch to add authentication:
+         *  1) NTS
+         *  2) Shared KEY
+         *  3) none
 	 */
 	sendlen = LEN_PKT_NOMAC;
-	if (NULL == auth) {
-		sendpkt(&rbufp->recv_srcadr, rbufp->dstadr, &xpkt, (int)sendlen);
-		DPRINT(1, ("transmit: at %u %s->%s mode %d len %zu\n",
-			   current_time, socktoa(&rbufp->dstadr->sin),
-			   socktoa(&rbufp->recv_srcadr), xmode, sendlen));
-		return;
-	}
-
-	/*
-	 * The received packet contains a MAC, so the transmitted packet
-	 * must be authenticated. For symmetric key cryptography, use
-	 * the predefined and trusted symmetric keys to generate the
-	 * cryptosum.
-	 */
 	get_systime(&xmt_tx);
-	sendlen += (size_t)authencrypt(auth, (uint32_t *)&xpkt, (int)sendlen);
+	if (rbufp->ntspacket.valid) {
+	  sendlen += extens_server_send(&rbufp->ntspacket, &xpkt);
+        } else if (NULL != auth) {
+	  sendlen += (size_t)authencrypt(auth, (uint32_t *)&xpkt, (int)sendlen);
+        }
 	sendpkt(&rbufp->recv_srcadr, rbufp->dstadr, &xpkt, (int)sendlen);
 	get_systime(&xmt_ty);
 	xmt_ty -= xmt_tx;
 	sys_authdelay = xmt_ty;
-	DPRINT(1, ("transmit: at %u %s->%s mode %d keyid %08x len %zu\n",
+	/* Previous versions of this code had separate DPRINT-s so it
+	 * could print the key on the auth case.  That requires separate
+	 * sendpkt-s on each branch or the DPRINT pollutes the timing. */
+	DPRINT(1, ("transmit: at %u %s->%s mode %d len %zu\n",
 		   current_time, socktoa(&rbufp->dstadr->sin),
-		   socktoa(&rbufp->recv_srcadr), xmode, auth->keyid, sendlen));
+		   socktoa(&rbufp->recv_srcadr), xmode, sendlen));
 }
 
 
-#ifdef ENABLE_DNS_LOOKUP
 /*
  * dns_take_server - process DNS query for server.
  */
@@ -2308,7 +2367,7 @@ dns_take_server(
 	int		restrict_mask;
 	struct peer *	pp;
 
-	if(!(server->cfg.flags & FLAG_DNS))
+	if(!(server->cfg.flags & FLAG_LOOKUP))
 		/* Already got an address for this slot. */
 		return;
 
@@ -2319,11 +2378,14 @@ dns_take_server(
 		return;
 	}
 
-	msyslog(LOG_INFO, "DNS: Server taking: %s", socktoa(rmtadr));
-	server->cfg.flags &= (unsigned)~FLAG_DNS;
+	if (NTP_PORT == SRCPORT(rmtadr))
+          msyslog(LOG_INFO, "DNS: Server taking: %s", socktoa(rmtadr));
+        else
+          msyslog(LOG_INFO, "DNS: Server taking: %s", sockporttoa(rmtadr));
+	server->cfg.flags &= (unsigned)~FLAG_LOOKUP;
 
 	server->srcadr = *rmtadr;
-	peer_update_hash(server);
+	peer_add_hash(server);
 
 	restrict_mask = restrictions(&server->srcadr);
 	if (RES_FLAGS & restrict_mask) {
@@ -2408,7 +2470,7 @@ void dns_take_status(struct peer* peer, DNS_Status status) {
 	switch (status) {
 		case DNS_good:
 			txt = "good";
-			if (FLAG_DNS & peer->cfg.flags)
+			if (FLAG_LOOKUP & peer->cfg.flags)
 				/* server: got answer, but didn't like any */
 				/* (all) already in use ?? */
 				hpoll += 1;
@@ -2417,8 +2479,15 @@ void dns_take_status(struct peer* peer, DNS_Status status) {
 				hpoll = 8;
 			break;
 		case DNS_temp:
+			/* DNS not working yet.  ??
+			 * Want to retry soon,
+			 * but also want to avoid log clutter.
+			 * Beware, Fedora 29 lies:
+			 *   What I expect to be temp (no Wifi)
+			 *   gets EAI_NONAME, Name or service not known
+			 */
 			txt = "temp";
-			hpoll += 1;
+			hpoll = 3;
 			break;
 		case DNS_error:
 			txt = "error";
@@ -2431,7 +2500,7 @@ void dns_take_status(struct peer* peer, DNS_Status status) {
 	if (hpoll > 12)
 		hpoll = 12;  /* 4096, a bit over an hour */
 	if ((DNS_good == status) &&
-		(MDF_UCAST & peer->cast_flags) && !(FLAG_DNS & peer->cfg.flags))
+		(MDF_UCAST & peer->cast_flags) && !(FLAG_LOOKUP & peer->cfg.flags))
 		hpoll = 0;  /* server: no more */
 	msyslog(LOG_INFO, "DNS: dns_take_status: %s=>%s, %d",
 		peer->hostname, txt, hpoll);
@@ -2441,22 +2510,40 @@ void dns_take_status(struct peer* peer, DNS_Status status) {
 	peer->nextdate = current_time + (1U << hpoll);
 }
 
+/* NTS out of cookies
+ * Beware of clutter in NTS-KE server logs
+ * There are actually several cases:
+ *   No NTS-KE server
+ *   NTS-KE server answers, but we don't like it.
+ *   NTS-KE works, but NTP server doesn't respond.
+ */
+static void restart_nts_ke(struct peer *peer) {
+	uint8_t hpoll = peer->hpoll;
+	peer_del_hash(peer);
+	hpoll += 2;
+	if (hpoll < 8)
+		hpoll = 8;      /* min retry: 256 seconds, ~5 min */
+	if (hpoll > 12)
+		hpoll = 12;	/* 4096, a bit over an hour */
+	peer->hpoll = hpoll;
+	peer->nextdate = current_time + (1U << hpoll);
+	peer->cfg.flags |= FLAG_LOOKUP;
+};
+
 /*
  * dns_new_interface
  *   A new interface is now active
  *   retry danging DNS lookups
  */
 void dns_new_interface(void) {
-    struct peer *p;
-    for (p = peer_list; p != NULL; p = p->p_link) {
-	if ((p->cfg.flags & FLAG_DNS) || (p->cast_flags & MDF_POOL)) {
-	    p->hpoll = p->cfg.minpoll;
-	    transmit(p);   /* does all the work */
+	struct peer *p;
+	for (p = peer_list; p != NULL; p = p->p_link) {
+		if ((p->cfg.flags & FLAG_LOOKUP) || (p->cast_flags & MDF_POOL)) {
+			p->hpoll = p->cfg.minpoll;
+			transmit(p);   /* does all the work */
+		}
 	}
-    }
 }
-
-#endif /* ENABLE_DNS_LOOKUP */
 
 
 
@@ -2514,14 +2601,14 @@ peer_unfit(
 	 * plus the increment due to one host poll interval.
 	 */
 	if (!(peer->cfg.flags & FLAG_REFCLOCK) && root_distance(peer) >=
-	    sys_maxdist + clock_phi * ULOGTOD(peer->hpoll))
+	    sys_maxdist + loop_data.clock_phi * ULOGTOD(peer->hpoll))
 		rval |= BOGON11;		/* distance exceeded */
 /* Startup bug, https://gitlab.com/NTPsec/ntpsec/issues/68
  *   introduced with ntp-dev-4.2.7p385
  * [2085] Fix root distance and root dispersion calculations.
  */
 	if (!(peer->cfg.flags & FLAG_REFCLOCK) && peer->disp >=
-	    sys_maxdist + clock_phi * ULOGTOD(peer->hpoll))
+	    sys_maxdist + loop_data.clock_phi * ULOGTOD(peer->hpoll))
 		rval |= BOGON11;		/* Initialization */
 
 	/*
@@ -2682,10 +2769,12 @@ set_sys_tick_precision(
 	/*
 	 * Find the nearest power of two.
 	 */
-	for (i = 0; tick <= 1; i--)
+	for (i = 0; tick <= 1; i--) {
 		tick *= 2;
-	if (tick - 1 > 1 - tick / 2)
+}
+	if (tick - 1 > 1 - tick / 2) {
 		i++;
+}
 
 	sys_vars.sys_precision = (int8_t)i;
 }
@@ -2710,7 +2799,7 @@ init_proto(const bool verbose)
 	sys_vars.sys_rootdelay = 0;
 	sys_vars.sys_rootdisp = 0;
 	sys_vars.sys_reftime = 0;
-	sys_jitter = 0;
+	clkstate.sys_jitter = 0;
 	measure_precision(verbose);
 	get_systime(&dummy);
 	sys_survivors = 0;
@@ -2755,9 +2844,9 @@ proto_config(
 		break;
 
 	case PROTO_MONITOR:	/* monitoring (monitor) */
-		if (value)
+		if (value) {
 			mon_start(MON_ON);
-		else {
+		} else {
 			mon_stop(MON_ON);
 			if (mon_data.mon_enabled)
 				msyslog(LOG_WARNING,
@@ -2850,5 +2939,27 @@ proto_clr_stats(void)
 	stat_count.sys_badauth = 0;
 	stat_count.sys_limitrejected = 0;
 	stat_count.sys_kodsent = 0;
+}
+
+
+/* limit logging so bad guys can't DDoS us by sending crap
+ * log first 100 and 10/hour
+ * This gets too-old cookies
+ */
+
+void maybe_log_junk(struct recvbuf *rbufp) {
+    static unsigned int noise_try = 0;
+    noise_try++;
+    if ((noise_try>100) && (((noise_try-90)*3600/current_time) > 10))
+      return;
+    msyslog(LOG_INFO,
+	"JUNK: M%d V%d 0/%2x%2x%2x%2x 48/%2x%2x%2x%2x from %s, lng=%ld",
+	PKT_MODE(rbufp->pkt.li_vn_mode), PKT_VERSION(rbufp->pkt.li_vn_mode),
+	rbufp->recv_buffer[0], rbufp->recv_buffer[1],
+	rbufp->recv_buffer[2], rbufp->recv_buffer[3],
+	rbufp->recv_buffer[48+0], rbufp->recv_buffer[48+1],
+	rbufp->recv_buffer[48+2], rbufp->recv_buffer[48+3],
+	sockporttoa(&rbufp->recv_srcadr),
+	(long)rbufp->recv_length);
 }
 

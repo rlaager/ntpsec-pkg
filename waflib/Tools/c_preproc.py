@@ -18,9 +18,9 @@ use_trigraphs=0
 strict_quotes=0
 g_optrans={'not':'!','not_eq':'!','and':'&&','and_eq':'&=','or':'||','or_eq':'|=','xor':'^','xor_eq':'^=','bitand':'&','bitor':'|','compl':'~',}
 re_lines=re.compile('^[ \t]*(?:#|%:)[ \t]*(ifdef|ifndef|if|else|elif|endif|include|import|define|undef|pragma)[ \t]*(.*)\r*$',re.IGNORECASE|re.MULTILINE)
-re_mac=re.compile("^[a-zA-Z_]\w*")
+re_mac=re.compile(r"^[a-zA-Z_]\w*")
 re_fun=re.compile('^[a-zA-Z_][a-zA-Z0-9_]*[(]')
-re_pragma_once=re.compile('^\s*once\s*',re.IGNORECASE)
+re_pragma_once=re.compile(r'^\s*once\s*',re.IGNORECASE)
 re_nl=re.compile('\\\\\r*\n',re.MULTILINE)
 re_cpp=re.compile(r'//.*?$|/\*.*?\*/|\'(?:\\.|[^\\\'])*\'|"(?:\\.|[^\\"])*"',re.DOTALL|re.MULTILINE)
 trig_def=[('??'+a,b)for a,b in zip("=-/!'()<>",r'#~\|^[]{}')]
@@ -47,11 +47,6 @@ ops=['* / %','+ -','<< >>','< <= >= >','== !=','& | ^','&& ||',',']
 for x,syms in enumerate(ops):
 	for u in syms.split():
 		prec[u]=x
-def trimquotes(s):
-	if not s:return''
-	s=s.rstrip()
-	if s[0]=="'"and s[-1]=="'":return s[1:-1]
-	return s
 def reduce_nums(val_1,val_2,val_op):
 	try:
 		a=0+val_1
@@ -396,7 +391,7 @@ def extract_macro(txt):
 			return(v,[[],t[1:]])
 		else:
 			return(v,[[],[('T','')]])
-re_include=re.compile('^\s*(<(?:.*)>|"(?:.*)")')
+re_include=re.compile(r'^\s*(<(?:.*)>|"(?:.*)")')
 def extract_include(txt,defs):
 	m=re_include.search(txt)
 	if m:
@@ -445,16 +440,14 @@ def tokenize_private(s):
 			v=m(name)
 			if v:
 				if name==IDENT:
-					try:
-						g_optrans[v]
+					if v in g_optrans:
 						name=OP
-					except KeyError:
-						if v.lower()=="true":
-							v=1
-							name=NUM
-						elif v.lower()=="false":
-							v=0
-							name=NUM
+					elif v.lower()=="true":
+						v=1
+						name=NUM
+					elif v.lower()=="false":
+						v=0
+						name=NUM
 				elif name==NUM:
 					if m('oct'):
 						v=int(v,8)
@@ -505,11 +498,11 @@ class c_parser(object):
 		self.names=[]
 		self.curfile=''
 		self.ban_includes=set()
+		self.listed=set()
 	def cached_find_resource(self,node,filename):
 		try:
 			cache=node.ctx.preproc_cache_node
 		except AttributeError:
-			global FILE_CACHE_SIZE
 			cache=node.ctx.preproc_cache_node=Utils.lru_cache(FILE_CACHE_SIZE)
 		key=(node,filename)
 		try:
@@ -544,11 +537,15 @@ class c_parser(object):
 				found=self.cached_find_resource(n,filename)
 				if found:
 					break
+		listed=self.listed
 		if found and not found in self.ban_includes:
-			self.nodes.append(found)
+			if found not in listed:
+				listed.add(found)
+				self.nodes.append(found)
 			self.addlines(found)
 		else:
-			if not filename in self.names:
+			if filename not in listed:
+				listed.add(filename)
 				self.names.append(filename)
 		return found
 	def filter_comments(self,node):
@@ -563,7 +560,6 @@ class c_parser(object):
 		try:
 			cache=node.ctx.preproc_cache_lines
 		except AttributeError:
-			global LINE_CACHE_SIZE
 			cache=node.ctx.preproc_cache_lines=Utils.lru_cache(LINE_CACHE_SIZE)
 		try:
 			return cache[node]
@@ -585,8 +581,7 @@ class c_parser(object):
 			raise PreprocError('could not read the file %r'%node)
 		except Exception:
 			if Logs.verbose>0:
-				Logs.error('parsing %r failed',node)
-				traceback.print_exc()
+				Logs.error('parsing %r failed %s',node,traceback.format_exc())
 		else:
 			self.lines.extend(lines)
 	def start(self,node,env):
@@ -660,11 +655,10 @@ class c_parser(object):
 						self.ban_includes.add(self.current_file)
 			except Exception as e:
 				if Logs.verbose:
-					Logs.debug('preproc: line parsing failed (%s): %s %s',e,line,Utils.ex_stack())
+					Logs.debug('preproc: line parsing failed (%s): %s %s',e,line,traceback.format_exc())
 	def define_name(self,line):
 		return re_mac.match(line).group()
 def scan(task):
-	global go_absolute
 	try:
 		incn=task.generator.includes_nodes
 	except AttributeError:

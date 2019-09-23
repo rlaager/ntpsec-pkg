@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2005 by Frank Kardel
  * Copyright 2015 by the NTPsec project contributors
- * SPDX-License-Identifier: BSD-2-clause
+ * SPDX-License-Identifier: BSD-2-Clause
  */
 #ifndef GUARD_NTP_DEBUG_H
 #define GUARD_NTP_DEBUG_H
@@ -12,7 +12,6 @@
  * macro for debugging output - cut down on #ifdef pollution.
  *
  * DPRINT() is the new one debug logger to rule them all.
- * Uses mprintf() and so supports %m, replaced by strerror(errno).
  *
  * The calling convention is not attractive:
  *     DPRINT(debuglevel, (fmt, ...));
@@ -24,7 +23,7 @@
 #define DPRINT(lvl, arg)					\
 	do { 						\
 		if (debug >= (lvl))			\
-			mprintf arg;			\
+			printf arg;			\
 	} while (0)
 #else
 #define DPRINT(lvl, arg)	do {} while (0)
@@ -33,7 +32,7 @@
 #define TPRINT(lvl, arg)				\
 	do { 						\
 		if (debug >= (lvl))			\
-			mprintf arg;			\
+			printf arg;			\
 	} while (0)
 
 #endif	/* GUARD_NTP_DEBUG_H */

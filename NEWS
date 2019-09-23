@@ -10,7 +10,71 @@ Much of the traditional function of a news file is now better addressed
 by browsing the comments in the revision history.  This file will focus
 on user-visible changes.
 
+== 2019-09-02: 1.1.7 ==
+
+The numeric literal argument of the 'time1' fudge option on a clock
+can now have one or more letter suffixes that compensate for era
+rollover in a GPS device.  Each "g" adds the number of seconds in a
+1024-week (10-bit) GPS era. Each "G" adds the number of seconds in a
+8192-week (13-bit) GPS era.
+
+The neoclock4x driver has been removed, due to the hardware and the
+vendor having utterly vanished from the face of the earth.
+
+The NTS ALPN negotiation sequence has been modified for improved
+interoperability with other NTS implementations.
+
+NTS key rotation now happens every 24 hours.  It used to rotate
+every hour to enable testing of recovery from stale cookies.
+
+On this day in 1945, some important paperwork was signed by
+General MacArthur aboard the USS Missouri.
+
+== 2019-07-10: 1.1.6 ==
+
+Fixes to code quality checks.
+
+Fixes to NTS server list.
+
+Fix to bug #600.
+
+On this day in 1913, in Death Valley, the temperature was 56.7°C,
+officially world's highest recorded temperature.
+
+== 2019-06-30: 1.1.5 ==
+
+Add ALPN for the NTS server, as required by the NTP draft.
+
+Revert some ntpq behavior.
+
+On this day in 1972 the first leap second is added to the UTC time system.
+
+== 2019-06-21: 1.1.4 ==
+
+NTS is now implemented.  See .../devel/nts.adoc
+https://tools.ietf.org/html/draft-ietf-ntp-using-nts-for-ntp
+
+We thank Cisco for sponsoring the NTS development.
+
+Lots of fixes and cleanups to PPS, both implementation and documentation.
+
+Pthread support is now required.  --disable-dns-lookup is gone.
+
+NIST lockclock mode is now a runtime option set by the (previously unused)
+flag1 mode bit of the local-clock driver.
+
+As always, lots of minor fixups and cleanups everywhere.  See the git log.
+
+Today marks the summer solstice in the Northern Hemisphere.
+
 == 2019-01-13: 1.1.3 ==
+
+Security fixes for bugs inherited from NTP Classic:
+
+* CVE-2019-6443: OOB read in ctl_getitem() in ntp_control.c (GitLab #507)
+* CVE-2019-6444: OOB read in process_control() in ntp_control.c (GitLab #508)
+* CVE-2019-6445: Remotely triggerable crash in ntp_control.c (GitLab #509)
+* CVE-2019-6442: Authenticated OOB write in ntp_parser.y (GitLab #510)
 
 Lots of typo fixes, documentation cleanups, test targets.
 
@@ -22,7 +86,7 @@ Use data minimization on client requests
   https://datatracker.ietf.org/doc/draft-ietf-ntp-data-minimization/
 
 Support AES-128-CMAC for authentication
-  https://datatracker.ietf.org/doc/draft-ietf-ntp-mac/
+  https://www.rfc-editor.org/info/rfc8573
 
 == 2018-06-11: 1.1.1 ==
 
@@ -132,6 +196,11 @@ CVE-2017-6464: Denial of Service via Malformed Config
 CVE-2017-6463: Authenticated DoS via Malicious Config Option
 CVE-2017-6458: Potential Overflows in ctl_put() functions
 CVE-2017-6451: Improper use of snprintf() in mx4200_send()
+
+A Pentest report by Cure53 noted that a previously fixed CVE had been
+reintroduced into the code.  This was resolved, again.
+
+CVE-2014-9295: Multiple stack-based buffer overflows in ntpd
 
 The following CVEs, announced simultaneously, affected NTP Classic but
 not NTPsec, because we had already removed the attack surface:
@@ -489,5 +558,9 @@ a future release.
 
 NTPsec is not impacted by CVE-2015-7848 (mode 7 loop counter underrun)
 because ntpdc and support for mode 7 packets have been removed.
+
+== HISTORIC-NEWS ==
+
+For older NEWS items, see the file devel/HISTORIC-NEWS.
 
 // end

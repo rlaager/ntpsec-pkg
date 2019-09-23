@@ -14,6 +14,7 @@
 #include "ntp_lists.h"
 #include "ntp_stdlib.h"
 #include "ntp_net.h"
+#include "nts.h"
 
 extern int32_t ntp_random (void);
 extern uint64_t ntp_random64 (void);
@@ -109,6 +110,24 @@ extern uint64_t ntp_random64 (void);
 #define LOGTOD(a)	ldexp(1., (int)(a)) /* log2 to double */
 #define ULOGTOD(a)	ldexp(1., (int)(a)) /* ulog2 to double */
 
+/*
+ * A refid is a "reference ID", intended as a uniqueness cookie for
+ * network hosts, used to prevent loops in the flow graph of
+ * client/server relationships.  Unfortunately, the length was frozen
+ * into the NTP packet format before IPv6; in that case the value is a
+ * hash of the IPv6 address and collisions *have* been observed in the
+ * wild
+ *
+ * Just to contemplate things further, the refid for a local clock source
+ * (which doesn't have an IP address) is interpreted as a 4-digit string that
+ * identifies the clock device class.
+ *
+ * In ntpq, the refid field in displays is overloaded yet again.  It can have
+ * the value "POOL" or "INIT" describing a connection status for a host that
+ * is not yet supplying time.
+ */
+#define REFIDLEN	sizeof(uint32_t)	/* size of IPv4 network addr */
+typedef uint32_t	refid_t;
 
 /*
  * The netendpt structure is used to hold the addresses and socket
@@ -126,7 +145,7 @@ typedef struct netendpt {
 	unsigned short	family;		/* AF_INET/AF_INET6 */
 	unsigned short	phase;		/* phase in update cycle */
 	uint32_t	flags;		/* interface flags */
-	uint32_t	addr_refid;	/* IPv4 addr or IPv6 hash */
+	refid_t		addr_refid;	/* IPv4 addr or IPv6 hash */
 	unsigned long	starttime;	/* current_time at creation */
 	volatile long	received;	/* number of incoming packets */
 	long		sent;		/* number of outgoing packets */
@@ -164,6 +183,7 @@ struct peer_ctl {
 	uint32_t	flags;
 	keyid_t		peerkey;
 	double		bias;
+	struct ntscfg_t nts_cfg;
 	uint32_t	mode;	/* only used by refclocks */
 #ifdef REFCLOCK
 	uint32_t	baud;
@@ -235,6 +255,7 @@ struct peer {
 	uint8_t	cast_flags;	/* additional flags */
 	uint8_t	last_event;	/* last peer error code */
 	uint8_t	num_events;	/* number of error events */
+	struct ntsclient_t nts_state;	/* per-peer NTS state */
 
 	/*
 	 * Variables used by reference clock support
@@ -255,7 +276,7 @@ struct peer {
 	int8_t	precision;	/* remote clock precision */
 	double	rootdelay;	/* roundtrip delay to primary source */
 	double	rootdisp;	/* dispersion to primary source */
-	uint32_t	refid;	/* remote reference ID */
+	refid_t	refid;		/* remote reference ID */
 	l_fp	reftime;	/* update epoch */
 
 #define clear_to_zero status
@@ -344,7 +365,10 @@ struct peer {
 /* #define	MODE_BCLIENT	6	** broadcast client mode */
 #define	MODE_BCLIENTX	6	/* for pylib/util.py */
 
-#define	LEN_PKT_NOMAC	48 /* min header length */
+#define	LEN_PKT_NOMAC	48	/* min header length */
+
+/* The RFCs carefully avoid specifying this. */
+#define MAX_EXT_LEN	4096	/* maximum length of extension-field data */
 
 /* pythonize-header: start ignoring */
 
@@ -359,27 +383,29 @@ struct peer {
 /*
  * Values for peer.flags (unsigned int)
  */
-#define	FLAG_CONFIG	0x0001u	/* association was configured */
-#define	FLAG_PREEMPT	0x0002u	/* preemptable association */
-#define	FLAG_AUTHENTIC	0x0004u	/* last message was authentic */
-#define	FLAG_REFCLOCK	0x0008u	/* this is actually a reference clock */
-#define	FLAG_BC_VOL	0x0010u	/* broadcast client volleying */
-#define	FLAG_PREFER	0x0020u	/* prefer peer */
-#define	FLAG_BURST	0x0040u	/* burst mode */
-#define	FLAG_PPS	0x0080u	/* steered by PPS */
-#define	FLAG_IBURST	0x0100u	/* initial burst mode */
-#define	FLAG_NOSELECT	0x0200u	/* never select */
-#define	FLAG_TRUE	0x0400u	/* force truechimer */
-#define	FLAG_DNS	0x0800u	/* needs DNS lookup */
-#define FLAG_TSTAMP_PPS	0x4cd000u	/* PPS source provides absolute timestamp */
+#define	FLAG_CONFIG	 0x0001u   /* association was configured */
+#define	FLAG_PREEMPT	 0x0002u   /* preemptable association */
+#define	FLAG_AUTHENTIC	 0x0004u   /* last message was authentic */
+#define	FLAG_REFCLOCK	 0x0008u   /* this is actually a reference clock */
+/* #define	FLAG_BC_VOL	 0x0010u   ** broadcast client volleying */
+#define	FLAG_PREFER	 0x0020u   /* prefer peer */
+#define	FLAG_BURST	 0x0040u   /* burst mode */
+#define	FLAG_PPS	 0x0080u   /* steered by PPS */
+#define	FLAG_IBURST	 0x0100u   /* initial burst mode */
+#define	FLAG_NOSELECT	 0x0200u   /* never select */
+#define	FLAG_TRUE	 0x0400u   /* force truechimer */
+#define	FLAG_DNS	 0x0800u   /* Server name, not number: needs DNS */
+#define FLAG_NTS         0x1000u   /* use NTS (network time security) */
+#define FLAG_NTS_ASK     0x2000u   /* NTS, ask for specified server */
+#define FLAG_NTS_REQ     0x4000u   /* NTS, require specified server */
+#define FLAG_NTS_NOVAL   0x8000u   /* do not validate the server certificate */
+#define FLAG_TSTAMP_PPS	0x10000u   /* PPS source provides absolute timestamp */
+#define	FLAG_LOOKUP	0x20000u   /* needs DNS or NTS lookup */
 
-
-/*
- * It's ugly that refid is sometimes treated as a  uint32_t and sometimes
- * as a string; that should be fixed. Using this in memcpy() at least
- * contains the problem.
+/* FLAG_DNS and FLAG_NTS stay on.
+ * FLAG_LOOKUP gets turned off when lookup succeeds.
  */
-#define REFIDLEN	sizeof(uint32_t)
+
 
 /* This is the new, sane way of representing packets. All fields are
    in host byte order, and the fixed-point time fields are just integers,
@@ -397,14 +423,6 @@ struct parsed_pkt {
         uint64_t org;
         uint64_t rec;
         uint64_t xmt;
-        unsigned num_extensions;
-        struct exten *extensions;
-};
-
-struct exten {
-        uint16_t type;
-        uint16_t len;
-        uint8_t *body;
 };
 
 /* This is the old, insane way of representing packets. It'll gradually
@@ -420,7 +438,7 @@ struct pkt {
 	int8_t	precision;	/* peer clock precision */
 	u_fp	rootdelay;	/* roundtrip delay to primary source */
 	u_fp	rootdisp;	/* dispersion to primary source*/
-	uint32_t	refid;		/* reference id */
+	refid_t	refid;		/* reference id */
 	l_fp_w	reftime;	/* last update time */
 	l_fp_w	org;		/* originate time stamp */
 	l_fp_w	rec;		/* receive time stamp */
@@ -434,7 +452,7 @@ struct pkt {
 #define MIN_MAC_LEN	(1 * sizeof(uint32_t))	/* crypto_NAK */
 #define	MAX_MAC_LEN	(6 * sizeof(uint32_t))	/* MAX of old style */
 
-	uint32_t	exten[(MAX_MAC_LEN) / sizeof(uint32_t)];
+	uint8_t	exten[MAX_MAC_LEN + MAX_EXT_LEN];
 } __attribute__ ((aligned));
 
 /* pythonize-header: stop ignoring */
@@ -457,7 +475,6 @@ struct pkt {
  * Event codes. Used for reporting errors/events to the control module
  */
 #define	PEER_EVENT	0x080	/* this is a peer event */
-#define CRPT_EVENT	0x100	/* this is a crypto event */
 
 /*
  * System event codes

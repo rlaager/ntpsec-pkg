@@ -67,7 +67,7 @@ def fortran_modifier_win32(conf):
 	v=conf.env
 	v.fcprogram_PATTERN=v.fcprogram_test_PATTERN='%s.exe'
 	v.fcshlib_PATTERN='%s.dll'
-	v.implib_PATTERN='lib%s.dll.a'
+	v.implib_PATTERN='%s.dll.a'
 	v.IMPLIB_ST='-Wl,--out-implib,%s'
 	v.FCFLAGS_fcshlib=[]
 	v.append_value('LINKFLAGS',['-Wl,--enable-auto-import'])
@@ -103,8 +103,8 @@ def check_fortran_dummy_main(self,*k,**kw):
 		self.end_msg('not found')
 		self.fatal('could not detect whether fortran requires a dummy main, see the config.log')
 GCC_DRIVER_LINE=re.compile('^Driving:')
-POSIX_STATIC_EXT=re.compile('\S+\.a')
-POSIX_LIB_FLAGS=re.compile('-l\S+')
+POSIX_STATIC_EXT=re.compile(r'\S+\.a')
+POSIX_LIB_FLAGS=re.compile(r'-l\S+')
 @conf
 def is_link_verbose(self,txt):
 	assert isinstance(txt,str)
@@ -276,7 +276,7 @@ def set_lib_pat(self):
 	self.env.fcshlib_PATTERN=self.env.pyext_PATTERN
 @conf
 def detect_openmp(self):
-	for x in('-qopenmp','-fopenmp','-openmp','-mp','-xopenmp','-omp','-qsmp=omp'):
+	for x in('-fopenmp','-openmp','-mp','-xopenmp','-omp','-qsmp=omp'):
 		try:
 			self.check_fc(msg='Checking for OpenMP flag %s'%x,fragment='program main\n  call omp_get_num_threads()\nend program main',fcflags=x,linkflags=x,uselib_store='OPENMP')
 		except self.errors.ConfigurationError:

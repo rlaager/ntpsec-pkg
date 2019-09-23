@@ -17,7 +17,7 @@ the general structure of an NTP packet (Figure 8):
        0                   1                   2                   3
        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-      |LI | VN  |Mode |    Stratum     |     Poll      |  Precision   |
+      |LI | VN  |Mode |    Stratum    |     Poll      |  Precision    |
       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
       |                         Root Delay                            |
       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -65,6 +65,27 @@ NTP packet is the minimal SNTP request, a mode 3 packet with the
 Stratum and all following fields zeroed out to byte 47.
 
 How to interpret these fields:
+
+Mode is decoded as follows:
+
++-------+--------------------------+
+| Value | Meaning                  |
++-------+--------------------------+
+| 0     | reserved                 |
+| 1     | symmetric active         |
+| 2     | symmetric passive        |
+| 3     | client                   |
+| 4     | server                   |
+| 5     | broadcast                |
+| 6     | NTP control message      |
+| 7     | reserved for private use |
++-------+--------------------------+
+
+While the Stratum field has 8 bytes, only values 0-16 (low 5 bits)
+are legal. Value 16 means 'unsychronized' Value 17-255 are reserved.
+
+LI (Leap Indicator), Version, Poll, and Precision are not described
+here; see RFC5905.
 
 t_1, the origin timestamp, is the time according to the client at
 which the request was sent.
@@ -131,7 +152,8 @@ direction.
 
 The RFC 5905 diagram is slightly out of date in that the digest header assumes
 a 128-bit (16-octet) MD5 hash, but it is also possible for the field to be a
-160-bit (20-octet) SHA1 hash.
+128-bit AES_CMAC hash or 160-bit (20-octet) SHA-1 hash.  NTPsec will
+support any 128- or 160-bit MAC type in lincrypto.
 
 An extension field consists of a 16-bit network-order type field
 length, followed by a 16-bit network-order payload length in octets,
@@ -180,7 +202,7 @@ M = More bit.
 A Mode 6 packet cannot have extension fields.
 
 """
-# SPDX-License-Identifier: BSD-2-clause
+# SPDX-License-Identifier: BSD-2-Clause
 from __future__ import print_function, division
 import getpass
 import hashlib
@@ -591,7 +613,7 @@ SERR_NOTRUST = "***No trusted keys have been declared"
 def dump_hex_printable(xdata, outfp=sys.stdout):
     "Dump a packet in hex, in a familiar hex format"
     rowsize = 16
-    while len(xdata) > 0:
+    while xdata:
         # Slice one row off of our data
         linedata, xdata = ntp.util.slicedata(xdata, rowsize)
         # Output data in hex form
@@ -945,7 +967,7 @@ class ControlSession:
             if bail >= (2*MAXFRAGS):
                 raise ControlException(SERR_TOOMUCH)
 
-            if len(fragments) == 0:
+            if not fragments:
                 tvo = self.primary_timeout / 1000
             else:
                 tvo = self.secondary_timeout / 1000
@@ -961,7 +983,7 @@ class ControlSession:
 
             if not rd:
                 # Timed out.  Return what we have
-                if len(fragments) == 0:
+                if not fragments:
                     if timeo:
                         raise ControlException(SERR_TIMEOUT)
                 if timeo:
@@ -992,7 +1014,7 @@ class ControlSession:
 
             # Validate that packet header is sane, and the correct type
             valid = self.__validate_packet(rpkt, rawdata, opcode, associd)
-            if valid is False:  # pragma: no cover
+            if not valid:  # pragma: no cover
                 continue
 
             # Someday, perhaps, check authentication here
@@ -1013,7 +1035,7 @@ class ControlSession:
             # Find the most recent fragment with a
             not_earlier = [frag for frag in fragments
                            if frag.offset >= rpkt.offset]
-            if len(not_earlier):
+            if not_earlier:
                 not_earlier = not_earlier[0]
                 if not_earlier.offset == rpkt.offset:
                     warn("duplicate %d octets at %d ignored, prior "
@@ -1022,7 +1044,7 @@ class ControlSession:
                             not_earlier.count, not_earlier.offset))
                     continue
 
-            if len(fragments) > 0:
+            if fragments:
                 last = fragments[-1]
                 if last.end() > rpkt.offset:
                     warn("received frag at %d overlaps with %d octet "
@@ -1194,14 +1216,14 @@ class ControlSession:
             if c == '"':
                 response += c
                 instring = not instring
-            elif (instring is False) and (c == ","):
+            elif not instring and c == ",":
                 # Separator between key=value pairs, done with this pair
                 kvpairs.append(response.strip())
                 response = ""
             elif 0 < cord < 127:
                 # if it isn't a special case or garbage, add it
                 response += c
-        if len(response) > 0:  # The last item won't be caught by the loop
+        if response:  # The last item won't be caught by the loop
             kvpairs.append(response.strip())
         items = []
         for pair in kvpairs:
@@ -1218,7 +1240,7 @@ class ControlSession:
                 except ValueError:
                     try:
                         castedvalue = float(value)
-                        if (key == "delay") and (raw is False):
+                        if key == "delay" and not raw:
                             # Hack for non-raw-mode to get precision
                             items.append(("delay-s", value))
                     except ValueError:
@@ -1227,7 +1249,7 @@ class ControlSession:
                         castedvalue = value  # str / unknown, stillneed casted
             else:  # no value
                 castedvalue = value
-            if raw is True:
+            if raw:
                 items.append((key, (castedvalue, value)))
             else:
                 items.append((key, castedvalue))
@@ -1603,11 +1625,13 @@ class Authenticator:
                 keyid = int(line.split()[1])
                 (keytype, passwd) = self.passwords[keyid]
                 if passwd is None:
+                    # Invalid key ID
                     raise ValueError
                 if len(passwd) > 20:
                     passwd = ntp.util.hexstr2octets(passwd)
                 return (keyid, keytype, passwd)
         else:
+            # No control lines found
             raise ValueError
 
     @staticmethod

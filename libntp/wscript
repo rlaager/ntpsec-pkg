@@ -1,7 +1,7 @@
 def build(ctx):
 
     libntp_source = [
-        "assert.c",
+	#"aes_siv.c",
         "authkeys.c",
         "authreadkeys.c",
         "clocktime.c",
@@ -15,7 +15,6 @@ def build(ctx):
         "macencrypt.c",
         "netof.c",
         "ntp_endian.c",
-        "ntp_dns.c",
         "numtoa.c",
         "refidsmear.c",
         "socket.c",
@@ -25,6 +24,7 @@ def build(ctx):
     ]
 
     libntp_source_sharable = [
+        "assert.c",
         "clockwork.c",
         "emalloc.c",
         "hextolfp.c",
@@ -41,22 +41,20 @@ def build(ctx):
     if not ctx.env.HAVE_STRLCAT or not ctx.env.HAVE_STRLCPY:
         libntp_source_sharable += ["strl_obsd.c"]
 
-    includes = ctx.env.PLATFORM_INCLUDES
-
     # C library
     ctx(
-        features="c cstlib bld_include src_include",
-        includes=includes,
+        features="c cstlib",
+        includes=[ctx.bldnode.parent.abspath(), "../include"] + ctx.env.PLATFORM_INCLUDES,
         source=libntp_source + libntp_source_sharable,
         target="ntp",
-        use="CRYPTO",
+        use="SSL CRYPTO",
     )
 
     # Loadable Python extension
     ctx(
-        features="c cshlib bld_include src_include pyext",
+        features="c cshlib pyext",
         install_path='${PYTHONARCHDIR}/ntp',
-        includes=includes,
+        includes=[ctx.bldnode.parent.abspath(), "../include"] + ctx.env.PLATFORM_INCLUDES,
         source=["pymodule.c"] + libntp_source_sharable,
         target="../pylib/ntpc",  # Put the output in the pylib directory
         use="M RT CRYPTO",

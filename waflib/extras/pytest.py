@@ -5,7 +5,6 @@
 import os
 from waflib import Task,TaskGen,Errors,Utils,Logs
 from waflib.Tools import ccroot
-from waflib import Node
 def _process_use_rec(self,name):
 	if name in self.pytest_use_not or name in self.pytest_use_seen:
 		return
@@ -29,31 +28,32 @@ def pytest_process_use(self):
 	names=self.to_list(getattr(self,'use',[]))
 	for name in names:
 		_process_use_rec(self,name)
-	def extend_unique(lst,var):
+	def extend_unique(lst,varlst):
 		ext=[]
-		for x in Utils.to_list(var):
+		for x in varlst:
 			if x not in lst:
 				ext.append(x)
 		lst.extend(ext)
 	for name in self.pytest_use_seen:
 		tg=self.bld.get_tgen_by_name(name)
-		extend_unique(self.pytest_paths,getattr(tg,'pytest_path',[]))
-		extend_unique(self.pytest_libpaths,getattr(tg,'pytest_libpath',[]))
+		extend_unique(self.pytest_paths,Utils.to_list(getattr(tg,'pytest_path',[])))
+		extend_unique(self.pytest_libpaths,Utils.to_list(getattr(tg,'pytest_libpath',[])))
 		if'py'in tg.features:
+			pypath=getattr(tg,'install_from',tg.path)
 			if'buildcopy'in tg.features:
-				pypath=getattr(tg,'install_from',tg.path)
-				extend_unique(self.pytest_paths,pypath.get_bld().abspath())
+				extend_unique(self.pytest_paths,[pypath.get_bld().abspath()])
 				extend_unique(self.pytest_dep_nodes,[o for task in getattr(tg,'tasks',[])for o in getattr(task,'outputs',[])])
 			else:
-				extend_unique(self.pytest_dep_nodes,[s for s in tg.source if s.suffix()=='.py'])
-				pypath=getattr(tg,'install_from',tg.path)
-				extend_unique(self.pytest_paths,pypath.abspath())
+				extend_unique(self.pytest_dep_nodes,tg.source)
+				extend_unique(self.pytest_paths,[pypath.abspath()])
 		if getattr(tg,'link_task',None):
 			if not isinstance(tg.link_task,ccroot.stlink_task):
 				extend_unique(self.pytest_dep_nodes,tg.link_task.outputs)
 				extend_unique(self.pytest_libpaths,tg.link_task.env.LIBPATH)
 				if'pyext'in tg.features:
 					extend_unique(self.pytest_libpaths,tg.link_task.env.LIBPATH_PYEXT)
+				else:
+					extend_unique(self.pytest_libpaths,[tg.link_task.outputs[0].parent.abspath()])
 @TaskGen.feature('pytest')
 @TaskGen.after_method('pytest_process_use')
 def make_pytest(self):

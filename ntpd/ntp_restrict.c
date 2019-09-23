@@ -61,8 +61,17 @@
 /*
  * The restriction list
  */
-restrict_u *restrictlist4;
-restrict_u *restrictlist6;
+struct restriction_data rstrct = {
+  /*
+   * (MOVED FROM ntp_monitor.c)
+   * Parameters of the RES_LIMITED restriction option. We define headway
+   * as the idle time between packets. A packet is discarded if the
+   * headway is less than the minimum, as well as if the average headway
+   * is less than eight times the increment.
+   */
+  .ntp_minpkt = NTP_MINPKT,   /* minimum (log 2 s) */
+  .ntp_minpoll = NTP_MINPOLL, /* increment (log 2 s) */
+};
 static int restrictcount;	/* count in the restrict lists */
 
 /*
@@ -145,8 +154,8 @@ init_restrict(void)
 	 * behavior as but reversed implementation compared to the docs.
 	 *
 	 */
-	LINK_SLIST(restrictlist4, &restrict_def4, link);
-	LINK_SLIST(restrictlist6, &restrict_def6, link);
+	LINK_SLIST(rstrct.restrictlist4, &restrict_def4, link);
+	LINK_SLIST(rstrct.restrictlist6, &restrict_def6, link);
 	restrictcount = 2;
 }
 
@@ -158,7 +167,6 @@ alloc_res4(void)
 	const size_t	count = INC_RESLIST4;
 	restrict_u *	rl;
 	restrict_u *	res;
-	int		i;
 
 	UNLINK_HEAD_SLIST(res, resfree4, link);
 	if (res != NULL)
@@ -167,7 +175,7 @@ alloc_res4(void)
 	rl = emalloc_zero(count * cb);
 	/* link all but the first onto free list */
 	res = (void *)((char *)rl + (count - 1) * cb);
-	for (i = count - 1; i > 0; i--) {
+	for (int i = count - 1; i > 0; i--) {
 		LINK_SLIST(resfree4, res, link);
 		res = (void *)((char *)res - cb);
 	}
@@ -184,7 +192,6 @@ alloc_res6(void)
 	const size_t	count = INC_RESLIST6;
 	restrict_u *	rl;
 	restrict_u *	res;
-	int		i;
 
 	UNLINK_HEAD_SLIST(res, resfree6, link);
 	if (res != NULL)
@@ -193,7 +200,7 @@ alloc_res6(void)
 	rl = emalloc_zero(count * cb);
 	/* link all but the first onto free list */
 	res = (void *)((char *)rl + (count - 1) * cb);
-	for (i = count - 1; i > 0; i--) {
+	for (int i = count - 1; i > 0; i--) {
 		LINK_SLIST(resfree6, res, link);
 		res = (void *)((char *)res - cb);
 	}
@@ -217,9 +224,9 @@ free_res(
 		dec_res_limited();
 
 	if (v6)
-		plisthead = &restrictlist6;
+		plisthead = &rstrct.restrictlist6;
 	else
-		plisthead = &restrictlist4;
+		plisthead = &rstrct.restrictlist4;
 	UNLINK_SLIST(unlinked, *plisthead, res, link, restrict_u);
 	INSIST(unlinked == res);
 
@@ -262,7 +269,7 @@ match_restrict4_addr(
 	restrict_u *	res;
 	restrict_u *	next;
 
-	for (res = restrictlist4; res != NULL; res = next) {
+	for (res = rstrct.restrictlist4; res != NULL; res = next) {
 		next = res->link;
 		if (res->expire &&
 		    res->expire <= current_time)
@@ -287,7 +294,7 @@ match_restrict6_addr(
 	restrict_u *	next;
 	struct in6_addr	masked;
 
-	for (res = restrictlist6; res != NULL; res = next) {
+	for (res = rstrct.restrictlist6; res != NULL; res = next) {
 		next = res->link;
 		INSIST(next != res);
 		if (res->expire &&
@@ -323,10 +330,10 @@ match_restrict_entry(
 	size_t cb;
 
 	if (v6) {
-		rlist = restrictlist6;
+		rlist = rstrct.restrictlist6;
 		cb = sizeof(pmatch->u.v6);
 	} else {
-		rlist = restrictlist4;
+		rlist = rstrct.restrictlist4;
 		cb = sizeof(pmatch->u.v4);
 	}
 
@@ -387,17 +394,17 @@ res_sorts_before6(
 	int cmp;
 
 	cmp = ADDR6_CMP(&r1->u.v6.addr, &r2->u.v6.addr);
-	if (cmp > 0)		/* r1->addr > r2->addr */
+	if (cmp > 0) {		/* r1->addr > r2->addr */
 		r1_before_r2 = 1;
-	else if (cmp < 0)	/* r2->addr > r1->addr */
+	} else if (cmp < 0) {	/* r2->addr > r1->addr */
 		r1_before_r2 = 0;
-	else {
+	} else {
 		cmp = ADDR6_CMP(&r1->u.v6.mask, &r2->u.v6.mask);
-		if (cmp > 0)		/* r1->mask > r2->mask*/
+		if (cmp > 0) {		/* r1->mask > r2->mask*/
 			r1_before_r2 = 1;
-		else if (cmp < 0)	/* r2->mask > r1->mask */
+		} else if (cmp < 0) {	/* r2->mask > r1->mask */
 			r1_before_r2 = 0;
-		else if (r1->mflags > r2->mflags)
+		} else if (r1->mflags > r2->mflags)
 			r1_before_r2 = 1;
 		else
 			r1_before_r2 = 0;
@@ -545,12 +552,12 @@ hack_restrict(
 				res = alloc_res6();
 				memcpy(res, &match,
 				       V6_SIZEOF_RESTRICT_U);
-				plisthead = &restrictlist6;
+				plisthead = &rstrct.restrictlist6;
 			} else {
 				res = alloc_res4();
 				memcpy(res, &match,
 				       V4_SIZEOF_RESTRICT_U);
-				plisthead = &restrictlist4;
+				plisthead = &rstrct.restrictlist4;
 			}
 			LINK_SORT_SLIST(
 				*plisthead, res,
@@ -655,8 +662,9 @@ restrict_source(
 		found_specific = 0;
 		free_res(res, IS_IPV6(addr));
 	}
-	if (found_specific)
+	if (found_specific) {
 		return;
+	}
 
 	hack_restrict(RESTRICT_FLAGS, addr, &onesmask,
 		      restrict_source_mflags, restrict_source_flags,

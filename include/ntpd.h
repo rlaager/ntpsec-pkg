@@ -93,21 +93,30 @@ extern	endpt *	select_peerinterface	(struct peer *, sockaddr_u *,
 extern	endpt *	findinterface		(sockaddr_u *);
 extern	void	interface_update	(interface_receiver_t, void *);
 extern  void    io_handler              (void);
-extern	void	init_io 	(void);
+extern	void	init_io		(void);
 extern	void	io_open_sockets	(void);
 extern	void	io_clr_stats	(void);
-extern	void	sendpkt 	(sockaddr_u *, endpt *, void *, int);
+extern	void	sendpkt		(sockaddr_u *, endpt *, void *, unsigned int);
 extern const char * latoa(endpt *);
+extern  uint64_t dropped_count(void);
+extern  uint64_t ignored_count(void);
+extern  uint64_t received_count(void);
+extern  void     inc_received_count(void);
+extern  uint64_t sent_count(void);
+extern  uint64_t notsent_count(void);
+extern  uint64_t handler_calls_count(void);
+extern  uint64_t handler_pkts_count(void);
+extern  uptime_t counter_reset_time(void);
 
 /* ntp_loopfilter.c */
 extern	void	init_loopfilter(void);
-extern	int 	local_clock(struct peer *, double);
+extern	int	local_clock(struct peer *, double);
 extern	void	adj_host_clock(void);
 extern	void	loop_config(int, double);
 extern	void	select_loop(int);
 extern	void	huffpuff(void);
 extern	unsigned int	sys_tai;
-extern 	int	freq_cnt;
+extern	int	freq_cnt;
 
 /* ntp_monitor.c */
 #define MON_HASH_SIZE		(1U << mon_data.mon_hash_bits)
@@ -130,7 +139,8 @@ extern  void	set_peerdstadr	(struct peer *, endpt *);
 extern	struct peer *newpeer	(sockaddr_u *, const char *,
 				 endpt *, uint8_t, struct peer_ctl *,
 				 uint8_t, const bool);
-extern	void	peer_update_hash (struct peer *);
+extern	void	peer_add_hash (struct peer *);
+extern	void	peer_del_hash (struct peer *);
 extern	void	peer_all_reset	(void);
 extern	void	peer_clr_stats	(void);
 extern	void	refresh_all_peerinterfaces(void);
@@ -142,7 +152,7 @@ extern	void	peer_cleanup	(void);
 
 /* ntp_proto.c */
 extern	void	transmit	(struct peer *);
-extern	void	receive 	(struct recvbuf *);
+extern	void	receive		(struct recvbuf *);
 extern	void	peer_clear	(struct peer *, const char *, const bool);
 extern	void	set_sys_leap	(uint8_t);
 
@@ -157,6 +167,21 @@ extern	void	init_proto	(const bool);
 extern	void	set_sys_tick_precision(double);
 extern	void	proto_config	(int, unsigned long, double);
 extern	void	proto_clr_stats (void);
+
+extern uptime_t stat_stattime(void);
+extern uint64_t stat_received(void);
+extern uint64_t stat_processed(void);
+extern uint64_t stat_restricted(void);
+extern void increment_restricted(void);
+extern uint64_t stat_newversion(void);
+extern uint64_t stat_oldversion(void);
+extern uint64_t stat_badlength(void);
+extern uint64_t stat_badauth(void);
+extern uint64_t stat_declined(void);
+extern uint64_t stat_limitrejected(void);
+extern uint64_t stat_kodsent(void);
+extern uptime_t stat_use_stattime(void);
+extern void set_use_stattime(uptime_t stime);
 
 
 
@@ -189,9 +214,27 @@ extern	int	mprintf_clock_stats(struct peer *, const char *, ...)
 extern	void	record_raw_stats (struct peer *,
 				  int leap, int version, int mode, int stratum,
 				  int ppoll, int precision, double root_delay,
-				  double root_dispersion, uint32_t refid,
+				  double root_dispersion, refid_t refid,
 				  unsigned int outcount);
+extern void record_ref_stats(
+    const struct peer *peer,
+    int     n,              /* Number of samples */
+    int     i,              /* Index of first sample used */
+    int     j,              /* Index of last sample used */
+    double  t1,             /* Value of first sample */
+    double  t2,             /* Value of first sample used */
+    double  t3,             /* answer/median */
+    double  t4,             /* Value of last sample used */
+    double  t5,             /* Value of last sample */
+    double  jitter,
+    double  std_dev,        /* std deviation of trimmed subset */
+    double  std_dev_all     /* std deviation of everything */
+    );
+
 extern	void	check_leap_file	(bool is_daily_check, time_t systime);
+
+/* NTS */
+extern	void	check_cert_file	(void);
 
 /* packetstamp.c */
 extern void	enable_packetstamps(int, sockaddr_u *);
@@ -221,37 +264,27 @@ extern char *ntp_signd_socket;
 /* ntp_control.c */
 extern keyid_t	ctl_auth_keyid;		/* keyid used for authenticating write requests */
 
-/*
- * Other statistics of possible interest
- */
-struct packet_counters {
-   uint64_t packets_dropped;	/* # packets dropped on reception */
-   uint64_t packets_ignored;	/* received on wild card interface */
-   uint64_t packets_received;	/* total number of packets received */
-   uint64_t packets_sent;		/* total number of packets sent */
-   uint64_t packets_notsent; 	/* total number of packets which couldn't be sent */
-  /* There used to be a signal handler for received packets. */
-  /* It's not needed now that the kernel time stamps packets. */
-  uint64_t handler_calls;	/* number of calls to interrupt handler */
-  uint64_t handler_pkts;	/* number of pkts received by handler */
-  uptime_t io_timereset;	/* time counters were reset */
-};
-extern volatile struct packet_counters pkt_count;
-
 /* ntp_io.c */
-extern bool	disable_dynamic_updates;
-extern unsigned int	sys_ifnum;		/* next .ifnum to assign */
-extern endpt *	any_interface;		/* IPv4 wildcard */
-extern endpt *	any6_interface;		/* IPv6 wildcard */
-extern endpt *	loopback_interface;	/* IPv4 loopback for refclocks */
-extern endpt *	ep_list;		/* linked list */
+struct ntp_io_data {
+  bool disable_dynamic_updates; /* if true, scan interfaces once only */
+  unsigned int sys_ifnum;       /* next .ifnum to assign */
+  endpt *any_interface;         /* IPv4 wildcard */
+  endpt *any6_interface;        /* IPv6 wildcard */
+  endpt *loopback_interface;    /* IPv4 loopback for refclocks */
+  endpt *ep_list;               /* complete endpt list */
+};
+extern struct ntp_io_data io_data;
 
 /* ntp_loopfilter.c */
-extern double	drift_comp;		/* clock frequency (s/s) */
-extern double	clock_stability;	/* clock stability (s/s) */
-extern double	clock_max_back;		/* max backward offset before step (s) */
-extern double	clock_max_fwd;		/* max forward offset before step (s) */
-extern double	clock_phi;		/* dispersion rate (s/s) */
+struct ntp_loop_data {
+  bool   lockclock;       /* lock to system clock? (externally disciplined?) */
+  double drift_comp;      /* clock frequency (s/s) */
+  double clock_stability; /* clock stability (wander) (s/s) */
+  double clock_max_back;  /* max backward offset before step (s) */
+  double clock_max_fwd;   /* max forward offset before step (s) */
+  double clock_phi;       /* dispersion rate (s/s) */
+};
+extern struct ntp_loop_data loop_data;
 
 /*
  * Clock state machine control flags
@@ -272,46 +305,49 @@ extern int	peer_ntpdate;		/* count of ntpdate peers */
 /*
  * Clock state machine variables
  */
-extern uint8_t	sys_poll;		/* system poll interval (log2 s) */
-extern int	tc_counter;		/* poll-adjust counter */
-extern double	last_offset;		/* last clock offset (s) */
-extern uint8_t	allan_xpt;		/* Allan intercept (log2 s) */
-extern double	clock_jitter;		/* clock jitter (s) */
-extern double	sys_offset;		/* system offset (s) */
-extern double	sys_jitter;		/* system jitter (s) */
+struct clock_state_machine {
+  uint8_t sys_poll;     /* system poll interval time constant/poll (log2 s) */
+  int     tc_counter;   /* poll-adjust counter */
+  double  last_offset;  /* last clock offset (s) */
+  uint8_t allan_xpt;    /* Allan intercept (log2 s) */
+  double  clock_jitter; /* clock jitter (s) */
+  double  sys_offset;   /* system offset (s) */
+  double  sys_jitter;   /* system jitter (s) */
+};
+extern struct clock_state_machine clkstate;
 
 /* ntp_monitor.c */
 struct monitor_data {
-    uint8_t	mon_hash_bits;		/* log2 size of hash table */
-    /*
+	uint8_t	mon_hash_bits;		/* log2 size of hash table */
+	/*
 	 * Pointers to the hash table and the MRU list.  Memory for the hash
 	 * table is allocated only if monitoring is enabled.
 	 * Total size can easily exceed 32 bits (4 GB)
 	 * Total count is unlikely to exceed 32 bits in 2017
 	 *   but memories keep growing.
 	 */
-    mon_entry ** mon_hash;		/* MRU hash table */
-    mon_entry mon_mru_list;		/* mru listhead */
-    uint64_t	mru_entries;		/* mru list count */
-    /*
+	mon_entry ** mon_hash;		/* MRU hash table */
+	mon_entry mon_mru_list;		/* mru listhead */
+	uint64_t	mru_entries;		/* mru list count */
+	/*
 	 * Initialization state.  We may be monitoring, we may not.  If
 	 * we aren't, we may not even have allocated any memory yet.
 	 */
-    unsigned int	mon_enabled;		/* MON_OFF (0) or other MON_* */
+	unsigned int	mon_enabled;		/* MON_OFF (0) or other MON_* */
 
-    uint64_t	mru_peakentries;	/* highest mru_entries */
-    uint64_t	mru_initalloc;		/* entries to preallocate */
-    uint64_t	mru_incalloc;		/* allocation batch factor */
-    uint64_t	mru_mindepth;		/* preempt above this */
-    int	mru_maxage;		/* recycle if older than this */
-    int	mru_minage;		/* recycle if older than this & full */
-    uint64_t	mru_maxdepth; 		/* MRU size hard limit */
-    uint64_t	mru_exists;		/* slot already exists */
-    uint64_t	mru_new;		/* allocated new slot */
-    uint64_t	mru_recycleold;		/* recycle: age > maxage */
-    uint64_t	mru_recyclefull;	/* recycle: full and age > minage */
-    uint64_t	mru_none;		/* couldn't allocate slot */
-    int	mon_age;		/* preemption limit */
+	uint64_t	mru_peakentries;	/* highest mru_entries */
+	uint64_t	mru_initalloc;		/* entries to preallocate */
+	uint64_t	mru_incalloc;		/* allocation batch factor */
+	uint64_t	mru_mindepth;		/* preempt above this */
+	int	mru_maxage;		/* recycle if older than this */
+	int	mru_minage;		/* recycle if older than this & full */
+	uint64_t	mru_maxdepth;		/* MRU size hard limit */
+	uint64_t	mru_exists;		/* slot already exists */
+	uint64_t	mru_new;		/* allocated new slot */
+	uint64_t	mru_recycleold;		/* recycle: age > maxage */
+	uint64_t	mru_recyclefull;	/* recycle: full and age > minage */
+	uint64_t	mru_none;		/* couldn't allocate slot */
+	int	mon_age;		/* preemption limit */
 };
 extern struct monitor_data mon_data;
 
@@ -330,15 +366,15 @@ extern int	peer_associations;	/* mobilized associations */
  */
 int	sys_maxclock;		/* maximum candidates */
 struct system_variables {
-    uint8_t	sys_leap;		/* system leap indicator */
-    uint8_t	sys_stratum;		/* system stratum */
-    int8_t	sys_precision;		/* local clock precision */
-    double	sys_rootdelay;		/* roundtrip delay to primary source */
-    double	sys_rootdisp;		/* dispersion to primary source */
-    double	sys_rootdist;		/* distance to primary source */
-    uint32_t	sys_refid;		/* reference id */
-    l_fp	sys_reftime;		/* last update time */
-    struct peer *sys_peer;		/* current peer */
+	uint8_t	sys_leap;		/* system leap indicator */
+	uint8_t	sys_stratum;		/* system stratum */
+	int8_t	sys_precision;		/* local clock precision */
+	double	sys_rootdelay;		/* roundtrip delay to primary source */
+	double	sys_rootdisp;		/* dispersion to primary source */
+	double	sys_rootdist;		/* distance to primary source */
+	refid_t	sys_refid;		/* reference id */
+	l_fp	sys_reftime;		/* last update time */
+	struct peer *sys_peer;		/* current peer */
 };
 extern struct system_variables sys_vars;
 
@@ -348,47 +384,31 @@ extern struct system_variables sys_vars;
 extern l_fp	sys_authdelay;		/* authentication delay */
 extern int	sys_minsane;		/* minimum candidates */
 
-/*
- * Statistics counters
- */
-struct statistics_counters {
-    uptime_t	sys_stattime;		/* time since sysstats reset */
-    uint64_t	sys_received;		/* packets received */
-    uint64_t	sys_processed;		/* packets for this host */
-    uint64_t	sys_restricted;	 	/* restricted packets */
-    uint64_t	sys_newversion;		/* current version  */
-    uint64_t	sys_oldversion;		/* old version */
-    uint64_t	sys_badlength;		/* bad length or format */
-    uint64_t	sys_badauth;		/* bad authentication */
-    uint64_t	sys_declined;		/* declined */
-    uint64_t	sys_limitrejected;	/* rate exceeded */
-    uint64_t	sys_kodsent;		/* KoD sent */
-    uptime_t	use_stattime;		/* time since usestats reset */
-};
-extern volatile struct statistics_counters stat_count;
-
 /* Signalling: Set by signal handlers */
 struct signals_detected {
-    bool sawALRM;
-    bool sawHUP;
-    bool sawDNS;
-    bool sawQuit;                   /* SIGQUIT, SIGINT, SIGTERM */
+	bool sawALRM;
+	bool sawHUP;
+	bool sawDNS;
+	bool sawQuit;                   /* SIGQUIT, SIGINT, SIGTERM */
 };
 extern volatile struct signals_detected sig_flags;
 
 
 /* ntp_restrict.c */
-extern restrict_u *	restrictlist4;	/* IPv4 restriction list */
-extern restrict_u *	restrictlist6;	/* IPv6 restriction list */
-extern int		ntp_minpkt;
-extern uint8_t		ntp_minpoll;
+struct restriction_data {
+  restrict_u *restrictlist4; /* IPv4 restriction list */
+  restrict_u *restrictlist6; /* IPv6 restriction list */
+  int        ntp_minpkt;     /* minimum (log 2 s) */
+  uint8_t    ntp_minpoll;    /* increment (log 2 s) */
+};
+extern struct restriction_data rstrct;
 
 /* ntp_signd.c */
 
 #ifdef ENABLE_MSSNTP
 /* ntp_signd.c */
 extern void send_via_ntp_signd(struct recvbuf *, int, keyid_t, int,
-			       struct pkt *);
+			       void *);
 #endif
 
 /* ntp_timer.c */
@@ -418,5 +438,19 @@ extern	int	waitsync_fd_to_close;	/* -w/--wait-sync */
 extern struct refclock * const refclock_conf[];
 extern const uint8_t	num_refclock_conf;
 #endif
+
+/* nts_extens.c */
+bool extens_init(void);
+int extens_client_send(struct peer *peer, struct pkt *xpkt);
+bool extens_server_recv(struct ntspacket_t *ntspacket, uint8_t *pkt, int lng);
+int extens_server_send(struct ntspacket_t *ntspacket, struct pkt *xpkt);
+bool extens_client_recv(struct peer *peer, uint8_t *pkt, int lng);
+
+/* nts.c */
+void nts_init(void);   /* Before sandbox() */
+void nts_init2(void);  /* After sandbox() */
+bool nts_probe(struct peer *peer);
+bool nts_check(struct peer *peer);
+void nts_timer(void);
 
 #endif	/* GUARD_NTPD_H */

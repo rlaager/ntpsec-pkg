@@ -42,7 +42,7 @@ def gcc_modifier_win32(conf):
 	v=conf.env
 	v.cprogram_PATTERN='%s.exe'
 	v.cshlib_PATTERN='%s.dll'
-	v.implib_PATTERN='lib%s.dll.a'
+	v.implib_PATTERN='%s.dll.a'
 	v.IMPLIB_ST='-Wl,--out-implib,%s'
 	v.CFLAGS_cshlib=[]
 	v.append_value('LINKFLAGS',['-Wl,--enable-auto-import'])

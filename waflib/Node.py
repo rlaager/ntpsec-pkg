@@ -36,6 +36,49 @@ exclude_regs='''
 **/_darcs/**
 **/.intlcache
 **/.DS_Store'''
+def ant_matcher(s,ignorecase):
+	reflags=re.I if ignorecase else 0
+	ret=[]
+	for x in Utils.to_list(s):
+		x=x.replace('\\','/').replace('//','/')
+		if x.endswith('/'):
+			x+='**'
+		accu=[]
+		for k in x.split('/'):
+			if k=='**':
+				accu.append(k)
+			else:
+				k=k.replace('.','[.]').replace('*','.*').replace('?','.').replace('+','\\+')
+				k='^%s$'%k
+				try:
+					exp=re.compile(k,flags=reflags)
+				except Exception as e:
+					raise Errors.WafError('Invalid pattern: %s'%k,e)
+				else:
+					accu.append(exp)
+		ret.append(accu)
+	return ret
+def ant_sub_filter(name,nn):
+	ret=[]
+	for lst in nn:
+		if not lst:
+			pass
+		elif lst[0]=='**':
+			ret.append(lst)
+			if len(lst)>1:
+				if lst[1].match(name):
+					ret.append(lst[2:])
+			else:
+				ret.append([])
+		elif lst[0].match(name):
+			ret.append(lst[1:])
+	return ret
+def ant_sub_matcher(name,pats):
+	nacc=ant_sub_filter(name,pats[0])
+	nrej=ant_sub_filter(name,pats[1])
+	if[]in nrej:
+		nacc=[]
+	return[nacc,nrej]
 class Node(object):
 	dict_class=dict
 	__slots__=('name','parent','children','cache_abspath','cache_isdir')
@@ -59,9 +102,9 @@ class Node(object):
 		return self.abspath()
 	def __copy__(self):
 		raise Errors.WafError('nodes are not supposed to be copied')
-	def read(self,flags='r',encoding='ISO8859-1'):
+	def read(self,flags='r',encoding='latin-1'):
 		return Utils.readf(self.abspath(),flags,encoding)
-	def write(self,data,flags='w',encoding='ISO8859-1'):
+	def write(self,data,flags='w',encoding='latin-1'):
 		Utils.writef(self.abspath(),data,flags,encoding)
 	def read_json(self,convert=True,encoding='utf-8'):
 		import json
@@ -150,6 +193,10 @@ class Node(object):
 	def find_node(self,lst):
 		if isinstance(lst,str):
 			lst=[x for x in Utils.split_path(lst)if x and x!='.']
+		if lst and lst[0].startswith('\\\\')and not self.parent:
+			node=self.ctx.root.make_node(lst[0])
+			node.cache_isdir=True
+			return node.find_node(lst[1:])
 		cur=self
 		for x in lst:
 			if x=='..':
@@ -264,9 +311,8 @@ class Node(object):
 			diff-=1
 			p=p.parent
 		return p is node
-	def ant_iter(self,accept=None,maxdepth=25,pats=[],dir=False,src=True,remove=True):
+	def ant_iter(self,accept=None,maxdepth=25,pats=[],dir=False,src=True,remove=True,quiet=False):
 		dircont=self.listdir()
-		dircont.sort()
 		try:
 			lst=set(self.children.keys())
 		except AttributeError:
@@ -285,66 +331,29 @@ class Node(object):
 					if isdir:
 						if dir:
 							yield node
-					else:
-						if src:
-							yield node
+					elif src:
+						yield node
 				if isdir:
 					node.cache_isdir=True
 					if maxdepth:
-						for k in node.ant_iter(accept=accept,maxdepth=maxdepth-1,pats=npats,dir=dir,src=src,remove=remove):
+						for k in node.ant_iter(accept=accept,maxdepth=maxdepth-1,pats=npats,dir=dir,src=src,remove=remove,quiet=quiet):
 							yield k
 	def ant_glob(self,*k,**kw):
 		src=kw.get('src',True)
-		dir=kw.get('dir',False)
+		dir=kw.get('dir')
 		excl=kw.get('excl',exclude_regs)
 		incl=k and k[0]or kw.get('incl','**')
-		reflags=kw.get('ignorecase',0)and re.I
-		def to_pat(s):
-			lst=Utils.to_list(s)
-			ret=[]
-			for x in lst:
-				x=x.replace('\\','/').replace('//','/')
-				if x.endswith('/'):
-					x+='**'
-				lst2=x.split('/')
-				accu=[]
-				for k in lst2:
-					if k=='**':
-						accu.append(k)
-					else:
-						k=k.replace('.','[.]').replace('*','.*').replace('?','.').replace('+','\\+')
-						k='^%s$'%k
-						try:
-							accu.append(re.compile(k,flags=reflags))
-						except Exception as e:
-							raise Errors.WafError('Invalid pattern: %s'%k,e)
-				ret.append(accu)
-			return ret
-		def filtre(name,nn):
-			ret=[]
-			for lst in nn:
-				if not lst:
-					pass
-				elif lst[0]=='**':
-					ret.append(lst)
-					if len(lst)>1:
-						if lst[1].match(name):
-							ret.append(lst[2:])
-					else:
-						ret.append([])
-				elif lst[0].match(name):
-					ret.append(lst[1:])
-			return ret
-		def accept(name,pats):
-			nacc=filtre(name,pats[0])
-			nrej=filtre(name,pats[1])
-			if[]in nrej:
-				nacc=[]
-			return[nacc,nrej]
-		ret=[x for x in self.ant_iter(accept=accept,pats=[to_pat(incl),to_pat(excl)],maxdepth=kw.get('maxdepth',25),dir=dir,src=src,remove=kw.get('remove',True))]
-		if kw.get('flat',False):
-			return' '.join([x.path_from(self)for x in ret])
-		return ret
+		remove=kw.get('remove',True)
+		maxdepth=kw.get('maxdepth',25)
+		ignorecase=kw.get('ignorecase',False)
+		quiet=kw.get('quiet',False)
+		pats=(ant_matcher(incl,ignorecase),ant_matcher(excl,ignorecase))
+		if kw.get('generator'):
+			return Utils.lazy_generator(self.ant_iter,(ant_sub_matcher,maxdepth,pats,dir,src,remove,quiet))
+		it=self.ant_iter(ant_sub_matcher,maxdepth,pats,dir,src,remove,quiet)
+		if kw.get('flat'):
+			return' '.join(x.path_from(self)for x in it)
+		return list(it)
 	def is_src(self):
 		cur=self
 		x=self.ctx.srcnode
@@ -405,18 +414,10 @@ class Node(object):
 			return None
 		return node
 	def find_or_declare(self,lst):
-		if isinstance(lst,str):
-			lst=[x for x in Utils.split_path(lst)if x and x!='.']
-		node=self.get_bld().search_node(lst)
-		if node:
-			if not os.path.isfile(node.abspath()):
-				node.parent.mkdir()
-			return node
-		self=self.get_src()
-		node=self.find_node(lst)
-		if node:
-			return node
-		node=self.get_bld().make_node(lst)
+		if isinstance(lst,str)and os.path.isabs(lst):
+			node=self.ctx.root.make_node(lst)
+		else:
+			node=self.get_bld().make_node(lst)
 		node.parent.mkdir()
 		return node
 	def find_dir(self,lst):
@@ -471,15 +472,6 @@ class Node(object):
 					return ret
 				raise
 		return ret
-	def get_sig(self):
-		return self.h_file()
-	def set_sig(self,val):
-		try:
-			del self.get_bld_sig.__cache__[(self,)]
-		except(AttributeError,KeyError):
-			pass
-	sig=property(get_sig,set_sig)
-	cache_sig=property(get_sig,set_sig)
 pickle_lock=Utils.threading.Lock()
 class Nod3(Node):
 	pass

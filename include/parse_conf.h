@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1989-2005 by Frank Kardel <kardel@ntp.org>
  * Copyright 2015 by the NTPsec project contributors
- * SPDX-License-Identifier: BSD-3-clause
+ * SPDX-License-Identifier: BSD-3-Clause
  */
 
 #ifndef GUARD_PARSE_CONF_H
@@ -30,15 +30,13 @@
  * see below for field offsets
  */
 
-struct format
-{
-  struct foff
-    {
-      unsigned short offset;		/* offset into buffer */
-      unsigned short length;		/* length of field */
-    }         field_offsets[O_COUNT];
-  const unsigned char *fixed_string;		/* string with must be chars (blanks = wildcards) */
-  unsigned long      flags;
+struct format {
+	struct foff {
+		unsigned short offset;		/* offset into buffer */
+		unsigned short length;		/* length of field */
+	}         field_offsets[O_COUNT];
+	const unsigned char *fixed_string;		/* string with must be chars (blanks = wildcards) */
+	unsigned long      flags;
 };
 #endif
 

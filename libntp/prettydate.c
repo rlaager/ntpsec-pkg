@@ -140,8 +140,8 @@ common_prettydate(
 	/* get & fix milliseconds */
 	ntps = lfpuint(ts);
 	msec = lfpfrac(ts) / 4294967;	/* fract / (2 ** 32 / 1000) */
-	if (msec >= 1000u) {
-		msec -= 1000u;
+	if (msec >= 1000U) {
+		msec -= 1000U;
 		ntps++;
 	}
 	sec = ntpcal_ntp_to_time(ntps, prettypivot);
@@ -157,13 +157,13 @@ common_prettydate(
 			 (unsigned long)lfpuint(ts), (unsigned long)lfpfrac(ts),
 			 jd.year, jd.month, jd.monthday,
 			 jd.hour, jd.minute, jd.second, msec);
-		strncat(bp, "Z",  LIB_BUFLENGTH);
+		strlcat(bp, "Z",  LIB_BUFLENGTH);
 	} else {
 		snprintf(bp, LIB_BUFLENGTH, pfmt,
 			 (unsigned long)lfpuint(ts), (unsigned long)lfpfrac(ts),
 			 1900 + tm->tm_year, tm->tm_mon+1, tm->tm_mday,
 			 tm->tm_hour, tm->tm_min, tm->tm_sec, msec);
-		strncat(bp, "Z", LIB_BUFLENGTH);
+		strlcat(bp, "Z", LIB_BUFLENGTH);
 	}
 	return bp;
 }

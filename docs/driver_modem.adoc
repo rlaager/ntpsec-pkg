@@ -1,7 +1,7 @@
-= NIST/USNO/PTB Modem Time Services =
+= NIST/USNO/PTB Modem Time Services
 include::html.include[]
 
-== Synopsis ==
+== Synopsis
 
 ["verse",subs="normal"]
 Name: modem
@@ -10,15 +10,15 @@ Serial Port: /dev/modem__u__; 9600 8N1
 Features: tty_clk
 Requires: a dial-out device.
 
-== Warning ==
+== Warning
 
-The ACTS mode of this driver reports only two-digit years, and is thus
+The ACTS and USNO modes of this driver report only two-digit years, and is thus
 reliant on the system clock to be near correct before samples will be
 processed properly. You will not be able to use it to run
 autonomously, nor will it reliably recover from a trashed or zeroed
 system clock.
 
-== Description ==
+== Description
 
 This driver supports the US (NIST and USNO) and European (PTB (Germany),
 NPL (UK), etc.) modem time services, as well as Spectracom GPS receivers
@@ -28,14 +28,15 @@ clock correction. It is designed primarily for backup when neither a
 radio clock nor connectivity to Internet time servers are available. It
 can also be configured to operate full period.
 
-For best results the indicated time must be corrected for the modem and
-telephone circuit propagation delays, which can reach 200 ms or more.
-For the NIST service, corrections are determined automatically by
-measuring the roundtrip delay of echoed characters. With this service,
-the absolute accuracy is typically a millisecond or two. Determining corrections for
-the other services must be by other means. With these
-services variations from call to call and between messages during a call
-are typically a few milliseconds, occasionally higher.
+For best results the indicated time must be corrected for the modem
+and telephone circuit propagation delays, which can reach 200 ms or
+more.  For the NIST service, corrections are determined automatically
+by measuring the roundtrip delay of echoed characters. With this
+service, the absolute accuracy is typically a millisecond or
+two. Determining corrections for the other services must be by other
+means. With these services variations from call to call and between
+messages during a call are typically a few milliseconds, occasionally
+higher.
 
 This driver requires a 9600 bps modem with a Hayes-compatible command
 set and control over the modem data terminal ready (DTR) control line.
@@ -43,7 +44,7 @@ The actual line speed ranges from 1200 bps with USNO to 14,400 bps
 with NIST. The modem setup string is hard-coded in the driver and may
 require changes for nonstandard modems or special circumstances. It
 can be overridden by setting the extended system variable
-"modem_setup" via ntpq.
+"modemsetup" via ntpq.
 
 There are three modes of operation selected by the +mode+ keyword in the
 +server+ configuration command. In auto mode (0) +flag1+ is set at each poll
@@ -83,7 +84,7 @@ settings are 12 (1.1 hours) for +minpoll+ and 17 (36 hours) for
 +maxpoll+. Ordinarily, the poll interval will start at +minpoll+ and
 ramp up to +maxpoll+ in a day or two.
 
-== US Phone Numbers and Formats ==
+== US Phone Numbers and Formats
 
 Note: Phone numbers include the entire Hayes modem command, including
 the +ATDT+ and other control codes as may be necessary. For most cases
@@ -108,11 +109,11 @@ MJD YR MO DA H M S ST S UT1 msADV <OTM>
 The +<OTM>+ on-time character "+*+" changes to "+#+" when the delay
 correction is valid.
 
-http://www.usno.navy.mil/USNO/time/telephone-time[US Naval Observatory (USNO)]
+https://www.usno.navy.mil/USNO/time/telephone-time[US Naval Observatory (USNO)]
 
 Phone: (202) 762-1594 (Washington, DC); (719) 567-6743 (Colorado Springs, CO)
 
-http://tycho.usno.navy.mil/modem_time.html[Data Format] (two lines,
+https://tycho.usno.navy.mil/modem_time.html[Data Format] (two lines,
 repeating at one-second intervals)
 
 ----------------------------------------------------
@@ -126,7 +127,7 @@ hhmmss second of day
 
 link:tf582_4.html[European Phone Numbers and Formats]
 
-http://www.spectracomcorp.com[Spectracom GPS Receivers]
+https://www.orolia.com/[Orolia GPS Receivers] (formerly Spectracom)
 
 If a modem is connected to a Spectracom receiver, this driver will call
 it and retrieve the time in one of two formats, 0 and 2. Ordinarily, the
@@ -134,12 +135,12 @@ receiver requires a +T+ in order to return the timecode. As this driver
 does not send data via the modem, it must either be configured in
 continuous mode or be polled by another local driver.
 
-== Monitor Data ==
+== Monitor Data
 
 The received timecode is written as-is to the +clockstats+ file along
 with the Hayes connection and hang-up commands and result codes.
 
-== Driver Options ==
+== Driver Options
 
 +unit+ 'number'::
   The driver unit number, defaulting to 0. Used as a distinguishing
@@ -172,17 +173,17 @@ with the Hayes connection and hang-up commands and result codes.
 +baud+ 'number'::
   Overrides the default baud rate.
 
-== Configuration Example ==
+== Configuration Example
 
 ----------------------------------------------------------------------------
 refclock modem
 ----------------------------------------------------------------------------
 
-== Author ==
+== Author
 
 David L. Mills <mills@udel.edu>
 
-== Additional Information ==
+== Additional Information
 
 link:refclock.html[Reference Clock Drivers]
 

@@ -133,11 +133,12 @@ findexistingpeer_name(
 {
 	struct peer *p;
 
-	if (NULL == start_peer)
+	if (NULL == start_peer) {
 		p = peer_list;
-	else
+	} else {
 		p = start_peer->p_link;
-	for (; p != NULL; p = p->p_link)
+	}
+	for (; p != NULL; p = p->p_link) {
 		if (p->hostname != NULL
 		    && (-1 == mode || p->hmode == mode)
 		    && (AF_UNSPEC == hname_fam
@@ -145,6 +146,7 @@ findexistingpeer_name(
 			|| hname_fam == AF(&p->srcadr))
 		    && !strcasecmp(p->hostname, hostname))
 			break;
+	}
 	return p;
 }
 
@@ -255,9 +257,10 @@ findpeerbyassoc(
 
 	assocpeer_calls++;
 	hash = assoc & NTP_HASH_MASK;
-	for (p = assoc_hash[hash]; p != NULL; p = p->aid_link)
+	for (p = assoc_hash[hash]; p != NULL; p = p->aid_link) {
 		if (assoc == p->associd)
 			break;
+	}
 	return p;
 }
 
@@ -301,17 +304,20 @@ score_all(
 	 */
 	tamp = score(peer);
 	temp = 100;
-	for (speer = peer_list; speer != NULL; speer = speer->p_link)
+	for (speer = peer_list; speer != NULL; speer = speer->p_link) {
 		if (speer->cfg.flags & FLAG_PREEMPT) {
 			x = score(speer);
-			if (x < temp)
+			if (x < temp) {
 				temp = x;
+			}
 		}
+	}
 	DPRINT(1, ("score_all: at %u score %d min %d\n",
 		   current_time, tamp, temp));
 
-	if (tamp != temp)
+	if (tamp != temp) {
 		temp = 0;
+	}
 
 	return temp;
 }
@@ -362,7 +368,7 @@ free_peer(
 	int		hash;
 
 
-	if ((MDF_UCAST & p->cast_flags) && !(FLAG_DNS & p->cfg.flags)) {
+	if ((MDF_UCAST & p->cast_flags) && !(FLAG_LOOKUP & p->cfg.flags)) {
 		hash = NTP_HASH_ADDR(&p->srcadr);
 		peer_hash_count[hash]--;
 
@@ -447,14 +453,6 @@ set_peerdstadr(
 	if (p == NULL || p->dstadr == dstadr)
 		return;
 
-	/*
-	 * Don't accept updates to a separate multicast receive-only
-	 * endpt while a BCLNT peer is running its unicast protocol.
-	 */
-	if (dstadr != NULL && (FLAG_BC_VOL & p->cfg.flags) &&
-	    (INT_MCASTIF & dstadr->flags) && MODE_CLIENT == p->hmode) {
-		return;
-	}
 	if (p->dstadr != NULL) {
 		p->dstadr->peercnt--;
 		UNLINK_SLIST(unlinked, p->dstadr->peers, p, ilink,
@@ -503,7 +501,6 @@ peer_refresh_interface(
 	}
 
 	set_peerdstadr(p, niface);
-
 }
 
 
@@ -528,7 +525,7 @@ refresh_all_peerinterfaces(void)
 			continue;
 		if (MDF_POOL & p->cast_flags)
 			continue;	/* Pool slots don't get interfaces. */
-		if (FLAG_DNS & p->cfg.flags)
+		if (FLAG_LOOKUP & p->cfg.flags)
 			continue;	/* Still doing DNS lookup. */
 		peer_refresh_interface(p);
 
@@ -557,10 +554,11 @@ newpeer(
 	unsigned int	hash;
 	const char *	name;	/* for error messages */
 
-	if (NULL != hostname)
+	if (NULL != hostname) {
 		name = hostname;
-	else
-		name = socktoa(srcadr);
+	} else {
+		name = socktoa(srcadr); 
+	}
 
 	/*
 	 * First search from the beginning for an association with given
@@ -604,8 +602,9 @@ newpeer(
 	 * Allocate a new peer structure. Some dirt here, since some of
 	 * the initialization requires knowledge of our system state.
 	 */
-	if (peer_free_count == 0)
+	if (peer_free_count == 0) {
 		getmorepeermem();
+	}
 	UNLINK_HEAD_SLIST(peer, peer_free, p_link);
 	peer_free_count--;
 	peer_associations++;
@@ -628,6 +627,9 @@ newpeer(
 	 * Copy in the peer configuration block.
 	 */
 	memcpy(&peer->cfg, ctl, sizeof(peer->cfg));
+
+	/* reset NTS */
+	peer->nts_state.count = -1;
 
 	peer->cast_flags = cast_flags;
 	set_peerdstadr(peer,
@@ -668,6 +670,10 @@ newpeer(
 	peer->hpoll = peer->cfg.minpoll;
 	if (cast_flags & MDF_POOL)
 		peer_clear(peer, "POOL", initializing1);
+	else if (FLAG_NTS & peer->cfg.flags)
+		peer_clear(peer, "NTS", initializing1);
+	else if (FLAG_DNS & peer->cfg.flags)
+		peer_clear(peer, "DNS", initializing1);
 	else
 		peer_clear(peer, "INIT", initializing1);
 	if (clock_ctl.mode_ntpdate)
@@ -683,8 +689,8 @@ newpeer(
 	/*
 	 * Put the new peer in the hash tables.
 	 */
-	if ((MDF_UCAST & cast_flags) && !(FLAG_DNS & ctl->flags))
-		peer_update_hash(peer);
+	if ((MDF_UCAST & cast_flags) && !(FLAG_LOOKUP & ctl->flags))
+		peer_add_hash(peer);
 	hash = peer->associd & NTP_HASH_MASK;
 	LINK_SLIST(assoc_hash[hash], peer, aid_link);
 	assoc_hash_count[hash]++;
@@ -699,7 +705,23 @@ newpeer(
 	return peer;
 }
 
-void peer_update_hash (struct peer *peer)
+void peer_del_hash (struct peer *peer)
+{
+        unsigned int hash;
+        struct peer *unlinked;
+
+        hash = NTP_HASH_ADDR(&peer->srcadr);
+        peer_hash_count[hash]--;
+
+        UNLINK_SLIST(unlinked, peer_hash[hash], peer, adr_link, struct peer);
+        if (NULL == unlinked) {
+            peer_hash_count[hash]++;
+            msyslog(LOG_ERR, "ERR: peer %s not in address table!",
+                socktoa(&peer->srcadr));
+        }
+}
+
+void peer_add_hash (struct peer *peer)
 {
 	unsigned int	hash;
 
@@ -730,8 +752,9 @@ peer_reset(
 	struct peer *peer
 	)
 {
-	if (peer == NULL)
+	if (peer == NULL) {
 		return;
+}
 
 	peer->timereset = current_time;
 	peer->sent = 0;
@@ -749,30 +772,30 @@ peer_reset(
  * peer_all_reset - reset all peer statistics counters
  */
 void
-peer_all_reset(void)
-{
+peer_all_reset(void) {
 	struct peer *peer;
 
-	for (peer = peer_list; peer != NULL; peer = peer->p_link)
+	for (peer = peer_list; peer != NULL; peer = peer->p_link) {
 		peer_reset(peer);
+	}
 }
 
 
 
 /* peer_cleanup - clean peer list prior to shutdown */
-void peer_cleanup(void)
-{
+void peer_cleanup(void) {
         struct peer *peer;
         associd_t assoc;
 
         for (assoc = initial_association_ID; assoc != current_association_ID; assoc++) {
-            if (assoc != 0U) {
-                peer = findpeerbyassoc(assoc);
-                if (peer != NULL)
-                    unpeer(peer);
-            }
+		if (assoc != 0U) {
+			peer = findpeerbyassoc(assoc);
+			if (peer != NULL)
+				unpeer(peer);
+		}
         }
         peer = findpeerbyassoc(current_association_ID);
-        if (peer != NULL)
-            unpeer(peer);
+        if (peer != NULL) {
+		unpeer(peer);
+	}
 }

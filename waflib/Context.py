@@ -5,10 +5,10 @@
 import os,re,imp,sys
 from waflib import Utils,Errors,Logs
 import waflib.Node
-HEXVERSION=0x1090f00
-WAFVERSION="1.9.15"
-WAFREVISION="c9ba881d7e4b8d1d5fcd2b6f92e46165dd108575"
-ABI=99
+HEXVERSION=0x2001200
+WAFVERSION="2.0.18"
+WAFREVISION="314689b8994259a84f0de0aaef74d7ce91f541ad"
+ABI=20
 DBFILE='.wafpickle-%s-%d-%d'%(sys.platform,sys.hexversion,ABI)
 APPNAME='APPNAME'
 VERSION='VERSION'
@@ -20,13 +20,13 @@ run_dir=''
 top_dir=''
 out_dir=''
 waf_dir=''
+default_encoding=Utils.console_encoding()
 g_module=None
 STDOUT=1
 STDERR=-1
 BOTH=0
 classes=[]
 def create_context(cmd_name,*k,**kw):
-	global classes
 	for x in classes:
 		if x.cmd==cmd_name:
 			return x(*k,**kw)
@@ -45,7 +45,6 @@ class store_context(type):
 			raise Errors.WafError('Missing command for the context class %r (cmd)'%name)
 		if not getattr(cls,'fun',None):
 			cls.fun=cls.cmd
-		global classes
 		classes.insert(0,cls)
 ctx=store_context('ctx',(object,),{})
 class Context(ctx):
@@ -55,7 +54,6 @@ class Context(ctx):
 		try:
 			rd=kw['run_dir']
 		except KeyError:
-			global run_dir
 			rd=run_dir
 		self.node_class=type('Nod3',(waflib.Node.Node,),{})
 		self.node_class.__module__='waflib.Node'
@@ -84,7 +82,6 @@ class Context(ctx):
 			if fun:
 				fun(self)
 	def execute(self):
-		global g_module
 		self.recurse([os.path.dirname(g_module.root_path)])
 	def pre_recurse(self,node):
 		self.stack_path.append(self.cur_script)
@@ -109,7 +106,7 @@ class Context(ctx):
 				cache[node]=True
 				self.pre_recurse(node)
 				try:
-					function_code=node.read('rU',encoding)
+					function_code=node.read('r',encoding)
 					exec(compile(function_code,node.abspath(),'exec'),self.exec_dict)
 				finally:
 					self.post_recurse(node)
@@ -137,11 +134,18 @@ class Context(ctx):
 					except OSError:
 						raise Errors.WafError('Cannot read the folder %r'%d)
 					raise Errors.WafError('No wscript file in directory %s'%d)
+	def log_command(self,cmd,kw):
+		if Logs.verbose:
+			fmt=os.environ.get('WAF_CMD_FORMAT')
+			if fmt=='string':
+				if not isinstance(cmd,str):
+					cmd=Utils.shell_escape(cmd)
+			Logs.debug('runner: %r',cmd)
+			Logs.debug('runner_env: kw=%s',kw)
 	def exec_command(self,cmd,**kw):
 		subprocess=Utils.subprocess
 		kw['shell']=isinstance(cmd,str)
-		Logs.debug('runner: %r',cmd)
-		Logs.debug('runner_env: kw=%s',kw)
+		self.log_command(cmd,kw)
 		if self.logger:
 			self.logger.info(cmd)
 		if'stdout'not in kw:
@@ -165,20 +169,21 @@ class Context(ctx):
 		if'cwd'in kw:
 			if not isinstance(kw['cwd'],str):
 				kw['cwd']=kw['cwd'].abspath()
+		encoding=kw.pop('decode_as',default_encoding)
 		try:
 			ret,out,err=Utils.run_process(cmd,kw,cargs)
 		except Exception as e:
 			raise Errors.WafError('Execution failure: %s'%str(e),ex=e)
 		if out:
 			if not isinstance(out,str):
-				out=out.decode(sys.stdout.encoding or'iso8859-1',errors='replace')
+				out=out.decode(encoding,errors='replace')
 			if self.logger:
 				self.logger.debug('out: %s',out)
 			else:
 				Logs.info(out,extra={'stream':sys.stdout,'c1':''})
 		if err:
 			if not isinstance(err,str):
-				err=err.decode(sys.stdout.encoding or'iso8859-1',errors='replace')
+				err=err.decode(encoding,errors='replace')
 			if self.logger:
 				self.logger.error('err: %s'%err)
 			else:
@@ -187,17 +192,9 @@ class Context(ctx):
 	def cmd_and_log(self,cmd,**kw):
 		subprocess=Utils.subprocess
 		kw['shell']=isinstance(cmd,str)
-		Logs.debug('runner: %r',cmd)
-		if'quiet'in kw:
-			quiet=kw['quiet']
-			del kw['quiet']
-		else:
-			quiet=None
-		if'output'in kw:
-			to_ret=kw['output']
-			del kw['output']
-		else:
-			to_ret=STDOUT
+		self.log_command(cmd,kw)
+		quiet=kw.pop('quiet',None)
+		to_ret=kw.pop('output',STDOUT)
 		if Logs.verbose and not kw['shell']and not Utils.check_exe(cmd[0]):
 			raise Errors.WafError('Program %r not found!'%cmd[0])
 		kw['stdout']=kw['stderr']=subprocess.PIPE
@@ -218,14 +215,15 @@ class Context(ctx):
 		if'cwd'in kw:
 			if not isinstance(kw['cwd'],str):
 				kw['cwd']=kw['cwd'].abspath()
+		encoding=kw.pop('decode_as',default_encoding)
 		try:
 			ret,out,err=Utils.run_process(cmd,kw,cargs)
 		except Exception as e:
 			raise Errors.WafError('Execution failure: %s'%str(e),ex=e)
 		if not isinstance(out,str):
-			out=out.decode(sys.stdout.encoding or'iso8859-1',errors='replace')
+			out=out.decode(encoding,errors='replace')
 		if not isinstance(err,str):
-			err=err.decode(sys.stdout.encoding or'iso8859-1',errors='replace')
+			err=err.decode(encoding,errors='replace')
 		if out and quiet!=STDOUT and quiet!=BOTH:
 			self.to_log('out: %s'%out)
 		if err and quiet!=STDERR and quiet!=BOTH:
@@ -302,9 +300,9 @@ class Context(ctx):
 			return
 		result=kw.get('result')or k[0]
 		defcolor='GREEN'
-		if result==True:
+		if result is True:
 			msg='ok'
-		elif result==False:
+		elif not result:
 			msg='not found'
 			defcolor='YELLOW'
 		else:
@@ -319,7 +317,6 @@ class Context(ctx):
 				color=defcolor
 		Logs.pprint(color,msg)
 	def load_special_tools(self,var,ban=[]):
-		global waf_dir
 		if os.path.isdir(waf_dir):
 			lst=self.root.find_node(waf_dir).find_node('waflib/extras').ant_glob(var)
 			for x in lst:
@@ -349,7 +346,7 @@ def load_module(path,encoding=None):
 		pass
 	module=imp.new_module(WSCRIPT_FILE)
 	try:
-		code=Utils.readf(path,m='rU',encoding=encoding)
+		code=Utils.readf(path,m='r',encoding=encoding)
 	except EnvironmentError:
 		raise Errors.WafError('Could not read the file %r'%path)
 	module_dir=os.path.dirname(path)
@@ -374,6 +371,9 @@ def load_tool(tool,tooldir=None,ctx=None,with_sys_path=True):
 			sys.path=tooldir+sys.path
 			try:
 				__import__(tool)
+			except ImportError as e:
+				e.waf_sys_path=list(sys.path)
+				raise
 			finally:
 				for d in tooldir:
 					sys.path.remove(d)
@@ -392,6 +392,9 @@ def load_tool(tool,tooldir=None,ctx=None,with_sys_path=True):
 						x=None
 				else:
 					__import__(tool)
+			except ImportError as e:
+				e.waf_sys_path=list(sys.path)
+				raise
 			finally:
 				if not with_sys_path:
 					sys.path.remove(waf_dir)

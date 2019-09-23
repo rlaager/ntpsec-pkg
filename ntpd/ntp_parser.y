@@ -7,7 +7,7 @@
  *		Newark, DE 19711
  * Copyright (c) 2006
  * Copyright 2015 by the NTPsec project contributors
- * SPDX-License-Identifier: BSD-2-clause
+ * SPDX-License-Identifier: BSD-2-Clause
  */
 
 %{
@@ -50,20 +50,25 @@
 }
 
 /* Terminals (do not appear left of colon) */
+%token	<Integer>	T_Aead
 %token	<Integer>	T_Age
 %token	<Integer>	T_All
 %token	<Integer>	T_Allan
 %token	<Integer>	T_Allpeers
+%token	<Integer>	T_Ask
 %token	<Integer>	T_Auth
 %token	<Integer>	T_Average
 %token	<Integer>	T_Baud
 %token	<Integer>	T_Bias
 %token	<Integer>	T_Burst
 %token	<Integer>	T_Calibrate
+%token	<Integer>	T_Ca
 %token	<Integer>	T_Ceiling
+%token	<Integer>	T_Cert
 %token	<Integer>	T_Clock
 %token	<Integer>	T_Clockstats
 %token	<Integer>	T_Cohort
+%token	<Integer>	T_Cookie
 %token	<Integer>	T_ControlKey
 %token	<Integer>	T_Ctl
 %token	<Integer>	T_Day
@@ -75,6 +80,7 @@
 %token	<Integer>	T_Driftfile
 %token	<Integer>	T_Drop
 %token	<Integer>	T_Dscp
+%token	<Integer>	T_Expire
 %token	<Integer>	T_Ellipsis	/* "..." not "ellipsis" */
 %token	<Integer>	T_Enable
 %token	<Integer>	T_End
@@ -128,6 +134,7 @@
 %token	<Integer>	T_Maxdist
 %token	<Integer>	T_Maxmem
 %token	<Integer>	T_Maxpoll
+%token	<Integer>	T_Maxtls
 %token	<Integer>	T_Mdnstries
 %token	<Integer>	T_Mem
 %token	<Integer>	T_Memlock
@@ -138,6 +145,7 @@
 %token	<Integer>	T_Minimum
 %token	<Integer>	T_Minpoll
 %token	<Integer>	T_Minsane
+%token	<Integer>	T_Mintls
 %token	<Integer>	T_Mode
 %token	<Integer>	T_Monitor
 %token	<Integer>	T_Month
@@ -154,9 +162,11 @@
 %token	<Integer>	T_Noserve
 %token	<Integer>	T_Notrap
 %token	<Integer>	T_Notrust
+%token	<Integer>	T_Noval
 %token	<Integer>	T_Ntp
 %token	<Integer>	T_Ntpport
 %token	<Integer>	T_NtpSignDsocket
+%token	<Integer>	T_Nts
 %token	<Integer>	T_Orphan
 %token	<Integer>	T_Orphanwait
 %token	<Integer>	T_Panic
@@ -174,6 +184,7 @@
 %token	<Integer>	T_Refclock
 %token	<Integer>	T_Refid
 %token	<Integer>	T_Requestkey
+%token	<Integer>	T_Require
 %token	<Integer>	T_Reset
 %token	<Integer>	T_Restrict
 %token	<Integer>	T_Rlimit
@@ -200,6 +211,8 @@
 %token	<Integer>	T_Timer
 %token	<Integer>	T_Timingstats
 %token	<Integer>	T_Tinker
+%token	<Integer>	T_Tlsciphers
+%token	<Integer>	T_Tlsciphersuites
 %token	<Integer>	T_Tos
 %token	<Integer>	T_True
 %token	<Integer>	T_Trustedkey
@@ -284,6 +297,9 @@
 %type	<Integer>	tinker_option_keyword
 %type	<Attr_val>	tinker_option
 %type	<Attr_val_fifo>	tinker_option_list
+%type	<Integer>	nts_string_option_keyword
+%type	<Attr_val>	nts_option
+%type	<Attr_val_fifo>	nts_option_list
 %type	<Attr_val>	tos_option
 %type	<Integer>	tos_option_dbl_keyword
 %type	<Integer>	tos_option_int_keyword
@@ -334,6 +350,7 @@ command :	/* NULL STATEMENT */
 	|	rlimit_command
 	|	system_option_command
 	|	tinker_command
+	|	nts_command
 	|	miscellaneous_command
 	;
 
@@ -402,6 +419,8 @@ option_flag_keyword
 	:	T_Burst
 	|	T_Iburst
 	|	T_Noselect
+	|	T_Noval
+	|	T_Nts
 	|	T_Prefer
 	|	T_True
 	;
@@ -423,7 +442,8 @@ option_int
 	;
 
 option_int_keyword
-	:	T_Key
+	:	T_Expire
+	|	T_Key
 	|	T_Minpoll
 	|	T_Maxpoll
 	|	T_Mode
@@ -449,6 +469,16 @@ option_string
 	|	T_Path T_String
 			{ $$ = create_attr_sval($1, $2); }
 	|	T_Ppspath T_String
+			{ $$ = create_attr_sval($1, $2); }
+	|	T_Ask T_String
+			{ $$ = create_attr_sval($1, $2); }
+	|	T_Require T_String
+			{ $$ = create_attr_sval($1, $2); }
+	|	T_Ca T_String
+			{ $$ = create_attr_sval($1, $2); }
+	|	T_Cert T_String
+			{ $$ = create_attr_sval($1, $2); }
+	|	T_Aead T_String
 			{ $$ = create_attr_sval($1, $2); }
 	;
 
@@ -1070,6 +1100,51 @@ tinker_option_keyword
 	|	T_Stepout
 	|	T_Tick
 	;
+
+
+/* NTS Commands
+ * ---------------
+ */
+
+nts_command
+	:	T_Nts nts_option_list
+			{ CONCAT_G_FIFOS(cfgt.nts, $2); }
+	;
+
+nts_option_list
+	:	nts_option_list nts_option
+		{
+			$$ = $1;
+			APPEND_G_FIFO($$, $2);
+		}
+	|	nts_option
+		{
+			$$ = NULL;
+			APPEND_G_FIFO($$, $1);
+		}
+	;
+
+nts_option
+	:	nts_string_option_keyword T_String
+			{ $$ = create_attr_sval($1, $2); }
+	|	T_Disable
+			{ $$ = create_attr_ival($1, 0); }
+	|	T_Enable
+			{ $$ = create_attr_ival($1, 1); }
+	;
+
+	;
+
+nts_string_option_keyword
+	:	T_Aead
+	|	T_Ca
+	|	T_Cert
+	|	T_Cookie
+	|	T_Key
+	|	T_Tlsciphers
+	|	T_Tlsciphersuites
+	|	T_Maxtls
+	|	T_Mintls
 
 
 /* Miscellaneous Commands

@@ -3,7 +3,7 @@
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
 import os
-from waflib import Task,Options,Utils
+from waflib import Task,Options,Utils,Errors
 from waflib.Configure import conf
 from waflib.TaskGen import extension,feature,before_method
 @before_method('apply_incpaths','apply_link','propagate_uselib_vars')
@@ -47,7 +47,7 @@ def check_perl_module(self,module):
 	self.start_msg('perl module %s'%module)
 	try:
 		r=self.cmd_and_log(cmd)
-	except Exception:
+	except Errors.WafError:
 		self.end_msg(False)
 		return None
 	self.end_msg(r or True)

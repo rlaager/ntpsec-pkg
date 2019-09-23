@@ -59,7 +59,6 @@ class log_filter(logging.Filter):
 	def __init__(self,name=''):
 		logging.Filter.__init__(self,name)
 	def filter(self,rec):
-		global verbose
 		rec.zone=rec.module
 		if rec.levelno>=logging.INFO:
 			return True
@@ -132,7 +131,10 @@ class formatter(logging.Formatter):
 			msg=re.sub(r'\r(?!\n)|\x1B\[(K|.*?(m|h|l))','',msg)
 		if rec.levelno>=logging.INFO:
 			if rec.args:
-				return msg%rec.args
+				try:
+					return msg%rec.args
+				except UnicodeDecodeError:
+					return msg.encode('utf-8')%rec.args
 			return msg
 		rec.msg=msg
 		rec.c1=colors.PINK
@@ -140,14 +142,11 @@ class formatter(logging.Formatter):
 		return logging.Formatter.format(self,rec)
 log=None
 def debug(*k,**kw):
-	global verbose
 	if verbose:
 		k=list(k)
 		k[0]=k[0].replace('\n',' ')
-		global log
 		log.debug(*k,**kw)
 def error(*k,**kw):
-	global log,verbose
 	log.error(*k,**kw)
 	if verbose>2:
 		st=traceback.extract_stack()
@@ -161,10 +160,8 @@ def error(*k,**kw):
 			if buf:
 				log.error('\n'.join(buf))
 def warn(*k,**kw):
-	global log
-	log.warn(*k,**kw)
+	log.warning(*k,**kw)
 def info(*k,**kw):
-	global log
 	log.info(*k,**kw)
 def init_log():
 	global log
@@ -206,5 +203,4 @@ def free_logger(logger):
 	except Exception:
 		pass
 def pprint(col,msg,label='',sep='\n'):
-	global info
 	info('%s%s%s %s',colors(col),msg,colors.NORMAL,label,extra={'terminator':sep})

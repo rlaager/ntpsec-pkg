@@ -1,11 +1,11 @@
-== History of NTP ==
+== History of NTP
 
 // Early history was found at https://www.galsys.co.uk/about-NTP.html
 
 The first NTP implementation started around 1980 with an accuracy of
 only several hundred milliseconds. That very first implementation was
 documented in Internet Engineering Note
-https://www.rfc-editor.org/ien/ien175.txt[IEN-173]. Later the first
+https://www.rfc-editor.org/ien/ien173.txt[IEN-173]. Later the first
 specification appeared in
 https://www.rfc-editor.org/rfc/rfc778.txt[RFC 778], but it was still
 named Internet Clock Service. At that time clock synchronization was
@@ -43,7 +43,7 @@ model for precision timekeeping) described a new implementation and
 interface in 1994. That implementation could keep time with a
 precision of up to one microsecond.
 
-Work for a Version 4 of NTP bagain around 1994. The first new
+Work for a Version 4 of NTP began around 1994. The first new
 specification was https://tools.ietf.org/rfc/rfc2030.txt[RFC 2030],
 Simple Network Time Protocol (SNTP) version 4 for IPv4, IPv6 and OSI.
 This issued in 1996.
@@ -58,6 +58,9 @@ Unixes.
 A proposed specification for NTPv4 issued in 2010 as
 https://tools.ietf.org/rfc/rfc5905.txt[RFC 5905].  Despite some
 underspecification and technical difficulties (especially near
-Autokey, its attempt at public-key encryption for authentication) 
+Autokey, its attempt at public-key encryption for authentication)
 NTPv4 implementations were in general use by 2014.
 
+The extension mechanism for the protocol was partly specified in RFC
+5905, but nor fully defined until
+https://tools.ietf.org/html/rfc7822[RFC 7822] in 2016.

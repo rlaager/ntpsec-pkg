@@ -86,19 +86,26 @@ static nic_rule *nic_rule_list;
 /*
  * Other statistics of possible interest
  */
+struct packet_counters {
+	uint64_t dropped;	/* # packets dropped on reception */
+	uint64_t ignored;	/* received on wild card interface */
+	uint64_t received;	/* total number of packets received */
+	uint64_t sent;		/* total number of packets sent */
+	uint64_t notsent;	/* total number of packets which couldn't be sent */
+	/* There used to be a signal handler for received packets. */
+	/* It's not needed now that the kernel time stamps packets. */
+	uint64_t handler_calls;	/* number of calls to interrupt handler */
+	uint64_t handler_pkts;	/* number of pkts received by handler */
+	uptime_t io_timereset;	/* time counters were reset */
+};
 volatile struct packet_counters pkt_count;
 
 /*
  * Interface stuff
  */
-endpt *	any_interface;		/* wildcard ipv4 interface */
-endpt *	any6_interface;		/* wildcard ipv6 interface */
-endpt *	loopback_interface;	/* loopback ipv4 interface */
-
-unsigned int sys_ifnum;			/* next .ifnum to assign */
+struct ntp_io_data io_data;
 static int ninterfaces;			/* total # of interfaces */
 
-bool disable_dynamic_updates;	/* if true, scan interfaces once only */
 extern  SOCKET  open_socket     (sockaddr_u *, bool, endpt *);
 
 static bool
@@ -214,7 +221,6 @@ struct remaddr {
 };
 
 static remaddr_t * remoteaddr_list;
-endpt *		ep_list;	/* complete endpt list */
 
 static endpt *	wildipv4;
 static endpt *	wildipv6;
@@ -269,8 +275,6 @@ maintain_activefds(
 	bool closing
 	)
 {
-	int i;
-
 	if (fd < 0 || fd >= (int)FD_SETSIZE) {
 		msyslog(LOG_ERR,
 			"IO: Too many sockets in use, FD_SETSIZE %d exceeded by fd %d",
@@ -284,11 +288,12 @@ maintain_activefds(
 	} else {
 		FD_CLR(fd, &activefds);
 		if (maxactivefd && fd == maxactivefd) {
-			for (i = maxactivefd - 1; i >= 0; i--)
+			for (int i = maxactivefd - 1; i >= 0; i--) {
 				if (FD_ISSET(i, &activefds)) {
 					maxactivefd = i;
 					break;
 				}
+			}
 			INSIST(fd != maxactivefd);
 		}
 	}
@@ -301,7 +306,7 @@ maintain_activefds(
  * the code solves following tasks:
  *
  *   - keep a current list of active interfaces in order
- *     to bind to to the interface address on NTP_PORT so that
+ *     to bind to the interface address on NTP_PORT so that
  *     all wild and specific bindings for NTP_PORT are taken by ntpd
  *     to avoid other daemons messing with the time or sockets.
  *   - all interfaces keep a list of peers that are referencing
@@ -564,8 +569,9 @@ netaddr_eqprefix(const isc_netaddr_t *a, const isc_netaddr_t *b,
 	/*
 	 * Don't crash if we get a pattern like 10.0.0.1/9999999.
 	 */
-	if (prefixlen > ipabytes * 8)
+	if (prefixlen > ipabytes * 8) {
 		prefixlen = ipabytes * 8;
+	}
 
 	nbytes = prefixlen / 8;
 	nbits = prefixlen % 8;
@@ -660,8 +666,9 @@ is_ip_address(
 			if ('[' == host[0]) {
 				strlcpy(tmpbuf, &host[1], sizeof(tmpbuf));
 				pch = strchr(tmpbuf, ']');
-				if (pch != NULL)
+				if (pch != NULL) {
 					*pch = '\0';
+				}
 			} else {
 				strlcpy(tmpbuf, host, sizeof(tmpbuf));
 			}
@@ -719,7 +726,7 @@ new_interface(
 		memcpy(iface, interface, sizeof(*iface));
 
 	/* count every new instance of an interface in the system */
-	iface->ifnum = sys_ifnum++;
+	iface->ifnum = io_data.sys_ifnum++;
 	iface->starttime = current_time;
 
 	return iface;
@@ -749,7 +756,7 @@ add_interface(
 	/* Calculate the refid */
 	ep->addr_refid = addr2refid(&ep->sin);
 	/* link at tail so ntpq -c ifstats index increases each row */
-	LINK_TAIL_SLIST(ep_list, ep, elink, endpt);
+	LINK_TAIL_SLIST(io_data.ep_list, ep, elink, endpt);
 	ninterfaces++;
 }
 
@@ -766,7 +773,7 @@ remove_interface(
 	endpt *		unlinked;
 	sockaddr_u	resmask;
 
-	UNLINK_SLIST(unlinked, ep_list, ep, elink, endpt);
+	UNLINK_SLIST(unlinked, io_data.ep_list, ep, elink, endpt);
 	delete_interface_from_list(ep);
 
 	if (ep->fd != INVALID_SOCKET) {
@@ -863,14 +870,14 @@ create_wildcards(
 
 		if (wildif->fd != INVALID_SOCKET) {
 			wildipv6 = wildif;
-			any6_interface = wildif;
+			io_data.any6_interface = wildif;
 			add_addr_to_list(&wildif->sin, wildif);
 			add_interface(wildif);
 			log_listen_address(wildif);
 		} else {
 			msyslog(LOG_ERR,
-				"IO: unable to bind to wildcard address %s - another process may be running: %m; EXITING",
-				socktoa(&wildif->sin));
+				"IO: unable to bind to wildcard address %s - another process may be running: %s; EXITING",
+				socktoa(&wildif->sin), strerror(errno));
 			exit(1);
 		}
 		DPRINT_INTERFACE(2, (wildif, "created ", "\n"));
@@ -905,15 +912,15 @@ create_wildcards(
 
 		if (wildif->fd != INVALID_SOCKET) {
 			wildipv4 = wildif;
-			any_interface = wildif;
+			io_data.any_interface = wildif;
 
 			add_addr_to_list(&wildif->sin, wildif);
 			add_interface(wildif);
 			log_listen_address(wildif);
 		} else {
 			msyslog(LOG_ERR,
-				"IO: unable to bind to wildcard address %s - another process may be running: %m; EXITING",
-				socktoa(&wildif->sin));
+				"IO: unable to bind to wildcard address %s - another process may be running: %s; EXITING",
+				socktoa(&wildif->sin), strerror(errno));
 			exit(1);
 		}
 		DPRINT_INTERFACE(2, (wildif, "created ", "\n"));
@@ -1245,7 +1252,7 @@ interface_update(
 {
 	bool new_interface_found;
 
-	if (disable_dynamic_updates)
+	if (io_data.disable_dynamic_updates)
 		return;
 
 	new_interface_found = update_interfaces(NTP_PORT, receiver, data);
@@ -1253,12 +1260,10 @@ interface_update(
 	if (!new_interface_found)
 		return;
 
-#ifdef ENABLE_DNS_LOOKUP
 #ifdef DEBUG
 	msyslog(LOG_DEBUG, "IO: new interface(s) found: waking up resolver");
 #endif
 	dns_new_interface();
-#endif
 }
 
 
@@ -1298,8 +1303,8 @@ set_wildcard_reuse(
 		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
 			       (char *)&on, sizeof(on)))
 			msyslog(LOG_ERR,
-				"IO: set_wildcard_reuse: setsockopt(SO_REUSEADDR, %s) failed: %m",
-				on ? "on" : "off");
+				"IO: set_wildcard_reuse: setsockopt(SO_REUSEADDR, %s) failed: %s",
+				on ? "on" : "off", strerror(errno));
 
 		DPRINT(4, ("set SO_REUSEADDR to %s on %s\n",
 			   on ? "on" : "off",
@@ -1628,7 +1633,7 @@ update_interfaces(
 	 * phase 2 - delete gone interfaces - reassigning peers to
 	 * other interfaces
 	 */
-	for (ep = ep_list; ep != NULL; ep = next_ep) {
+	for (ep = io_data.ep_list; ep != NULL; ep = next_ep) {
 		next_ep = ep->elink;
 
 		/*
@@ -1657,8 +1662,8 @@ update_interfaces(
 		 * update globals in case we lose
 		 * a loopback interface
 		 */
-		if (ep == loopback_interface)
-			loopback_interface = NULL;
+		if (ep == io_data.loopback_interface)
+			io_data.loopback_interface = NULL;
 
 		delete_interface(ep);
 	}
@@ -1751,9 +1756,9 @@ create_interface(
 	 * set globals with the first found
 	 * loopback interface of the appropriate class
 	 */
-	if (NULL == loopback_interface && AF_INET == iface->family
+	if (NULL == io_data.loopback_interface && AF_INET == iface->family
 	    && (INT_LOOPBACK & iface->flags))
-		loopback_interface = iface;
+		io_data.loopback_interface = iface;
 
 	/*
 	 * put into our interface list
@@ -1782,8 +1787,8 @@ set_excladdruse(
 		return;
 
 	msyslog(LOG_ERR,
-		"IO: setsockopt(%d, SO_EXCLUSIVEADDRUSE, on): %m",
-		(int)fd);
+		"IO: setsockopt(%d, SO_EXCLUSIVEADDRUSE, on): %s",
+		(int)fd, strerror(errno));
 }
 #endif  /* SO_EXCLUSIVEADDRUSE */
 
@@ -1801,7 +1806,7 @@ set_reuseaddr(
 #ifndef SO_EXCLUSIVEADDRUSE
 	endpt *ep;
 
-	for (ep = ep_list; ep != NULL; ep = ep->elink) {
+	for (ep = io_data.ep_list; ep != NULL; ep = ep->elink) {
 		if (ep->flags & INT_WILDCARD)
 			continue;
 
@@ -1816,8 +1821,8 @@ set_reuseaddr(
 		if (ep->fd != INVALID_SOCKET) {
 			if (setsockopt(ep->fd, SOL_SOCKET, SO_REUSEADDR,
 				       (char *)&flag, sizeof(flag))) {
-				msyslog(LOG_ERR, "IO: set_reuseaddr: setsockopt(%s, SO_REUSEADDR, %s) failed: %m",
-					socktoa(&ep->sin), flag ? "on" : "off");
+				msyslog(LOG_ERR, "IO: set_reuseaddr: setsockopt(%s, SO_REUSEADDR, %s) failed: %s",
+					socktoa(&ep->sin), flag ? "on" : "off", strerror(errno));
 			}
 		}
 	}
@@ -1852,8 +1857,8 @@ open_socket(
 	if (INVALID_SOCKET == fd) {
 		errval = errno;
 		msyslog(LOG_ERR,
-			"IO: socket(AF_INET%s, SOCK_DGRAM, 0) failed on address %s: %m",
-			IS_IPV6(addr) ? "6" : "", socktoa(addr));
+			"IO: socket(AF_INET%s, SOCK_DGRAM, 0) failed on address %s: %s",
+			IS_IPV6(addr) ? "6" : "", socktoa(addr), strerror(errno));
 
 		if (errval == EPROTONOSUPPORT ||
 		    errval == EAFNOSUPPORT ||
@@ -1863,8 +1868,8 @@ open_socket(
 		errno = errval;
 #ifndef __COVERITY__
 		msyslog(LOG_ERR,
-			"IO: unexpected socket() error %m code %d (not EPROTONOSUPPORT nor EAFNOSUPPORT nor EPFNOSUPPORT) - exiting",
-			errno);
+			"IO: unexpected socket() error %s code %d (not EPROTONOSUPPORT nor EAFNOSUPPORT nor EPFNOSUPPORT) - exiting",
+			strerror(errno), errno);
 		exit(1);
 #endif /* __COVERITY__ */
 	}
@@ -1886,11 +1891,11 @@ open_socket(
 		       sizeof(on))) {
 
 		msyslog(LOG_ERR,
-			"IO: setsockopt SO_REUSEADDR %s fails for address %s: %m",
+			"IO: setsockopt SO_REUSEADDR %s fails for address %s: %s",
 			(turn_off_reuse)
 			    ? "off"
 			    : "on",
-			socktoa(addr));
+			socktoa(addr), strerror(errno));
 		close(fd);
 		return INVALID_SOCKET;
 	}
@@ -1911,8 +1916,8 @@ open_socket(
 			       sizeof(qos)))
 			msyslog(LOG_ERR,
 				"IO: setsockopt IP_TOS (%02x) fails on "
-                                "address %s: %m",
-				(unsigned)qos, socktoa(addr));
+                                "address %s: %s",
+				(unsigned)qos, socktoa(addr), strerror(errno));
 	}
 
 	/*
@@ -1923,15 +1928,15 @@ open_socket(
 		if (setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, (char*)&qos,
 			       sizeof(qos)))
 			msyslog(LOG_ERR, "IO: setsockopt IPV6_TCLASS (%02x) "
-                                         "fails on address %s: %m",
-				         (unsigned)qos, socktoa(addr));
+                                         "fails on address %s: %s",
+				         (unsigned)qos, socktoa(addr), strerror(errno));
 #endif /* IPV6_TCLASS */
 		if (isc_net_probe_ipv6only_bool()
 		    && setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY,
 		    (const void *)&on, sizeof(on)))
 			msyslog(LOG_ERR,
-				"IO: setsockopt IPV6_V6ONLY on fails on address %s: %m",
-				socktoa(addr));
+				"IO: setsockopt IPV6_V6ONLY on fails on address %s: %s",
+				socktoa(addr), strerror(errno));
 	}
 
 #ifdef NEED_REUSEADDR_FOR_IFADDRBIND
@@ -1964,10 +1969,10 @@ open_socket(
 #endif
 		    ) {
 			msyslog(LOG_ERR,
-				"IO: bind(%d) AF_INET%s %s#%d flags 0x%x failed: %m",
+				"IO: bind(%d) AF_INET%s %s#%d flags 0x%x failed: %s",
 				fd, IS_IPV6(addr) ? "6" : "",
 				socktoa(addr), SRCPORT(addr),
-				interf->flags);
+				interf->flags, strerror(errno));
 		}
 
 		close(fd);
@@ -1996,43 +2001,44 @@ open_socket(
 
 
 /*
- * sendpkt - send a packet to the specified destination. Maintain a
- * send error cache so that only the first consecutive error for a
- * destination is logged.
+ * sendpkt - send a packet to the specified destination.
  */
 void
 sendpkt(
 	sockaddr_u *		dest,
-	endpt *	ep,
+	endpt *			src,
 	void *			pkt,
-	int			len
+	unsigned int		len
 	)
 {
-	endpt *	src;
 	ssize_t	cc;
 
-	src = ep;
+	if (len > sizeof(struct pkt)) {
+		msyslog(LOG_ERR, "Err: sendpkt - buffer overflow %u", len);
+		exit(1);
+	}
+
 	if (NULL == src) {
 		/*
 		 * unbound peer - drop request and wait for better
 		 * network conditions
 		 */
-		DPRINT(2, ("sendpkt(dst=%s, len=%d): no interface - IGNORED\n",
+		DPRINT(2, ("sendpkt(dst=%s, len=%u): no interface - IGNORED\n",
 			   socktoa(dest), len));
 		return;
 	}
 
-	DPRINT(2, ("sendpkt(%d, dst=%s, src=%s, len=%d)\n",
+	DPRINT(2, ("sendpkt(%d, dst=%s, src=%s, len=%u)\n",
 		   src->fd, socktoa(dest), socktoa(&src->sin), len));
 
 	cc = sendto(src->fd, pkt, (unsigned int)len, 0,
 		    &dest->sa, SOCKLEN(dest));
 	if (cc == -1) {
 		src->notsent++;
-		pkt_count.packets_notsent++;
+		pkt_count.notsent++;
 	} else	{
 		src->sent++;
-		pkt_count.packets_sent++;
+		pkt_count.sent++;
 	}
 }
 
@@ -2074,16 +2080,16 @@ read_refclock_packet(
 		char buf[RX_BUFF_SIZE];
 
 		buflen = read(fd, buf, sizeof buf);
-		pkt_count.packets_dropped++;
+		pkt_count.dropped++;
 		return (buflen);
 	}
 
 	i = (rp->datalen == 0
-	     || rp->datalen > sizeof(rb->recv_space))
-	        ? sizeof(rb->recv_space)
+	     || rp->datalen > sizeof(rb->recv_buffer))
+	        ? sizeof(rb->recv_buffer)
 		: rp->datalen;
 	do {
-		buflen = read(fd, (char *)&rb->recv_space, i);
+		buflen = read(fd, (char *)&rb->recv_buffer, i);
 	} while (buflen < 0 && EINTR == errno);
 
 	if (buflen <= 0) {
@@ -2107,7 +2113,7 @@ read_refclock_packet(
 	if (!consumed) {
 		rp->recvcount++;
 		// FIXME: should have separate slot for refclock packets
-		pkt_count.packets_received++;
+		pkt_count.received++;
 	}
 
 	return (int)buflen;
@@ -2144,8 +2150,9 @@ read_network_packet(
 		char buf[RX_BUFF_SIZE];
 		sockaddr_u from;
 
-		if (rb != NULL)
+		if (rb != NULL) {
 			freerecvbuf(rb);
+		}
 
 		fromlen = sizeof(from);
 		buflen = recvfrom(fd, buf, sizeof(buf), 0,
@@ -2156,16 +2163,16 @@ read_network_packet(
 			    : "drop",
 			free_recvbuffs(), fd, socktoa(&from)));
 		if (itf->ignore_packets)
-			pkt_count.packets_ignored++;
+			pkt_count.ignored++;
 		else
-			pkt_count.packets_dropped++;
+			pkt_count.dropped++;
 		return (buflen);
 	}
 
 	fromlen = sizeof(rb->recv_srcadr);
 
-	iovec.iov_base        = &rb->recv_space;
-	iovec.iov_len         = sizeof(rb->recv_space);
+	iovec.iov_base        = &rb->recv_buffer;
+	iovec.iov_len         = sizeof(rb->recv_buffer);
 	memset(&msghdr, '\0', sizeof(msghdr));
 	msghdr.msg_name       = &rb->recv_srcadr;
 	msghdr.msg_namelen    = fromlen;
@@ -2185,8 +2192,8 @@ read_network_packet(
 		freerecvbuf(rb);
 		return (buflen);
 	} else if (buflen < 0) {
-		msyslog(LOG_ERR, "IO: recvfrom(%s) fd=%d: %m",
-			socktoa(&rb->recv_srcadr), fd);
+		msyslog(LOG_ERR, "IO: recvfrom(%s) fd=%d: %s",
+			socktoa(&rb->recv_srcadr), fd, strerror(errno));
 		DPRINT(5, ("read_network_packet: fd=%d dropped (bad recvfrom)\n",
 			   fd));
 		freerecvbuf(rb);
@@ -2217,7 +2224,7 @@ read_network_packet(
 		if (   IN6_IS_ADDR_LOOPBACK(PSOCK_ADDR6(&rb->recv_srcadr))
 		    && !IN6_IS_ADDR_LOOPBACK(PSOCK_ADDR6(&itf->sin))
 		   ) {
-			pkt_count.packets_dropped++;
+			pkt_count.dropped++;
 			DPRINT(2, ("DROPPING that packet\n"));
 			freerecvbuf(rb);
 			return buflen;
@@ -2237,7 +2244,7 @@ read_network_packet(
 	freerecvbuf(rb);
 
 	itf->received++;
-	pkt_count.packets_received++;
+	pkt_count.received++;
 	return (buflen);
 }
 
@@ -2257,11 +2264,7 @@ io_handler(void)
 	 * time.  select() will terminate on SIGALARM or on the
 	 * reception of input.
 	 */
-#ifdef ENABLE_DNS_LOOKUP
 	pthread_sigmask(SIG_BLOCK, &blockMask, &runMask);
-#else
-	sigprocmask(SIG_BLOCK, &blockMask, &runMask);
-#endif
 	flag = sig_flags.sawALRM || sig_flags.sawQuit || sig_flags.sawHUP || \
 	  sig_flags.sawDNS;
 	if (!flag) {
@@ -2271,22 +2274,18 @@ io_handler(void)
 	  nfound = -1;
 	  errno = EINTR;
 	}
-#ifdef ENABLE_DNS_LOOKUP
 	pthread_sigmask(SIG_SETMASK, &runMask, NULL);
-#else
-	sigprocmask(SIG_SETMASK, &runMask, NULL);
-#endif  
 
 	if (nfound > 0) {
 		input_handler(&rdfdes);
 	} else if (nfound == -1 && errno != EINTR) {
-		msyslog(LOG_ERR, "IO: select() error: %m");
+		msyslog(LOG_ERR, "IO: select() error: %s", strerror(errno));
 	}
 #   ifdef DEBUG
 	else if (debug > 4) { /* SPECIAL DEBUG */
-		msyslog(LOG_DEBUG, "IO: select(): nfound=%d, error: %m", nfound);
+		msyslog(LOG_DEBUG, "IO: select(): nfound=%d, error: %s", nfound, strerror(errno));
 	} else {
-		DPRINT(1, ("select() returned %d: %m\n", nfound));
+		DPRINT(1, ("select() returned %d: %s\n", nfound, strerror(errno)));
 	}
 #   endif /* DEBUG */
 }
@@ -2348,7 +2347,7 @@ input_handler(
 			saved_errno = errno;
 			clk = refclock_name(rp->srcclock);
 			errno = saved_errno;
-			msyslog(LOG_ERR, "IO: %s read: %m", clk);
+			msyslog(LOG_ERR, "IO: %s read: %s", clk, strerror(errno));
 			maintain_activefds(fd, true);
 		} else if (0 == buflen) {
 			clk = refclock_name(rp->srcclock);
@@ -2366,7 +2365,7 @@ input_handler(
 	/*
 	 * Loop through the interfaces looking for data to read.
 	 */
-	for (ep = ep_list; ep != NULL; ep = ep->elink) {
+	for (ep = io_data.ep_list; ep != NULL; ep = ep->elink) {
 		fd = ep->fd;
 		if (FD_ISSET(fd, fds))
 			do {
@@ -2439,7 +2438,7 @@ select_peerinterface(
 	 * operation with public key cryptography.
 	 */
 	if (IS_PEER_REFCLOCK(peer)) {
-		ep = loopback_interface;
+		ep = io_data.loopback_interface;
 	} else {
 		ep = dstadr;
 		if (NULL == ep)
@@ -2605,7 +2604,7 @@ findclosestinterface(
 	ZERO_SOCK(&min_dist);
 	winner = NULL;
 
-	for (ep = ep_list; ep != NULL; ep = ep->elink) {
+	for (ep = io_data.ep_list; ep != NULL; ep = ep->elink) {
 		if (ep->ignore_packets ||
 		    AF(addr) != ep->family ||
 		    (unsigned int)flags & ep->flags)
@@ -2646,7 +2645,6 @@ calc_addr_distance(
 	uint32_t	v4dist;
 	bool	found_greater;
 	bool	a1_greater;
-	int	i;
 
 	REQUIRE(AF(a1) == AF(a2));
 
@@ -2667,7 +2665,7 @@ calc_addr_distance(
 
 	found_greater = false;
 	a1_greater = false;	/* suppress pot. uninit. warning */
-	for (i = 0; i < (int)sizeof(NSRCADR6(a1)); i++) {
+	for (int i = 0; i < (int)sizeof(NSRCADR6(a1)); i++) {
 		if (!found_greater &&
 		    NSRCADR6(a1)[i] != NSRCADR6(a2)[i]) {
 			found_greater = true;
@@ -2697,8 +2695,6 @@ cmp_addr_distance(
 	const sockaddr_u *	d2
 	)
 {
-	int	i;
-
 	REQUIRE(AF(d1) == AF(d2));
 
 	if (IS_IPV4(d1)) {
@@ -2710,7 +2706,7 @@ cmp_addr_distance(
 			return COMPARE_GREATERTHAN;
 	}
 
-	for (i = 0; i < (int)sizeof(NSRCADR6(d1)); i++) {
+	for (int i = 0; i < (int)sizeof(NSRCADR6(d1)); i++) {
 		if (NSRCADR6(d1)[i] < NSRCADR6(d2)[i])
 			return COMPARE_LESSTHAN;
 		else if (NSRCADR6(d1)[i] > NSRCADR6(d2)[i])
@@ -2749,15 +2745,78 @@ getinterface(
 void
 io_clr_stats(void)
 {
-	pkt_count.packets_dropped = 0;
-	pkt_count.packets_ignored = 0;
-	pkt_count.packets_received = 0;
-	pkt_count.packets_sent = 0;
-	pkt_count.packets_notsent = 0;
+	pkt_count.dropped = 0;
+	pkt_count.ignored = 0;
+	pkt_count.received = 0;
+	pkt_count.sent = 0;
+	pkt_count.notsent = 0;
 
 	pkt_count.handler_calls = 0;
 	pkt_count.handler_pkts = 0;
 	pkt_count.io_timereset = current_time;
+}
+
+/*
+ * dropped_count - return the number of dropped packets
+ */
+uint64_t dropped_count(void) {
+  return pkt_count.dropped;
+}
+
+/*
+ * ignored_count - return the number of ignored packets
+ */
+uint64_t ignored_count(void) {
+  return pkt_count.ignored;
+}
+
+/*
+ * received_count - return the number of received packets
+ */
+uint64_t received_count(void) {
+  return pkt_count.received;
+}
+
+/*
+ * inc_recieved_count - increment the number of received packets
+ * required so that refclock_generic.c can track its packets
+ */
+void inc_received_count(void) {
+  pkt_count.received++;
+}
+
+/*
+ * sent_count - return the number of sent packets
+ */
+uint64_t sent_count(void) {
+  return pkt_count.sent;
+}
+/*
+ * notsent_count - return the number of not sent packets
+ */
+uint64_t notsent_count(void) {
+  return pkt_count.notsent;
+}
+
+/*
+ * handler_calls_count - return the number of handler calls
+ */
+uint64_t handler_calls_count(void) {
+  return pkt_count.handler_calls;
+}
+
+/*
+ * handler_pkts_count - return the number of handler packets
+ */
+uint64_t handler_pkts_count(void) {
+  return pkt_count.handler_pkts;
+}
+
+/*
+ * counter_reset_time - return the time of the last counter reset
+ */
+uptime_t counter_reset_time(void) {
+  return pkt_count.io_timereset;
 }
 
 
@@ -2846,8 +2905,9 @@ close_and_delete_fd_from_list(
 	UNLINK_EXPR_SLIST(lsock, fd_list, fd ==
 	    UNLINK_EXPR_SLIST_CURRENT()->fd, link, vsock_t);
 
-	if (NULL == lsock)
+	if (NULL == lsock) {
 		return;
+	}
 
 	switch (lsock->type) {
 
@@ -2914,8 +2974,9 @@ delete_interface_from_list(
 		    UNLINK_EXPR_SLIST_CURRENT()->ep, link,
 		    remaddr_t);
 
-		if (unlinked == NULL)
+		if (unlinked == NULL) {
 			break;
+		}
 		DPRINT(4, ("Deleted addr %s for interface #%u %s "
 			   "from list of addresses\n",
 			   socktoa(&unlinked->addr), iface->ifnum,
@@ -2937,11 +2998,12 @@ find_addr_in_list(
 
 	for (entry = remoteaddr_list;
 	     entry != NULL;
-	     entry = entry->link)
+	     entry = entry->link) {
 		if (SOCK_EQ(&entry->addr, addr)) {
 			DPRINT(4, ("FOUND\n"));
 			return entry->ep;
 		}
+	}
 
 	DPRINT(4, ("NOT FOUND\n"));
 	return NULL;
@@ -2976,9 +3038,9 @@ process_routing_msgs(struct asyncio_reader *reader)
 	char *p;
 #endif
 
-	if (disable_dynamic_updates) {
+	if (io_data.disable_dynamic_updates) {
 		/*
-		 * discard ourselves if we are not needed any more
+		 * discard ourselves if we are not needed anymore
 		 * usually happens when running unprivileged
 		 */
 		remove_asyncio_reader(reader);
@@ -2991,10 +3053,10 @@ process_routing_msgs(struct asyncio_reader *reader)
 	if (cnt < 0) {
 		if (errno == ENOBUFS) {
 			msyslog(LOG_ERR,
-				"IO: routing socket reports: %m");
+				"IO: routing socket reports: %s", strerror(errno));
 		} else {
 			msyslog(LOG_ERR,
-				"IO: routing socket reports: %m - disabling");
+				"IO: routing socket reports: %s - disabling", strerror(errno));
 			remove_asyncio_reader(reader);
 			delete_asyncio_reader(reader);
 		}
@@ -3105,7 +3167,7 @@ init_async_notifications()
 #endif
 	if (fd < 0) {
 		msyslog(LOG_ERR,
-			"IO: unable to open routing socket (%m) - using polled interface update");
+			"IO: unable to open routing socket (%s) - using polled interface update", strerror(errno));
 		return;
 	}
 
@@ -3119,7 +3181,7 @@ init_async_notifications()
 		       | RTMGRP_IPV6_MROUTE;
 	if (bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
 		msyslog(LOG_ERR,
-			"IO: bind failed on routing socket (%m) - using polled interface update");
+			"IO: bind failed on routing socket (%s) - using polled interface update", strerror(errno));
 		return;
 	}
 #endif

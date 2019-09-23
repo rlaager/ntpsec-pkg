@@ -137,7 +137,7 @@ struct refclockproc {
 	double	fudgetime1;	/* fudge time1 */
 	double	fudgetime2;	/* fudge time2 */
 	uint8_t	stratum;	/* server stratum */
-	uint32_t	refid;		/* reference identifier */
+	refid_t	refid;		/* reference identifier */
 	uint8_t	sloppyclockflag; /* driver options */
 
 	/*
@@ -237,12 +237,6 @@ extern	struct refclock	refclock_local;
 extern	struct refclock	refclock_modem;
 #else
 #define refclock_modem	refclock_none
-#endif
-
-#ifdef CLOCK_NEOCLOCK
-extern	struct refclock	refclock_neoclock4x;
-#else
-#define	refclock_neoclock4x	refclock_none
 #endif
 
 #ifdef CLOCK_NMEA

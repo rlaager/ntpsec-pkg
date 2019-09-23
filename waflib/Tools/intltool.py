@@ -2,6 +2,7 @@
 # encoding: utf-8
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
+from __future__ import with_statement
 import os,re
 from waflib import Context,Task,Utils,Logs
 import waflib.Tools.ccroot
@@ -60,12 +61,11 @@ def apply_intltool_po(self):
 	inst=getattr(self,'install_path','${LOCALEDIR}')
 	linguas=self.path.find_node(os.path.join(podir,'LINGUAS'))
 	if linguas:
-		file=open(linguas.abspath())
-		langs=[]
-		for line in file.readlines():
-			if not line.startswith('#'):
-				langs+=line.split()
-		file.close()
+		with open(linguas.abspath())as f:
+			langs=[]
+			for line in f.readlines():
+				if not line.startswith('#'):
+					langs+=line.split()
 		re_linguas=re.compile('[-a-zA-Z_@.]+')
 		for lang in langs:
 			if re_linguas.match(lang):
