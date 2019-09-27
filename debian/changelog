@@ -1,3 +1,42 @@
+ntpsec (1.1.7+dfsg1-1) unstable; urgency=medium
+
+  * New upstream version (Closes: 931327)
+    - NTS is now implemented.
+      https://tools.ietf.org/html/draft-ietf-ntp-using-nts-for-ntp
+      We thank Cisco for sponsoring the NTS development.
+    - Lots of fixes and cleanups to PPS, both implementation and
+      documentation.
+      - Allow "prefer" on a "pps" peer to use it with any source.
+    - NIST lockclock mode is now a runtime option set by the (previously
+      unused) flag1 mode bit of the local-clock driver.
+    - The numeric literal argument of the 'time1' fudge option on a clock
+      can now have one or more letter suffixes that compensate for era
+      rollover in a GPS device.  Each "g" adds the number of seconds in a
+      1024-week (10-bit) GPS era. Each "G" adds the number of seconds in a
+      8192-week (13-bit) GPS era.
+    - The neoclock4x driver has been removed, due to the hardware and the
+      vendor having utterly vanished from the face of the earth.
+    - Update libjsmn with upstream sync
+    - ntpviz: Add -T TERMINAL option.
+    - Fix slow DNS retries (Closes: 924192)
+  * Return to new upstream GPG key
+  * Drop many patches (merged upstream)
+  * Refresh Debian-specific patches
+  * ntpdate.8: Remove duplicated -o option
+  * ntpdate.8: Remove -p option (Closes: 926877)
+  * ntpdate.8: Remove -e option
+  * ntpdate.8: Remove inaccurate BUGS section
+  * Update ntpdate-debian.8 to match ntpdate.8
+  * Fix ntpdate -s (syslog) to fix the if-up hook (Closes: 931414)
+  * Fix cron jobs for systemd-cron (Closes: 929756)
+  * Sort debian/ntpsec.install
+  * Give the CloudFlare server as an example with NTS
+  * Add a hint to ntp.conf for NTS servers
+  * Add nts-keys file to AppArmor profile
+  * Add ssl_certs and ssl_keys to apparmor for NTS
+
+ -- Richard Laager <rlaager@wiktel.com>  Fri, 27 Sep 2019 02:02:00 -0500
+
 ntpsec (1.1.3+dfsg1-2) unstable; urgency=medium
 
   * Suppress lintian warning
