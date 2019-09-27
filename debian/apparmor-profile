@@ -16,6 +16,8 @@
 /usr/sbin/ntpd flags=(attach_disconnected) {
   #include <abstractions/base>
   #include <abstractions/nameservice>
+  #include <abstractions/ssl_certs>
+  #include <abstractions/ssl_keys>
   #include <abstractions/user-tmp>
 
   capability ipc_lock,

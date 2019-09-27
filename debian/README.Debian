@@ -157,6 +157,11 @@ may require changes to the installed apparmor profile.  Before filing a bug,
 please see:
     https://wiki.ubuntu.com/DebuggingApparmor
 
+When configuring ntpd as an NTS server, if your certificate and key files are
+not already covered by /etc/apparmor.d/abstractions/ssl_certs and ssl_keys,
+you will need to add rules to /etc/apparmor.d/local/usr.sbin.ntpd to allow
+reading them.
+
 If your ntpd configuration needs access to a device (e.g. a local DCF clock),
 you need to add this device to: /etc/apparmor.d/tunables/ntpd
 
