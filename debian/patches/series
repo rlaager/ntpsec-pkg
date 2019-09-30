@@ -1,3 +1,6 @@
+# Accepted upstream
+0001-Fix-spelling-error.patch
+
 # Forwarding not needed
 systemd-use-wrapper.patch
 systemd-fix-ntp-wait-service-paths.patch
