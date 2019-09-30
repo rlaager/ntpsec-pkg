@@ -5,7 +5,7 @@ Maintainer: Richard Laager <rlaager@wiktel.com>
 Uploaders: tony mancill <tmancill@debian.org>
 Build-Depends: asciidoc,
                bison,
-               debhelper (>= 10),
+               debhelper (>= 12),
                dh-apache2,
                dh-apparmor,
                dh-python,
@@ -30,6 +30,7 @@ Homepage: https://www.ntpsec.org
 
 Package: ntpsec
 Architecture: any
+Pre-Depends: ${misc:Pre-Depends}
 Depends: adduser,
          lsb-base (>= 3.2-13),
          netbase,
