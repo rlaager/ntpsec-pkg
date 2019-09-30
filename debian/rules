@@ -77,6 +77,7 @@ override_dh_install:
 		debian/tmp/usr/bin/ntpkeygen \
 		debian/tmp/usr/bin/ntploggps \
 		debian/tmp/usr/bin/ntplogtemp \
+		debian/tmp/usr/bin/ntpwait \
 		debian/tmp/usr/sbin/
 	install -m 755 \
 		ntpclients/ntpmon.py \
@@ -87,9 +88,6 @@ override_dh_install:
 	install -m 755 \
 		attic/ntpdate \
 		debian/tmp/usr/sbin
-	install -m 755 \
-		ntpclients/ntpwait.py \
-		debian/tmp/usr/sbin/ntpwait
 
 	install -d debian/ntpsec/lib/systemd/system
 	install -m 644 \
