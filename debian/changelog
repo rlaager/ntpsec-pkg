@@ -1,4 +1,4 @@
-ntpsec (1.1.7+dfsg1-1~wiktel1.18.04.1) bionic; urgency=medium
+ntpsec (1.1.7+dfsg1-1~wiktel1.18.04.2) bionic; urgency=medium
 
   * New upstream version (Closes: 931327)
     - NTS is now implemented.
