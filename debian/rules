@@ -197,12 +197,12 @@ ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
 endif
 	dh_apparmor --profile-name=usr.sbin.ntpd -pntpsec
 
-override_dh_installsystemd:
-	dh_installsystemd -pntpsec \
+override_dh_systemd_start:
+	dh_systemd_start -pntpsec \
 		ntpsec.service \
 		ntpsec-systemd-netif.path \
 		ntpsec-rotate-stats.timer
-	dh_installsystemd -pntpsec-ntpviz \
+	dh_systemd_start -pntpsec-ntpviz \
 		ntploggps.timer \
 		ntplogtemp.timer \
 		ntpviz-daily.timer \
