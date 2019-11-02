@@ -14,6 +14,9 @@ leapfile /usr/share/zoneinfo/leap-seconds.list
 #filegen peerstats file peerstats type day enable
 #filegen clockstats file clockstats type day enable
 
+# This should be maxclock 7, but the pool entries count towards maxclock.
+tos maxclock 11
+
 # Comment this out if you have a refclock and want it to be able to discipline
 # the clock by itself (e.g. if the system is not connected to the network).
 tos minclock 4 minsane 3
