@@ -10,16 +10,17 @@ Racoon is shooting configuration bugs.
 
 |==============================
 
-== Manual Pages ==
+== Manual Pages
 
 include::includes/manual.adoc[]
 
-== Table of Contents ==
+== Table of Contents
 
 * link:#_synopsis[SYNOPSIS]
 * link:#_description[DESCRIPTION]
 * link:#_configuration_support[Configuration Support]
 * link:#_authentication_commands[Authentication Commands]
+* link:#_nts_commands[NTS Commands]
 * link:#monit[Monitoring Support]
 * link:#_access_control_support[Access Control Support]
 * link:#_access_control_commands[Access Control Commands]

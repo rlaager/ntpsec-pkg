@@ -11,7 +11,7 @@ def add_dbus_file(self,filename,prefix,mode):
 	if not'process_dbus'in self.meths:
 		self.meths.append('process_dbus')
 	self.dbus_lst.append([filename,prefix,mode])
-@before_method('apply_core')
+@before_method('process_source')
 def process_dbus(self):
 	for filename,prefix,mode in getattr(self,'dbus_lst',[]):
 		node=self.path.find_resource(filename)

@@ -2,6 +2,7 @@
 # encoding: utf-8
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
+from waflib import Errors
 from waflib.Tools import ccroot,ar
 from waflib.Configure import conf
 @conf
@@ -18,7 +19,7 @@ def find_irixcc(conf):
 		conf.fatal('irixcc was not found')
 	try:
 		conf.cmd_and_log(cc+['-version'])
-	except Exception:
+	except Errors.WafError:
 		conf.fatal('%r -version could not be executed'%cc)
 	v.CC=cc
 	v.CC_NAME='irix'

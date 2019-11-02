@@ -1,4 +1,4 @@
-= Differences from NTP Classic =
+= Differences from NTP Classic
 include::html.include[]
 
 [cols="10%,90%",frame="none",grid="none",style="verse"]
@@ -8,13 +8,13 @@ include::html.include[]
 Accept no imitations.
 |==============================
 
-== Related Links ==
+== Related Links
 
 * A list of all links is on the link:sitemap.html[Site Map] page.
 
 '''''
 
-== Table of Contents ==
+== Table of Contents
 
 * link:#intro[Introduction]
 * link:#incompatible[Incompatible Changes]
@@ -24,7 +24,7 @@ Accept no imitations.
 * link:#other[Other user-visible changes]
 
 [[intro]]
-== Introduction ==
+== Introduction
 
 The design objectives of this distribution, NTPsec, are in
 many ways a break with NTP's past.  We have deliberately jettisoned
@@ -36,8 +36,11 @@ We retain, however, almost full compatibility and interoperation with
 NTP Classic.  The qualification "almost" is required mainly because we
 do not support the Autokey (RFC 5906) public-key encryption scheme. It
 had interoperability and exploitable vulnerability issues too severe
-to be patched.  We are participating in an IETF effort to develop
-better security features.
+to be patched.  We have also dropped broadcast and anycast modes
+because they cannot be secured.
+
+A major new feature is that we implement IETF's Network Time Security
+standard for strong cryptographic authentication of time service.
 
 This project began as an effort to address serious security issues
 with NTP Classic, and we intend to keep a particularly strong focus on
@@ -47,7 +50,7 @@ Most of the changes are under the hood, internal to the codebase.  A
 few will be user-visible.
 
 [[incompatible]]
-== Incompatible Changes ==
+== Incompatible Changes
 
 Normally NTPsec is a drop-in replacement for legacy versions. We have
 tried to hold incompatible changes to a minimum, but there are a
@@ -89,17 +92,28 @@ a build-time switch, not a run-time one).
   getting it fully IPv6-ready.
 
 * ntpq no longer has the +-i+/+--interactive+ option, as there was no
-  situation in which it was meaningful.
+  situation in which it was meaningful.  The orders in which the
+  default set of system, peer, and clock variables are dumped have
+  changed.
 
 * Interleave mode has been removed.  It was buggy and the root cause
   of at least two CVEs.
 
 [[security]]
-== Security Improvements ==
+== Security Improvements
 
 We have spent more effort than anything else on reducing attack
-surface and hardening code.  In toto, more than 70% of the NTP Classic
-codebase has been outright removed, with less than 5% new code added.
+surface and hardening code.  In toto, more than 74% of the NTP Classic
+codebase has been outright removed, with less than 5% new code added
+to the security-critical core.
+
+* Network Time Security is implemented. See our page on
+  link:standards.html[Standards Conformance]
+
+* NTPsec conforms to the
+  https://datatracker.ietf.org/doc/draft-ietf-ntp-data-minimization/[NTP
+  Client Data Minimization] draft RFC, which changes the client-side
+  generation of some packet headers to prevent client fingerprinting.
 
 * The deprecated ntpdc utility, long a chronic locus of security
   vulnerabilities, has been removed.  Its function has been merged
@@ -108,7 +122,7 @@ codebase has been outright removed, with less than 5% new code added.
 * Autokey is not supported; that code has been
   removed, as it was chronically prone to security vulnerabilities.
 
-* peer mode has been removed.  The keyword peer in ntp.conf is now
+* Peer mode has been removed.  The keyword peer in ntp.conf is now
   just an alias for keyword server.
 
 * Broadcast- and multicast modes, which are impossible to
@@ -148,7 +162,7 @@ codebase has been outright removed, with less than 5% new code added.
   copy and formatting functions replaced by safe (bounded) ones.
 
 [[timesync]]
-== Time-synchronization improvements ==
+== Time-synchronization improvements
 
 * Internally, there is more consistent use of nanosecond precision.
   A visible effect of this is that time stepping with sufficiently
@@ -163,13 +177,18 @@ codebase has been outright removed, with less than 5% new code added.
   system clock (e.g. at boot time on a system with missing or damaged
   battery back up) without requiring sync to a remote peer.
 
-* We've fixed bug inherited from Classic that could cause the jitter
+* We've fixed a bug inherited from Classic that could cause the jitter
   of a bad peer to be incorrectly zeroed, possibly causing that peer
   to be selected.  This probably accounts for some flakiness within
   8 polling intervals of startup on older versions.
 
+* Flagging a PPS peer with "prefer" allows its pulse-per-second input
+  to be used with any source. This capability had been claimed in the NTP
+  Classic documentation but if it was ever actually implemented that
+  code was lost without trace by the time NTPsec forked.
+
 [[clients]]
-== Client Tool Improvements ==
+== Client Tool Improvements
 
 * A new tool, +ntpmon+, performs real-time monitoring of your
   peer and MRU status with efficient (least-cost) querying.
@@ -212,10 +231,10 @@ codebase has been outright removed, with less than 5% new code added.
   variable that is the root distance of the selected peer. This can
   fill in the MIB's ntpEntTimeDistance entry.
 
-* ntpq displays the root distance (aka. syncronization distance) in the
+* ntpq displays the root distance (aka. synchronization distance) in the
   sysinfo command.
 
-== Configuration Improvements ==
+== Configuration Improvements
 
 * The notorious collision between pool and nopeer in older
   implementations has been fixed; the pool keyword is now fully
@@ -227,6 +246,11 @@ codebase has been outright removed, with less than 5% new code added.
   future release.  Relevant examples of the new syntax are included on
   each refclock page.  One major feature of the new syntax is that
   refclock drivers are referred to by names, not numbers.
+
+* Entries for GPS devices can be fudged for era wraparound using the
+  +time1+ offset. Each 'g' on the end of the offset adds the number of
+  seconds in a 10-bit GPS era (1024 weeks); each 'G' adds the number
+  of seconds in a 13-bit GPS era (8192 weeks).
 
 * The unpeer command now takes a type-unit specification when
   unpeering a clock.
@@ -269,7 +293,7 @@ codebase has been outright removed, with less than 5% new code added.
   maxdisp". See RFC 5905 for discussion of this synchronization
   parameter.
 
-* The default baudrate of the NMEA driver has been changed to 9600 to
+* The default bitrate of the NMEA driver has been changed to 9600 to
   match the default speed of almost all modern GPSes.  The code can be
   built in a strict NTP Classic compatibility mode that restores the
   old 4800bps default.
@@ -278,13 +302,25 @@ codebase has been outright removed, with less than 5% new code added.
   default device path, the default PPS device path (if any) and the
   serial baud rate.
 
+* NIST lockclock mode is now a runtime option set by the (previously unused)
+  flag1 mode bit of the local-clock driver, rather than a compile-time
+  option.
+
 [[other]]
-== Other user-visible changes ==
+== Other user-visible changes
 
 * The documentation has been extensively updated and revised.  One
   important change is that manual pages are now generated from the
   same masters as this web documentation, so the two will no longer
   drift out of synchronization.
+
+[[future]]
+== Future directions
+
+* We intend to fully support Network Time Security and to be first or
+  second interop on that standard once it is finalized.  At that
+  point, older insecure authentication methods (MAC and MS-SNTP) may
+  be removed.
 
 '''''
 

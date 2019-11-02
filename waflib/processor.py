@@ -22,6 +22,8 @@ def run():
 		sys.exit(1)
 	[cmd,kwargs,cargs]=cPickle.loads(base64.b64decode(txt))
 	cargs=cargs or{}
+	if not'close_fds'in kwargs:
+		kwargs['close_fds']=False
 	ret=1
 	out,err,ex,trace=(None,None,None,None)
 	try:

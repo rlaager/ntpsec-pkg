@@ -20,39 +20,38 @@ Description: Document disabled refclocks
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2019-01-17
+Last-Update: 2019-09-23
 --- a/docs/refclock.adoc
 +++ b/docs/refclock.adoc
-@@ -164,20 +164,20 @@
+@@ -164,19 +164,19 @@
  | Name                                  | Flags | Driver
- |link:driver_local.html[local]          | - | Undisciplined Local Clock
- |link:driver_spectracom.html[spectracom]| D | Generic Spectracom Receivers
--|link:driver_truetime.html[truetime]    | D | TrueTime GPS/GOES Receivers
-+|link:driver_truetime.html[truetime]    | d | TrueTime GPS/GOES Receivers
- |link:driver_generic.html[generic]      | T | Generic Reference Driver (Parse)
- |link:driver_arbiter.html[arbiter]      | D | Arbiter 1088A/B GPS Receiver
--|link:driver_modem.html[modem]          | - | NIST/USNO/PTB Modem Time Services
-+|link:driver_modem.html[modem]          | d | NIST/USNO/PTB Modem Time Services
- |link:driver_nmea.html[nmea]            | T | Generic NMEA GPS Receiver
- |link:driver_pps.html[pps]              | T | PPS Clock Discipline
- |link:driver_hpgps.html[hpgps]          | T | Hewlett Packard GPS Receivers
- |link:driver_shm.html[shm]              | T | Shared Memory Driver
- |link:driver_trimble.html[trimble]      | D | Trimble Palisade/Thunderbolt/Acutime GPSes
--|link:driver_oncore.html[oncore]        | D | Motorola UT Oncore GPS
-+|link:driver_oncore.html[oncore]        | d | Motorola UT Oncore GPS
- |link:driver_jjy.html[jjy]              | T | JJY Receivers
- |link:driver_zyfer.html[zyfer]          | - | Zyfer GPStarplus Receiver
- |link:driver_neoclock.html[neoclock]    | D | NeoClock4X DCF77 / TDF Receiver
--|link:driver_gpsd.html[gpsd]            | T | GPSD client protocol
-+|link:driver_gpsd.html[gpsd]            | d | GPSD client protocol
+ |link:driver_local.html[local]          | -  | Undisciplined Local Clock
+ |link:driver_spectracom.html[spectracom]| D2 | Generic Spectracom Receivers
+-|link:driver_truetime.html[truetime]    | D2 | TrueTime GPS/GOES Receivers
++|link:driver_truetime.html[truetime]    | d2 | TrueTime GPS/GOES Receivers
+ |link:driver_generic.html[generic]      | T  | Generic Reference Driver (Parse)
+-|link:driver_arbiter.html[arbiter]      | D2 | Arbiter 1088A/B GPS Receiver
++|link:driver_arbiter.html[arbiter]      | d2 | Arbiter 1088A/B GPS Receiver
+ |link:driver_modem.html[modem]          | -  | NIST/USNO/PTB Modem Time Services
+ |link:driver_nmea.html[nmea]            | T  | Generic NMEA GPS Receiver
+ |link:driver_pps.html[pps]              | T  | PPS Clock Discipline
+ |link:driver_hpgps.html[hpgps]          | T  | Hewlett Packard GPS Receivers
+ |link:driver_shm.html[shm]              | T  | Shared Memory Driver
+ |link:driver_trimble.html[trimble]      | D  | Trimble Palisade/Thunderbolt/Acutime GPSes
+-|link:driver_oncore.html[oncore]        | D2 | Motorola Oncore GPS
++|link:driver_oncore.html[oncore]        | d2 | Motorola Oncore GPS
+ |link:driver_jjy.html[jjy]              | T  | JJY Receivers
+ |link:driver_zyfer.html[zyfer]          | -  | Zyfer GPStarplus Receiver
+-|link:driver_gpsd.html[gpsd]            | T  | GPSD client protocol
++|link:driver_gpsd.html[gpsd]            | d  | GPSD client protocol
  |====================================================================
  
  The name in the left column is the driver type to be used in the
-@@ -189,6 +189,7 @@
+@@ -188,6 +188,7 @@
  |====================================================================
  |Flag| Meaning
  | D | Deprecated.  May be removed in a future release
 +| d | Disabled in the Debian package.
  | T | Regularly tested by an active maintainer (some devices/modes)
+ | 2 | Returns only 2-digit years. Relies on system clock for century.
  |====================================================================
- 

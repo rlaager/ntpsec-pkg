@@ -5,22 +5,24 @@ Maintainer: Richard Laager <rlaager@wiktel.com>
 Uploaders: tony mancill <tmancill@debian.org>
 Build-Depends: asciidoc,
                bison,
-               debhelper (>= 10),
+               debhelper (>= 12),
                dh-apache2,
                dh-apparmor,
                dh-python,
                docbook-xsl,
                libcap2-dev [linux-any],
-               libssl-dev,
+               libssl-dev (>= 1.1.1),
                netbase,
+               pkg-config,
                pps-tools [linux-any],
                python3 (>= 3.3),
                python3-dev (>= 3.3),
+               systemd,
                xsltproc
 Build-Conflicts: libavahi-compat-libdnssd-dev,
                  libwww-dev,
                  libwww-ssl-dev
-Standards-Version: 4.3.0
+Standards-Version: 4.4.1
 Rules-Requires-Root: no
 Vcs-Browser: https://github.com/rlaager/ntpsec-pkg
 Vcs-Git: https://github.com/rlaager/ntpsec-pkg.git
@@ -28,6 +30,7 @@ Homepage: https://www.ntpsec.org
 
 Package: ntpsec
 Architecture: any
+Pre-Depends: ${misc:Pre-Depends}
 Depends: adduser,
          lsb-base (>= 3.2-13),
          netbase,

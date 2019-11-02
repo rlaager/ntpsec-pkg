@@ -16,6 +16,10 @@ https://docs.ntpsec.org/latest/ntpsec.html
 There are some prerequisites.  Libraries need the binary installed
 to run and in addition, the development headers installed to build.
 
+We need pthreads (It's optional in POSIX)
+We need OpenSSL >= 1.0.1
+NTS needs TLS1.2 or newer.
+
 === The short version ===
 
 If you are on a Debian or Ubuntu distribution that uses apt-get, or on

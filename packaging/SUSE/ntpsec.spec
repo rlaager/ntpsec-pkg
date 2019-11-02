@@ -23,7 +23,7 @@
 %bcond_with libbsd
 %endif
 Name:           ntpsec
-Version:        0.9.7+git20170607.7c0008c91
+Version:        1.1.3
 Release:        0
 Summary:        Improved implementation of Network Time Protocol
 License:        BSD-2-Clause and NTP and BSD-3-Clause and MIT
@@ -47,7 +47,6 @@ BuildRequires:  netcfg
 BuildRequires:  openssl-devel
 BuildRequires:  pkgconfig
 BuildRequires:  pps-tools-devel
-BuildRequires:  pkgconfig(libevent)
 BuildRequires:  pkgconfig(libseccomp)
 BuildRequires:  pkgconfig(python)
 Requires:       netcfg

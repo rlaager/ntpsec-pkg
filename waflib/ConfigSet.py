@@ -4,7 +4,7 @@
 
 import copy,re,os
 from waflib import Logs,Utils
-re_imp=re.compile('^(#)*?([^#=]*?)\ =\ (.*?)$',re.M)
+re_imp=re.compile(r'^(#)*?([^#=]*?)\ =\ (.*?)$',re.M)
 class ConfigSet(object):
 	__slots__=('table','parent')
 	def __init__(self,filename=None):
@@ -46,7 +46,7 @@ class ConfigSet(object):
 		self[key]=[]
 	def __getattr__(self,name):
 		if name in self.__slots__:
-			return object.__getattr__(self,name)
+			return object.__getattribute__(self,name)
 		else:
 			return self[name]
 	def __setattr__(self,name,value):
@@ -146,7 +146,7 @@ class ConfigSet(object):
 		Utils.writef(filename,''.join(buf))
 	def load(self,filename):
 		tbl=self.table
-		code=Utils.readf(filename,m='rU')
+		code=Utils.readf(filename,m='r')
 		for m in re_imp.finditer(code):
 			g=m.group
 			tbl[g(2)]=eval(g(3))

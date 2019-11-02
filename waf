@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-# encoding: ISO8859-1
-# Thomas Nagy, 2005-2017
+# encoding: latin-1
+# Thomas Nagy, 2005-2018
 #
 """
 Redistribution and use in source and binary forms, with or without
@@ -32,13 +32,13 @@ POSSIBILITY OF SUCH DAMAGE.
 
 import os, sys, inspect
 
-VERSION="1.9.15"
-REVISION="7481b2b5d90177d4bb747dbff06bef90"
-GIT="a9cf440b4f440d71cdc23d757c5a8d1c497a7233"
+VERSION="2.0.18"
+REVISION="2196dde88c146cbf99e9e4d00621cfc8"
+GIT="0c0916ebdbf2cf3fff4b332b67774e8bc09a67da"
 INSTALL=''
-C1='#.'
-C2='#+'
-C3='#)'
+C1='#7'
+C2='#0'
+C3='#-'
 cwd = os.getcwd()
 join = os.path.join
 
@@ -140,6 +140,9 @@ def find_lib():
 	if name.endswith('waf-light'):
 		w = test(base)
 		if w: return w
+		for dir in sys.path:
+			if test(dir):
+				return dir
 		err('waf-light requires waflib -> export WAFDIR=/folder')
 
 	dirname = '%s-%s-%s' % (WAF, VERSION, REVISION)

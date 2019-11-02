@@ -2,7 +2,7 @@
 # encoding: utf-8
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
-from waflib import Utils,Task
+from waflib import Utils,Task,Errors
 from waflib.Tools import ccroot,fc_config,fc_scan
 from waflib.TaskGen import extension
 from waflib.Configure import conf
@@ -15,7 +15,15 @@ def fc_hook(self,node):
 	return self.create_compiled_task('fc',node)
 @conf
 def modfile(conf,name):
-	return{'lower':name.lower()+'.mod','lower.MOD':name.lower()+'.MOD','UPPER.mod':name.upper()+'.mod','UPPER':name.upper()+'.MOD'}[conf.env.FC_MOD_CAPITALIZATION or'lower']
+	if name.find(':')>=0:
+		separator=conf.env.FC_SUBMOD_SEPARATOR or'@'
+		modpath=name.split(':')
+		modname=modpath[0]+separator+modpath[-1]
+		suffix=conf.env.FC_SUBMOD_SUFFIX or'.smod'
+	else:
+		modname=name
+		suffix='.mod'
+	return{'lower':modname.lower()+suffix.lower(),'lower.MOD':modname.lower()+suffix.upper(),'UPPER.mod':modname.upper()+suffix.lower(),'UPPER':modname.upper()+suffix.upper()}[conf.env.FC_MOD_CAPITALIZATION or'lower']
 def get_fortran_tasks(tsk):
 	bld=tsk.generator.bld
 	tasks=bld.get_tasks_group(bld.get_group_idx(tsk.generator))
@@ -51,7 +59,7 @@ class fc(Task.Task):
 					name=bld.modfile(x.replace('MOD@',''))
 					node=bld.srcnode.find_or_declare(name)
 					tsk.set_outputs(node)
-					outs[id(node)].add(tsk)
+					outs[node].add(tsk)
 		for tsk in lst:
 			key=tsk.uid()
 			for x in bld.raw_deps[key]:
@@ -61,10 +69,12 @@ class fc(Task.Task):
 					if node and node not in tsk.outputs:
 						if not node in bld.node_deps[key]:
 							bld.node_deps[key].append(node)
-						ins[id(node)].add(tsk)
+						ins[node].add(tsk)
 		for k in ins.keys():
 			for a in ins[k]:
 				a.run_after.update(outs[k])
+				for x in outs[k]:
+					self.generator.bld.producer.revdeps[x].add(a)
 				tmp=[]
 				for t in outs[k]:
 					tmp.extend(t.outputs)
@@ -100,7 +110,7 @@ class fcprogram_test(fcprogram):
 		kw['output']=0
 		try:
 			(bld.out,bld.err)=bld.cmd_and_log(cmd,**kw)
-		except Exception:
+		except Errors.WafError:
 			return-1
 		if bld.out:
 			bld.to_log('out: %s\n'%bld.out)

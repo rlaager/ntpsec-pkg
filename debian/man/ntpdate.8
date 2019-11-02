@@ -3,17 +3,13 @@
 ntpdate \- set the date and time via NTP
 .SH SYNOPSIS
 .B ntpdate
-.RB [\| \-46bBdoqsuv \|]
+.RB [\| \-46bBdqsuv \|]
 .RB [\| \-a
 .IR key \|]
-.RB [\| \-e
-.IR authdelay \|]
 .RB [\| \-k
 .IR keyfile \|]
 .RB [\| \-o
 .IR version \|]
-.RB [\| \-p
-.IR samples \|]
 .RB [\| \-t
 .IR timeout \|]
 .I server
@@ -91,13 +87,6 @@ Enable the debugging mode, in which ntpdate will go through all the steps,
 but not adjust the local clock and using an unprivileged port. Information
 useful for general debugging will also be printed.
 .TP
-.BI \-e \ authdelay
-Specify the processing delay to perform an authentication
-function as the value authdelay, in seconds and fraction (see
-ntpd for details). This number is usually small enough to be
-negligible for most purposes, though specifying a value may
-improve timekeeping on very slow CPU's.
-.TP
 .BI \-k \ keyfile
 Specify the path for the authentication key file as the string
 keyfile. The default is /etc/ntp.keys. This file should be in
@@ -107,11 +96,6 @@ the format described in ntpd.
 Specify the NTP version for outgoing packets as the integer version, which
 can be 1, 2, 3 or 4. The default is 4. This allows ntpdate to be used with
 older NTP versions.
-.TP
-.BI \-p \ samples
-Specify the number of samples to be acquired from each server
-as the integer samples, with values from 1 to 8 inclusive. The
-default is 4.
 .TP
 .B \-q
 Query only \(en don't set the clock.
@@ -144,12 +128,6 @@ and updates the clock, and nonzero otherwise.
 .TP
 .I /etc/ntp.keys
 \- encryption keys used by ntpdate.
-.SH BUGS
-The slew adjustment is actually 50% larger than the measured offset,
-since this (it is argued) will tend to keep a badly drifting clock
-more accurate. This is probably not a good idea and may cause a
-troubling hunt for some values of the kernel variables tick and
-tickadj.
 .SH AUTHOR
 David L. Mills (mills@udel.edu)
 .br

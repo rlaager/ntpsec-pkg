@@ -1,17 +1,14 @@
 Description: Use python2 for ntploggps
  There is no python3-gps, so we have to use python (Python 2) for ntploggps.
- We also remove its dependency on the "ntp" module, since we only ship a
- python3-ntp and not a python-ntp.  It only uses the ntp module for printing
- the version number.
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2019-02-03
+Last-Update: 2019-10-29
 --- a/ntpclients/ntploggps.py
 +++ b/ntpclients/ntploggps.py
 @@ -1,4 +1,4 @@
 -#!/usr/bin/python3
-+#!/usr/bin/python
++#!/usr/bin/python2
  # -*- coding: utf-8 -*-
  
  """\

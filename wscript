@@ -197,6 +197,14 @@ def configure(ctx):
     if ctx.options.disable_manpage:
         ctx.env.DISABLE_MANPAGE = True
 
+    ctx.check_cfg(
+        package='systemd', variables=['systemdsystemunitdir'],
+        uselib_store='SYSTEMD', mandatory=False,
+        msg="Checking for systemd")
+    if ctx.env.SYSTEMD_systemdsystemunitdir:
+        ctx.start_msg("systemd unit directory:")
+        ctx.end_msg(ctx.env.SYSTEMD_systemdsystemunitdir)
+
     source_date_epoch = os.getenv('SOURCE_DATE_EPOCH', None)
     if ctx.options.build_epoch is not None:
         build_epoch = ctx.options.build_epoch
@@ -296,6 +304,7 @@ def configure(ctx):
     # may depend on some libs, like -lssp
     ctx.check_cc(lib="m", comment="Math library")
     ctx.check_cc(lib="rt", mandatory=False, comment="realtime library")
+    ctx.check_cc(lib="pthread", mandatory=False, comment="threads library")
     ctx.check_cc(lib="execinfo", mandatory=False,
                  comment="BSD backtrace library")
     ret = ctx.check_cc(lib="bsd", mandatory=False,
@@ -558,6 +567,29 @@ int main(int argc, char **argv) {
         ctx.define("_POSIX_C_SOURCE", "200112L", quote=False)
         ctx.define("__EXTENSIONS__", "1", quote=False)
 
+    # Borrowed from waf-1.9, when type_name and field_name were valid keywords
+    SNIP_TYPE = '''
+    int main(int argc, char **argv) {
+        (void)argc; (void)argv;
+        if ((%(type_name)s *) 0) return 0;
+        if (sizeof (%(type_name)s)) return 0;
+        return 1;
+    }
+    '''
+
+    SNIP_FIELD = '''
+    #include <stddef.h>
+    int main(int argc, char **argv) {
+        char *off;
+        (void)argc; (void)argv;
+        off = (char*) &((%(type_name)s*)0)->%(field_name)s;
+        return (size_t) off < sizeof(%(type_name)s);
+    }
+    '''
+
+    def to_header(header_name):
+        return ''.join(['#include <%s>\n' % x for x in Utils.to_list(header_name)])
+
     structures = (
         ("struct if_laddrconf", ["sys/types.h", "net/if6.h"], False),
         ("struct if_laddrreq", ["sys/types.h", "net/if6.h"], False),
@@ -565,14 +597,12 @@ int main(int argc, char **argv) {
         ("struct ntptimeval", ["sys/time.h", "sys/timex.h"], False),
     )
     for (s, h, r) in structures:
-        ctx.check_cc(type_name=s, header_name=h, mandatory=r)
-
-    # waf's SNIP_FIELD should likely include this header itself
-    # This is needed on some systems to get size_t for following checks
-    ctx.check_cc(auto_add_header_name=True,
-                 header_name="stddef.h",
-                 define_name="",           # omit from config.h
-                 mandatory=False)
+        ctx.check_cc(
+            fragment=to_header(h) + SNIP_TYPE % {'type_name': s},
+            msg='Checking for type %s' % s,
+            define_name=ctx.have_define(s.upper()),
+            mandatory=r,
+        )
 
     structure_fields = (
         ("struct timex", "time_tick", ["sys/time.h", "sys/timex.h"]),
@@ -582,7 +612,12 @@ int main(int argc, char **argv) {
         # first in glibc 2.12
     )
     for (s, f, h) in structure_fields:
-        ctx.check_cc(type_name=s, field_name=f, header_name=h, mandatory=False)
+        ctx.check_cc(
+            fragment=to_header(h) + SNIP_FIELD % {'type_name': s, 'field_name': f},
+            msg='Checking for field %s in %s' % (f, s),
+            define_name=ctx.have_define((s + '_' + f).upper()),
+            mandatory=False,
+        )
 
     # mostly used by timetoa.h and timespecops.h
     sizeofs = [
@@ -595,9 +630,19 @@ int main(int argc, char **argv) {
 
     # Check via pkg-config first, then fall back to a direct search
     if not ctx.check_cfg(
+        package='libssl', uselib_store='SSL',
+        args=['libssl', '--cflags', '--libs'],
+        msg="Checking for OpenSSL/libssl (via pkg-config)",
+        define_name='', mandatory=False,
+    ):
+        ctx.check_cc(msg="Checking for OpenSSL's ssl library",
+                     lib="ssl", mandatory=True)
+
+    # Check via pkg-config first, then fall back to a direct search
+    if not ctx.check_cfg(
         package='libcrypto', uselib_store='CRYPTO',
         args=['libcrypto', '--cflags', '--libs'],
-        msg="Checking for OpenSSL (via pkg-config)",
+        msg="Checking for OpenSSL/libcrypto (via pkg-config)",
         define_name='', mandatory=False,
     ):
         ctx.check_cc(msg="Checking for OpenSSL's crypto library",
@@ -615,7 +660,7 @@ int main(int argc, char **argv) {
         ('res_init', ["netinet/in.h", "arpa/nameser.h", "resolv.h"]),
         ('sched_setscheduler', ["sched.h"]),
         ('strlcpy', ["string.h"]),
-        ('strlcat', ["string.h"]) 
+        ('strlcat', ["string.h"])
     )
     for ft in optional_functions:
             probe_function(ctx, function=ft[0], prerequisites=ft[1])
@@ -631,24 +676,22 @@ int main(int argc, char **argv) {
         # Very old versions of OpenSSL don't have cmac.h
         #  We could add ifdefs, but old crypto is deprecated in favor of CMAC
         #  and so far, all the systems that we want to support are new enough.
-        ('CMAC_CTX_new', ["openssl/cmac.h"], "CRYPTO", True) )
+        ('CMAC_CTX_new', ["openssl/cmac.h"], "CRYPTO", True))
     for ft in required_functions:
-            probe_function(ctx, function=ft[0],
-                prerequisites=ft[1], use=ft[2],
-                mandatory=ft[3])
-
-
+        probe_function(ctx, function=ft[0],
+                       prerequisites=ft[1], use=ft[2],
+                       mandatory=ft[3])
 
     # check for BSD versions outside of libc
     if not ctx.get_define("HAVE_STRLCAT"):
         ret = probe_function(ctx, function='strlcat',
-                    prerequisites=['bsd/string.h'])
+                             prerequisites=['bsd/string.h'])
         if ret:
             ctx.define("HAVE_STRLCAT", 1, comment="Using bsd/strlcat")
 
     if not ctx.get_define("HAVE_STRLCPY"):
         ret = probe_function(ctx, function='strlcpy',
-                    prerequisites=['bsd/string.h'])
+                             prerequisites=['bsd/string.h'])
         if ret:
             ctx.define("HAVE_STRLCPY", 1, comment="Using bsd/strlcpy")
 
@@ -714,6 +757,9 @@ int main(int argc, char **argv) {
     from wafhelpers.check_sockaddr import check_sockaddr
     check_sockaddr(ctx)
 
+    from wafhelpers.check_strerror import check_strerror
+    check_strerror(ctx)
+
     # Check for Solaris's service configuration facility library
     ctx.check_cc(header_name="libscf.h", lib="scf", mandatory=False,
                  uselib_store="SCF")
@@ -741,25 +787,12 @@ int main(int argc, char **argv) {
                    comment="Enable MS-SNTP extensions "
                    " https://msdn.microsoft.com/en-us/library/cc212930.aspx")
 
-    if ctx.options.enable_lockclock:
-        if ctx.env.REFCLOCK_LOCAL:
-            ctx.define("ENABLE_LOCKCLOCK", 1,
-                       comment="Enable NIST 'lockclock'")
-        else:
-            import waflib.Errors
-            raise waflib.Errors.WafError(
-                "NIST 'lockclock' requires refclock 'local'")
-
     if not ctx.options.disable_droproot:
         ctx.define("ENABLE_DROPROOT", 1,
                    comment="Drop root after initialising")
     if ctx.options.enable_early_droproot:
         ctx.define("ENABLE_EARLY_DROPROOT", 1,
                    comment="Enable early drop root")
-
-    if not ctx.options.disable_dns_lookup:
-        ctx.define("ENABLE_DNS_LOOKUP", 1,
-                   comment="Enable DNS lookup of hostnames")
 
     # This is true under every Unix-like OS.
     ctx.define("HAVE_WORKING_FORK", 1,
@@ -774,9 +807,6 @@ int main(int argc, char **argv) {
                comment="Whether SO_REUSEADDR is needed to open "
                "same sockets on alternate interfaces, required "
                "by Linux at least")
-
-    from wafhelpers.check_vsprintfm import check_vsprintfm
-    check_vsprintfm(ctx)
 
     # Check for directory separator
     if ctx.env.DEST_OS == "win32":
@@ -815,16 +845,9 @@ int main(int argc, char **argv) {
             ctx.check_cc(header_name="seccomp.h")
             ctx.check_cc(lib="seccomp")
 
-    from wafhelpers.check_pthread import check_pthread_header_lib
-    check_pthread_header_lib(ctx)
-
     if not ctx.options.disable_mdns_registration:
         ctx.check_cc(header_name="dns_sd.h", lib="dns_sd", mandatory=False,
                      uselib_store="DNS_SD")
-
-    if not ctx.options.disable_dns_lookup:
-        from wafhelpers.check_pthread import check_pthread_run
-        check_pthread_run(ctx)
 
     # Solaris needs -lsocket and -lnsl for socket code
     if ctx.env.DEST_OS == "sunos":
@@ -897,10 +920,12 @@ def bin_test(ctx):
     from wafhelpers.bin_test import cmd_bin_test
     cmd_bin_test(ctx, config)
 
+
 def bin_test_summary(ctx):
     """Display results of binary check, use after tests."""
     from wafhelpers.bin_test import bin_test_summary
     bin_test_summary(ctx)
+
 
 # Borrowed from https://www.rtems.org/
 variant_cmd = (
@@ -1029,11 +1054,13 @@ def build(ctx):
         # required by the generic and Trimble refclocks
         ctx.recurse("libparse")
     ctx.recurse("libntp")
+    ctx.recurse("libaes_siv")
     ctx.recurse("ntpd")
     ctx.recurse("ntpfrob")
     ctx.recurse("ntptime")
     ctx.recurse("pylib")
     ctx.recurse("attic")
+    ctx.recurse("etc")
     ctx.recurse("tests")
 
     if ctx.env['PYTHON_CURSES']:
@@ -1111,22 +1138,6 @@ def build(ctx):
                   "loading the Python ntp library may be troublesome ---")
 
 #
-# Boot script setup
-#
-
-
-def systemdenable(ctx):
-    "Enable boot time start with systemd. Must run as root."
-    ctx.exec_command("cp etc/ntpd.service etc/ntp-wait.service "
-                     "/usr/lib/systemd/system/")
-
-
-def systemddisable(ctx):
-    "Disable boot time start with systemd. Must run as root."
-    ctx.exec_command("rm -f /usr/lib/systemd/system/ntpd.service "
-                     "/usr/lib/systemd/system/ntp-wait.service")
-
-#
 # Miscellaneous utility productions
 #
 
@@ -1136,8 +1147,6 @@ def ifdex(ctx):
     ctx.exec_command("ifdex -X build/config.h -X devel/ifdex-ignores .")
 
 # See https://gitlab.com/esr/loccount
-
-
 def loccount(ctx):
     "Report the SLOC count of the source tree."
     ctx.exec_command("loccount -x=build .")

@@ -1,0 +1,25 @@
+From 043a3b604cc8bddd39ee7e0c052f13bdeae7e2cd Mon Sep 17 00:00:00 2001
+From: Richard Laager <rlaager@wiktel.com>
+Date: Sun, 29 Sep 2019 18:06:13 -0500
+Subject: [PATCH] Fix spelling error
+
+---
+ docs/includes/nts-commands.adoc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docs/includes/nts-commands.adoc b/docs/includes/nts-commands.adoc
+index c13790b4c..c077235eb 100644
+--- a/docs/includes/nts-commands.adoc
++++ b/docs/includes/nts-commands.adoc
+@@ -108,7 +108,7 @@ The following options of the +server+ command configure NTS (as a client).
+   with their hash, as created by +openssl rehash+.
+ 
+ +aead+ _string_::
+-  Specify the prefered crypto algorithm to be used on the wire.
++  Specify the preferred crypto algorithm to be used on the wire.
+   The only options supported are AES_SIV_CMAC_256, AES_SIV_CMAC_384, and
+   AES_SIV_CMAC_512.  The server may ignore the request.  See the +aead+
+   option above.
+-- 
+2.22.0
+

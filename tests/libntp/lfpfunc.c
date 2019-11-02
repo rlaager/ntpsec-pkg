@@ -66,7 +66,7 @@ static int l_fp_ucmp(const l_fp first, l_fp second)
 }
 
 //----------------------------------------------------------------------
-// imlementation of the LFP stuff
+// implementation of the LFP stuff
 // This should be easy enough...
 //----------------------------------------------------------------------
 
@@ -88,7 +88,7 @@ static l_fp l_fp_abs(const l_fp first)
 
 static int l_fp_signum(const l_fp first)
 {
-	if (lfpuint(first) & 0x80000000u)
+	if (lfpuint(first) & 0x80000000U)
 		return -1;
 	return (lfpuint(first) || lfpfrac(first));
 }
@@ -144,7 +144,7 @@ static const size_t addsub_tot = (sizeof(addsub_tab)/sizeof(addsub_tab[0][0]));
 //  * The 'l_fp' fixed point fraction has 32 bits precision, so we allow
 //    for the LSB to toggle by clamping the epsilon to be at least 2^(-31)
 //
-//  * The double mantissa has a precsion 54 bits, so the other minimum is
+//  * The double mantissa has a precision 54 bits, so the other minimum is
 //    dval * (2^(-53))
 //
 //  The maximum of those two boundaries is used for the check.
@@ -230,15 +230,15 @@ TEST(lfpfunc, Absolute) {
 }
 
 static const l_fp roundtab[] = {
-  0,
-  0x140000000,
-  0x1c0000000,
-  0xffffffff80000000,
-  0x7fffffff7fffffff,
-  0x7fffffffffffffff,
-  0x55555555aaaaaaaa,
-  0x5555555555555555,
-  0x8000000000000001
+	0,
+	0x140000000,
+	0x1c0000000,
+	0xffffffff80000000,
+	0x7fffffff7fffffff,
+	0x7fffffffffffffff,
+	0x55555555aaaaaaaa,
+	0x5555555555555555,
+	0x8000000000000001
 };
 static const size_t round_cnt = (sizeof(roundtab)/sizeof(roundtab[0]));
 

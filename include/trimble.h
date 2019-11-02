@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2005 by Frank Kardel <kardel <AT> ntp.org>
  * Copyright 2015 by the NTPsec project contributors
- * SPDX-License-Identifier: BSD-3-clause
+ * SPDX-License-Identifier: BSD-3-Clause
  */
 #ifndef GUARD_TRIMBLE_H
 #define GUARD_TRIMBLE_H
@@ -52,7 +52,7 @@
 #define CMD_CHEIGHTFILT	0x73	/* height filter control */
 #define CMD_CHIGH8CNT	0x75	/* high-8 (best 4) / high-6 (overdetermined) control */
 #define CMD_CMAXDGPSCOR	0x77	/* maximum rate of DGPS corrections */
-#define CMD_CSUPER	0x8E	/* super paket */
+#define CMD_CSUPER	0x8E	/* super packet */
 
 #define CMD_RDATAA	0x3D	/* data channel A configuration:trimble_channelA:RO */
 #define CMD_RALMANAC	0x40	/* almanac data for sat:gps_almanac:RO */
@@ -91,15 +91,14 @@
 #define CMD_RDOUBLEXYZ	0x83	/* double precision XYZ:gps_position_ext(XYZ):RO|DEF */
 #define CMD_RDOUBLELLA	0x84	/* double precision LLA:gps_position_ext(LLA):RO|DEF */
 #define CMD_RDGPSSTAT	0x85	/* differential correction status:trimble_dgpsstatus:RO */
-#define CMD_RSUPER	0x8F	/* super paket::0 */
+#define CMD_RSUPER	0x8F	/* super packet::0 */
 
-typedef struct cmd_info
-{
-  unsigned char cmd;		/* command code */
-  const char   *cmdname;	/* command name */
-  const char   *cmddesc;	/* command description */
-  const char   *varname;	/* name of variable */
-  int           varmode;	/* mode of variable */
+typedef struct cmd_info {
+	unsigned char cmd;		/* command code */
+	const char   *cmdname;	/* command name */
+	const char   *cmddesc;	/* command description */
+	const char   *varname;	/* name of variable */
+	int           varmode;	/* mode of variable */
 } cmd_info_t;
 
 extern cmd_info_t trimble_rcmds[];

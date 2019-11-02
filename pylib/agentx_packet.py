@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Common utility functions
-# SPDX-License-Identifier: BSD-2-clause
+# SPDX-License-Identifier: BSD-2-Clause
 
 from __future__ import print_function
 
@@ -98,7 +98,7 @@ class AgentXPDU:
                 # *might* have to rethink this if contents get classified
                 continue
             pktvars[vname] = var
-        if self._hascontext is True:
+        if self._hascontext:
             # context is always present, not always used
             pktvars["context"] = self.context
         return pktvars
@@ -130,7 +130,7 @@ class AgentXPDU:
             return False
         if self._hascontext != other._hascontext:
             return False
-        if self._hascontext is True:
+        if self._hascontext:
             if self.context != other.context:
                 return False
         return True
@@ -673,7 +673,7 @@ def decode_ResponsePDU(data, header):
     temp, data = slicedata(data, 8)
     sysUptime, resError, resIndex = struct.unpack(endianToken + "IHH",
                                                   ntp.poly.polybytes(temp))
-    if len(data) > 0:
+    if data:
         varbinds = decode_varbindlist(data, header)
     else:
         varbinds = None
@@ -766,7 +766,7 @@ class OID:
         self.sanity()
 
     def __eq__(self, other):
-        if isinstance(other, OID) is False:
+        if not isinstance(other, OID):
             return False
         if not (self.subids == other.subids):
             return False
@@ -810,10 +810,10 @@ class OID:
             else:
                 # this is the Py3 version of c = cmp(x[i], y[i])
                 c = (x[i] > y[i]) - (x[i] < y[i])
-                c = -c if flipped is True else c
+                c = -c if flipped else c
                 return c
         # Only reach this if shorter, and each index is equal
-        if flipped is True:
+        if flipped:
             return 1
         else:
             return -1
@@ -828,7 +828,7 @@ class OID:
             raise ValueError
 
     def isNull(self):
-        if (len(self.subids) == 0) and (self.include is False):
+        if not self.subids and not self.include:
             return True
         return False
 
@@ -1076,7 +1076,7 @@ class SearchRange:
     def sanity(self):
         self.start.sanity()
         self.end.sanity()
-        if self.end.include is True:
+        if self.end.include:
             raise ValueError
 
     def encode(self, bigEndian):
@@ -1095,7 +1095,7 @@ def encode_searchrange_list(bigEndian, searchranges):
 
 def decode_searchrange_list(data, header):  # Cannot handle extra data
     oidranges = []
-    while len(data) > 0:
+    while data:
         oids, data = decode_SearchRange(data, header)
         oidranges.append(oids)
     return tuple(oidranges)
@@ -1109,9 +1109,9 @@ def encode_varbindlist(bigEndian, varbinds):
 
 
 def decode_varbindlist(data, header):
-    if len(data) > 0:
+    if data:
         varbinds = []
-        while len(data) > 0:
+        while data:
             vb, data = decode_Varbind(data, header)
             varbinds.append(vb)
         varbinds = tuple(varbinds)
@@ -1151,7 +1151,7 @@ def makeflags(iR, nI, aI, cP, bE):
 
 
 def getendian(bigEndian):
-    return ">" if bigEndian is True else "<"
+    return ">" if bigEndian else "<"
 
 
 def encode_pduheader(pduType, instanceRegistration, newIndex,
@@ -1205,7 +1205,7 @@ def encode_context(bigEndian, context):
 
 def decode_context(data, header):
     flags = header["flags"]
-    if flags["contextP"] is True:
+    if flags["contextP"]:
         context, data = decode_octetstr(data, header)
     else:
         context = None

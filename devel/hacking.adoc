@@ -1,9 +1,9 @@
-= How-to for NTPsec hackers =
+= How-to for NTPsec hackers
 
 Annoying but necessary legalese:
 
-    By submitting patches to this project, you agree to allow them to be
-    redistributed under the project's license according to the normal
+    By submitting patches to this project you agree to allow them to be
+    redistributed under the project's license, according to the normal
     forms and usages of the open-source community.
 
 If you want to learn more about the code internals, consult the
@@ -13,7 +13,7 @@ and project conventions.
 You may also find the articles at https://blog.ntpsec.org/
 interesting.
 
-== Choice of language ==
+== Choice of language
 
 In order to reduce the complexity of maintenance and testing
 due to multiple languages, we hold the set of allowed languages
@@ -32,9 +32,23 @@ it's easier to verify portability in Python than it is in sh.
 Please read our C and Python guidelines carefully; they're not just
 about style, they're serious measures to reduce defect rates.
 
-== C Guidelines ==
+== Inclusions from other projects
 
-=== C API standards ===
+Git subtrees and submodules are clever but full of traps. Discussion
+here:
+
+https://medium.com/@porteneuve/mastering-git-submodules-34c65e940407
+https://medium.com/@porteneuve/mastering-git-subtrees-943d29a798ec
+
+These don't even touch the biggest issue, which is stable reproducible
+builds.  For this reason, we use naive textual inclusion.
+
+So far this has only been an issue with libaes_siv. If you notice
+there's an inclusion not listed here, file an issue.
+
+== C Guidelines
+
+=== C API standards
 
 The baseline C standard to write to is ISO/IEC 9899:1999, also known
 as C99 (but see the following section on banned functions).  Note that
@@ -54,12 +68,22 @@ which is used, when available, for increased accuracy, and has a
 fallback implementation using native time calls.
 
 You can read POSIX-1.2001, with 2004 Corrigendum, online for free here:
-    http://pubs.opengroup.org/onlinepubs/009695399/toc.htm
+    https://pubs.opengroup.org/onlinepubs/009695399/toc.htm
 
 You can see POSIX.1-2001, SUSv3, online for free here:
     http://www.unix-systems.org/version3/
 
-POSIX threads *are* considered part of the standardized API and may be used.
+POSIX threads *are* considered part of the standardized API, but their
+use requires extreme care.  The main part of ntpd assumes it is the only
+thread.  One interesting area is msyslog.  The DNS thread doesn't call msyslog.
+That was impractical for NTS, so msyslog is thread safe as of 2019-Apr.
+Beware of calling strerror() from non-main threads.  Use strerror_r()
+into a buffer on the stack.  Similarly, use socktoa_r() and sockporttoa_r()
+and don't call lib_getbuf() or refclock_name().
+
+Actually, don't use strerror_r() since our build environment
+has troubles getting a consistent version of the API.
+Use mystrerror() until we clean this up.
 
 You *may* assume the clock_gettime(2) and clock_settime(2) calls, and
 the related getitimer(2)/setitimer(2), from POSIX-1.2008.
@@ -79,12 +103,12 @@ Here are the non-standardized APIs that may be used:
   UDP packet layer.  See ntpd/ntp_packetstamp.c for details - if you
   add a local hack to do this, it needs to be sealed inside that module.
 
-=== Banned functions ===
+=== Banned functions
 
 The following C99/POSIX functions are BANNED.  They are unsafe, tending to
 cause buffer overruns and (all too often) exploitable security holes:
 
-* strcpy, strncpy, strcat:  Use strlcpy and strlcat instead.
+* strcpy, strncpy, strcat, strncat:  Use strlcpy and strlcat instead.
 * sprintf, vsprintf: use snprintf and vsnprintf instead.
 * In scanf and friends, the %s format without length limit is banned.
 * strtok: use strtok_r() or unroll this into the obvious loop.
@@ -99,11 +123,11 @@ property is not portable.
 In general, avoid functions that are non-reentrant.  When in doubt, see
 http://www.unix.org/whitepapers/reentrant.html[Thread-safety and POSIX.1]
 
-=== Banned features ===
+=== Banned features
 
 All C files should be in plain US-ASCII encoding; do not use trigraphs.
 
-=== Other interfaces to be avoided ===
+=== Other interfaces to be avoided
 
 Don't use gettimeofday(2).  While this is nominally POSIX, it is
 deprecated and may be removed in the future.  Use clock_gettime(2)
@@ -120,12 +144,16 @@ want that to happen again. Thus, if you must refer to struct timeval due to
 an external interface, move the data to/from a struct timespec as
 close to that call site as possible.
 
-=== Coding style and indentation ===
+=== Coding style and indentation
 
 Dr. Dave Mills liked this code indented formatted in a consistent way.
 The file "dot.emacs" has the emacs C-mode indentation style that Dave
 likes. It's a bit archaic, but we've stuck with it to preserve
 continuity; you should, too.
+
+*Do* always add the optional braces around if/for/while/do bodies.
+It helps readability, staves off some subtle errors, and will be 
+helpful if the code is ever moved to Go.
 
 A discussion about using uncrustify to mass convert all the C sources
 to a more current indentation and format style is ongoing.  As it will
@@ -133,7 +161,7 @@ result in a coordinated flag day in ongoing development, it will be
 carefully announced in the mailto:devel@ntpsec.org mailing list before
 being merged and pushed.
 
-=== Conventions for #ifdef guard names ===
+=== Conventions for #ifdef guard names
 
 Parts of this code are a thicket of C preprocessor conditionals.
 In an attempt to make these halfway comprehensible, we use the
@@ -175,12 +203,16 @@ USE_*::
 	gate use of sections of code that must be conditionally
 	compiled depending on *combinations* of HAVE and NEED symbols.
 
-=== Cross-platform portability ===
+=== Cross-platform portability
 
 Do not bake in any assumptions about 32-vs-64-bit word size.  It is OK
 to assume the code will never run on a 16-bit machine.  When in doubt,
 and whenever possible, use the fixed-width integral types from
 <stdint.h>.
+
+You *may* assume twos-complement arithmetic.  The C Standards
+committee has accepted a proposal to mandate twos complement in the
+next revision beyond ISO/IEC 9899:2018.  Some of our code requires it.
 
 You *may* assume that the compiler supports POSIX 64-bit integral types
 (int64_t, uint64_t and friends) even if the target hardware is 32-bit.
@@ -201,7 +233,7 @@ is true on effectively all modern hardware, the code runs on some
 sufficiently old iron that this is not necessarily the case even if
 the compiler and toolchain have been modernized.
 
-== Python guidelines ==
+== Python guidelines
 
 You may assume Python 2 at 2.6 or later, or Python 3 at 3.3 or later.
 
@@ -228,12 +260,12 @@ a Pyflakes test, we probably will not merge it.
 https://pypi.python.org/pypi/pyflakes
 
 Note: In the future, the Python baseline may
-http://www.curiousefficiency.org/posts/2015/04/stop-supporting-python26.html[change
+https://www.curiousefficiency.org/posts/2015/04/stop-supporting-python26.html[change
 t 2.7.2].
 
-== General notes ==
+== General notes
 
-=== Build system ===
+=== Build system
 
 The build uses waf, replacing a huge ancient autoconf hairball that
 caused many problems. The waf script is embedded in the top level of
@@ -242,16 +274,16 @@ instructions.
 
 Full waf documentation is at https://waf.io/
 
-=== Naming conventions ===
+=== Naming conventions
 
-Every binary and script we install has an "ntp" prefix on the name
-because namespace pollution is rude.  If you write a new tool that you
+Almost every binary and script we install has an "ntp" prefix on the name
+because namespace pollution is rude. If you write a new tool that you
 want us to install, follow this convention.
 
 Generally, we favor "ntp" rather than "ntp-" for consistency and to
 reduce the amount people have to type. Choose tastefully.
 
-=== Well-tempered output ===
+=== Well-tempered output
 
 We are devotees of the Unix rule that programs should play nicely
 with other programs.  We like output formats that are simple,
@@ -276,7 +308,7 @@ standard output should be able to emit two formats. The default can be
 should also be a -j/--json option that emits a self-describing JSON
 object.
 
-You can read about JSON at http://www.json.org/
+You can read about JSON at https://www.json.org/
 
 Be aware that if you present a tool design with a messy output format
 and no JSON option, it is quite likely to be rejected.
@@ -286,11 +318,11 @@ UTC with some options frozen; full year required, medial T required,
 explicit Zulu timezone). Local times should be expressed in ISO 8601,
 always with the full 4-digit year.
 
-=== Copyrights and licenses ===
+=== Copyrights and licenses
 
 Much of the historic code in this distribution is under the "NTP
-License" resembling BSD-2-clause.  Our favored licenses are
-BSD-2-clause for code and Creative Commons Attribution 4.0 License
+License" resembling BSD-2-Clause.  Our favored licenses are
+BSD-2-Clause for code and Creative Commons Attribution 4.0 License
 for documentation.
 
 Please do *not* submit code under GPL or other licenses which place
@@ -342,7 +374,7 @@ the historic copyright is no longer appropriate, but such decisions
 cannot be made casually. Discuss it with the project management
 before moving.
 
-=== Document what you do ===
+=== Document what you do
 
 When you change anything user-visible, you are expected to update the
 relevant documentation *in the same commit*.  No exceptions.
@@ -350,7 +382,7 @@ relevant documentation *in the same commit*.  No exceptions.
 Otherwise, we'd have to inflict long, tedious document reviews on
 everybody. Nobody wants that.
 
-=== Documentation format and structure ===
+=== Documentation format and structure
 
 All our documentation is mastered in asciidoc.  That includes internal
 documentation like this file. We do this because asciidoc is easy to
@@ -377,7 +409,12 @@ a large common include file. These includes live in docs/includes
 and are probably what you need to edit if you're updating anything
 that appears on a man page.
 
-=== Version number ===
+All headers should be asymmetric Atx-style. Text wraps somewhere around
+column 72 (forget semantic writing) and unless otherwise noted refer to
+the January 2019 revision of the draft AsciiDoc Recommended
+link:https://asciidoctor.org/docs/asciidoc-recommended-practices/[Practices].
+
+=== Version number
 
 We use a variant of three-part Semantic Versioning, of the form X.Y.Z.
 X, Y, and Z are non-negative decimal integers.
@@ -405,7 +442,7 @@ Note that this is a different numbering system from NTP Classic. In
 their A.B.C numbers, A was the protocol version, B was the major, and
 C was the minor.  They also use release-candidate suffixes.
 
-== Version string ==
+== Version string
 
 We use the BUILD_EPOCH as described in packaging/packaging.adoc for
 the timestamp (converted to RFC 3339 format) part of the version
@@ -419,7 +456,7 @@ Development builds have version strings of the form:
 
 <base version number>+ <BUILD_EPOCH in RFC 3339 format> (git rev <git shorthash>)
 
-== Contribution workflow and conventions ==
+== Contribution workflow and conventions
 
 Please work on one piece of conceptual work at a time.
 
@@ -431,14 +468,14 @@ mailto:devel@ntpsec.org mailing list.  Other people may have
 suggestions, will want to collaborate, and will wish to review your
 code.
 
-=== Git ===
+=== Git
 
 We use Git as our distributed version control system.
 
 If you ever get stuck or confused while using Git, please consult
-http://ohshitgit.com/
+https://ohshitgit.com/
 
-=== GitLab.com ===
+=== GitLab.com
 
 We use GitLab.com as our forge.
 
@@ -458,7 +495,7 @@ of the Project Manager, after consulting with the existing core team.
 Generally, other levels of access will not be granted, as they are not
 necessary to be a welcome and effective contributor.
 
-=== Optional: Send patches by email ===
+=== Optional: Send patches by email
 
 If you do not want to use GitLab pull requests, we welcome simple fix
 and "drive-by" patches submitted by email.
@@ -482,7 +519,7 @@ parameter ---author from the email From header and the git parameter
 
 For complex patches and contribution narratives, please use GitLab.
 
-== Commit comments ==
+== Commit comments
 
 And please follow git conventions for change comments. That means your comment
 should consist of:
@@ -519,7 +556,7 @@ summary.
 Yes, we know the pre-git portions of the history violate some of these.
 That was then; this is now.
 
-=== How to refer to previous commits ===
+=== How to refer to previous commits
 
 The best (most human-friendly) way to reference a commit is by quoting its
 summary line; if you need to disambiguate, give its date and author.
@@ -529,7 +566,7 @@ keeping random strings of hex digits in working memory.  Besides, hashes
 will break if the history is ever moved to another VCS or the repository
 has to be surgically altered.
 
-=== Avoid unnecessary merge bubbles ===
+=== Avoid unnecessary merge bubbles
 
 There are two kinds of merge bubbles in git commit graphs. The
 necessary kind happens because branches have genuinely diverged enough
@@ -560,7 +597,7 @@ Setting this option adds --rebase to all your pulls; this may cause
 a minor inconvenience when you have uncommitted local changes; you
 should be able to use "git stash" to get around that.
 
-== Logging tags ==
+== Logging tags
 
 To facilitate analysis of logs, log messages are tagged with an initial
 topic group token.  These are:
@@ -579,7 +616,7 @@ PROTO:: Protocol machine actions
 REFCLOCK:: Reference clock and driver actions
 MODE6:: Processing of Mode 6 requests
 
-== Release Checklist ==
+== Release Checklist
 
 This is the release checklist to be used by the project manager to cut
 each release.
@@ -587,6 +624,10 @@ each release.
 . Decide that it is time to cut a release.  This decision can be driven
   by landing a significant new feature, landing a critical fix, or just
   that enough time has passed with ongoing improvements and fixes.
+
+. Make sure inclusions (currently only libaes_siv) are updated, and
+  run the build as a sanity check.  There's a 'pullincludes' target
+  in waf that refreshes the includes. Commit that change.
 
 . Email a warning message to the mailto:devel@ntpsec.org list,
   and ask the major contributors to chime in, and to each assure
@@ -614,5 +655,58 @@ each release.
 . Run the "release" script in this (devel) directory.
 
 . Post release announcement
+
+== Release Prep Steps.  Ignore this if you are not Mark
+
+. start a new Debian instance, note it's public IP address, and ssh into it.
+
+LOCAL
+ssh -v -i ~/.ssh/aws-mra.key admin@IPADDRESS
+
+REMOTE
+sudo apt-get update
+sudo apt-get install build-essential m4 bison git gnupg libssl-dev emacs-nox python-pip
+
+. copy over gitlab ssh access key
+
+LOCAL
+scp ~/.ssh/gitlab.key  admin@52.91.165.241:.ssh
+
+REMOTE
+cat >> ~/.ssh/config
+Host gitlab.com
+  Hostname gitlab.com
+  User git
+  Port 22
+  PreferredAuthentications publickey
+  IdentityFile ~/.ssh/gitlab.key
+
+ssh git@gitlab.com  # expect "Welcome to GitLab, @fallenpegasus!"
+
+. clone the repo
+
+REMOTE
+git clone git@gitlab.com:NTPsec/ntpsec.git
+
+. copy over gpg signing key
+
+LOCAL
+gpg --export-secret-key 0x5A22E330161C3978 >secret.gkey
+scp secret.gkey admin@IPADDRESS:.
+
+REMOTE
+gpg --import ~/secret.gkey
+GPG_TTY=$(tty); export GPG_TTY
+echo "test" | gpg --clearsign
+
+. setup gitconfig
+
+REMOTE
+
+cat > ~/.gitconfig
+[user]
+        name = Mark Atwood
+        email = mark.atwood@ntpsec.org
+
 
 //end

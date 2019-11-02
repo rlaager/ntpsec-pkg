@@ -16,6 +16,8 @@
 /usr/sbin/ntpd flags=(attach_disconnected) {
   #include <abstractions/base>
   #include <abstractions/nameservice>
+  #include <abstractions/ssl_certs>
+  #include <abstractions/ssl_keys>
   #include <abstractions/user-tmp>
 
   capability ipc_lock,
@@ -52,6 +54,7 @@
 
   /var/lib/ntpsec/ntp.drift rw,
   /var/lib/ntpsec/ntp.drift-tmp rw,
+  /var/lib/ntpsec/nts-keys rw,
   /usr/share/zoneinfo/leap-seconds.list rw,
 
   /var/log/ntp w,

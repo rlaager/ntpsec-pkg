@@ -48,7 +48,7 @@ endif
 		python3 waf configure \
 		--prefix=/usr \
 		--enable-debug-gdb --enable-mssntp --enable-warnings \
-		--refclock=local,spectracom,generic,arbiter,nmea,pps,hpgps,shm,trimble,jjy,zyfer,neoclock \
+		--refclock=local,spectracom,generic,arbiter,nmea,pps,hpgps,shm,trimble,jjy,zyfer \
 		--enable-doc --htmldir=/usr/share/doc/ntpsec/html \
 		--build-epoch=$(SOURCE_DATE_EPOCH) \
 
@@ -71,12 +71,38 @@ override_dh_auto_clean:
 
 override_dh_install:
 	python3 waf install --destdir=$(CURDIR)/debian/tmp
+	mv \
+		debian/tmp/lib/systemd/system/ntpd.service \
+		debian/tmp/lib/systemd/system/ntpsec.service
 	rm -rf debian/tmp/usr/lib/python3/dist-packages/ntp/__pycache__
+	# ntpfrob probes internal, mostly undocumented settings.  It is
+	# extremely unlikely that anyone needs this.
+	#
+	# ntpsnmpd is experimental.  If support for it is desired, then
+	# it can be installed, but it will require some patching of file
+	# paths to be compliant with Debian best practices.  It also needs
+	# more documentation on how to integrate with snmpd.
+	#
+	# From ntpsweep.1, "ntpsweep relies on ntpq and Mode 6 queries to
+	# probe servers. This depends on the remote host's restrict
+	# configuration allowing queries. Nowadays effectively all public
+	# hosts set noquery, so this script is unlikely to be useful unless
+	# you have multiple specially-configured timeservers on a LAN."  The
+	# default ntp.conf from this package also sets "noquery" (with an
+	# exception for localhost).
+	rm \
+		debian/tmp/usr/bin/ntpfrob \
+		debian/tmp/usr/bin/ntpsnmpd \
+		debian/tmp/usr/bin/ntpsweep \
+		debian/tmp/usr/share/man/man1/ntpsweep.1 \
+		debian/tmp/usr/share/man/man8/ntpfrob.8 \
+	        debian/tmp/usr/share/man/man8/ntpsnmpd.8
 	mv \
 		debian/tmp/usr/bin/ntptime \
 		debian/tmp/usr/bin/ntpkeygen \
 		debian/tmp/usr/bin/ntploggps \
 		debian/tmp/usr/bin/ntplogtemp \
+		debian/tmp/usr/bin/ntpwait \
 		debian/tmp/usr/sbin/
 	install -m 755 \
 		ntpclients/ntpmon.py \
@@ -87,17 +113,8 @@ override_dh_install:
 	install -m 755 \
 		attic/ntpdate \
 		debian/tmp/usr/sbin
-	install -m 755 \
-		ntpclients/ntpwait.py \
-		debian/tmp/usr/sbin/ntpwait
 
 	install -d debian/ntpsec/lib/systemd/system
-	install -m 644 \
-		etc/ntpd.service \
-		debian/ntpsec/lib/systemd/system/ntpsec.service
-	install -m 644 \
-		etc/ntp-wait.service \
-		debian/ntpsec/lib/systemd/system/ntpsec-wait.service
 	install -m 644 \
 		debian/ntpsec.ntpsec-rotate-stats.service \
 		debian/ntpsec/lib/systemd/system/ntpsec-rotate-stats.service
@@ -109,12 +126,6 @@ override_dh_install:
 	install -m 644 \
 		etc/ntploggps.service \
 		etc/ntploggps.timer \
-		etc/ntplogtemp.service \
-		etc/ntplogtemp.timer \
-		etc/ntpviz-daily.service \
-		etc/ntpviz-daily.timer \
-		etc/ntpviz-weekly.service \
-		etc/ntpviz-weekly.timer \
 		debian/ntpsec-ntpviz/lib/systemd/system/
 
 	install -d debian/ntpsec-ntpviz/etc/ntpviz/day
@@ -186,12 +197,12 @@ ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
 endif
 	dh_apparmor --profile-name=usr.sbin.ntpd -pntpsec
 
-override_dh_systemd_start:
-	dh_systemd_start -pntpsec \
+override_dh_installsystemd:
+	dh_installsystemd -pntpsec \
 		ntpsec.service \
 		ntpsec-systemd-netif.path \
 		ntpsec-rotate-stats.timer
-	dh_systemd_start -pntpsec-ntpviz \
+	dh_installsystemd -pntpsec-ntpviz \
 		ntploggps.timer \
 		ntplogtemp.timer \
 		ntpviz-daily.timer \

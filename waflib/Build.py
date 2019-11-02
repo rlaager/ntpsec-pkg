@@ -52,15 +52,10 @@ class BuildContext(Context.Context):
 		for v in SAVED_ATTRS:
 			if not hasattr(self,v):
 				setattr(self,v,{})
-	def set_cur(self,cur):
-		self.current_group=cur
-	def get_cur(self):
-		return self.current_group
-	cur=property(get_cur,set_cur)
 	def get_variant_dir(self):
 		if not self.variant:
 			return self.out_dir
-		return os.path.join(self.out_dir,self.variant)
+		return os.path.join(self.out_dir,os.path.normpath(self.variant))
 	variant_dir=property(get_variant_dir,None)
 	def __call__(self,*k,**kw):
 		kw['bld']=self
@@ -68,12 +63,6 @@ class BuildContext(Context.Context):
 		self.task_gen_cache_names={}
 		self.add_to_group(ret,group=kw.get('group'))
 		return ret
-	def rule(self,*k,**kw):
-		def f(rule):
-			ret=self(*k,**kw)
-			ret.rule=rule
-			return ret
-		return f
 	def __copy__(self):
 		raise Errors.WafError('build contexts cannot be copied')
 	def load_envs(self):
@@ -177,13 +166,16 @@ class BuildContext(Context.Context):
 		try:
 			self.producer.start()
 		except KeyboardInterrupt:
-			self.store()
+			if self.is_dirty():
+				self.store()
 			raise
 		else:
-			if self.producer.dirty:
+			if self.is_dirty():
 				self.store()
 		if self.producer.error:
 			raise Errors.BuildError(self.producer.error)
+	def is_dirty(self):
+		return self.producer.dirty
 	def setup(self,tool,tooldir=None,funs=None):
 		if isinstance(tool,list):
 			for i in tool:
@@ -297,7 +289,7 @@ class BuildContext(Context.Context):
 			return self.group_names[x]
 		return self.groups[x]
 	def add_to_group(self,tgen,group=None):
-		assert(isinstance(tgen,TaskGen.task_gen)or isinstance(tgen,Task.TaskBase))
+		assert(isinstance(tgen,TaskGen.task_gen)or isinstance(tgen,Task.Task))
 		tgen.bld=self
 		self.get_group(group).append(tgen)
 	def get_group_name(self,g):
@@ -358,23 +350,20 @@ class BuildContext(Context.Context):
 			lst.extend(g)
 		return lst
 	def post_group(self):
+		def tgpost(tg):
+			try:
+				f=tg.post
+			except AttributeError:
+				pass
+			else:
+				f()
 		if self.targets=='*':
 			for tg in self.groups[self.current_group]:
-				try:
-					f=tg.post
-				except AttributeError:
-					pass
-				else:
-					f()
+				tgpost(tg)
 		elif self.targets:
 			if self.current_group<self._min_grp:
 				for tg in self.groups[self.current_group]:
-					try:
-						f=tg.post
-					except AttributeError:
-						pass
-					else:
-						f()
+					tgpost(tg)
 			else:
 				for tg in self._exact_tg:
 					tg.post()
@@ -386,14 +375,26 @@ class BuildContext(Context.Context):
 			elif not ln.is_child_of(self.srcnode):
 				Logs.warn('CWD %s is not under %s, forcing --targets=* (run distclean?)',ln.abspath(),self.srcnode.abspath())
 				ln=self.srcnode
-			for tg in self.groups[self.current_group]:
+			def is_post(tg,ln):
 				try:
-					f=tg.post
+					p=tg.path
 				except AttributeError:
 					pass
 				else:
-					if tg.path.is_child_of(ln):
-						f()
+					if p.is_child_of(ln):
+						return True
+			def is_post_group():
+				for i,g in enumerate(self.groups):
+					if i>self.current_group:
+						for tg in g:
+							if is_post(tg,ln):
+								return True
+			if self.post_mode==POST_LAZY and ln!=self.srcnode:
+				if is_post_group():
+					ln=self.srcnode
+			for tg in self.groups[self.current_group]:
+				if is_post(tg,ln):
+					tgpost(tg)
 	def get_tasks_group(self,idx):
 		tasks=[]
 		for tg in self.groups[idx]:
@@ -403,16 +404,12 @@ class BuildContext(Context.Context):
 				tasks.append(tg)
 		return tasks
 	def get_build_iterator(self):
-		self.current_group=0
 		if self.targets and self.targets!='*':
 			(self._min_grp,self._exact_tg)=self.get_targets()
-		global lazy_post
 		if self.post_mode!=POST_LAZY:
-			while self.current_group<len(self.groups):
+			for self.current_group,_ in enumerate(self.groups):
 				self.post_group()
-				self.current_group+=1
-			self.current_group=0
-		while self.current_group<len(self.groups):
+		for self.current_group,_ in enumerate(self.groups):
 			if self.post_mode!=POST_AT_ONCE:
 				self.post_group()
 			tasks=self.get_tasks_group(self.current_group)
@@ -421,7 +418,6 @@ class BuildContext(Context.Context):
 			self.cur_tasks=tasks
 			if tasks:
 				yield tasks
-			self.current_group+=1
 		while 1:
 			yield[]
 	def install_files(self,dest,files,**kw):
@@ -531,7 +527,9 @@ class inst(Task.Task):
 		if isinstance(self.install_to,Node.Node):
 			dest=self.install_to.abspath()
 		else:
-			dest=Utils.subst_vars(self.install_to,self.env)
+			dest=os.path.normpath(Utils.subst_vars(self.install_to,self.env))
+		if not os.path.isabs(dest):
+			dest=os.path.join(self.env.PREFIX,dest)
 		if destdir and Options.options.destdir:
 			dest=os.path.join(Options.options.destdir,os.path.splitdrive(dest)[1].lstrip(os.sep))
 		return dest
@@ -578,10 +576,14 @@ class inst(Task.Task):
 			else:
 				if st1.st_mtime+2>=st2.st_mtime and st1.st_size==st2.st_size:
 					if not self.generator.bld.progress_bar:
-						Logs.info('- install %s (from %s)',tgt,lbl)
+						c1=Logs.colors.NORMAL
+						c2=Logs.colors.BLUE
+						Logs.info('%s- install %s%s%s (from %s)',c1,c2,tgt,c1,lbl)
 					return False
 		if not self.generator.bld.progress_bar:
-			Logs.info('+ install %s (from %s)',tgt,lbl)
+			c1=Logs.colors.NORMAL
+			c2=Logs.colors.BLUE
+			Logs.info('%s+ install %s%s%s (from %s)',c1,c2,tgt,c1,lbl)
 		try:
 			os.chmod(tgt,Utils.O644|stat.S_IMODE(os.stat(tgt).st_mode))
 		except EnvironmentError:
@@ -609,19 +611,25 @@ class inst(Task.Task):
 	def do_link(self,src,tgt,**kw):
 		if os.path.islink(tgt)and os.readlink(tgt)==src:
 			if not self.generator.bld.progress_bar:
-				Logs.info('- symlink %s (to %s)',tgt,src)
+				c1=Logs.colors.NORMAL
+				c2=Logs.colors.BLUE
+				Logs.info('%s- symlink %s%s%s (to %s)',c1,c2,tgt,c1,src)
 		else:
 			try:
 				os.remove(tgt)
 			except OSError:
 				pass
 			if not self.generator.bld.progress_bar:
-				Logs.info('+ symlink %s (to %s)',tgt,src)
+				c1=Logs.colors.NORMAL
+				c2=Logs.colors.BLUE
+				Logs.info('%s+ symlink %s%s%s (to %s)',c1,c2,tgt,c1,src)
 			os.symlink(src,tgt)
 			self.fix_perms(tgt)
 	def do_uninstall(self,src,tgt,lbl,**kw):
 		if not self.generator.bld.progress_bar:
-			Logs.info('- remove %s',tgt)
+			c1=Logs.colors.NORMAL
+			c2=Logs.colors.BLUE
+			Logs.info('%s- remove %s%s%s',c1,c2,tgt,c1)
 		try:
 			os.remove(tgt)
 		except OSError as e:
@@ -635,7 +643,9 @@ class inst(Task.Task):
 	def do_unlink(self,src,tgt,**kw):
 		try:
 			if not self.generator.bld.progress_bar:
-				Logs.info('- remove %s',tgt)
+				c1=Logs.colors.NORMAL
+				c2=Logs.colors.BLUE
+				Logs.info('%s- remove %s%s%s',c1,c2,tgt,c1)
 			os.remove(tgt)
 		except OSError:
 			pass
@@ -652,15 +662,6 @@ class UninstallContext(InstallContext):
 	def __init__(self,**kw):
 		super(UninstallContext,self).__init__(**kw)
 		self.is_install=UNINSTALL
-	def execute(self):
-		try:
-			def runnable_status(self):
-				return Task.SKIP_ME
-			setattr(Task.Task,'runnable_status_back',Task.Task.runnable_status)
-			setattr(Task.Task,'runnable_status',runnable_status)
-			super(UninstallContext,self).execute()
-		finally:
-			setattr(Task.Task,'runnable_status',Task.Task.runnable_status_back)
 class CleanContext(BuildContext):
 	'''cleans the project'''
 	cmd='clean'
@@ -675,11 +676,15 @@ class CleanContext(BuildContext):
 			self.store()
 	def clean(self):
 		Logs.debug('build: clean called')
-		if self.bldnode!=self.srcnode:
+		if hasattr(self,'clean_files'):
+			for n in self.clean_files:
+				n.delete()
+		elif self.bldnode!=self.srcnode:
 			lst=[]
 			for env in self.all_envs.values():
 				lst.extend(self.root.find_or_declare(f)for f in env[CFG_FILES])
-			for n in self.bldnode.ant_glob('**/*',excl='.lock* *conf_check_*/** config.log c4che/*',quiet=True):
+			excluded_dirs='.lock* *conf_check_*/** config.log %s/*'%CACHE_DIR
+			for n in self.bldnode.ant_glob('**/*',excl=excluded_dirs,quiet=True):
 				if n in lst:
 					continue
 				n.delete()
@@ -746,17 +751,17 @@ class StepContext(BuildContext):
 			for pat in self.files.split(','):
 				matcher=self.get_matcher(pat)
 				for tg in g:
-					if isinstance(tg,Task.TaskBase):
+					if isinstance(tg,Task.Task):
 						lst=[tg]
 					else:
 						lst=tg.tasks
 					for tsk in lst:
 						do_exec=False
-						for node in getattr(tsk,'inputs',[]):
+						for node in tsk.inputs:
 							if matcher(node,output=False):
 								do_exec=True
 								break
-						for node in getattr(tsk,'outputs',[]):
+						for node in tsk.outputs:
 							if matcher(node,output=True):
 								do_exec=True
 								break
@@ -781,9 +786,9 @@ class StepContext(BuildContext):
 				pat='%s$'%pat
 			pattern=re.compile(pat)
 		def match(node,output):
-			if output==True and not out:
+			if output and not out:
 				return False
-			if output==False and not inn:
+			if not output and not inn:
 				return False
 			if anode:
 				return anode==node

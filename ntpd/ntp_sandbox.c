@@ -1,7 +1,7 @@
 /*
  * ntp_sandbox.c - privilege containment for the NTP daemon
  *
- * SPDX-License-Identifier: BSD-2-clause
+ * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #include "config.h"
@@ -79,7 +79,7 @@ bool sandbox(const bool droproot,
 #  ifdef HAVE_LINUX_CAPABILITY
 		/* set flag: keep privileges across setuid() call. */
 		if (prctl( PR_SET_KEEPCAPS, 1L, 0L, 0L, 0L ) == -1) {
-			msyslog( LOG_ERR, "INIT: prctl( PR_SET_KEEPCAPS, 1L ) failed: %m" );
+			msyslog( LOG_ERR, "INIT: prctl( PR_SET_KEEPCAPS, 1L ) failed: %s", strerror(errno) );
 			exit(-1);
 		}
 #  elif defined(HAVE_SOLARIS_PRIVS)
@@ -116,7 +116,7 @@ getuser:
 					sw_gid = pw->pw_gid;
 				} else {
 					if (errno)
-						msyslog(LOG_ERR, "INIT: getpwnam(%s) failed: %m", user);
+						msyslog(LOG_ERR, "INIT: getpwnam(%s) failed: %s", user, strerror(errno));
 					else
 						msyslog(LOG_ERR, "INIT: Cannot find user `%s'", user);
 					exit (-1);
@@ -143,67 +143,67 @@ getgroup:
 		if (chrootdir ) {
 			/* make sure cwd is inside the jail: */
 			if (chdir(chrootdir)) {
-				msyslog(LOG_ERR, "INIT: Cannot chdir() to `%s': %m", chrootdir);
+				msyslog(LOG_ERR, "INIT: Cannot chdir() to `%s': %s", chrootdir, strerror(errno));
 				exit (-1);
 			}
 			if (chroot(chrootdir)) {
-				msyslog(LOG_ERR, "INIT: Cannot chroot() to `%s': %m", chrootdir);
+				msyslog(LOG_ERR, "INIT: Cannot chroot() to `%s': %s", chrootdir, strerror(errno));
 				exit (-1);
 			}
 			if (chdir("/")) {
-				msyslog(LOG_ERR, "INIT: Cannot chdir() to root after chroot(): %m");
+				msyslog(LOG_ERR, "INIT: Cannot chdir() to root after chroot(): %s", strerror(errno));
 				exit (-1);
 			}
 		}
 #  ifdef HAVE_SOLARIS_PRIVS
 		if ((lowprivs = priv_str_to_set(LOWPRIVS, ",", NULL)) == NULL) {
-			msyslog(LOG_ERR, "INIT: priv_str_to_set() failed:%m");
+			msyslog(LOG_ERR, "INIT: priv_str_to_set() failed:%s", strerror(errno));
 			exit(-1);
 		}
 		if ((highprivs = priv_allocset()) == NULL) {
-			msyslog(LOG_ERR, "INIT: priv_allocset() failed:%m");
+			msyslog(LOG_ERR, "INIT: priv_allocset() failed:%s", strerror(errno));
 			exit(-1);
 		}
 		(void) getppriv(PRIV_PERMITTED, highprivs);
 		(void) priv_intersect(highprivs, lowprivs);
 		if (setppriv(PRIV_SET, PRIV_PERMITTED, lowprivs) == -1) {
-			msyslog(LOG_ERR, "INIT: setppriv() failed:%m");
+			msyslog(LOG_ERR, "INIT: setppriv() failed:%s", strerror(errno));
 			exit(-1);
 		}
 #  endif /* HAVE_SOLARIS_PRIVS */
                 /* FIXME? Apple takes an int as 2nd argument */
 		if (user && initgroups(user, (gid_t)sw_gid)) {
-			msyslog(LOG_ERR, "INIT: Cannot initgroups() to user `%s': %m", user);
+			msyslog(LOG_ERR, "INIT: Cannot initgroups() to user `%s': %s", user, strerror(errno));
 			exit (-1);
 		}
 		if (group && setgid(sw_gid)) {
-			msyslog(LOG_ERR, "INIT: Cannot setgid() to group `%s': %m", group);
+			msyslog(LOG_ERR, "INIT: Cannot setgid() to group `%s': %s", group, strerror(errno));
 			exit (-1);
 		}
 		if (group && setegid(sw_gid)) {
-			msyslog(LOG_ERR, "INIT: Cannot setegid() to group `%s': %m", group);
+			msyslog(LOG_ERR, "INIT: Cannot setegid() to group `%s': %s", group, strerror(errno));
 			exit (-1);
 		}
 		if (group) {
 			if (0 != setgroups(1, &sw_gid)) {
-				msyslog(LOG_ERR, "INIT: setgroups(1, %u) failed: %m",
-                                        sw_gid);
+				msyslog(LOG_ERR, "INIT: setgroups(1, %u) failed: %s",
+                                        sw_gid, strerror(errno));
 				exit (-1);
 			}
 		}
 		else if (pw)
 			if (0 != initgroups(pw->pw_name, (gid_t)pw->pw_gid)) {
 				msyslog(LOG_ERR,
-                                        "INIT: initgroups(<%s>, %u) filed: %m",
-                                        pw->pw_name, pw->pw_gid);
+                                        "INIT: initgroups(<%s>, %u) failed: %s",
+                                        pw->pw_name, pw->pw_gid, strerror(errno));
 				exit (-1);
 			}
 		if (user && setuid(sw_uid)) {
-			msyslog(LOG_ERR, "INIT: Cannot setuid() to user `%s': %m", user);
+			msyslog(LOG_ERR, "INIT: Cannot setuid() to user `%s': %s", user, strerror(errno));
 			exit (-1);
 		}
 		if (user && seteuid(sw_uid)) {
-			msyslog(LOG_ERR, "INIT: Cannot seteuid() to user `%s': %m", user);
+			msyslog(LOG_ERR, "INIT: Cannot seteuid() to user `%s': %s", user, strerror(errno));
 			exit (-1);
 		}
 
@@ -235,13 +235,13 @@ getgroup:
 			caps = cap_from_text(captext);
 			if (!caps) {
 				msyslog(LOG_ERR,
-					"INIT: cap_from_text(%s) failed: %m",
-					captext);
+					"INIT: cap_from_text(%s) failed: %s",
+					captext, strerror(errno));
 				exit(-1);
 			}
 			if (-1 == cap_set_proc(caps)) {
 				msyslog(LOG_ERR,
-					"INIT: cap_set_proc() failed to drop root privs: %m");
+					"INIT: cap_set_proc() failed to drop root privs: %s", strerror(errno));
 				exit(-1);
 			}
 			cap_free(caps);
@@ -249,11 +249,11 @@ getgroup:
 #  endif	/* HAVE_LINUX_CAPABILITY */
 #  ifdef HAVE_SOLARIS_PRIVS
 		if (priv_delset(lowprivs, "proc_setid") == -1) {
-			msyslog(LOG_ERR, "INIT: priv_delset() failed:%m");
+			msyslog(LOG_ERR, "INIT: priv_delset() failed:%s", strerror(errno));
 			exit(-1);
 		}
 		if (setppriv(PRIV_SET, PRIV_PERMITTED, lowprivs) == -1) {
-			msyslog(LOG_ERR, "INIT: setppriv() failed:%m");
+			msyslog(LOG_ERR, "INIT: setppriv() failed:%s", strerror(errno));
 			exit(-1);
 		}
 		priv_freeset(lowprivs);
@@ -275,7 +275,7 @@ getgroup:
         signal_no_reset1(SIGSYS, catchTrap);
 
 	if (NULL == ctx) {
-		msyslog(LOG_ERR, "INIT: sandbox: seccomp_init() failed: %m");
+		msyslog(LOG_ERR, "INIT: sandbox: seccomp_init() failed: %s", strerror(errno));
 		exit (1);
 		}
 
@@ -290,12 +290,6 @@ int scmp_sc[] = {
  * these from the list.
  */
 
-#ifndef ENABLE_DNS_LOOKUP
-	/* libcrypto uses pthread_once() */
-	/* We could avoid this by calling ssl_init() first. */
-	SCMP_SYS(futex),	/* sem_xxx, used by threads */
-#endif
-
 	SCMP_SYS(getdents),	/* Scanning /etc/ntp.d/ */
 	SCMP_SYS(getdents64),
 #ifdef __NR_prlimit64
@@ -303,6 +297,7 @@ int scmp_sc[] = {
 #endif
 #endif  /* ENABLE_EARLY_DROPROOT */
 
+        SCMP_SYS(accept),
         SCMP_SYS(access),
 	SCMP_SYS(adjtimex),
 	SCMP_SYS(bind),
@@ -317,6 +312,7 @@ int scmp_sc[] = {
 	SCMP_SYS(fcntl),
 	SCMP_SYS(fstat),
 	SCMP_SYS(fsync),
+	SCMP_SYS(futex),	/* sem_xxx, used by threads */
 
 
 #ifdef __NR_getrandom
@@ -335,6 +331,7 @@ int scmp_sc[] = {
 	SCMP_SYS(gettimeofday),	/* mkstemp */
 	SCMP_SYS(ioctl),
 	SCMP_SYS(link),
+	SCMP_SYS(listen),
 	SCMP_SYS(lseek),
 	SCMP_SYS(munmap),
 	SCMP_SYS(open),
@@ -371,6 +368,7 @@ int scmp_sc[] = {
 #ifdef __NR_time
 	SCMP_SYS(time),		/* not in ARM */
 #endif
+	SCMP_SYS(sysinfo),
 #ifdef HAVE_TIMER_CREATE
 	SCMP_SYS(timer_create),
 	SCMP_SYS(timer_gettime),
@@ -382,7 +380,6 @@ int scmp_sc[] = {
 	SCMP_SYS(write),
         SCMP_SYS(unlink),
 
-#ifdef ENABLE_DNS_LOOKUP
 /* Don't comment out this block for testing.
  * pthread_create blocks signals so it will crash
  * rather than generate a trap.
@@ -396,11 +393,6 @@ int scmp_sc[] = {
 	SCMP_SYS(socketpair),
 	SCMP_SYS(statfs),
 	SCMP_SYS(uname),
-#endif
-/* This shouldn't be needed if we don't use DNS, but
- * several libraries call pthread_once, just in case.
- */
-	SCMP_SYS(futex),	/* sem_xxx, used by threads */
 
 
 #ifdef REFCLOCK
@@ -429,7 +421,7 @@ int scmp_sc[] = {
 	/* gentoo 64-bit and 32-bit, Intel and Arm use mmap */
 	SCMP_SYS(mmap),
 #endif
-#if defined(__i386__) || defined(__arm__)
+#if defined(__i386__) || defined(__arm__) || defined(__powerpc__)
 	SCMP_SYS(_newselect),
 	SCMP_SYS(_llseek),
 	SCMP_SYS(mmap2),
@@ -438,20 +430,18 @@ int scmp_sc[] = {
 #endif
 };
 	{
-		unsigned int i;
-
-		for (i = 0; i < COUNTOF(scmp_sc); i++) {
+		for (unsigned int i = 0; i < COUNTOF(scmp_sc); i++) {
 			if (seccomp_rule_add(ctx,
 			    SCMP_ACT_ALLOW, scmp_sc[i], 0) < 0) {
 				msyslog(LOG_ERR,
-				    "INIT: sandbox: seccomp_rule_add() failed: %m");
+				    "INIT: sandbox: seccomp_rule_add() failed: %s", strerror(errno));
 			    exit(1);
 			}
 		}
 	}
 
 	if (seccomp_load(ctx) < 0) {
-		msyslog(LOG_ERR, "INIT: sandbox: seccomp_load() failed: %m");
+		msyslog(LOG_ERR, "INIT: sandbox: seccomp_load() failed: %s", strerror(errno));
 		exit(1);
 	}
 	else {

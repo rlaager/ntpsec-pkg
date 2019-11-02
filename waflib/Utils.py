@@ -2,7 +2,8 @@
 # encoding: utf-8
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
-import atexit,os,sys,errno,traceback,inspect,re,datetime,platform,base64,signal,functools
+from __future__ import with_statement
+import atexit,os,sys,errno,inspect,re,datetime,platform,base64,signal,functools,time
 try:
 	import cPickle
 except ImportError:
@@ -32,9 +33,14 @@ try:
 	from hashlib import md5
 except ImportError:
 	try:
-		from md5 import md5
+		from hashlib import sha1 as md5
 	except ImportError:
 		pass
+else:
+	try:
+		md5().digest()
+	except ValueError:
+		from hashlib import sha1 as md5
 try:
 	import threading
 except ImportError:
@@ -120,46 +126,47 @@ class lru_cache(object):
 			node.key=key
 			node.val=val
 			self.table[key]=node
-is_win32=os.sep=='\\'or sys.platform=='win32'
-def readf(fname,m='r',encoding='ISO8859-1'):
+class lazy_generator(object):
+	def __init__(self,fun,params):
+		self.fun=fun
+		self.params=params
+	def __iter__(self):
+		return self
+	def __next__(self):
+		try:
+			it=self.it
+		except AttributeError:
+			it=self.it=self.fun(*self.params)
+		return next(it)
+	next=__next__
+is_win32=os.sep=='\\'or sys.platform=='win32'or os.name=='nt'
+def readf(fname,m='r',encoding='latin-1'):
 	if sys.hexversion>0x3000000 and not'b'in m:
 		m+='b'
-		f=open(fname,m)
-		try:
+		with open(fname,m)as f:
 			txt=f.read()
-		finally:
-			f.close()
 		if encoding:
 			txt=txt.decode(encoding)
 		else:
 			txt=txt.decode()
 	else:
-		f=open(fname,m)
-		try:
+		with open(fname,m)as f:
 			txt=f.read()
-		finally:
-			f.close()
 	return txt
-def writef(fname,data,m='w',encoding='ISO8859-1'):
+def writef(fname,data,m='w',encoding='latin-1'):
 	if sys.hexversion>0x3000000 and not'b'in m:
 		data=data.encode(encoding)
 		m+='b'
-	f=open(fname,m)
-	try:
+	with open(fname,m)as f:
 		f.write(data)
-	finally:
-		f.close()
 def h_file(fname):
-	f=open(fname,'rb')
 	m=md5()
-	try:
+	with open(fname,'rb')as f:
 		while fname:
 			fname=f.read(200000)
 			m.update(fname)
-	finally:
-		f.close()
 	return m.digest()
-def readf_win32(f,m='r',encoding='ISO8859-1'):
+def readf_win32(f,m='r',encoding='latin-1'):
 	flags=os.O_NOINHERIT|os.O_RDONLY
 	if'b'in m:
 		flags|=os.O_BINARY
@@ -171,23 +178,17 @@ def readf_win32(f,m='r',encoding='ISO8859-1'):
 		raise IOError('Cannot read from %r'%f)
 	if sys.hexversion>0x3000000 and not'b'in m:
 		m+='b'
-		f=os.fdopen(fd,m)
-		try:
+		with os.fdopen(fd,m)as f:
 			txt=f.read()
-		finally:
-			f.close()
 		if encoding:
 			txt=txt.decode(encoding)
 		else:
 			txt=txt.decode()
 	else:
-		f=os.fdopen(fd,m)
-		try:
+		with os.fdopen(fd,m)as f:
 			txt=f.read()
-		finally:
-			f.close()
 	return txt
-def writef_win32(f,data,m='w',encoding='ISO8859-1'):
+def writef_win32(f,data,m='w',encoding='latin-1'):
 	if sys.hexversion>0x3000000 and not'b'in m:
 		data=data.encode(encoding)
 		m+='b'
@@ -200,24 +201,18 @@ def writef_win32(f,data,m='w',encoding='ISO8859-1'):
 		fd=os.open(f,flags)
 	except OSError:
 		raise OSError('Cannot write to %r'%f)
-	f=os.fdopen(fd,m)
-	try:
+	with os.fdopen(fd,m)as f:
 		f.write(data)
-	finally:
-		f.close()
 def h_file_win32(fname):
 	try:
 		fd=os.open(fname,os.O_BINARY|os.O_RDONLY|os.O_NOINHERIT)
 	except OSError:
 		raise OSError('Cannot read from %r'%fname)
-	f=os.fdopen(fd,'rb')
 	m=md5()
-	try:
+	with os.fdopen(fd,'rb')as f:
 		while fname:
 			fname=f.read(200000)
 			m.update(fname)
-	finally:
-		f.close()
 	return m.digest()
 readf_unix=readf
 writef_unix=writef
@@ -276,13 +271,25 @@ def num2ver(ver):
 				ret+=256**(3-i)*int(ver[i])
 		return ret
 	return ver
-def ex_stack():
-	return traceback.format_exc()
 def to_list(val):
 	if isinstance(val,str):
 		return val.split()
 	else:
 		return val
+def console_encoding():
+	try:
+		import ctypes
+	except ImportError:
+		pass
+	else:
+		try:
+			codepage=ctypes.windll.kernel32.GetConsoleCP()
+		except AttributeError:
+			pass
+		else:
+			if codepage:
+				return'cp%d'%codepage
+	return sys.stdout.encoding or('cp1252'if is_win32 else'latin-1')
 def split_path_unix(path):
 	return path.split('/')
 def split_path_cygwin(path):
@@ -294,23 +301,25 @@ def split_path_cygwin(path):
 re_sp=re.compile('[/\\\\]+')
 def split_path_win32(path):
 	if path.startswith('\\\\'):
-		ret=re_sp.split(path)[2:]
-		ret[0]='\\'+ret[0]
+		ret=re_sp.split(path)[1:]
+		ret[0]='\\\\'+ret[0]
+		if ret[0]=='\\\\?':
+			return ret[1:]
 		return ret
 	return re_sp.split(path)
 msysroot=None
 def split_path_msys(path):
-	if path.startswith(('/','\\'))and not path.startswith(('\\','\\\\')):
+	if path.startswith(('/','\\'))and not path.startswith(('//','\\\\')):
 		global msysroot
 		if not msysroot:
-			msysroot=subprocess.check_output(['cygpath','-w','/']).decode(sys.stdout.encoding or'iso8859-1')
+			msysroot=subprocess.check_output(['cygpath','-w','/']).decode(sys.stdout.encoding or'latin-1')
 			msysroot=msysroot.strip()
 		path=os.path.normpath(msysroot+os.sep+path)
 	return split_path_win32(path)
 if sys.platform=='cygwin':
 	split_path=split_path_cygwin
 elif is_win32:
-	if os.environ.get('MSYSTEM'):
+	if os.environ.get('MSYSTEM')and sys.executable.startswith('/'):
 		split_path=split_path_msys
 	else:
 		split_path=split_path_win32
@@ -355,8 +364,18 @@ def quote_define_name(s):
 	fu=re.sub('_+','_',fu)
 	fu=fu.upper()
 	return fu
+re_sh=re.compile('\\s|\'|"')
+def shell_escape(cmd):
+	if isinstance(cmd,str):
+		return cmd
+	return' '.join(repr(x)if re_sh.search(x)else x for x in cmd)
 def h_list(lst):
 	return md5(repr(lst).encode()).digest()
+if sys.hexversion<0x3000000:
+	def h_list_python2(lst):
+		return md5(repr(lst)).digest()
+	h_list_python2.__doc__=h_list.__doc__
+	h_list=h_list_python2
 def h_fun(fun):
 	try:
 		return fun.code
@@ -384,7 +403,7 @@ def h_cmd(ins):
 	else:
 		ret=str(h_fun(ins))
 	if sys.hexversion>0x3000000:
-		ret=ret.encode('iso8859-1','xmlcharrefreplace')
+		ret=ret.encode('latin-1','xmlcharrefreplace')
 	return ret
 reg_subst=re.compile(r"(\\\\)|(\$\$)|\$\{([^}]+)\}")
 def subst_vars(expr,params):
@@ -426,14 +445,16 @@ def unversioned_sys_platform():
 		return s
 	if s=='cli'and os.name=='nt':
 		return'win32'
-	return re.split('\d+$',s)[0]
+	return re.split(r'\d+$',s)[0]
 def nada(*k,**kw):
 	pass
 class Timer(object):
 	def __init__(self):
-		self.start_time=datetime.datetime.utcnow()
+		self.start_time=self.now()
 	def __str__(self):
-		delta=datetime.datetime.utcnow()-self.start_time
+		delta=self.now()-self.start_time
+		if not isinstance(delta,datetime.timedelta):
+			delta=datetime.timedelta(seconds=delta)
 		days=delta.days
 		hours,rem=divmod(delta.seconds,3600)
 		minutes,seconds=divmod(rem,60)
@@ -446,6 +467,11 @@ class Timer(object):
 		if days or hours or minutes:
 			result+='%dm'%minutes
 		return'%s%.3fs'%(result,seconds)
+	def now(self):
+		return datetime.datetime.utcnow()
+	if hasattr(time,'perf_counter'):
+		def now(self):
+			return time.perf_counter()
 def read_la_file(path):
 	sp=re.compile(r'^([^=]+)=\'(.*)\'$')
 	dc={}
@@ -473,7 +499,7 @@ def get_registry_app_path(key,filename):
 		return None
 	try:
 		result=winreg.QueryValue(key,"Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\%s.exe"%filename[0])
-	except WindowsError:
+	except OSError:
 		pass
 	else:
 		if os.path.isfile(result):
@@ -493,7 +519,7 @@ def get_process():
 	except IndexError:
 		filepath=os.path.dirname(os.path.abspath(__file__))+os.sep+'processor.py'
 		cmd=[sys.executable,'-c',readf(filepath)]
-		return subprocess.Popen(cmd,stdout=subprocess.PIPE,stdin=subprocess.PIPE,bufsize=0)
+		return subprocess.Popen(cmd,stdout=subprocess.PIPE,stdin=subprocess.PIPE,bufsize=0,close_fds=not is_win32)
 def run_prefork_process(cmd,kwargs,cargs):
 	if not'env'in kwargs:
 		kwargs['env']=dict(os.environ)
@@ -511,7 +537,9 @@ def run_prefork_process(cmd,kwargs,cargs):
 	if not obj:
 		raise OSError('Preforked sub-process %r died'%proc.pid)
 	process_pool.append(proc)
-	ret,out,err,ex,trace=cPickle.loads(base64.b64decode(obj))
+	lst=cPickle.loads(base64.b64decode(obj))
+	assert len(lst)==5
+	ret,out,err,ex,trace=lst
 	if ex:
 		if ex=='OSError':
 			raise OSError(trace)

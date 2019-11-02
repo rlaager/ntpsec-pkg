@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# SPDX-License-Identifier: BSD-2-clause
+# SPDX-License-Identifier: BSD-2-Clause
 '''\
 Any keystroke causes a poll and update. Keystroke commands:
 
@@ -173,7 +173,7 @@ class Fatal(Exception):
 class OutputContext:
     def __enter__(self):
         "Begin critical region."
-        if (sys.version_info[0] < 3) and (disableunicode is False):
+        if sys.version_info[0] < 3 and not disableunicode:
             # This appears to only be needed under python 2, it is only
             # activated when we already have UTF-8. Otherwise we drop
             # down to non-unicode versions.
@@ -211,6 +211,11 @@ USAGE: ntpmon [-dhnuV] [-D lvl] [-l logfile] [host]
 '''
 
 if __name__ == '__main__':
+    bin_ver = "ntpsec-@NTPSEC_VERSION_EXTENDED@"
+    if ntp.util.stdversion() != bin_ver:
+        sys.stderr.write("Module/Binary version mismatch\n")
+        sys.stderr.write("Binary: %s\n" % bin_ver)
+        sys.stderr.write("Module: %s\n" % ntp.util.stdversion())
     try:
         (options, arguments) = getopt.getopt(sys.argv[1:],
                                              "dD:hl:nuV",
@@ -301,7 +306,7 @@ if __name__ == '__main__':
                     else:
                         peer_report.polls = [1]  # Kluge!
                         peers = []
-                    if showpeers and len(peers) == 0:
+                    if showpeers and not peers:
                         raise Fatal("no peers reported")
                     try:
                         initphase = False

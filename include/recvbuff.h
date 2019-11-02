@@ -4,6 +4,7 @@
 #include "ntp.h"
 #include "ntp_net.h"
 #include "ntp_lists.h"
+#include "nts.h"
 
 /*
  * recvbuf memory management
@@ -21,36 +22,32 @@
  */
 
 /*
- *  the maximum length NTP packet contains the NTP header, one Autokey
- *  request, one Autokey response and the MAC (Autokey has been removed
- *  from NTPsec, but we need to deal with the largest packets from legacy
- *  versions). Assuming certificates don't get too big, the maximum packet
- *  length is set arbitrarily at 1000.
+ *  The maximum length NTP packet contains the NTP header, one Autokey
+ *  request, one Autokey response, the MAC, and extension fields
+ *  (Autokey has been removed from NTPsec, but we need to deal with
+ *  the largest packets from legacy versions).  The only free parameter
+ *  here is the maximum length of extension data.
  */
-#define	RX_BUFF_SIZE	1000		/* hail Mary */
+#define	RX_BUFF_SIZE	(LEN_PKT_NOMAC + MAX_MAC_LEN + MAX_EXT_LEN)
 
 
 typedef struct recvbuf recvbuf_t;
 
 struct recvbuf {
-	recvbuf_t *	link;	/* next in list */
-	sockaddr_u	recv_srcadr;
-	sockaddr_u	srcadr;		/* where packet came from */
-	struct netendpt *	dstadr;		/* address pkt arrived on */
+	recvbuf_t *	link;		/* next in list */
+	sockaddr_u	recv_srcadr;	/* where packet came from */
+	struct netendpt *	dstadr;	/* address pkt arrived on */
 	SOCKET		fd;		/* fd on which it was received */
 	l_fp		recv_time;	/* time of arrival */
 	size_t		recv_length;	/* number of octets received */
-	union {
-		struct pkt	X_recv_pkt;
-		uint8_t		X_recv_buffer[RX_BUFF_SIZE];
-	} recv_space;
-#define	recv_pkt		recv_space.X_recv_pkt
-#define	recv_buffer		recv_space.X_recv_buffer
+	uint8_t		recv_buffer[RX_BUFF_SIZE];
 	struct parsed_pkt pkt;  /* host-order copy of data from wire */
 	int used;		/* reference count */
 	bool keyid_present;
 	keyid_t keyid;
 	int mac_len;
+	bool extens_present;
+	struct ntspacket_t ntspacket;
 #ifdef REFCLOCK
 	struct peer *	recv_peer;
 #endif /* REFCLOCK */

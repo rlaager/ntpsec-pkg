@@ -69,7 +69,7 @@ class MIBControl:
             if node not in currentLevel.keys():
                 currentLevel[node] = {"reader": None, "writer": None,
                                       "subids": None}
-            if len(remainingOID) == 0:  # We have reached the target node
+            if not remainingOID:  # We have reached the target node
                 currentLevel[node]["reader"] = reader
                 currentLevel[node]["writer"] = writer
                 if dynamic is not None:
@@ -86,7 +86,7 @@ class MIBControl:
         while True:
             try:
                 oid, reader, writer = gen_next(gen)
-                if nextP is True:  # GetNext
+                if nextP:  # GetNext
                     # For getnext any OID greater than the start qualifies
                     oidhit = (oid > searchoid)
                 else:  # Get
@@ -95,12 +95,12 @@ class MIBControl:
                 if oidhit and (reader is not None):
                     # We only return OIDs that have a minimal implementation
                     # walkMIBTree handles the generation of dynamic trees
-                    if returnGenerator is True:
+                    if returnGenerator:
                         return oid, reader, writer, gen
                     else:
                         return oid, reader, writer
             except StopIteration:  # Couldn't find anything in the tree
-                if returnGenerator is True:
+                if returnGenerator:
                     return None, None, None, None
                 else:
                     return None, None, None
@@ -126,15 +126,14 @@ class MIBControl:
                     continue  # skip unimplemented OIDs
                 elif oid.subids == oidrange.start.subids:
                     # ok, found the start, do we need to skip it?
-                    if oidrange.start.include is True:
+                    if oidrange.start.include:
                         oids.append((oid, reader, writer))
                         break
                     else:
                         continue
                 elif oid > oidrange.start:
                     # If we are here it means we hit the start but skipped
-                    if (oidrange.end.isNull() is False) and \
-                       (oid >= oidrange.end):
+                    if not oidrange.end.isNull() and oid >= oidrange.end:
                         # We fell off the range
                         return []
                     oids.append((oid, reader, writer))
@@ -142,7 +141,7 @@ class MIBControl:
             except StopIteration:
                 # Couldn't find *anything*
                 return []
-        if firstOnly is True:
+        if firstOnly:
             return oids
         # Start filling in the rest of the range
         while True:
@@ -150,8 +149,7 @@ class MIBControl:
                 oid, reader, writer = gen_next(gen)
                 if reader is None:
                     continue  # skip unimplemented OIDs
-                elif (oidrange.end.isNull() is False) and \
-                     (oid >= oidrange.end):
+                elif not oidrange.end.isNull() and oid >= oidrange.end:
                     break  # past the end of a bounded range
                 else:
                     oids.append((oid, reader, writer))
@@ -194,7 +192,7 @@ class PacketControl:
         if self.stillConnected is not True:
             return False
         if runforever:
-            while self.stillConnected is True:
+            while self.stillConnected:
                 self._doloop()
                 if self.loopCallback is not None:
                     self.loopCallback(self)
@@ -207,7 +205,7 @@ class PacketControl:
         # loop body split out to separate the one-shot/run-forever switches
         # from the actual logic
         self.packetEater()
-        while len(self.receivedPackets) > 0:
+        while self.receivedPackets:
             packet = self.receivedPackets.pop(0)
             if packet.sessionID != self.sessionID:
                 self.log(
@@ -252,15 +250,15 @@ class PacketControl:
         "Wait for a response to a specific packet, dropping everything else"
         while True:
             self.packetEater()
-            while len(self.receivedPackets) > 0:
+            while self.receivedPackets:
                 packet = self.receivedPackets.pop(0)
                 if packet.__class__ != ax.ResponsePDU:
                     continue
                 haveit = (opkt.transactionID == packet.transactionID) and \
                          (opkt.packetID == packet.packetID)
-                if ignoreSID is False:
+                if not ignoreSID:
                     haveit = haveit and (opkt.sessionID == packet.sessionID)
-                if haveit is True:
+                if haveit:
                     self.log("Received waited for response", 4)
                     return packet
             time.sleep(self.spinGap)
@@ -284,7 +282,7 @@ class PacketControl:
                 return None  # We don't even have a packet header, bail
             try:
                 pkt, fullPkt, extraData = ax.decode_packet(self.receivedData)
-                if fullPkt is False:
+                if not fullPkt:
                     return None
                 self.receivedData = extraData
                 self.receivedPackets.append(pkt)
@@ -308,7 +306,7 @@ class PacketControl:
         self.log("Sending packet (with reply: %s): %s" % (expectsReply,
                                                           repr(packet)), 4)
         self.socket.sendall(encoded)
-        if expectsReply is True:
+        if expectsReply:
             index = (packet.sessionID,
                      packet.transactionID,
                      packet.packetID)
@@ -352,11 +350,11 @@ class PacketControl:
         data = b""
         while True:
             tmp = select.select([self.socket], [], [], 0)[0]
-            if len(tmp) == 0:  # No socket, means no data available
+            if not tmp:  # No socket, means no data available
                 break
             tmp = tmp[0]
             newdata = tmp.recv(4096)  # Arbitrary value
-            if len(newdata) > 0:
+            if newdata:
                 self.log("Received data: %s" % repr(newdata), 5)
                 data += newdata
                 self.lastReception = time.time()
@@ -378,7 +376,7 @@ class PacketControl:
                 binds.append(ax.Varbind(ax.VALUE_NO_SUCH_OBJECT, target))
             else:
                 vbind = reader(oid)
-                if vbind is None:  # No data avaliable.
+                if vbind is None:  # No data available.
                     # I am not certain that this is the correct response
                     # when no data is available. snmpwalk appears to stop
                     # calling a particular sub-agent when it gets to a NULL.
@@ -397,7 +395,7 @@ class PacketControl:
         for oidr in packet.oidranges:
             while True:
                 oids = self.database.getOIDsInRange(oidr, True)
-                if len(oids) == 0:  # Nothing found
+                if not oids:  # Nothing found
                     binds.append(ax.Varbind(ax.VALUE_END_OF_MIB_VIEW,
                                             oidr.start))
                     break
@@ -424,7 +422,7 @@ class PacketControl:
         # Handle non-repeats
         for oidr in nonreps:
             oids = self.database.getOIDsInRange(oidr, True)
-            if len(oids) == 0:  # Nothing found
+            if not oids:  # Nothing found
                 binds.append(ax.Varbind(ax.VALUE_END_OF_MIB_VIEW, oidr.start))
             else:
                 oid, reader, _ = oids[0]
@@ -432,7 +430,7 @@ class PacketControl:
         # Handle repeaters
         for oidr in repeats:
             oids = self.database.getOIDsInRange(oidr)
-            if len(oids) == 0:  # Nothing found
+            if not oids:  # Nothing found
                 binds.append(ax.Varbind(ax.VALUE_END_OF_MIB_VIEW, oidr.start))
             else:
                 for oid, reader, _ in oids[:packet.maxReps]:
@@ -445,9 +443,9 @@ class PacketControl:
         # Be advised: MOST OF THE VALIDATION IS DUMMY CODE OR DOESN'T EXIST
         # According to the RFC this is one of the most demanding parts and
         #  *has* to be gotten right
-        if self.database.inSetP is True:
+        if self.database.inSetP:
             pass  # Is this an error?
-        # if (inSetP is True) is an error these will go in an else block
+        # if (inSetP) is an error these will go in an else block
         self.database.inSetP = True
         self.database.setVarbinds = []
         self.database.setHandlers = []
@@ -488,7 +486,7 @@ class PacketControl:
             self.sendPacket(resp, False)
 
     def handle_CommitSetPDU(self, packet):
-        if self.database.inSetP is False:
+        if not self.database.inSetP:
             pass  # how to handle this?
         varbinds = self.database.setVarbinds
         handlers = self.database.setHandlers
@@ -553,7 +551,7 @@ def walkMIBTree(tree, rootpath=()):
     keyID = 0
     while True:
         if keyID >= len(currentKeys):
-            if len(nodeStack) > 0:
+            if nodeStack:
                 # No more nodes this level, pop higher node
                 current, currentKeys, keyID, key = nodeStack.pop()
                 oidStack.pop()
@@ -569,7 +567,7 @@ def walkMIBTree(tree, rootpath=()):
             # Push current node, move down a level
             nodeStack.append((current, currentKeys, keyID, key))
             oidStack.append(key)
-            if isinstance(subs, dict) is True:
+            if isinstance(subs, dict):
                 current = subs
             else:
                 current = subs()  # Tree generator function

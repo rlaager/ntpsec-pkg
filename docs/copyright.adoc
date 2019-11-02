@@ -1,4 +1,4 @@
-= Copyright Notice =
+= Copyright Notice
 include::html.include[]
 
 [cols="10%,90%",frame="none",grid="none",style="verse"]
@@ -116,8 +116,6 @@ as authors of this work.
   <jhay@icomtek.csir.co.za>] IPv6 support and testing
 * mailto:davehart@davehart.com[Dave Hart <davehart@davehart.com>]
   General maintenance
-* mailto:neoclock4x@linum.com[Claas Hilbrecht
-  <neoclock4x@linum.com>] NeoClock4X clock driver
 * mailto:glenn@herald.usask.ca[Glenn Hollinger
   <glenn@herald.usask.ca>] GOES clock driver (removed in NTPsec)
 * mailto:jbj@chatham.usdesign.com[Jeff Johnson
@@ -127,7 +125,7 @@ as authors of this work.
   mailto:H.Lambermont@chello.nl[<H.Lambermont@chello.nl>] ntpsweep
 * mailto:phk@FreeBSD.ORG[Poul-Henning Kamp <phk@FreeBSD.ORG>]
   Oncore driver (Original author)
-* http://www4.informatik.uni-erlangen.de/%7ekardel[Frank Kardel]
+* https://www4.informatik.uni-erlangen.de/%7ekardel[Frank Kardel]
   mailto:kardel@ntp.org[<kardel (at) ntp
   (dot) org>] PARSE <GENERIC> (driver 14 reference clocks), STREAMS
   modules for PARSE, support scripts, syslog cleanup, dynamic interface

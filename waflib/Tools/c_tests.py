@@ -132,7 +132,7 @@ extern int foo;
 class grep_for_endianness(Task.Task):
 	color='PINK'
 	def run(self):
-		txt=self.inputs[0].read(flags='rb').decode('iso8859-1')
+		txt=self.inputs[0].read(flags='rb').decode('latin-1')
 		if txt.find('LiTTleEnDian')>-1:
 			self.generator.tmp.append('little')
 		elif txt.find('BIGenDianSyS')>-1:
@@ -140,13 +140,13 @@ class grep_for_endianness(Task.Task):
 		else:
 			return-1
 @feature('grep_for_endianness')
-@after_method('process_source')
+@after_method('apply_link')
 def grep_for_endianness_fun(self):
-	self.create_task('grep_for_endianness',self.compiled_tasks[0].outputs[0])
+	self.create_task('grep_for_endianness',self.link_task.outputs[0])
 @conf
 def check_endianness(self):
 	tmp=[]
 	def check_msg(self):
 		return tmp[0]
-	self.check(fragment=ENDIAN_FRAGMENT,features='c grep_for_endianness',msg='Checking for endianness',define='ENDIANNESS',tmp=tmp,okmsg=check_msg)
+	self.check(fragment=ENDIAN_FRAGMENT,features='c cshlib grep_for_endianness',msg='Checking for endianness',define='ENDIANNESS',tmp=tmp,okmsg=check_msg,confcache=None)
 	return tmp[0]

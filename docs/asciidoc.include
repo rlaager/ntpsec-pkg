@@ -7,8 +7,8 @@
 :project-contact: https://www.ntpsec.org/channels.html
 :project-security-list: security@ntpsec.org
 :project-bug-list: bugs@ntpsec.org
-:millshome: http://www.eecis.udel.edu/~mills/
-:GPSD: http://www.catb.org/gpsd/
+:millshome: https://www.eecis.udel.edu/~mills/
+:GPSD: https://gpsd.io/
 :ntpconf: ntp.conf
 // Annoyingly, these have to be *manually* synchronized with the headers
 // on their manual pages - asciidoc doesn't expand attributes in header lines.
@@ -24,4 +24,6 @@
 :ntpwaitman: ntpwait(8)
 :ntpdigman: ntpdig(1)
 :ntpvizman: ntpviz(1)
-
+// Be very careful about changing things here.
+// Everything is included in HTML doc forming.
+// Borrow a second set of eyes. -- JamesB192

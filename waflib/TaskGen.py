@@ -8,9 +8,9 @@ feats=Utils.defaultdict(set)
 HEADER_EXTS=['.h','.hpp','.hxx','.hh']
 class task_gen(object):
 	mappings=Utils.ordered_iter_dict()
-	prec=Utils.defaultdict(list)
+	prec=Utils.defaultdict(set)
 	def __init__(self,*k,**kw):
-		self.source=''
+		self.source=[]
 		self.target=''
 		self.meths=[]
 		self.features=[]
@@ -22,12 +22,17 @@ class task_gen(object):
 		else:
 			self.bld=kw['bld']
 			self.env=self.bld.env.derive()
-			self.path=self.bld.path
+			self.path=kw.get('path',self.bld.path)
+			path=self.path.abspath()
 			try:
-				self.idx=self.bld.idx[self.path]=self.bld.idx.get(self.path,0)+1
+				self.idx=self.bld.idx[path]=self.bld.idx.get(path,0)+1
 			except AttributeError:
 				self.bld.idx={}
-				self.idx=self.bld.idx[self.path]=1
+				self.idx=self.bld.idx[path]=1
+			try:
+				self.tg_idx_count=self.bld.tg_idx_count=self.bld.tg_idx_count+1
+			except AttributeError:
+				self.tg_idx_count=self.bld.tg_idx_count=1
 		for key,val in kw.items():
 			setattr(self,key,val)
 	def __str__(self):
@@ -83,7 +88,7 @@ class task_gen(object):
 					break
 			else:
 				tmp.append(a)
-		tmp.sort()
+		tmp.sort(reverse=True)
 		out=[]
 		while tmp:
 			e=tmp.pop()
@@ -101,12 +106,12 @@ class task_gen(object):
 							break
 					else:
 						tmp.append(x)
+						tmp.sort(reverse=True)
 		if prec:
 			buf=['Cycle detected in the method execution:']
 			for k,v in prec.items():
 				buf.append('- %s after %s'%(k,[x for x in v if x in prec]))
 			raise Errors.WafError('\n'.join(buf))
-		out.reverse()
 		self.meths=out
 		Logs.debug('task_gen: posting %s %d',self,id(self))
 		for x in out:
@@ -197,8 +202,7 @@ def before_method(*k):
 	def deco(func):
 		setattr(task_gen,func.__name__,func)
 		for fun_name in k:
-			if not func.__name__ in task_gen.prec[fun_name]:
-				task_gen.prec[fun_name].append(func.__name__)
+			task_gen.prec[func.__name__].add(fun_name)
 		return func
 	return deco
 before=before_method
@@ -206,8 +210,7 @@ def after_method(*k):
 	def deco(func):
 		setattr(task_gen,func.__name__,func)
 		for fun_name in k:
-			if not fun_name in task_gen.prec[func.__name__]:
-				task_gen.prec[func.__name__].append(fun_name)
+			task_gen.prec[fun_name].add(func.__name__)
 		return func
 	return deco
 after=after_method
@@ -228,10 +231,13 @@ def to_nodes(self,lst,path=None):
 	for x in Utils.to_list(lst):
 		if isinstance(x,str):
 			node=find(x)
-		else:
+		elif hasattr(x,'name'):
 			node=x
+		else:
+			tmp.extend(self.to_nodes(x))
+			continue
 		if not node:
-			raise Errors.WafError("source not found: %r in %r"%(x,self))
+			raise Errors.WafError('source not found: %r in %r'%(x,self))
 		tmp.append(node)
 	return tmp
 @feature('*')
@@ -257,10 +263,11 @@ def process_rule(self):
 	cls_str=getattr(self,'cls_str',None)
 	cls_keyword=getattr(self,'cls_keyword',None)
 	use_cache=getattr(self,'cache_rule','True')
+	deep_inputs=getattr(self,'deep_inputs',False)
 	scan_val=has_deps=hasattr(self,'deps')
 	if scan:
 		scan_val=id(scan)
-	key=Utils.h_list((name,self.rule,chmod,shell,color,cls_str,cls_keyword,scan_val,_vars))
+	key=Utils.h_list((name,self.rule,chmod,shell,color,cls_str,cls_keyword,scan_val,_vars,deep_inputs))
 	cls=None
 	if use_cache:
 		try:
@@ -284,6 +291,8 @@ def process_rule(self):
 			setattr(cls,'__str__',self.cls_str)
 		if cls_keyword:
 			setattr(cls,'keyword',self.cls_keyword)
+		if deep_inputs:
+			Task.deep_inputs(cls)
 		if scan:
 			cls.scan=self.scan
 		elif has_deps:
@@ -296,11 +305,15 @@ def process_rule(self):
 					nodes.append(node)
 				return[nodes,[]]
 			cls.scan=scan
-		for x in('after','before','ext_in','ext_out'):
-			setattr(cls,x,getattr(self,x,[]))
 		if use_cache:
 			cache[key]=cls
 	tsk=self.create_task(name)
+	for x in('after','before','ext_in','ext_out'):
+		setattr(tsk,x,getattr(self,x,[]))
+	if hasattr(self,'stdout'):
+		tsk.stdout=self.stdout
+	if hasattr(self,'stderr'):
+		tsk.stderr=self.stderr
 	if getattr(self,'timeout',None):
 		tsk.timeout=self.timeout
 	if getattr(self,'always',None):
@@ -338,7 +351,7 @@ def sequence_order(self):
 			for y in self.tasks:
 				y.set_run_after(x)
 	self.bld.prev=self
-re_m4=re.compile('@(\w+)@',re.M)
+re_m4=re.compile(r'@(\w+)@',re.M)
 class subst_pc(Task.Task):
 	def force_permissions(self):
 		if getattr(self.generator,'chmod',None):
@@ -348,6 +361,8 @@ class subst_pc(Task.Task):
 		if getattr(self.generator,'is_copy',None):
 			for i,x in enumerate(self.outputs):
 				x.write(self.inputs[i].read('rb'),'wb')
+				stat=os.stat(self.inputs[i].abspath())
+				os.utime(self.outputs[i].abspath(),(stat.st_atime,stat.st_mtime))
 			self.force_permissions()
 			return None
 		if getattr(self.generator,'fun',None):
@@ -355,11 +370,11 @@ class subst_pc(Task.Task):
 			if not ret:
 				self.force_permissions()
 			return ret
-		code=self.inputs[0].read(encoding=getattr(self.generator,'encoding','ISO8859-1'))
+		code=self.inputs[0].read(encoding=getattr(self.generator,'encoding','latin-1'))
 		if getattr(self.generator,'subst_fun',None):
 			code=self.generator.subst_fun(self,code)
 			if code is not None:
-				self.outputs[0].write(code,encoding=getattr(self.generator,'encoding','ISO8859-1'))
+				self.outputs[0].write(code,encoding=getattr(self.generator,'encoding','latin-1'))
 			self.force_permissions()
 			return None
 		code=code.replace('%','%%')
@@ -370,7 +385,6 @@ class subst_pc(Task.Task):
 				lst.append(g(1))
 				return"%%(%s)s"%g(1)
 			return''
-		global re_m4
 		code=getattr(self.generator,'re_m4',re_m4).sub(repl,code)
 		try:
 			d=self.generator.dct
@@ -384,7 +398,7 @@ class subst_pc(Task.Task):
 					tmp=str(tmp)
 				d[x]=tmp
 		code=code%d
-		self.outputs[0].write(code,encoding=getattr(self.generator,'encoding','ISO8859-1'))
+		self.outputs[0].write(code,encoding=getattr(self.generator,'encoding','latin-1'))
 		self.generator.bld.raw_deps[self.uid()]=lst
 		try:
 			delattr(self,'cache_sig')
@@ -442,19 +456,15 @@ def process_subst(self):
 				b=y
 		if not a:
 			raise Errors.WafError('could not find %r for %r'%(x,self))
-		has_constraints=False
 		tsk=self.create_task('subst',a,b)
 		for k in('after','before','ext_in','ext_out'):
 			val=getattr(self,k,None)
 			if val:
-				has_constraints=True
 				setattr(tsk,k,val)
-		if not has_constraints:
-			global HEADER_EXTS
-			for xt in HEADER_EXTS:
-				if b.name.endswith(xt):
-					tsk.before=[k for k in('c','cxx')if k in Task.classes]
-					break
+		for xt in HEADER_EXTS:
+			if b.name.endswith(xt):
+				tsk.ext_out=tsk.ext_out+['.h']
+				break
 		inst_to=getattr(self,'install_path',None)
 		if inst_to:
 			self.install_task=self.add_install_files(install_to=inst_to,install_from=b,chmod=getattr(self,'chmod',Utils.O644))

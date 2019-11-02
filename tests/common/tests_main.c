@@ -49,7 +49,6 @@ static void RunAllTests(void)
 	RUN_TEST_GROUP(lfpfunc);
 	RUN_TEST_GROUP(lfptostr);
 	RUN_TEST_GROUP(macencrypt);
-	RUN_TEST_GROUP(msyslog);
 	RUN_TEST_GROUP(netof6);
 	RUN_TEST_GROUP(numtoa);
 	RUN_TEST_GROUP(prettydate);
@@ -73,6 +72,11 @@ static void RunAllTests(void)
 	RUN_TEST_GROUP(leapsec);
 	RUN_TEST_GROUP(hackrestrict);
 	RUN_TEST_GROUP(recvbuff);
+	RUN_TEST_GROUP(nts);
+	RUN_TEST_GROUP(nts_client);
+	RUN_TEST_GROUP(nts_server);
+	RUN_TEST_GROUP(nts_cookie);
+	RUN_TEST_GROUP(nts_extens);
 #endif
 
 }
@@ -80,6 +84,7 @@ static void RunAllTests(void)
 
 int main(int argc, const char * argv[]) {
 
+	getbuf_init();
 	ssl_init();
 	auth_init();
 	init_network();

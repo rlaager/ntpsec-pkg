@@ -1,50 +1,5 @@
-# Applied upstream
-## KOD fix
-0001-Fix-a-bug-in-handling-of-the-rate-limiting-KOD.patch
-## control error checking
-0001-Added-tests-and-comments-to-Authenticator.control.patch
-## PPS fixes
-0001-Simplify-the-PPS-selection-logic.patch
-0002-Fix-PPS-documentation.patch
-0003-Fix-the-PPS-threshold-in-the-PPS-docs.patch
-0004-Cleanup-the-PPS-driver-docs.patch
-0005-Allow-prefer-on-a-pps-peer-to-use-it.patch
-## Pool documentation fixes
-0001-Simplify-and-remove-redundancies-update-URL-to-SSL.patch
-0002-Some-suggested-edits.patch
-0003-Simplify-server-pool-to-merely-pool-.-Fix-a-grammar-.patch
-0004-typo.patch
-## Add security fixes to NEWS
-0001-Add-security-fixes-to-NEWS.patch
-0002-Male-our-CVE-cite-format-uniform-with-the-way-we-ve-.patch
-## Neoclock fix
-0001-Prevent-possible-NULL-deref-during-shutdown-of-neocl.patch
-## ntpkeygen / ntploggps version fixes
-0001-replace-unnecessary-ntp.util-imports.patch
-## Replace banned string functions
-0001-Several-strncpy-strncat-strlcpy-strlcat-fix-542.patch
-## Documentation fixes
-0001-Typo-fixes.patch
-0001-Configuration-code-and-documentation-for-NTS-s-clien.patch
-0001-Documentation-polishing.patch
-0002-Trivial-link-fix.patch
-0003-Documentation-polishing.patch
-0004-Another-note-on-standards-conformance.patch
-0005-Documentation-polishing.patch
-0001-Typo-markup-fix.patch
-0001-Typos-in-comments-and-documentation.patch
-0001-Fix-a-typo.patch
-0001-Grammar.patch
-## Python egg
-0001-Issue-503-PEP-241-compliance.patch
-0001-issue-546.patch
-0001-Make-sure-PEP241-egg-gets-variables-substituted.patch
-0001-Use-.egg-info-for-the-Python-info-file.patch
-## Fix a spelling error
-0001-Fix-a-typo.2.patch
-
-# Forwarded
-0001-Add-Documentation-to-ntp-wait.service.patch
+# Accepted upstream
+0001-Fix-spelling-error.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch
@@ -57,3 +12,4 @@ use-etc-ntpviz-for-header-and-footer.patch
 use-var-log-ntpsec-for-stats.patch
 set-statsdir-by-default.patch
 use-sbin-for-ntploggps-and-ntplogtemp.patch
+use-var-lib-ntpsec-for-cookies.patch

@@ -21,10 +21,6 @@
 #include <bsd/string.h>
 #endif
 
-#ifndef __sysloglike
-#define __sysloglike(fmt, args) ;
-#endif /* __sysloglike */
-
 #ifdef __GNUC__
 #define NTP_PRINTF(fmt, args) __attribute__((__format__(__printf__, fmt, args)))
 #else
@@ -33,10 +29,8 @@
 
 extern const char *ntpd_version(void);
 
-extern	int	mprintf(const char *, ...) __sysloglike(1, 2);
-extern	int	mvsnprintf(char *, size_t, const char *, va_list)
-			__sysloglike(3, 0);
-extern	void	msyslog(int, const char *, ...) __sysloglike(2, 3);
+extern	void	msyslog(int, const char *, ...) NTP_PRINTF(2, 3);
+extern	void	mystrerror(int errnum, char *buf, size_t buflen);
 extern	void	init_logging	(const char *, uint32_t, int);
 extern	int	change_logfile	(const char *, bool);
 extern	void	reopen_logfile  (void);
@@ -48,10 +42,10 @@ extern	int	ymd2yd		(int, int, int);
 
 /* getopt.c */
 struct option {
-    const char* name;
-    int has_arg;
-    int* flag;
-    int val;
+	const char* name;
+	int has_arg;
+	int* flag;
+	int val;
 };
 
 int ntp_getopt(int argc, char *const argv[], const char *optstring);
@@ -106,7 +100,9 @@ extern	const char * k_st_flags	(uint32_t);
 extern	char *	statustoa	(int, int);
 extern	sockaddr_u * netof6	(sockaddr_u *);
 extern	const char * socktoa	(const sockaddr_u *);
+extern	const char * socktoa_r	(const sockaddr_u *sock, char *buf, size_t buflen);
 extern	const char * sockporttoa(const sockaddr_u *);
+extern	const char * sockporttoa_r(const sockaddr_u *sock, char *buf, size_t buflen);
 extern	unsigned short	sock_hash(const sockaddr_u *) __attribute__((pure));
 extern	const char *refid_str	(uint32_t, int);
 
@@ -126,6 +122,7 @@ extern char *	ntp_optarg;		/* global argument pointer */
 extern int	ntp_optind;		/* global argv index */
 
 /* lib_strbuf.c */
+extern  void    getbuf_init (void);
 extern bool	ipv4_works;
 extern bool	ipv6_works;
 

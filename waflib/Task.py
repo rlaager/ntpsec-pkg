@@ -2,17 +2,19 @@
 # encoding: utf-8
 # WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file
 
-import os,re,sys,tempfile
+import os,re,sys,tempfile,traceback
 from waflib import Utils,Logs,Errors
 NOT_RUN=0
 MISSING=1
 CRASHED=2
 EXCEPTION=3
+CANCELED=4
 SKIPPED=8
 SUCCESS=9
 ASK_LATER=-1
 SKIP_ME=-2
 RUN_ME=-3
+CANCEL_ME=-4
 COMPILE_TEMPLATE_SHELL='''
 def f(tsk):
 	env = tsk.env
@@ -20,6 +22,9 @@ def f(tsk):
 	bld = gen.bld
 	cwdx = tsk.get_cwd()
 	p = env.get_flat
+	def to_list(xx):
+		if isinstance(xx, str): return [xx]
+		return xx
 	tsk.last_cmd = cmd = \'\'\' %s \'\'\' % s
 	return tsk.exec_command(cmd, cwd=cwdx, env=env.env or None)
 '''
@@ -43,13 +48,25 @@ def f(tsk):
 	tsk.last_cmd = lst
 	return tsk.exec_command(lst, cwd=cwdx, env=env.env or None)
 '''
+COMPILE_TEMPLATE_SIG_VARS='''
+def f(tsk):
+	sig = tsk.generator.bld.hash_env_vars(tsk.env, tsk.vars)
+	tsk.m.update(sig)
+	env = tsk.env
+	gen = tsk.generator
+	bld = gen.bld
+	cwdx = tsk.get_cwd()
+	p = env.get_flat
+	buf = []
+	%s
+	tsk.m.update(repr(buf).encode())
+'''
 classes={}
 class store_task_type(type):
 	def __init__(cls,name,bases,dict):
 		super(store_task_type,cls).__init__(name,bases,dict)
 		name=cls.__name__
-		if name!='evil'and name!='TaskBase':
-			global classes
+		if name!='evil'and name!='Task':
 			if getattr(cls,'run_str',None):
 				(f,dvars)=compile_fun(cls.run_str,cls.shell)
 				cls.hcode=Utils.h_cmd(cls.run_str)
@@ -58,35 +75,48 @@ class store_task_type(type):
 				cls.run=f
 				cls.vars=list(set(cls.vars+dvars))
 				cls.vars.sort()
+				if cls.vars:
+					fun=compile_sig_vars(cls.vars)
+					if fun:
+						cls.sig_vars=fun
 			elif getattr(cls,'run',None)and not'hcode'in cls.__dict__:
 				cls.hcode=Utils.h_cmd(cls.run)
 			getattr(cls,'register',classes)[name]=cls
 evil=store_task_type('evil',(object,),{})
-class TaskBase(evil):
+class Task(evil):
+	vars=[]
+	always_run=False
+	shell=False
 	color='GREEN'
 	ext_in=[]
 	ext_out=[]
 	before=[]
 	after=[]
-	hcode=''
+	hcode=Utils.SIG_NIL
 	keep_last_cmd=False
-	__slots__=('hasrun','generator')
+	weight=0
+	tree_weight=0
+	prio_order=0
+	__slots__=('hasrun','generator','env','inputs','outputs','dep_nodes','run_after')
 	def __init__(self,*k,**kw):
 		self.hasrun=NOT_RUN
 		try:
 			self.generator=kw['generator']
 		except KeyError:
 			self.generator=self
-	def __repr__(self):
-		return'\n\t{task %r: %s %s}'%(self.__class__.__name__,id(self),str(getattr(self,'fun','')))
-	def __str__(self):
-		if hasattr(self,'fun'):
-			return self.fun.__name__
-		return self.__class__.__name__
-	def keyword(self):
-		if hasattr(self,'fun'):
-			return'Function'
-		return'Processing'
+		self.env=kw['env']
+		self.inputs=[]
+		self.outputs=[]
+		self.dep_nodes=[]
+		self.run_after=set()
+	def __lt__(self,other):
+		return self.priority()>other.priority()
+	def __le__(self,other):
+		return self.priority()>=other.priority()
+	def __gt__(self,other):
+		return self.priority()<other.priority()
+	def __ge__(self,other):
+		return self.priority()<=other.priority()
 	def get_cwd(self):
 		bld=self.generator.bld
 		ret=getattr(self,'cwd',None)or getattr(bld,'cwd',bld.bldnode)
@@ -105,6 +135,8 @@ class TaskBase(evil):
 		if old!=x or' 'in x or'\t'in x or"'"in x:
 			x='"%s"'%x
 		return x
+	def priority(self):
+		return(self.weight+self.prio_order,-getattr(self.generator,'tg_idx_count',0))
 	def split_argfile(self,cmd):
 		return([cmd[0]],[self.quote_flag(x)for x in cmd[1:]])
 	def exec_command(self,cmd,**kw):
@@ -115,28 +147,31 @@ class TaskBase(evil):
 		if self.env.PATH:
 			env=kw['env']=dict(kw.get('env')or self.env.env or os.environ)
 			env['PATH']=self.env.PATH if isinstance(self.env.PATH,str)else os.pathsep.join(self.env.PATH)
-		if not isinstance(cmd,str)and(len(repr(cmd))>=8192 if Utils.is_win32 else len(cmd)>200000):
-			cmd,args=self.split_argfile(cmd)
-			try:
-				(fd,tmp)=tempfile.mkstemp()
-				os.write(fd,'\r\n'.join(args).encode())
-				os.close(fd)
-				if Logs.verbose:
-					Logs.debug('argfile: @%r -> %r',tmp,args)
-				return self.generator.bld.exec_command(cmd+['@'+tmp],**kw)
-			finally:
+		if hasattr(self,'stdout'):
+			kw['stdout']=self.stdout
+		if hasattr(self,'stderr'):
+			kw['stderr']=self.stderr
+		if not isinstance(cmd,str):
+			if Utils.is_win32:
+				too_long=sum([len(arg)for arg in cmd])+len(cmd)>8192
+			else:
+				too_long=len(cmd)>200000
+			if too_long and getattr(self,'allow_argsfile',True):
+				cmd,args=self.split_argfile(cmd)
 				try:
-					os.remove(tmp)
-				except OSError:
-					pass
-		else:
-			return self.generator.bld.exec_command(cmd,**kw)
-	def runnable_status(self):
-		return RUN_ME
-	def uid(self):
-		return Utils.SIG_NIL
+					(fd,tmp)=tempfile.mkstemp()
+					os.write(fd,'\r\n'.join(args).encode())
+					os.close(fd)
+					if Logs.verbose:
+						Logs.debug('argfile: @%r -> %r',tmp,args)
+					return self.generator.bld.exec_command(cmd+['@'+tmp],**kw)
+				finally:
+					try:
+						os.remove(tmp)
+					except OSError:
+						pass
+		return self.generator.bld.exec_command(cmd,**kw)
 	def process(self):
-		m=self.generator.bld.producer
 		try:
 			del self.generator.bld.task_sigs[self.uid()]
 		except KeyError:
@@ -144,31 +179,27 @@ class TaskBase(evil):
 		try:
 			ret=self.run()
 		except Exception:
-			self.err_msg=Utils.ex_stack()
+			self.err_msg=traceback.format_exc()
 			self.hasrun=EXCEPTION
-			m.error_handler(self)
-			return
-		if ret:
-			self.err_code=ret
-			self.hasrun=CRASHED
 		else:
-			try:
-				self.post_run()
-			except Errors.WafError:
-				pass
-			except Exception:
-				self.err_msg=Utils.ex_stack()
-				self.hasrun=EXCEPTION
+			if ret:
+				self.err_code=ret
+				self.hasrun=CRASHED
 			else:
-				self.hasrun=SUCCESS
-		if self.hasrun!=SUCCESS:
-			m.error_handler(self)
-	def run(self):
-		if hasattr(self,'fun'):
-			return self.fun(self)
-		return 0
-	def post_run(self):
-		pass
+				try:
+					self.post_run()
+				except Errors.WafError:
+					pass
+				except Exception:
+					self.err_msg=traceback.format_exc()
+					self.hasrun=EXCEPTION
+				else:
+					self.hasrun=SUCCESS
+		if self.hasrun!=SUCCESS and self.scan:
+			try:
+				del self.generator.bld.imp_sigs[self.uid()]
+			except KeyError:
+				pass
 	def log_display(self,bld):
 		if self.generator.bld.progress_bar==3:
 			return
@@ -189,10 +220,7 @@ class TaskBase(evil):
 		col2=Logs.colors.NORMAL
 		master=self.generator.bld.producer
 		def cur():
-			tmp=-1
-			if hasattr(master,'ready'):
-				tmp-=master.ready.qsize()
-			return master.processed+tmp
+			return master.processed-master.ready.qsize()
 		if self.generator.bld.progress_bar==1:
 			return self.generator.bld.progress_line(cur(),master.total,col1,col2)
 		if self.generator.bld.progress_bar==2:
@@ -217,9 +245,7 @@ class TaskBase(evil):
 			kw+=' '
 		return fs%(cur(),total,kw,col1,s,col2)
 	def hash_constraints(self):
-		cls=self.__class__
-		tup=(str(cls.before),str(cls.after),str(cls.ext_in),str(cls.ext_out),cls.__name__,cls.hcode)
-		return hash(tup)
+		return(tuple(self.before),tuple(self.after),tuple(self.ext_in),tuple(self.ext_out),self.__class__.__name__,self.hcode)
 	def format_error(self):
 		if Logs.verbose:
 			msg=': %r\n%r'%(self,getattr(self,'last_cmd',''))
@@ -237,6 +263,8 @@ class TaskBase(evil):
 				return' -> task in %r failed%s'%(name,msg)
 		elif self.hasrun==MISSING:
 			return' -> missing files in %r%s'%(name,msg)
+		elif self.hasrun==CANCELED:
+			return' -> %r canceled because of missing dependencies'%name
 		else:
 			return'invalid status for task in %r: %r'%(name,self.hasrun)
 	def colon(self,var1,var2):
@@ -255,17 +283,6 @@ class TaskBase(evil):
 				lst.extend(tmp)
 				lst.append(y)
 			return lst
-class Task(TaskBase):
-	vars=[]
-	always_run=False
-	shell=False
-	def __init__(self,*k,**kw):
-		TaskBase.__init__(self,*k,**kw)
-		self.env=kw['env']
-		self.inputs=[]
-		self.outputs=[]
-		self.dep_nodes=[]
-		self.run_after=set()
 	def __str__(self):
 		name=self.__class__.__name__
 		if self.outputs:
@@ -325,7 +342,7 @@ class Task(TaskBase):
 		else:
 			self.outputs.append(out)
 	def set_run_after(self,task):
-		assert isinstance(task,TaskBase)
+		assert isinstance(task,Task)
 		self.run_after.add(task)
 	def signature(self):
 		try:
@@ -343,14 +360,18 @@ class Task(TaskBase):
 		ret=self.cache_sig=self.m.digest()
 		return ret
 	def runnable_status(self):
+		bld=self.generator.bld
+		if bld.is_install<0:
+			return SKIP_ME
 		for t in self.run_after:
 			if not t.hasrun:
 				return ASK_LATER
+			elif t.hasrun<SKIPPED:
+				return CANCEL_ME
 		try:
 			new_sig=self.signature()
 		except Errors.TaskNotReady:
 			return ASK_LATER
-		bld=self.generator.bld
 		key=self.uid()
 		try:
 			prev_sig=bld.task_sigs[key]
@@ -405,6 +426,10 @@ class Task(TaskBase):
 						if hasattr(v,'__call__'):
 							v=v()
 					upd(v)
+	def sig_deep_inputs(self):
+		bld=self.generator.bld
+		lst=[bld.task_sigs[bld.node_sigs[node]]for node in(self.inputs+self.dep_nodes)if node.is_bld()]
+		self.m.update(Utils.h_list(lst))
 	def sig_vars(self):
 		sig=self.generator.bld.hash_env_vars(self.env,self.vars)
 		self.m.update(sig)
@@ -471,10 +496,10 @@ if sys.hexversion>0x3000000:
 		try:
 			return self.uid_
 		except AttributeError:
-			m=Utils.md5(self.__class__.__name__.encode('iso8859-1','xmlcharrefreplace'))
+			m=Utils.md5(self.__class__.__name__.encode('latin-1','xmlcharrefreplace'))
 			up=m.update
 			for x in self.inputs+self.outputs:
-				up(x.abspath().encode('iso8859-1','xmlcharrefreplace'))
+				up(x.abspath().encode('latin-1','xmlcharrefreplace'))
 			self.uid_=m.digest()
 			return self.uid_
 	uid.__doc__=Task.uid.__doc__
@@ -493,14 +518,27 @@ def set_file_constraints(tasks):
 	ins=Utils.defaultdict(set)
 	outs=Utils.defaultdict(set)
 	for x in tasks:
-		for a in getattr(x,'inputs',[])+getattr(x,'dep_nodes',[]):
-			ins[id(a)].add(x)
-		for a in getattr(x,'outputs',[]):
-			outs[id(a)].add(x)
+		for a in x.inputs:
+			ins[a].add(x)
+		for a in x.dep_nodes:
+			ins[a].add(x)
+		for a in x.outputs:
+			outs[a].add(x)
 	links=set(ins.keys()).intersection(outs.keys())
 	for k in links:
 		for a in ins[k]:
 			a.run_after.update(outs[k])
+class TaskGroup(object):
+	def __init__(self,prev,next):
+		self.prev=prev
+		self.next=next
+		self.done=False
+	def get_hasrun(self):
+		for k in self.prev:
+			if not k.hasrun:
+				return NOT_RUN
+		return SUCCESS
+	hasrun=property(get_hasrun,None)
 def set_precedence_constraints(tasks):
 	cstr_groups=Utils.defaultdict(list)
 	for x in tasks:
@@ -520,14 +558,20 @@ def set_precedence_constraints(tasks):
 				b=i
 			else:
 				continue
-			aval=set(cstr_groups[keys[a]])
-			for x in cstr_groups[keys[b]]:
-				x.run_after.update(aval)
+			a=cstr_groups[keys[a]]
+			b=cstr_groups[keys[b]]
+			if len(a)<2 or len(b)<2:
+				for x in b:
+					x.run_after.update(a)
+			else:
+				group=TaskGroup(set(a),set(b))
+				for x in b:
+					x.run_after.add(group)
 def funex(c):
 	dc={}
 	exec(c,dc)
 	return dc['f']
-re_cond=re.compile('(?P<var>\w+)|(?P<or>\|)|(?P<and>&)')
+re_cond=re.compile(r'(?P<var>\w+)|(?P<or>\|)|(?P<and>&)')
 re_novar=re.compile(r'^(SRC|TGT)\W+.*?$')
 reg_act=re.compile(r'(?P<backslash>\\)|(?P<dollar>\$\$)|(?P<subst>\$\{(?P<var>\w+)(?P<code>.*?)\})',re.M)
 def compile_fun_shell(line):
@@ -544,6 +588,9 @@ def compile_fun_shell(line):
 		return None
 	line=reg_act.sub(repl,line)or line
 	dvars=[]
+	def add_dvar(x):
+		if x not in dvars:
+			dvars.append(x)
 	def replc(m):
 		if m.group('and'):
 			return' and '
@@ -551,8 +598,7 @@ def compile_fun_shell(line):
 			return' or '
 		else:
 			x=m.group('var')
-			if x not in dvars:
-				dvars.append(x)
+			add_dvar(x)
 			return'env[%r]'%x
 	parm=[]
 	app=parm.append
@@ -569,8 +615,7 @@ def compile_fun_shell(line):
 				app('" ".join([a.path_from(cwdx) for a in tsk.outputs])')
 		elif meth:
 			if meth.startswith(':'):
-				if var not in dvars:
-					dvars.append(var)
+				add_dvar(var)
 				m=meth[1:]
 				if m=='SRC':
 					m='[a.path_from(cwdx) for a in tsk.inputs]'
@@ -580,18 +625,20 @@ def compile_fun_shell(line):
 					m='[tsk.inputs%s]'%m[3:]
 				elif re_novar.match(m):
 					m='[tsk.outputs%s]'%m[3:]
-				elif m[:3]not in('tsk','gen','bld'):
-					dvars.append(meth[1:])
-					m='%r'%m
+				else:
+					add_dvar(m)
+					if m[:3]not in('tsk','gen','bld'):
+						m='%r'%m
 				app('" ".join(tsk.colon(%r, %s))'%(var,m))
 			elif meth.startswith('?'):
 				expr=re_cond.sub(replc,meth[1:])
 				app('p(%r) if (%s) else ""'%(var,expr))
 			else:
-				app('%s%s'%(var,meth))
+				call='%s%s'%(var,meth)
+				add_dvar(call)
+				app(call)
 		else:
-			if var not in dvars:
-				dvars.append(var)
+			add_dvar(var)
 			app("p('%s')"%var)
 	if parm:
 		parm="%% (%s) "%(',\n\t\t'.join(parm))
@@ -606,6 +653,9 @@ def compile_fun_noshell(line):
 	dvars=[]
 	merge=False
 	app=buf.append
+	def add_dvar(x):
+		if x not in dvars:
+			dvars.append(x)
 	def replc(m):
 		if m.group('and'):
 			return' and '
@@ -613,8 +663,7 @@ def compile_fun_noshell(line):
 			return' or '
 		else:
 			x=m.group('var')
-			if x not in dvars:
-				dvars.append(x)
+			add_dvar(x)
 			return'env[%r]'%x
 	for m in reg_act_noshell.finditer(line):
 		if m.group('space'):
@@ -637,8 +686,7 @@ def compile_fun_noshell(line):
 					app('[a.path_from(cwdx) for a in tsk.outputs]')
 			elif code:
 				if code.startswith(':'):
-					if not var in dvars:
-						dvars.append(var)
+					add_dvar(var)
 					m=code[1:]
 					if m=='SRC':
 						m='[a.path_from(cwdx) for a in tsk.inputs]'
@@ -648,19 +696,21 @@ def compile_fun_noshell(line):
 						m='[tsk.inputs%s]'%m[3:]
 					elif re_novar.match(m):
 						m='[tsk.outputs%s]'%m[3:]
-					elif m[:3]not in('tsk','gen','bld'):
-						dvars.append(m)
-						m='%r'%m
+					else:
+						add_dvar(m)
+						if m[:3]not in('tsk','gen','bld'):
+							m='%r'%m
 					app('tsk.colon(%r, %s)'%(var,m))
 				elif code.startswith('?'):
 					expr=re_cond.sub(replc,code[1:])
 					app('to_list(env[%r] if (%s) else [])'%(var,expr))
 				else:
-					app('gen.to_list(%s%s)'%(var,code))
+					call='%s%s'%(var,code)
+					add_dvar(call)
+					app('to_list(%s)'%call)
 			else:
 				app('to_list(env[%r])'%var)
-				if not var in dvars:
-					dvars.append(var)
+				add_dvar(var)
 		if merge:
 			tmp='merge(%s, %s)'%(buf[-2],buf[-1])
 			del buf[-1]
@@ -695,6 +745,14 @@ def compile_fun(line,shell=False):
 		return compile_fun_shell(line)
 	else:
 		return compile_fun_noshell(line)
+def compile_sig_vars(vars):
+	buf=[]
+	for x in sorted(vars):
+		if x[:3]in('tsk','gen','bld'):
+			buf.append('buf.append(%s)'%x)
+	if buf:
+		return funex(COMPILE_TEMPLATE_SIG_VARS%'\n\t'.join(buf))
+	return None
 def task_factory(name,func=None,vars=None,color='GREEN',ext_in=[],ext_out=[],before=[],after=[],shell=False,scan=None):
 	params={'vars':vars or[],'color':color,'name':name,'shell':shell,'scan':scan,}
 	if isinstance(func,str)or isinstance(func,tuple):
@@ -702,7 +760,6 @@ def task_factory(name,func=None,vars=None,color='GREEN',ext_in=[],ext_out=[],bef
 	else:
 		params['run']=func
 	cls=type(Task)(name,(Task,),params)
-	global classes
 	classes[name]=cls
 	if ext_in:
 		cls.ext_in=Utils.to_list(ext_in)
@@ -713,9 +770,23 @@ def task_factory(name,func=None,vars=None,color='GREEN',ext_in=[],ext_out=[],bef
 	if after:
 		cls.after=Utils.to_list(after)
 	return cls
-def always_run(cls):
-	Logs.warn('This decorator is deprecated, set always_run on the task class instead!')
-	cls.always_run=True
+def deep_inputs(cls):
+	def sig_explicit_deps(self):
+		Task.sig_explicit_deps(self)
+		Task.sig_deep_inputs(self)
+	cls.sig_explicit_deps=sig_explicit_deps
 	return cls
-def update_outputs(cls):
-	return cls
+TaskBase=Task
+class TaskSemaphore(object):
+	def __init__(self,num):
+		self.num=num
+		self.locking=set()
+		self.waiting=set()
+	def is_locked(self):
+		return len(self.locking)>=self.num
+	def acquire(self,tsk):
+		if self.is_locked():
+			raise IndexError('Cannot lock more %r'%self.locking)
+		self.locking.add(tsk)
+	def release(self,tsk):
+		self.locking.remove(tsk)

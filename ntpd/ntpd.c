@@ -13,9 +13,7 @@
 #include "ntp_syslog.h"
 #include "ntp_assert.h"
 #include "ntp_auth.h"
-#ifdef ENABLE_DNS_LOOKUP
 #include "ntp_dns.h"
-#endif
 #include "isc_error.h"
 
 #include <unistd.h>
@@ -92,9 +90,7 @@ static int	wait_child_sync_if	(int, long);
 #endif
 
 static	void	catchHUP	(int);
-#ifdef ENABLE_DNS_LOOKUP
 static	void	catchDNS	(int);
-#endif
 
 # ifdef	DEBUG
 static	void	moredebug	(int);
@@ -216,8 +212,9 @@ parse_cmdline_opts(
 {
 	static bool	parsed = false;
 
-	if (parsed)
+	if (parsed) {
 	    return;
+	}
 
 	int op;
 
@@ -253,8 +250,9 @@ parse_cmdline_opts(
 		break;
 	    case 'D':
 #ifdef DEBUG
-		if (ntp_optarg != NULL)
+		if (ntp_optarg != NULL) {
 			debug = atoi(ntp_optarg);
+		}
 #endif
 		break;
 	    case 'f':
@@ -273,8 +271,9 @@ parse_cmdline_opts(
 	    case 'i':
 #ifdef ENABLE_DROPROOT
 		droproot = true;
-		if (ntp_optarg != NULL)
+		if (ntp_optarg != NULL) {
 			chrootdir = ntp_optarg;
+		}
 #endif
 		break;
 	    case 'I':
@@ -434,7 +433,7 @@ main(
 static void
 catch_danger(int signo)
 {
-	msyslog(LOG_INFO, "ERR: setpgid(): %m");
+	msyslog(LOG_INFO, "ERR: setpgid(): %s", strerror(errno));
 	/* Make the system believe we'll free something, but don't do it! */
 	return;
 }
@@ -471,7 +470,7 @@ set_process_priority(void)
 				sched.sched_priority = config_priority;
 		}
 		if ( sched_setscheduler(0, SCHED_FIFO, &sched) == -1 )
-			msyslog(LOG_ERR, "INIT: sched_setscheduler(): %m");
+			msyslog(LOG_ERR, "INIT: sched_setscheduler(): %s", strerror(errno));
 		else
 			need_priority = false;
 	}
@@ -504,20 +503,21 @@ ntpdmain(
 	int		pipe_fds[2];
 	int		rc;
 	int		exit_code;
-#  ifdef SIGDANGER
 	struct sigaction sa;
-#  endif
 # endif	/* HAVE_WORKING_FORK*/
 	int op;
 
 	uv = umask(0);
-	if (uv)
+	if (uv) {
 		umask(uv);
-	else
+	} else {
 		umask(022);
+	}
 	saved_argc = argc;
 	saved_argv = argv;
 	progname = argv[0];
+
+	getbuf_init();
 	parse_cmdline_opts(argc, argv);
 # ifdef DEBUG
 	setvbuf(stdout, NULL, _IOLBF, 0);
@@ -579,7 +579,7 @@ ntpdmain(
 		termlogit = true;
 		exit_code = (errno) ? errno : -1;
 		msyslog(LOG_ERR,
-			"INIT: Pipe creation failed for --wait-sync: %m");
+			"INIT: Pipe creation failed for --wait-sync: %s", strerror(errno));
 		exit(exit_code);
 	    }
 	    waitsync_fd_to_close = pipe_fds[1];
@@ -596,7 +596,7 @@ ntpdmain(
 		rc = fork();
 		if (-1 == rc) {
 			exit_code = (errno) ? errno : -1;
-			msyslog(LOG_ERR, "INIT: fork: %m");
+			msyslog(LOG_ERR, "INIT: fork: %s", strerror(errno));
 			exit(exit_code);
 		}
 		if (rc > 0) {
@@ -622,7 +622,7 @@ ntpdmain(
 		setup_logfile(logfilename);
 
 		if (setsid() == (pid_t)-1)
-			msyslog(LOG_ERR, "INIT: setsid(): %m");
+			msyslog(LOG_ERR, "INIT: setsid(): %s", strerror(errno));
 #  ifdef SIGDANGER
 		/* Don't get killed by low-on-memory signal. */
 		sa.sa_handler = catch_danger;
@@ -633,6 +633,12 @@ ntpdmain(
 # endif		/* HAVE_WORKING_FORK */
 	}
 
+	/* Ignore SIGPIPE - from OpenSSL */
+	sa.sa_handler = SIG_IGN;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART;
+ 	(void)sigaction(SIGPIPE, &sa, NULL);
+
 	/*
 	 * Set up signals we pay attention to locally.
 	 */
@@ -641,9 +647,7 @@ ntpdmain(
 	signal_no_reset(SIGTERM, catchQuit);
 	signal_no_reset(SIGHUP, catchHUP);
 	signal_no_reset(SIGBUS, catchQuit);  /* FIXME: It's broken, can't continue. */
-#ifdef ENABLE_DNS_LOOKUP
 	signal_no_reset(SIGDNS, catchDNS);
-#endif
 
 # ifdef DEBUG
 	signal_no_reset(MOREDEBUGSIG, moredebug);
@@ -821,20 +825,22 @@ ntpdmain(
 		 * is associated with running with uid 0 - should be refined on
 		 * ports that allow binding to NTP_PORT with uid != 0
 		 */
-		disable_dynamic_updates = true;
+		io_data.disable_dynamic_updates = true;
 		msyslog(LOG_INFO, "INIT: running as non-root disables dynamic interface tracking");
 	}
 #endif
 
      	/* use this to test if option setting gives expected results */
 	if (dumpopts) {
-	    if (explicit_config)
+	    if (explicit_config) {
 		fprintf(stdout, "conffile \"%s\";\n", explicit_config);
+	    }
 #ifdef DEBUG
 	    fprintf(stdout, "#debug = %d\n", debug);
 #endif /* DEBUG */
-	    if (driftfile)
+	    if (driftfile) {
 		fprintf(stdout, "driftfile \"%s\";\n", driftfile);
+	    }
 	    fprintf(stdout, "#allow_panic = %s\n",
 		    clock_ctl.allow_panic ? "true" : "false");
 	    fprintf(stdout, "#force_step_once = %s\n",
@@ -849,16 +855,18 @@ ntpdmain(
 #endif
 	    /* FIXME: dump interfaces */
 	    /* FIXME: dump authkeys */
-	    if (logfilename)
+	    if (logfilename) {
 		fprintf(stdout, "logfile \"%s\";\n", logfilename);
+	    }
 	    fprintf(stdout, "#listen_to_virtual_ips = %s\n",
 		    listen_to_virtual_ips ? "true" : "false");
 #if defined(HAVE_DNS_SD_H)
 	    fprintf(stdout, "#mdnsreg = %s\n",
 		    mdnsreg ? "true" : "false");
 #endif  /* HAVE_DNS_SD_H */
-	    if (pidfile)
+	    if (pidfile) {
 		fprintf(stdout, "pidfile \"%s\";\n", pidfile);
+	    }
 	    /* FIXME: dump priority */
 	    fprintf(stdout, "#mode_ntpdate = %s\n",
 		    clock_ctl.mode_ntpdate ? "true" : "false");
@@ -896,6 +904,8 @@ ntpdmain(
 	loop_config(LOOP_DRIFTINIT, 0);
 	report_event(EVNT_SYSRESTART, NULL, NULL);
 
+	nts_init();		/* Before droproot */
+
 #ifndef ENABLE_EARLY_DROPROOT
 	/* drop root privileges */
 	if (sandbox(droproot, user, group, chrootdir, interface_interval!=0) && interface_interval) {
@@ -903,6 +913,8 @@ ntpdmain(
 		msyslog(LOG_INFO, "INIT: running as non-root disables dynamic interface tracking");
 	}
 #endif
+
+	nts_init2();		/* After droproot */
 
 	if (access(statsdir, W_OK) != 0) {
 	    msyslog(LOG_ERR, "statistics directory %s does not exist or is unwriteable, error %s", statsdir, strerror(errno));
@@ -940,12 +952,10 @@ static void mainloop(void)
 			timer();
 		}
 
-#ifdef ENABLE_DNS_LOOKUP
 		if (sig_flags.sawDNS) {
 			sig_flags.sawDNS = false;
 			dns_check();
 		}
-#endif
 
 		/*
 		 * Check files
@@ -956,11 +966,8 @@ static void mainloop(void)
 
 			reopen_logfile();
 
-			{
-			time_t tnow;
-			time(&tnow);
-			check_leap_file(false, tnow);
-			}
+			check_leap_file(false, time(NULL));
+			check_cert_file();
 		}
 
 		/*
@@ -1000,8 +1007,9 @@ finish_safe(
 	const char *sig_desc;
 
 	sig_desc = strsignal(sig);
-	if (sig_desc == NULL)
+	if (sig_desc == NULL) {
 		sig_desc = "";
+	}
 	msyslog(LOG_NOTICE, "ERR: %s exiting on signal %d (%s)", progname,
 		sig, sig_desc);
 	/* See Classic Bugs 2513 and Bug 2522 re the unlink of PIDFILE */
@@ -1031,16 +1039,14 @@ static void catchHUP(int sig)
 	sig_flags.sawHUP = true;
 }
 
-#ifdef ENABLE_DNS_LOOKUP
 /*
- * catchDNS - set flag to process answer DNS lookup
+ * catchDNS - set flag to process answer from DNS lookup
  */
 static void catchDNS(int sig)
 {
 	UNUSED_ARG(sig);
 	sig_flags.sawDNS = true;
 }
-#endif
 
 /*
  * wait_child_sync_if - implements parent side of -w/--wait-sync
@@ -1052,7 +1058,6 @@ wait_child_sync_if(
 	long	wait_sync1
 	)
 {
-	int	rc;
 	int	exit_code;
 	time_t	wait_end_time;
 	time_t	cur_time;
@@ -1075,14 +1080,14 @@ wait_child_sync_if(
 		wtimeout.tv_nsec = 0;
 		FD_ZERO(&readset);
 		FD_SET(pipe_read_fd, &readset);
-		rc = pselect(pipe_read_fd + 1, &readset, NULL, NULL,
-			     &wtimeout, NULL);
+		int rc = pselect(pipe_read_fd + 1, &readset, NULL, NULL,
+				 &wtimeout, NULL);
 		if (-1 == rc) {
 			if (EINTR == errno)
 				continue;
 			exit_code = (errno) ? errno : -1;
 			msyslog(LOG_ERR,
-				"ERR: --wait-sync select failed: %m");
+				"ERR: --wait-sync select failed: %s", strerror(errno));
 			return exit_code;
 		}
 		if (0 == rc) {
@@ -1126,26 +1131,26 @@ wait_child_sync_if(
  */
 static void check_minsane()
 {
-    struct peer *peer;
-    int servers = 0;
+	struct peer *peer;
+	int servers = 0;
 
-    if (sys_minsane > 1) return;  /* already adjusted, assume reasonable */
+	if (sys_minsane > 1) return;  /* already adjusted, assume reasonable */
 
-    for (peer = peer_list; peer != NULL; peer = peer->p_link) {
-	if (peer->cfg.flags & FLAG_NOSELECT) continue;
-	servers++;
-	if (peer->cast_flags & MDF_POOL) {
-	    /* pool server */
-	    servers = sys_maxclock;
-	    break;
+	for (peer = peer_list; peer != NULL; peer = peer->p_link) {
+		if (peer->cfg.flags & FLAG_NOSELECT) continue;
+		servers++;
+		if (peer->cast_flags & MDF_POOL) {
+			/* pool server */
+			servers = sys_maxclock;
+			break;
+		}
+		/* ?? multicast and such */
 	}
-	/* ?? multicast and such */
-    }
 
-    if (servers >= 5)
-	msyslog(LOG_ERR, "SYNC: Found %d servers, suggest minsane at least 3", servers);
-    else if (servers == 4)
-        msyslog(LOG_ERR, "SYNC: Found 4 servers, suggest minsane of 2");
+	if (servers >= 5)
+		msyslog(LOG_ERR, "SYNC: Found %d servers, suggest minsane at least 3", servers);
+	else if (servers == 4)
+		msyslog(LOG_ERR, "SYNC: Found 4 servers, suggest minsane of 2");
 
 }
 
@@ -1220,8 +1225,9 @@ close_all_except(
 {
 	int fd;
 
-	for (fd = 0; fd < keep_fd; fd++)
+	for (fd = 0; fd < keep_fd; fd++) {
 		close(fd);
+	}
 
 	close_all_beyond(keep_fd);
 }
@@ -1249,7 +1255,7 @@ close_all_beyond(
 	 * calls)
 	 */
 	if (fcntl(keep_fd + 1, F_CLOSEM, 0) == -1)
-		msyslog(LOG_ERR, "INIT: F_CLOSEM(%d): %m", keep_fd + 1);
+		msyslog(LOG_ERR, "INIT: F_CLOSEM(%d): %s", keep_fd + 1, strerror(errno));
 # else  /* !HAVE_CLOSEFROM && !F_CLOSEM follows */
 	int fd;
 	int max_fd;
@@ -1258,8 +1264,9 @@ close_all_beyond(
 	max_fd = sysconf(_SC_OPEN_MAX);
 	if (10000 < max_fd)
 		msyslog(LOG_ERR, "INIT: close_all_beyond: closing %d files", max_fd);
-	for (fd = keep_fd + 1; fd < max_fd; fd++)
+	for (fd = keep_fd + 1; fd < max_fd; fd++) {
 		close(fd);
+	}
 # endif /* !HAVE_CLOSEFROM && !F_CLOSEM */
 }
 

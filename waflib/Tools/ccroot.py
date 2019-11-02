@@ -63,6 +63,7 @@ def apply_incpaths(self):
 	self.env.INCPATHS=[x.path_from(cwd)for x in lst]
 class link_task(Task.Task):
 	color='YELLOW'
+	weight=3
 	inst_to=None
 	chmod=Utils.O755
 	def add_target(self,target):
@@ -129,6 +130,10 @@ def rm_tgt(cls):
 		return old(self)
 	setattr(cls,'run',wrap)
 rm_tgt(stlink_task)
+@feature('skip_stlib_link_deps')
+@before_method('process_use')
+def apply_skip_stlib_link_deps(self):
+	self.env.SKIP_STLIB_LINK_DEPS=True
 @feature('c','cxx','d','fc','asm')
 @after_method('process_source')
 def apply_link(self):
@@ -149,7 +154,7 @@ def apply_link(self):
 	try:
 		inst_to=self.install_path
 	except AttributeError:
-		inst_to=self.link_task.__class__.inst_to
+		inst_to=self.link_task.inst_to
 	if inst_to:
 		self.install_task=self.add_install_files(install_to=inst_to,install_from=self.link_task.outputs[:],chmod=self.link_task.chmod,task=self.link_task)
 @taskgen_method
@@ -232,7 +237,9 @@ def process_use(self):
 		y=self.bld.get_tgen_by_name(x)
 		var=y.tmp_use_var
 		if var and link_task:
-			if var=='LIB'or y.tmp_use_stlib or x in names:
+			if self.env.SKIP_STLIB_LINK_DEPS and isinstance(link_task,stlink_task):
+				pass
+			elif var=='LIB'or y.tmp_use_stlib or x in names:
 				self.env.append_value(var,[y.target[y.target.rfind(os.sep)+1:]])
 				self.link_task.dep_nodes.extend(y.link_task.outputs)
 				tmp_path=y.link_task.outputs[0].parent.path_from(self.get_cwd())
@@ -309,8 +316,8 @@ def apply_implib(self):
 		node=self.path.find_resource(self.defs)
 		if not node:
 			raise Errors.WafError('invalid def file %r'%self.defs)
-		if'msvc'in(self.env.CC_NAME,self.env.CXX_NAME):
-			self.env.append_value('LINKFLAGS','/def:%s'%node.path_from(self.get_cwd()))
+		if self.env.def_PATTERN:
+			self.env.append_value('LINKFLAGS',self.env.def_PATTERN%node.path_from(self.get_cwd()))
 			self.link_task.dep_nodes.append(node)
 		else:
 			self.link_task.inputs.append(node)
@@ -358,6 +365,7 @@ def apply_vnum(self):
 		self.create_task('vnum',node,outs)
 	if getattr(self,'install_task',None):
 		self.install_task.hasrun=Task.SKIPPED
+		self.install_task.no_errcheck_out=True
 		path=self.install_task.install_to
 		if self.env.DEST_OS=='openbsd':
 			libname=self.link_task.outputs[0].name
@@ -375,7 +383,7 @@ def apply_vnum(self):
 		try:
 			inst_to=self.install_path
 		except AttributeError:
-			inst_to=self.link_task.__class__.inst_to
+			inst_to=self.link_task.inst_to
 		if inst_to:
 			p=Utils.subst_vars(inst_to,self.env)
 			path=os.path.join(p,name2)

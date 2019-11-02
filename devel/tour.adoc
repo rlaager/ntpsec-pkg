@@ -1,4 +1,4 @@
-= A Tour of the NTP Internals =
+= A Tour of the NTP Internals
 
 This document is intended to be helpful to people trying to understand
 and modify the NTP code.  It aims to explain how the pieces fit
@@ -13,9 +13,9 @@ However, try not to replicate comments here; it's better to point
 at where they live in the code.  This document is intended to convey
 a higher-level view than individual comments.
 
-== Key Types ==
+== Key Types
 
-=== l_fp, s_fp, u_fp ===
+=== l_fp, s_fp, u_fp
 
 C doesn't have any native fixed-point types, only float types.
 To do certain time calculations without loss of precision, NTP
@@ -45,7 +45,7 @@ into account.
 Most time offsets are much smaller than the NTP epoch, so a 32-bit
 representation is used for these. There were two of these:
 s_fp for signed offsets and u_fp for strictly non-negative ones.
-NTPsec has already removed the singed version
+NTPsec has already removed the signed version
 
 The comments in libntp/ntp_calendar.c are pretty illuminating about
 calendar representations.  A high-level point they don't make is
@@ -56,7 +56,7 @@ will be, by a factor of at least five million) we can map all incoming
 timestamps from whatever cycle into the nearest time in modular
 arithmetic relative to the cycle length.
 
-=== time64_t ===
+=== time64_t
 
 NTP was written well before the 64-bit word size became common. While
 compilers on 32-bit machines sometimes have had "long long" as an
@@ -70,7 +70,7 @@ way but implemented as a uint64_t has already replaced this.
 This still has some utility because NTP still runs on 32-bit machines
 with a 32-bit time_t.
 
-=== refid ===
+=== refid
 
 A refid is not a type of its own, but a convention that overloads
 different kinds of information in a 32-bit field that occurs in a
@@ -84,11 +84,6 @@ an IPv6 address.  (If and when the protocol is redesigned for
 IPv6 the field length will go to 128 bits and it will become a full
 IPv6 address.)
 
-Internally the refid is used for loop detection. (Which is why hashing
-IPv6 addresses is risky - hash collisions happen.) It's also part of
-ntpq's display in the status line for a reference clock, if you have
-one locally attached.
-
 The driver structure for reference clocks has a refid field that is
 (by default) copied into samples issued from that clock. It is
 not necessarily unique to a driver type; notably, all GPS driver
@@ -96,11 +91,22 @@ types ship the refid "GPS". It is possible to fudge this ID to
 something more informative in the ntpd configuration command
 for the driver.
 
+It's also part of
+ntpq's display in the status line for a reference clock, if you have
+one locally attached.
+
 The conflation of ID-for-humans with the loop-detection cookie is not quite
 the design error it looks like, as refclocks aren't implicated in
 loop detection.
 
-=== struct timespec vs. struct timeval ===
+The address refid you get from a peer is used for loop detection.
+(Which is why hashing IPv6 addresses is risky - hash collisions
+happen.)  It's supposeed to be an address identifying the host on
+which the time sample was generated. You never want that system
+to be one of your clients, for exactly the same reason you don't
+want positive feedback in your stereo system.
+
+=== struct timespec vs. struct timeval
 
 These aren't local types themselves - both are standardized in
 ANSI/POSIX.  They're both second/subsecond pairs intended to represent
@@ -127,7 +133,7 @@ or to nanosecond precision as close to these call sites as possible;
 this doesn't pull additional accuracy out of thin air, but it does
 avoid loss-of-precision bugs due to mixing these structures.
 
-=== struct peer ===
+=== struct peer
 
 In ntpd, there are peer control blocks - one per upstream synchronization
 source - that have an IP address in them.  That's what the main
@@ -140,12 +146,64 @@ internet.  Refclock data always has a round trip time of zero, and the
 code that finds the lowest RTT picks the most recent slot when the
 RTTs are equal.
 
-== config file parser ==
+== config file parser
 
-There is a minor quirk: numbers come in as integers, type T_Integer.
+There are two stages of processing that translate from ntp.conf syntax
+to configuration state that the code actually uses.  One level grovels
+through the syntax using a yacc-generared parser and collects stuff
+from it into intermediate configuration blocks - these are just C
+structures.  Another layer does some simple operations on the
+intermediate configuration blocks to initialize things like the peer
+structures.
+
+Here's a diagram:
+
+--------------------------------------------------------------------
+    +-----------------+
+    | ntp.conf syntax |
+    +-----------------+
+             |
+             | <----------------- Yacc-generated parser
+	     |
+    +--------------------+
+    |configuration blocks|
+    +--------------------+
+             |
+	     |<------------------- Fancy copy operation.
+	     |
+   +---------------------+
+   |struct peer instances|
+   +---------------------+
+--------------------------------------------------------------------
+
+The server/pool/refclock declarations all use the same branch of the
+yacc grammar; thus they take a set of options that is grammatically
+identical.  You can, for example, specify a 'refid' string for a
+server, or an outgoing 'version' for a refclock, even though doing
+either of those things doesn't make any semantic sense.  The parser
+doesn't care.
+
+This is slightly odd because normally configuration languages try to
+be more restrictive at the grammar level in order to generate better
+error messages.  But the NTP parser won't complain when you specify that
+'refid' string for a server.
+
+The documentation *pretends* that the different declaration types have
+different option subgrammars, but it's lying by omission.  The parser
+doesn't care.  It just takes any option values you feed it and stuffs
+them into a configuration block associated with the hostname in the
+declaration.  The configuration block has slots in it for every
+possible option in all three declaration types.  The declaration type
+(server/refclock/pool) is just another slot in that block.
+
+A later stage of configuration walks through the configuration blocks
+and massages them ("Fancy copy operation") into instances of the
+internal peer structure that NTP uses.
+
+Here is a quirk of the grammar: numbers come in as integers, type T_Integer.
 There is no type T_Unsigned.  Range checking may not work right.
 
-== ntpd control flow ==
+== ntpd control flow
 
 In normal operation, after initialization, ntpd loops forever
 waiting for a UDP packet to arrive on some set of open interfaces, or
@@ -201,7 +259,7 @@ There was internal evidence in the NTP Classic build machinery that
 asynchronous I/O on Unix machines probably hadn't worked for
 quite a while before NTPsec removed it.
 
-== System call interface and the PLL ==
+== System call interface and the PLL
 
 All of ntpds clock management is done through four system calls:
 clock_gettime(2), clock_settime(2), and either ntp_adjtime(2) or (in
@@ -327,7 +385,7 @@ RFC 1589 covers the above timekeeping and slewing and kernel PLL.
 RFC 2783 covers the API for reading a time stamp the kernel grabs when a PPS
 happens.
 
-== Refclock management ==
+== Refclock management
 
 There is an illuminating comment in ntpd/ntp_refclock.c that begins
 "Reference clock support is provided here by maintaining the fiction
@@ -350,7 +408,19 @@ The process everything step sorts the contents of the FIFO, then discards
 outliers, roughly 1/3 of the samples, and then figures out the average and
 injects that into the peer buffer for the refclock.
 
-== Asynchronous DNS lookup ==
+Another way of looking at it: there are two parts to the refclock code.
+
+The first operates on the second time scale.  The main thread calls the 
+refclock receive routine when a "packet" arrives over the serial port and/or 
+the timer routine every second so it can poll SHM and cleanup of the serial 
+port gets unplugged.  That level of code puts samples into a FIFO.
+ 
+The other is at the poll-interval level,16 seconds to 64 seconds.  That takes 
+data out of the FIFO, discards outliers, averages, and injects a sample into 
+the normal NTP processing pipeline where it shows up as a 1 bit in the peers 
+reach mask.  (or a 0 if there weren't any good samples)
+
+== Asynchronous DNS lookup
 
 The DNS code runs in a separate thread to avoid stalling
 the main loop while it waits for a DNS lookup to return. And DNS
@@ -383,7 +453,7 @@ isn't a way to do that yet - the pool doesn't have any DNS support
 for it.)  The other would be to try replacing the poorest server
 rather than only replacing dead servers.
 
-== The build recipe ==
+== The build recipe
 
 The build recipe is, essentially, a big Python program using a set of
 specialized procedures called 'waf'.  To learn about waf itself see
@@ -432,11 +502,11 @@ a loadable Python module.  Here are a few useful generalizations:
   You will usually be able to model your implementation on code that
   is already there.
 
-== The Python tools ==
+== The Python tools
 
 Project policy is that (a) anything that does not have to be written
-in C shouldn't be, and (b) our preferred non-C language is Python.
-Most of the auxiliary tools have already been moved.  This section
+in C shouldn't be, and (b) our preferred non-C language is Python
+All the auxiliary tools have already been moved.  This section
 describes how they fit together.
 
 == The pylib/ntp library
@@ -446,7 +516,7 @@ layering of the three most important ones - ntpq, ntpdig, and ntpmon.
 These are front ends to a back-end library of Python service routines that
 installs as 'ntp' and lives in the source tree at pylib/.
 
-=== ntpq and ntpmon ===
+=== ntpq and ntpmon
 
 ntpq and ntpmon are front ends to back-end class called ControlSession
 that lives in ntp.packet.
@@ -474,13 +544,13 @@ doesn't live in the front end.  It's in ntp.util, well separated from
 both the command interpreter and the protocol back end so it can be
 re-used.
 
-=== ntpdig ===
+=== ntpdig
 
 ntpdig also uses the pylib library but doesn't speak Mode 6.
 Instead, it builds and interprets time-synchronization packets
 using some of the same machinery.
 
-=== MRU reporting ===
+=== MRU reporting
 
 The mrulist() method in ControlSession is more complex than the rest of the
 back-end code put together except do_query() itself.  It is the one part

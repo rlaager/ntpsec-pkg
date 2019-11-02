@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 "Common utility functions"
-# SPDX-License-Identifier: BSD-2-clause
+# SPDX-License-Identifier: BSD-2-Clause
 
 from __future__ import print_function, division
 
@@ -169,7 +169,7 @@ def parseConf(text):
 
     def pushToken():
         token = "".join(current)
-        if inQuote is False:  # Attempt type conversion
+        if not inQuote:  # Attempt type conversion
             try:
                 token = int(token)
             except ValueError:
@@ -182,16 +182,16 @@ def parseConf(text):
         current[:] = []
 
     def pushLine():
-        if len(current) > 0:
+        if current:
             pushToken()
-        if len(tokens) > 0:
+        if tokens:
             lines.append(tokens[:])
             tokens[:] = []
 
     i = 0
     tlen = len(text)
     while i < tlen:
-        if inQuote is True:
+        if inQuote:
             if text[i] == quoteStarter:  # Ending a text string
                 pushToken()
                 quoteStarter = ""
@@ -210,7 +210,7 @@ def parseConf(text):
             elif text[i] in "'\"":  # Starting a text string
                 inQuote = True
                 quoteStarter = text[i]
-                if len(current) > 0:
+                if current:
                     pushToken()
             elif text[i] == "\\":  # Linebreak escape
                 i += 1
@@ -219,7 +219,7 @@ def parseConf(text):
             elif text[i] == "\n":  # EOL: break the lines
                 pushLine()
             elif text[i] in string.whitespace:
-                if len(current) > 0:
+                if current:
                     pushToken()
             else:
                 current.append(text[i])
@@ -316,11 +316,11 @@ def gluenumberstring(above, below, isnegative):
     "Glues together parts of a number string"
     if above == "":
         above = "0"
-    if len(below) > 0:
+    if below:
         newvalue = ".".join((above, below))
     else:
         newvalue = above
-    if isnegative is True:
+    if isnegative:
         newvalue = "-" + newvalue
     return newvalue
 
@@ -507,7 +507,7 @@ def unitify(value, startingunit, baseunit=None, width=8, unitSpace=False):
         newvalue = cropprecision(value, ooms)
         newvalue, unitsmoved = scalestring(newvalue)
     unitget = unitrelativeto(startingunit, unitsmoved)
-    if unitSpace is True:
+    if unitSpace:
         spaceWidthAdjustment = 1
         spacer = " "
     else:
@@ -984,6 +984,7 @@ class PeerSummary:
         mode = 0
         unreach = 0
         xmt = 0
+        ntscookies = -1
 
         now = time.time()
 
@@ -1085,6 +1086,8 @@ class PeerSummary:
             elif name == "xmt":
                 # FIXME, xmt never used.
                 xmt = value
+            elif name == "ntscookies":
+                ntscookies = value
             else:
                 # unknown name?
                 # line = " name=%s " % (name)    # debug
@@ -1105,7 +1108,10 @@ class PeerSummary:
             elif dstadr_refid == "POOL":
                 ptype = 'p'     # pool
             elif srcadr.startswith("224."):
-                ptype = 'a'     # manycastclient
+                ptype = 'a'     # manycastclient (compatibility with Classic)
+            elif ntscookies > -1:
+                # FIXME: Will foo up if there are ever more than 9 cookies
+                ptype = chr(ntscookies + ord('0'))
             else:
                 ptype = 'u'     # unicast
         elif hmode == ntp.magic.MODE_ACTIVE:
@@ -1132,7 +1138,7 @@ class PeerSummary:
         # slots setup via pool have only srcadr
         if srcadr is not None \
                 and srcadr != "0.0.0.0" \
-                and srcadr[:7] != "127.127" \
+                and not srcadr.startswith("127.127") \
                 and srcadr != "::":
             if self.showhostnames:
                 try:

@@ -237,16 +237,17 @@ static const char leap_gthash [] = {
     "#h	1151a8f e85a5069 9000fcdb 3d5e5365 1d505b37"
 };
 
-static time_t lsec2009 = 3439756800u - JAN_1970; // 1 Jan 2009, 00:00:00 utc
-static time_t lsec2012 = 3550089600u - JAN_1970; // 1 Jul 2012, 00:00:00 utc
+static time_t lsec2009 = 3439756800U - JAN_1970; // 1 Jan 2009, 00:00:00 utc
+static time_t lsec2012 = 3550089600U - JAN_1970; // 1 Jul 2012, 00:00:00 utc
 
 static int stringreader(void* farg)
 {
 	const char ** cpp = (const char**)farg;
-	if (**cpp)
+	if (**cpp) {
 		return *(*cpp)++;
-	else
-		return EOF;
+	} else {
+	    return EOF; 
+	}
 }
 
 static bool
@@ -393,9 +394,9 @@ TEST(leapsec, loadFileExpire) {
 	rc =   leapsec_load(pt, stringreader, &cp)
 	    && leapsec_set_table(pt);
 	TEST_ASSERT_EQUAL(1, rc);
-	rc = leapsec_expired(3439756800u - JAN_1970);
+	rc = leapsec_expired(3439756800U - JAN_1970);
 	TEST_ASSERT_EQUAL(0, rc);
-	rc = leapsec_expired(3610569601u - JAN_1970);
+	rc = leapsec_expired(3610569601U - JAN_1970);
 	TEST_ASSERT_EQUAL(1, rc);
 }
 
@@ -406,7 +407,7 @@ TEST(leapsec, loadFileTTL) {
 	int rc;
 	leap_table_t * pt = leapsec_get_table(0);
 
-	const time_t limit = 3610569600u - JAN_1970;
+	const time_t limit = 3610569600U - JAN_1970;
 
 	rc =   leapsec_load(pt, stringreader, &cp)
 	    && leapsec_set_table(pt);
@@ -440,11 +441,11 @@ my_fprintf(FILE *stream, const char *fmt, ...) {
 	vfprintf(stream, fmt, ap);
 	va_end(ap);
 
-};
+}
 
 
 // ----------------------------------------------------------------------
-// test query in pristine state (bug#2745 misbehaviour)
+// test query in pristine state (bug#2745 misbehavior)
 TEST(leapsec, lsQueryPristineState) {
 	int            rc;
 	leap_result_t  qr;
@@ -943,7 +944,7 @@ TEST(leapsec, ls2012seqInsDumb) {
 	TEST_ASSERT_EQUAL(0,            qr.warped   );
 	TEST_ASSERT_EQUAL(LSPROX_ALERT, qr.proximity);
 
-	// NOW the insert/backwarp must happen
+	// NOW the insert/delete must happen
 	rc = leapsec_query(&qr, lsec2012+1);
 	TEST_ASSERT_TRUE(rc);
 	TEST_ASSERT_EQUAL(-1,            qr.warped   );

@@ -252,7 +252,7 @@ ntpcal_periodic_extend(
  * Convert a timestamp in NTP scale to a 64bit seconds value in the UN*X
  * scale with proper epoch unfolding around a given pivot or the current
  * system time. This function happily accepts negative pivot values as
- * timestamps befor 1970-01-01, so be aware of possible trouble on
+ * timestamps before 1970-01-01, so be aware of possible trouble on
  * platforms with 32bit 'time_t'!
  *
  * This is also a periodic extension, but since the cycle is 2^32 and
@@ -424,10 +424,12 @@ ntpcal_split_eradays(
 		/* hit last day of leap year */
 		n001 -= 1;
 		yday += DAYSPERYEAR;
-		if (isleapyear)
+		if (isleapyear) {
 			*isleapyear = 1;
-	} else if (isleapyear)
+		}
+	} else if (isleapyear) {
 		*isleapyear = (n001 == 3) && ((n004 != 24) || (n100 == 3));
+	}
 
 	/* now merge the cycles to elapsed years, using horner scheme */
 	res.hi = ((4*n400 + n100)*25 + n004)*4 + n001;
@@ -699,8 +701,9 @@ ntpcal_edate_to_eradays(
 	if (mons) {
 		tmp = ntpcal_days_in_months(mons);
 		res = ntpcal_days_in_years(years + tmp.hi) + tmp.lo;
-	} else
+	} else {
 		res = ntpcal_days_in_years(years);
+	}
 	res += mdays;
 
 	return res;

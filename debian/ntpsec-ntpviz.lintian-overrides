@@ -1,3 +1,8 @@
 # These units are launched by the corresponding timer units:
 ntpsec-ntpviz: systemd-service-file-missing-install-key lib/systemd/system/ntploggps.service
 ntpsec-ntpviz: systemd-service-file-missing-install-key lib/systemd/system/ntplogtemp.service
+# The non-systemd version of these are cron jobs in /etc/cron.d/ntpsec-ntpviz:
+ntpsec-ntpviz: package-supports-alternative-init-but-no-init.d-script lib/systemd/system/ntploggps.service
+ntpsec-ntpviz: package-supports-alternative-init-but-no-init.d-script lib/systemd/system/ntplogtemp.service
+ntpsec-ntpviz: package-supports-alternative-init-but-no-init.d-script lib/systemd/system/ntpviz-daily.service
+ntpsec-ntpviz: package-supports-alternative-init-but-no-init.d-script lib/systemd/system/ntpviz-weekly.service

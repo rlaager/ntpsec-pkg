@@ -9,7 +9,7 @@
 # from ntpd as objects that can be re-used by other front
 # ends. Reusable pieces live in pylib.
 #
-# SPDX-License-Identifier: BSD-2-clause
+# SPDX-License-Identifier: BSD-2-Clause
 from __future__ import print_function, division
 
 import cmd
@@ -87,7 +87,9 @@ class Ntpq(cmd.Cmd):
 
     def get_names(self):
         # Overrides a method in Cmd
-        return [x.replace('hot_', ':').replace('config_from_file', 'config-from-file') for x in dir(self.__class__)]
+        return [x.replace('hot_', ':').replace('config_from_file',
+                                               'config-from-file')
+                for x in dir(self.__class__)]
 
     def emptyline(self):
         "Called when an empty line is entered in response to the prompt."
@@ -111,10 +113,10 @@ class Ntpq(cmd.Cmd):
                 line = line.replace(cmd, cmdprefixlist[0])
                 cmd = cmdprefixlist[0]
             elif len(cmdprefixlist) > 1:
-                self.warn("***Command `%s' ambiguous\n" % cmd)
+                self.warn("***Command `%s' ambiguous" % cmd)
                 return
-            elif len(cmdprefixlist) == 0:
-                self.warn("***Command `%s' unknown\n" % cmd)
+            elif not cmdprefixlist:
+                self.warn("***Command `%s' unknown" % cmd)
                 return
 
             if cmd == "help" and arg:
@@ -125,15 +127,15 @@ class Ntpq(cmd.Cmd):
                     if len(argprefixlist) == 1:
                         line = line.replace(arg, argprefixlist.pop())
                     elif len(argprefixlist) > 1:
-                        self.warn("Command `%s' is ambiguous\n" % arg)
+                        self.warn("Command `%s' is ambiguous" % arg)
                         return
-                    elif len(argprefixlist) == 0:
-                        self.warn("Command `%s' is unknown\n" % arg)
+                    elif not argprefixlist:
+                        self.warn("Command `%s' is unknown" % arg)
                         return
 
             self.onecmd(line)
         except TypeError:
-            self.warn("Command `%s' is unknown\n" % line)
+            self.warn("Command `%s' is unknown" % line)
 
     def do_help(self, arg):
         if arg:
@@ -144,7 +146,7 @@ class Ntpq(cmd.Cmd):
                 if len(argprefixlist) == 1:
                     arg = argprefixlist.pop()
                 elif len(argprefixlist) > 1:
-                    self.warn("Command `%s' is ambiguous.\n" % arg)
+                    self.warn("Command `%s' is ambiguous." % arg)
                     return
         cmd.Cmd.do_help(self, arg)
 
@@ -152,13 +154,13 @@ class Ntpq(cmd.Cmd):
         try:
             sys.stdout.write(ntp.poly.polyunicode(msg))
         except UnicodeEncodeError as e:
-            print("Unicode failure:", e)
-            print("msg:\n", repr(msg))
+            self.warn("Unicode failure: %s" % str(e))
+            self.warn("msg:\n" + repr(msg))
             raise e
         sys.stdout.flush()    # In case we're piping the output
 
     def warn(self, msg):
-        sys.stderr.write(ntp.poly.polystr(msg))
+        sys.stderr.write(ntp.poly.polystr(msg) + "\n")
 
     def help_help(self):
         self.say("""\
@@ -172,20 +174,20 @@ usage: help [ command ]
         try:
             self.peers = self.session.readstat()
         except ntp.packet.ControlException as e:
-            self.warn(e.message + "\n")
+            self.warn(e.message)
             return False
         except IOError as e:
-            print(e.strerror)
+            self.warn(e.strerror)
             return False
 
-        if len(self.peers) == 0:
+        if not self.peers:
             if self.chosts:
                 self.say("server=%s " % self.session.hostname)
             self.say("No association IDs returned\n")
             return False
 
         if self.debug:
-            self.warn("\n%d associations total\n" % len(self.peers))
+            self.warn("\n%d associations total" % len(self.peers))
         # sortassoc()
         return True
 
@@ -242,15 +244,15 @@ usage: help [ command ]
                 try:
                     variables = self.session.readvar(peer.associd, raw=True)
                 except ntp.packet.ControlException as e:
-                    self.warn(e.message + "\n")
+                    self.warn(e.message)
                     return
                 except IOError as e:
-                    print(e.strerror)
+                    self.warn(e.strerror)
                     return
                 if not variables:
                     if len(self.chosts) > 1:
                         self.warn("server=%s " % self.session.hostname)
-                    self.warn("***No information returned for association %d\n"
+                    self.warn("***No information returned for association %d"
                               % peer.associd)
                     continue
                 if len(self.chosts) > 1:
@@ -267,7 +269,7 @@ usage: help [ command ]
         # No big deal most of the time.  Just a useless packet exchange.
         if not line:
             if required:
-                self.warn("An associd argument is required.\n")
+                self.warn("An associd argument is required.")
                 return -1
             else:
                 return 0
@@ -277,13 +279,13 @@ usage: help [ command ]
             try:
                 idx = int(line[1:].split()[0])
             except ValueError:
-                self.warn("Invalid index literal.\n")
+                self.warn("Invalid index literal.")
                 return -1
             if idx < 0 or idx >= 2**16-1:
-                self.warn("%d is not a valid association number.\n" % idx)
+                self.warn("%d is not a valid association number." % idx)
                 return -1
             elif idx not in range(1, len(self.peers)+1):
-                self.warn("No such association as %d.\n" % idx)
+                self.warn("No such association as %d." % idx)
                 return -1
             else:
                 return self.peers[idx - 1].associd
@@ -291,11 +293,11 @@ usage: help [ command ]
             try:
                 associd = int(line.split()[0])
             except ValueError:
-                self.warn("Invalid associd literal.\n")
+                self.warn("Invalid associd literal.")
                 return -1
             if (associd != 0 and
                     associd not in [peer.associd for peer in self.peers]):
-                self.warn("Unknown associd.\n")
+                self.warn("Unknown associd.")
                 return -1
             else:
                 return associd
@@ -339,10 +341,10 @@ usage: help [ command ]
         try:
             variables = self.session.readvar(associd, varlist, op, raw=True)
         except ntp.packet.ControlException as e:
-            self.warn(e.message + "\n")
+            self.warn(e.message)
             return False
         except IOError as e:
-            print(e.strerror)
+            self.warn(e.strerror)
             return False
         if len(self.chosts) > 1:
             self.say("server=%s " % self.session.hostname)
@@ -383,8 +385,8 @@ usage: units
             try:
                 self.session.primary_timeout = int(line)
             except ValueError:
-                print("What?")
-        print("primary timeout %d ms" % self.session.primary_timeout)
+                self.warn("What?")
+        self.say("primary timeout %d ms\n" % self.session.primary_timeout)
 
     def help_timeout(self):
         self.say("""\
@@ -400,7 +402,7 @@ usage: timeout [ msec ]
                                            raw=True)
         except ntp.packet.ControlException as e:
             if ntp.control.CERR_UNKNOWNVAR == e.errorcode:
-                self.warn("Unknown variable.  Trying one at a time.\n")
+                self.warn("Unknown variable.  Trying one at a time.")
                 varlist = [v[0] for v in variables]
                 items = []
                 for var in varlist:
@@ -416,10 +418,10 @@ usage: timeout [ msec ]
                         raise e
                 queried = ntp.util.OrderedDict(items)
             else:
-                self.warn(e.message + "\n")
+                self.warn(e.message)
                 return
         except IOError as e:
-            print(e.strerror)
+            self.warn(e.strerror)
             return
         if self.rawmode:
             self.say(self.session.response)
@@ -472,10 +474,10 @@ usage: timeout [ msec ]
                     except IndexError:
                         self.say("%s  %s%d\n" % (legend, "mode#", value))
                 else:
-                    self.warn("unexpected vc type %s for %s, value %s\n"
+                    self.warn("unexpected vc type %s for %s, value %s"
                               % (fmt, name, value))
         except KeyboardInterrupt:
-            self.warn("display interrupted\n")
+            self.warn("display interrupted")
 
     def do_delay(self, line):
         "set the delay added to encryption time stamps"
@@ -499,9 +501,9 @@ usage: delay [ msec ]
         "specify the host whose NTP server we talk to"
         if not line:
             if self.session.havehost():
-                print("current host is %s" % self.session.hostname)
+                self.say("current host is %s\n" % self.session.hostname)
             else:
-                print("no current host")
+                self.say("no current host\n")
         else:
             tokens = line.split()
             if tokens[0] == '-4':
@@ -513,13 +515,15 @@ usage: delay [ msec ]
             try:
                 if (tokens and
                         self.session.openhost(tokens[0], session.ai_family)):
-                    print("current host set to %s" % self.session.hostname)
+                    self.say("current host set to %s\n"
+                             % self.session.hostname)
                 elif self.session.havehost():
-                    print("current host remains %s" % self.session.hostname)
+                    self.say("current host remains %s\n"
+                             % self.session.hostname)
                 else:
-                    print("still no current host")
+                    self.say("still no current host\n")
             except KeyboardInterrupt:
-                print("lookup interrupted")
+                self.warn("lookup interrupted")
 
     def help_host(self):
         self.say("""\
@@ -530,7 +534,7 @@ usage: host [-4|-6] [hostname]
     def do_poll(self, line):
         "poll an NTP server in client mode `n' times"
         # And it's not in the C version, so we're off the hook here
-        print("poll not implemented yet")
+        self.warn("WARNING: poll not implemented yet")
 
     def help_poll(self):
         self.say("""\
@@ -543,7 +547,9 @@ usage: poll [n] [verbose]
         try:
             self.session.password()
         except ntp.packet.ControlException as e:
-            self.warn(e.message + "\n")
+            self.warn(e.message)
+        except IOError:
+            self.warn("***Can't read control key from /etc/ntp.conf")
 
     def help_passwd(self):
         self.say("""\
@@ -560,11 +566,11 @@ usage: passwd []
         elif line == "no":
             self.showhostnames = False
         else:
-            print("What?")
+            self.say("What?\n")
         if self.showhostnames:
-            print("hostnames being shown")
+            self.say("hostnames being shown\n")
         else:
-            print("hostnames not being shown")
+            self.say("hostnames not being shown\n")
 
     def help_hostnames(self):
         self.say("""\
@@ -587,15 +593,15 @@ usage: hostnames [yes|no]
             try:
                 self.debug = int(line)  # C version didn't implement this
             except ValueError:
-                print("What?")
+                self.warn("What?")
         self.session.debug = self.debug
-        print("debug level is %d" % self.debug)
+        self.say("debug level is %d\n" % self.debug)
 
     def do_logfile(self, line):
         """view/change logfile. \"<stderr>\" will log to stderr
            instead of a file"""
         if not line:
-            print(repr(self.logfp.name))
+            self.say(repr(self.logfp.name) + "\n")
             return
         if self.logfp != sys.stderr:
             self.logfp.close()
@@ -605,9 +611,9 @@ usage: hostnames [yes|no]
             try:
                 logfp = open(line, "a", 1)  # 1 => line buffered
                 self.logfp = self.session.logfp = logfp
-                print("Logfile set to", line)
+                self.say("Logfile set to %s\n" % line)
             except IOError:
-                print("Could not open", line, "for logging.")
+                self.warn("Could not open %s for logging." % line)
 
     def help_debug(self):
         self.say("""\
@@ -638,11 +644,11 @@ usage: quit
             try:
                 self.session.keyid = int(line)
             except ValueError:
-                print("What?")
+                self.warn("What?")
         if self.session.keyid is None:
-            print("no keyid defined")
+            self.say("no keyid defined\n")
         else:
-            print("keyid is %d" % self.session.keyid)
+            self.say("keyid is %d\n" % self.session.keyid)
 
     def help_keyid(self):
         self.say("""\
@@ -652,7 +658,7 @@ usage: keyid [key#]
 
     def do_version(self, line):
         "print version number"
-        print(version)
+        self.say(version + "\n")
 
     def help_version(self):
         self.say("""\
@@ -664,9 +670,9 @@ usage: version
         "toggle direct mode output"
         self.directmode = not self.directmode
         if self.directmode:
-            print("Direct mode is on")
+            self.say("Direct mode is on\n")
         else:
-            print("Direct mode is off")
+            self.say("Direct mode is off\n")
 
     def help_direct(self):
         self.say("""\
@@ -677,7 +683,7 @@ usage: direct
     def do_raw(self, line):
         "do raw mode variable output"
         self.rawmode = True
-        print("Output set to raw")
+        self.say("Output set to raw\n")
 
     def help_raw(self):
         self.say("""\
@@ -688,7 +694,7 @@ usage: raw
     def do_cooked(self, line):
         "do cooked mode variable output"
         self.rawmode = False
-        print("Output set to cooked")
+        self.say("Output set to cooked\n")
 
     def help_cooked(self):
         self.say("""\
@@ -705,11 +711,11 @@ usage: cooked
         elif line == "no":
             self.session.always_auth = False
         else:
-            print("What?")
+            self.warn("What?")
         if self.session.always_auth:
-            print("authenticated requests being sent")
+            self.say("authenticated requests being sent\n")
         else:
-            print("unauthenticated requests being sent")
+            self.say("unauthenticated requests being sent\n")
 
     def help_authenticate(self):
         self.say("""\
@@ -728,11 +734,12 @@ usage: authenticate [yes|no]
                         newversion <= ntp.magic.NTP_VERSION):
                     self.pktversion = newversion
                 else:
-                    print("versions %d to %d, please"
-                          % (ntp.magic.NTP_OLDVERSION, ntp.magic.NTP_VERSION))
+                    self.warn("versions %d to %d, please"
+                              % (ntp.magic.NTP_OLDVERSION,
+                                 ntp.magic.NTP_VERSION))
             except ValueError:
-                print("What?")
-        print("NTP version being claimed is %d" % self.pktversion)
+                self.warn("What?")
+        self.say("NTP version being claimed is %d\n" % self.pktversion)
 
     def help_ntpversion(self):
         self.say("""\
@@ -744,7 +751,10 @@ usage: ntpversion [version number]
         "set key type to use for authenticated requests"
         if not line:
             self.say("Keytype: %s\n" % self.session.keytype)
-        elif line not in "DSA, MD4, MD5, MDC2, RIPEMD160, SHA1":
+        elif line not in "DSA, MD4, MD5, MDC2, RIPEMD160, SHA-1, AES-CMAC":
+            # Above list is somewhat bogus. All but oldest versions of NTPsec
+            # will cheerfully use any 16- or 20-bit MAC supported by libcrypto;
+            # NTP Classic will probably barf on AES-CMAC.
             self.warn("Keytype %s is not supported by ntpd.\n" % line)
         elif line not in hashlib.algorithms_available:
             self.warn("Keytype %s is not supported by ntpq.\n" % line)
@@ -754,7 +764,7 @@ usage: ntpversion [version number]
     def help_keytype(self):
         self.say("""\
 function: set key type to use for authenticated requests, one of:
-    DSA, MD4, MD5, MDC2, RIPEMD160, SHA1
+    DSA, MD4, MD5, MDC2, RIPEMD160, SHA-1, AES-CMAC
 usage: keytype [digest-name]
 """)
 
@@ -830,7 +840,7 @@ usage: addvars name[=value][,...]
         vars_to_rm = line.split(',')
         for rm_var in vars_to_rm:
             if rm_var not in self.uservars:
-                print("%s is not in the variable list" % rm_var)
+                self.warn("%s is not in the variable list" % rm_var)
             else:
                 del self.uservars[rm_var]
 
@@ -852,13 +862,13 @@ usage: clearvars
 
     def do_showvars(self, line):
         "print variables on the variable list"
-        if len(self.uservars) == 0:
-            print("No variables on list.")
+        if not self.uservars:
+            self.say("No variables on list.\n")
         for (name, value) in self.uservars.items():
             if value:
-                print("%s=%s" % (name, value))
+                self.say("%s=%s\n" % (name, value))
             else:
-                print(name)
+                self.say(name + "\n")
 
     def help_showvars(self):
         self.say("""\
@@ -959,7 +969,7 @@ usage: mreadlist assocIDlow assocIDhigh
     def do_mrl(self, line):
         "read the peer variables in the variable list for multiple peers"
         if not line:
-            self.warn("usage: mrl assocIDlow assocIDhigh\n")
+            self.warn("usage: mrl assocIDlow assocIDhigh")
             return
         self.do_mreadlist(line)
 
@@ -973,7 +983,7 @@ usage: mrl assocIDlow assocIDhigh
         "read peer variables from multiple peers"
         if not line:
             self.warn("usage: mreadvar assocIDlow assocIDhigh  "
-                      "[ name=value[,...] ]\n")
+                      "[ name=value[,...] ]")
             return
         idrange = self.__assoc_range_valid(line)
         if not idrange:
@@ -997,7 +1007,7 @@ usage: mreadvar assocIDlow assocIDhigh [name=value[,...]]
         "read peer variables from multiple peers"
         if not line:
             self.warn(
-                "usage: mrv assocIDlow assocIDhigh [name=value[,...]]\n")
+                "usage: mrv assocIDlow assocIDhigh [name=value[,...]]")
             return
         self.do_mreadvar(line)
 
@@ -1035,7 +1045,7 @@ usage: cl [assocID]
         "read clock variables"
         assoc = self.__assoc_valid(line)
         if assoc == 0:
-            self.warn("This command requires the association ID of a clock.\n")
+            self.warn("This command requires the association ID of a clock.")
         elif assoc > 0:
             self.__dolist(line.split()[1:], assoc,
                           ntp.control.CTL_OP_READCLOCK, ntp.ntpc.TYPE_CLOCK)
@@ -1059,22 +1069,23 @@ usage: cv [ assocID ] [ name=value[,...] ]
     def do_pstats(self, line):
         "show statistics for a peer"
         pstats = (
-            ("srcadr", "remote host:         ", NTP_ADD),
-            ("dstadr", "local address:       ", NTP_ADD),
-            ("timerec", "time last received:  ", NTP_INT),
-            ("timer", "time until next send:", NTP_INT),
-            ("timereach", "reachability change: ", NTP_INT),
-            ("sent", "packets sent:        ", NTP_INT),
-            ("received", "packets received:    ", NTP_INT),
-            ("badauth", "bad authentication:  ", NTP_INT),
-            ("bogusorg", "bogus origin:        ", NTP_INT),
-            ("oldpkt", "duplicate:           ", NTP_INT),
-            ("seldisp", "bad dispersion:      ", NTP_INT),
-            ("selbroken", "bad reference time:  ", NTP_INT),
-            ("candidate", "candidate order:     ", NTP_INT),
+            ("srcadr", "remote host:          ", NTP_ADD),
+            ("dstadr", "local address:        ", NTP_ADD),
+            ("timerec", "time last received:   ", NTP_INT),
+            ("timer", "time until next send: ", NTP_INT),
+            ("timereach", "reachability change:  ", NTP_INT),
+            ("sent", "packets sent:         ", NTP_INT),
+            ("received", "packets received:     ", NTP_INT),
+            ("badauth", "bad authentication:   ", NTP_INT),
+            ("bogusorg", "bogus origin:         ", NTP_INT),
+            ("oldpkt", "duplicate:            ", NTP_INT),
+            ("seldisp", "bad dispersion:       ", NTP_INT),
+            ("selbroken", "bad reference time:   ", NTP_INT),
+            ("candidate", "candidate order:      ", NTP_INT),
+            ("ntscookies", "count of nts cookies: ", NTP_INT),
         )
         if not line:
-            self.warn("usage: pstats assocID\n")
+            self.warn("usage: pstats assocID")
             return
         associd = self.__assoc_valid(line)
         if associd >= 0:
@@ -1150,10 +1161,13 @@ usage: lopeers
         try:
             self.session.password()
         except ntp.packet.ControlException as e:
-            self.warn(e.message + "\n")
+            self.warn(e.message)
+            return
+        except IOError:
+            self.warn("***Can't read control key from /etc/ntp.conf")
             return
         if self.debug > 2:
-            self.warn("In Config\nKeyword = :config\nCommand = %s\n" % line)
+            self.warn("In Config\nKeyword = :config\nCommand = %s" % line)
         try:
             self.session.config(line)
             m = re.match("column ([0-9]+) syntax error", self.session.response)
@@ -1168,7 +1182,7 @@ usage: lopeers
                 self.say("^\n")
             self.say(self.session.response + "\n")
         except ntp.packet.ControlException as e:
-            self.warn(e.message + "\n")
+            self.warn(e.message)
 
     def help_hot_config(self):
         self.say("""\
@@ -1182,7 +1196,7 @@ usage: config <configuration command line>
             with open(line) as rfp:
                 self.say("%s\n" % self.session.config(rfp.read()))
         except IOError:
-            self.warn("Could not read %s\n" % line)
+            self.warn("Could not read %s" % line)
 
     def help_config_from_file(self):
         self.say("""\
@@ -1273,7 +1287,7 @@ usage: config_from_file <configuration filename>
             # With high-traffic NTP servers, this can occur if the
             # MRU list is limited to less than about 16 seconds' of
             # entries.  See the 'mru' ntp.conf entry.
-            self.warn(e.message + "\n")
+            self.warn(e.message)
 
     def help_mrulist(self):
         self.say("""\
@@ -1288,7 +1302,7 @@ usage: mrulist [tag=value] [tag=value] [tag=value] [tag=value]
             self.session.password()
             entries = self.session.ifstats()
             if self.rawmode:
-                print(self.session.response)
+                self.say(self.session.response + "\n")
             else:
                 formatter = ntp.util.IfstatsSummary()
                 self.say(ntp.util.IfstatsSummary.header)
@@ -1296,8 +1310,10 @@ usage: mrulist [tag=value] [tag=value] [tag=value] [tag=value]
                 for (i, entry) in enumerate(entries):
                     self.say(formatter.summary(i, entry))
         except ntp.packet.ControlException as e:
-            self.warn(e.message + "\n")
+            self.warn(e.message)
             return
+        except IOError:
+            self.warn("***Can't read control key from /etc/ntp.conf")
 
     def help_ifstats(self):
         self.say("""\
@@ -1311,7 +1327,7 @@ usage: ifstats
             self.session.password()
             entries = self.session.reslist()
             if self.rawmode:
-                print(self.session.response)
+                self.say(self.session.response + "\n")
             else:
                 formatter = ntp.util.ReslistSummary()
                 self.say(ntp.util.ReslistSummary.header)
@@ -1319,8 +1335,10 @@ usage: ifstats
                 for entry in entries:
                     self.say(formatter.summary(entry))
         except ntp.packet.ControlException as e:
-            self.warn(e.message + "\n")
+            self.warn(e.message)
             return
+        except IOError:
+            self.warn("***Can't read control key from /etc/ntp.conf")
 
     def help_reslist(self):
         self.say("""\
@@ -1475,6 +1493,36 @@ usage: authinfo
 
 # FIXME: This table should move to ntpd
 #          so the answers track when ntpd is updated
+    def do_ntsinfo(self, _line):
+        "display NTS authentication counters"
+        ntsinfo = (
+   ("nts_client_send",           "NTS client sends:          ", NTP_INT),
+   ("nts_client_recv_good",      "NTS client recvs good:     ", NTP_INT),
+   ("nts_client_recv_bad",       "NTS client recvs w error:  ", NTP_INT),
+   ("nts_server_recv_good",      "NTS server recvs good:     ", NTP_INT),
+   ("nts_server_recv_bad",       "NTS server recvs w error:  ", NTP_INT),
+   ("nts_server_send",           "NTS server sends:          ", NTP_INT),
+   ("nts_cookie_make",           "NTS make cookies:          ", NTP_INT),
+   ("nts_cookie_decode",         "NTS decode cookies:        ", NTP_INT),
+   ("nts_cookie_decode_old",     "NTS decode cookies old:    ", NTP_INT),
+   ("nts_cookie_decode_too_old", "NTS decode cookies too old:", NTP_INT),
+   ("nts_cookie_decode_error",   "NTS decode cookies error:  ", NTP_INT),
+   ("nts_ke_probes_good",        "NTS KE probes good:        ", NTP_INT),
+   ("nts_ke_probes_bad",         "NTS KE probes_bad:         ", NTP_INT),
+   ("nts_ke_serves_good",        "NTS KE serves good:        ", NTP_INT),
+   ("nts_ke_serves_bad",         "NTS KE serves_bad:         ", NTP_INT),
+  )
+        self.collect_display(associd=0, variables=ntsinfo, decodestatus=False)
+
+    def help_ntsinfo(self):
+        self.say("""\
+function: display NTS authentication counters
+usage: ntsinfo
+""")
+
+
+# FIXME: This table should move to ntpd
+#          so the answers track when ntpd is updated
     def do_iostats(self, _line):
         "display network input and output counters"
         iostats = (
@@ -1554,6 +1602,11 @@ USAGE: ntpq [-46dphinOV] [-c str] [-D lvl] [host ...]
 '''
 
 if __name__ == '__main__':
+    bin_ver = "ntpsec-@NTPSEC_VERSION_EXTENDED@"
+    if ntp.util.stdversion() != bin_ver:
+        sys.stderr.write("Module/Binary version mismatch\n")
+        sys.stderr.write("Binary: %s\n" % bin_ver)
+        sys.stderr.write("Module: %s\n" % ntp.util.stdversion())
     try:
         (options, arguments) = getopt.getopt(
             sys.argv[1:],
@@ -1594,7 +1647,7 @@ if __name__ == '__main__':
             cast = ntp.util.safeargcast(val, int, errmsg, usage)
             session.debug = interpreter.debug = cast
         elif switch in ("-h", "--help"):
-            print(usage)
+            sys.stderr.write(usage)
             raise SystemExit(0)
         elif switch in ("-n", "--numeric"):
             interpreter.showhostnames = False
@@ -1603,7 +1656,7 @@ if __name__ == '__main__':
         elif switch in ("-k", "--keyfile"):
             keyfile = val
         elif switch in ("-V", "--version"):
-            print("ntpq %s" % version)
+            sys.stdout.write("ntpq %s\n" % version)
             raise SystemExit(0)
         elif switch in ("-w", "--wide"):
             interpreter.wideremote = True
@@ -1628,7 +1681,7 @@ if __name__ == '__main__':
         try:
             credentials = ntp.packet.Authenticator(keyfile)
         except (OSError, IOError):
-            sys.stderr.write("ntpq: %s nonexistent or unreadable\n" % keyfile)
+            sys.stderr.write("ntpq: %s nonexistent or unreadable" % keyfile)
             raise SystemExit(1)
         if credentials:
             session.auth = credentials
@@ -1642,27 +1695,27 @@ if __name__ == '__main__':
             elif '6' == token[-1]:
                 session.ai_family = socket.AF_INET6
             else:
-                interpreter.warn("%s: unexpected option-like thing.\n"
+                interpreter.warn("%s: unexpected option-like thing."
                                  % progname)
                 raise SystemExit(1)
             arguments.pop(0)
         else:
             interpreter.chosts.append((token, session.ai_family))
 
-    if len(arguments) == 0:
+    if not arguments:
         interpreter.chosts.append((DEFHOST, session.ai_family))
 
-    if (len(interpreter.ccmds) == 0 and
+    if (not interpreter.ccmds and
             not interpreter.interactive and
             os.isatty(0) and
             os.isatty(1)):
         interpreter.interactive = True
 
     try:
-        if len(interpreter.ccmds) == 0:
+        if not interpreter.ccmds:
             if len(interpreter.chosts) > 1:
                 interpreter.warn(
-                    "ntpq can only work interactively on one host.\n")
+                    "ntpq can only work interactively on one host.")
                 interpreter.chosts = interpreter.chosts[:1]
             session.openhost(*interpreter.chosts[0])
             interpreter.cmdloop()
@@ -1677,7 +1730,7 @@ if __name__ == '__main__':
         if os.isatty(0):
             interpreter.say("\n")
     except ntp.packet.ControlException as e:
-        interpreter.warn(e.message + "\n")
+        interpreter.warn(e.message)
     except IOError:
-        print("Bailing out...")
+        sys.stderr.write("Bailing out...\n")
 # end

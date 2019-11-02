@@ -51,7 +51,7 @@ def ntp_read_vars(peer, vars, host):
     obsolete = {'phase': 'offset',
                 'rootdispersion': 'rootdisp'}
 
-    if not len(vars):
+    if not vars:
         do_all = True
     else:
         do_all = False
@@ -116,6 +116,12 @@ USAGE: ntptrace [-<flag> [<val>] | --<name>[{=| }<val>]]... [host]
 Options are specified by doubled hyphens and their name or by a single
 hyphen and the flag character.""" + "\n"
 
+bin_ver = "ntpsec-@NTPSEC_VERSION_EXTENDED@"
+if ntp.util.stdversion() != bin_ver:
+    sys.stderr.write("Module/Binary version mismatch\n")
+    sys.stderr.write("Binary: %s\n" % bin_ver)
+    sys.stderr.write("Module: %s\n" % ntp.util.stdversion())
+
 try:
     (options, arguments) = getopt.getopt(
         sys.argv[1:], "m:nr:?V",
@@ -143,7 +149,7 @@ for (switch, val) in options:
         print("ntptrace %s" % ntp.util.stdversion())
         raise SystemExit(0)
 
-if len(arguments):
+if arguments:
     host = arguments[0]
 
 hostcount = 0

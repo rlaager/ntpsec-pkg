@@ -59,7 +59,7 @@ class AuthenticatorJig:
         self.compute_mac_calls = []
 
     def __getitem__(self, key):
-        if self.fail_getitem is True:
+        if self.fail_getitem:
             raise IndexError
         return ("passtype", "pass")
 
@@ -243,14 +243,14 @@ class TestSyncPacket(unittest.TestCase):
         except ntpp.SyncException as e:
             errored = e.message
         self.assertEqual(errored, "Packet is a runt")
-        # Test with extension, MD5 or SHA1, 20
+        # Test with extension, MD5 or SHA-1, 20
         mac = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09" \
               "\x0A\x0B\x0C\x0D\x0E\x0F\x10\x11\x12\x13"
         data2 = data + ext + mac
         cls = self.target(data2)
         self.assertEqual(cls.mac, ntp.poly.polybytes(mac))
         self.assertEqual(cls.extension, ntp.poly.polybytes(ext + mac))
-        # Test with extension, MD5 or SHA1, 24
+        # Test with extension, MD5 or SHA-1, 24
         mac += "\x14\x15\x16\x17"
         data2 = data + ext + mac
         cls = self.target(ntp.poly.polybytes(data2))
@@ -795,9 +795,9 @@ class TestControlSession(unittest.TestCase):
 
         def lookup_jig(hostname, family):
             lookups.append((hostname, family))
-            if returnNothing is True:
+            if returnNothing:
                 return None
-            elif noCanon is True:
+            elif noCanon:
                 return [("family", "socktype", "protocol", None,
                          ("1.2.3.4", 80)), ]
             else:
@@ -1548,7 +1548,7 @@ class TestControlSession(unittest.TestCase):
                 query_fail[0] -= 1
                 code = query_fail_code.pop(0)
                 raise ctlerr("foo", errorcode=code)
-            if len(query_results) > 0:
+            if query_results:
                 setresponse(query_results.pop(0))
         logjig = jigs.FileJig()
         # Init
@@ -1917,6 +1917,22 @@ class TestAuthenticator(unittest.TestCase):
                 cls.control()
                 errored = False
             except ValueError:
+                errored = True
+            self.assertEqual(errored, True)
+            # Malformed control line
+            self.open_data = ["control foo"]
+            try:
+                cls.control()
+                errored = False
+            except ValueError:
+                errored = True
+            self.assertEqual(errored, True)
+            # Non-existent key
+            self.open_data = ["control 42"]
+            try:
+                cls.control()
+                errored = False
+            except KeyError:
                 errored = True
             self.assertEqual(errored, True)
         finally:

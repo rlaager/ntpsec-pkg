@@ -4,7 +4,7 @@ Description: Use /var/log/ntpsec for stats
 Forwarded: not-needed
 Origin: vendor
 Author: Richard Laager <rlaager@wiktel.com>
-Last-Update: 2018-07-31
+Last-Update: 2019-09-23
 --- a/etc/ntploggps.service
 +++ b/etc/ntploggps.service
 @@ -6,4 +6,4 @@
@@ -19,5 +19,5 @@ Last-Update: 2018-07-31
  
  [Service]
  Type=simple
--ExecStart=/usr/bin/ntplogtemp -o -l /var/log/ntpstats/temps
-+ExecStart=/usr/bin/ntplogtemp -o -l /var/log/ntpsec/temps
+-ExecStart=@BINDIR@/ntplogtemp -o -l /var/log/ntpstats/temps
++ExecStart=@BINDIR@/ntplogtemp -o -l /var/log/ntpsec/temps

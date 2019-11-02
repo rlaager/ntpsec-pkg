@@ -15,7 +15,7 @@
  * Copyright (c) 1997, 1998, 1999, 2000  Trimble Navigation Ltd.
  * All rights reserved.
  * Copyright 2017 by the NTPsec project contributors
- * SPDX-License-Identifier: BSD-4-clause
+ * SPDX-License-Identifier: BSD-4-Clause
  */
 
 #include "config.h"
@@ -216,8 +216,9 @@ sendbyte (
 	int b
 	)
 {
-	if (b == DLE)
+	if (b == DLE) {
 		*(buffer->data+buffer->size++) = DLE;
+	}
 	*(buffer->data+buffer->size++) = (unsigned char)b;
 }
 
@@ -332,8 +333,8 @@ trimble_start (
 			  refclock_name(peer), path));
 
 	if (tcgetattr(fd, &tio) < 0) {
-		msyslog(LOG_ERR, "REFCLOCK: %s tcgetattr failed: %m",
-		        refclock_name(peer));
+		msyslog(LOG_ERR, "REFCLOCK: %s tcgetattr failed: %s",
+		        refclock_name(peer), strerror(errno));
 		close(fd);
 		return false;
 	}
@@ -375,7 +376,6 @@ trimble_start (
 	    default:
 	        msyslog(LOG_NOTICE, "REFCLOCK: %s mode unknown",
 			refclock_name(peer));
-		break;
 		close(fd);
 		free(up);
 		return false;
@@ -391,9 +391,9 @@ trimble_start (
 	iflag = tio.c_iflag;
 	if (tcsetattr(fd, TCSANOW, &tio) == -1 || tcgetattr(fd, &tio) == -1 ||
 	    tio.c_cflag != cflag || tio.c_iflag != iflag) {
-		msyslog(LOG_ERR, "REFCLOCK: %s tcsetattr failed: wanted cflag 0x%x got 0x%x, wanted iflag 0x%x got 0x%x, return: %m",
+		msyslog(LOG_ERR, "REFCLOCK: %s tcsetattr failed: wanted cflag 0x%x got 0x%x, wanted iflag 0x%x got 0x%x, return: %s",
 		        refclock_name(peer), cflag, (unsigned int)tio.c_cflag,
-		        iflag, (unsigned int)tio.c_iflag);
+		        iflag, (unsigned int)tio.c_iflag, strerror(errno));
 		close(fd);
 		free(up);
 		return false;
@@ -410,8 +410,8 @@ trimble_start (
 		 * voltage and pulsed negative.
 		 */
 		if (ioctl(fd, TIOCMGET, &up->MCR) < 0) {
-			msyslog(LOG_ERR, "REFCLOCK: %s TIOCMGET failed: %m",
-			        refclock_name(peer));
+			msyslog(LOG_ERR, "REFCLOCK: %s TIOCMGET failed: %s",
+			        refclock_name(peer), strerror(errno));
 			close(fd);
 			free(up);
 			return false;
@@ -419,8 +419,8 @@ trimble_start (
 		up->MCR |= TIOCM_RTS;
 		if (ioctl(fd, TIOCMSET, &up->MCR) < 0 ||
 		    !(up->MCR & TIOCM_RTS)) {
-			msyslog(LOG_ERR, "REFCLOCK: %s TIOCMSET failed: MCR=0x%x, return=%m",
-			        refclock_name(peer), (unsigned int)up->MCR);
+			msyslog(LOG_ERR, "REFCLOCK: %s TIOCMSET failed: MCR=0x%x, return=%s",
+			        refclock_name(peer), (unsigned int)up->MCR, strerror(errno));
 			close(fd);
 			free(up);
 			return false;
@@ -468,8 +468,9 @@ trimble_start (
 		return false;
 	}
 
-	if (up->type == CLK_THUNDERBOLT)
+	if (up->type == CLK_THUNDERBOLT) {
 		init_thunderbolt(fd);
+	}
 
 	return true;
 }
@@ -603,8 +604,9 @@ TSIP_decode (
 
 			/* flags checked in 8f-0b for Palisade and Acutime */
 			up->trk_status = (unsigned char)mb(18);
-			if (up->trk_status > PAL_TSTATS)
+			if (up->trk_status > PAL_TSTATS) {
 				up->trk_status = PAL_TSTATS;
+}
 			up->UTC_flags = (unsigned char)mb(19);
 
 			/* get timecode from 8f-0b except with Praecis */
@@ -673,11 +675,13 @@ TSIP_decode (
 			}
 #endif
 			decod_stat = (unsigned char)mb(12);
-			if (decod_stat > TB_DECOD_STATS)
+			if (decod_stat > TB_DECOD_STATS) {
 				decod_stat = TB_DECOD_STATS;
+}
 			disc_mode = (unsigned char)mb(2);
-			if (disc_mode > TB_DISC_MODES)
+			if (disc_mode > TB_DISC_MODES) {
 				disc_mode = TB_DISC_MODES;
+}
 			DPRINT(2, ("TSIP_decode: unit %d: leap=%d  decod.stat=%s  disc.mode=%s\n",
 			       up->unit, pp->leap,
 			       tracking_status[tb_decod_conv[decod_stat]],
@@ -915,8 +919,8 @@ trimble_poll (
 	/* ask Praecis for its signal status */
 	if(up->type == CLK_PRAECIS) {
 		if(write(peer->procptr->io.fd,"SPSTAT\r\n",8) < 0)
-			msyslog(LOG_ERR, "REFCLOCK: %s write: %m:",
-			        refclock_name(peer));
+			msyslog(LOG_ERR, "REFCLOCK: %s write: %s:",
+			        refclock_name(peer), strerror(errno));
 	}
 
 	/* record clockstats */
@@ -955,7 +959,7 @@ trimble_io (
 	pp = peer->procptr;
 	up = pp->unitptr;
 
-	c = (char *) &rbufp->recv_space;
+	c = (char *) &rbufp->recv_buffer;
 	d = c + rbufp->recv_length;
 
 	while (c != d) {
@@ -980,9 +984,9 @@ trimble_io (
 			break;
 
 		    case TSIP_PARSED_DATA:
-			if (*c == DLE)
+			if (*c == DLE) {
 				up->rpt_status = TSIP_PARSED_DLE_2;
-			else if (up->parity_chk && *c == '\377')
+			} else if (up->parity_chk && *c == '\377')
 				up->rpt_status = TSIP_PARSED_PARITY;
 			else
 				mb(up->rpt_cnt++) = *c;
