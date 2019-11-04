@@ -105,12 +105,6 @@ override_dh_install:
 		debian/tmp/usr/bin/ntpwait \
 		debian/tmp/usr/sbin/
 	install -m 755 \
-		ntpclients/ntpmon.py \
-		debian/tmp/usr/bin/ntpmon
-	install -m 755 \
-		ntpclients/ntptrace.py \
-		debian/tmp/usr/bin/ntptrace
-	install -m 755 \
 		attic/ntpdate \
 		debian/tmp/usr/sbin
 
