@@ -35,9 +35,8 @@ Two drivers have new device path prefixes:
       /dev/wwvb0 -> /dev/spectracom0
     Type 29 - Trimble Palisade/Thunderbolt/Acutime GPSes
       /dev/palisade0 -> /dev/trimble0
-Both of these drivers, plus these two have been deprecated:
+Both of these drivers, plus this one have been deprecated:
     Type 11 - Arbiter 1088A/B GPS Receiver
-    Type 44 - NeoClock4X DCF77 / TDF Receiver
 If you use any of these, please alert the package maintainer or the upstream
 NTPsec project right away.
 
