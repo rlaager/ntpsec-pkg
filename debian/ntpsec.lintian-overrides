@@ -4,8 +4,6 @@ ntpsec: systemd-service-file-missing-install-key lib/systemd/system/ntpsec-rotat
 ntpsec: systemd-service-file-missing-install-key lib/systemd/system/ntpsec-systemd-netif.service
 # ntp-wait.service intentionally and correctly has WantedBy=time-sync.target.
 ntpsec: systemd-service-file-refers-to-unusual-wantedby-target
-# The non-systemd version of this is a cron job in /etc/cron.d/ntpsec:
-ntpsec: package-supports-alternative-init-but-no-init.d-script lib/systemd/system/ntpsec-rotate-stats.service
 # The non-systemd version of this is /etc/dhcp/dhclient-exit-hooks.d/ntpsec:
 ntpsec: package-supports-alternative-init-but-no-init.d-script lib/systemd/system/ntpsec-systemd-netif.service
 # These are included manually, as the postinst needs custom ordering.
