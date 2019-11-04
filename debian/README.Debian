@@ -17,6 +17,44 @@ that are not connected to the Internet.  The documentation in the package
 ntpsec-doc will assist with these tasks.
 
 
+NTS
+---
+
+Network Time Security (NTS) is "a mechanism for using Transport Layer Security
+(TLS) and Authenticated Encryption with Associated Data (AEAD) to provide
+cryptographic security for the client-server mode of the Network Time Protocol
+(NTP)."  It has not yet been published as an RFC, but the Internet-Draft has
+been implemented in NTPsec and other implementations:
+    https://tools.ietf.org/html/draft-ietf-ntp-using-nts-for-ntp-20
+
+To configure an NTPsec server to support NTS, first obtain an TLS certificate
+(e.g. from Let's Encrypt using certbot).  Then configure /etc/ntpsec/ntp.conf
+(or add a file in /etc/ntpsec/ntp.d) with:
+    nts cert /etc/letsencrypt/live/ntp1.example.com/fullchain.pem
+    nts key /etc/letsencrypt/live/ntp1.example.com/privkey.pem
+    nts enable mintls TLS1.3
+
+It is not required to limit the server to TLS 1.3, but the maintainer of this
+package recommends doing so.  As NTS is new, deployments are not subject to
+backwards-compatibility concerns.  Given the significant changes from TLS 1.2
+to 1.3, avoiding TLS 1.2 entirely is the simpler and more secure choice.  If
+you wish to support older clients with NTS, omit the "mintls TLS1.3" to enable
+the use of TLS 1.2. (The NTS protocol requires a minimum of TLS 1.2.)  You may
+wish to restrict the TLS 1.2 ciphers with "nts tlsciphers CIPHERS" where
+CIPHERS is an OpenSSL cipher string.  You can find up-to-date guidance on SSL
+ciphers from Mozilla's SSL Configuration Generator:
+    https://ssl-config.mozilla.org
+
+To configure an NTPsec client to use NTS for a particular server connection,
+add "nts" to that server line in /etc/ntpsec/ntp.conf:
+    server ntp1.example.com nts iburst
+If the server runs NTS-KE on a different port than TCP port 123, specify
+the port.  For example, CloudFlare uses port 1234:
+    server time.cloudflare.com:1234 nts iburst
+
+Note that the NTP Pool Project (pool.ntp.org) does not support NTS.
+
+
 Refclock Changes
 ----------------
 
@@ -124,6 +162,10 @@ NTP protocol to work (for either ntpdate or ntpd) is UDP port 123.
 Server-to-server NTP packets usually use this for both source and destination:
 for extra security, a stateful firewall should block "new" packets with source,
 but not destination, port 123 from entering your network.
+
+If you are using NTS, the TCP port for NTS-KE has not yet been standardized by
+IETF/IANA, but this package uses TCP port 123 by default.  Servers may use
+other ports; for example, CloudFlare's service uses port 1234.
 
 
 Keys
