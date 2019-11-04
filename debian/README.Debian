@@ -131,7 +131,7 @@ Keys
 
 ntpkeygen can be used to generate an MD5 ntp.keys file in /etc.  Use of these
 keys has not yet been tested; please report success or failure in using them to
-the maintainer.
+the maintainer.  Or better, switch to NTS.
 
 
 PPS
