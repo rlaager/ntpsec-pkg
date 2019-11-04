@@ -1,5 +1,6 @@
 # Accepted upstream
 0001-Fix-spelling-error.patch
+0001-Append-NUL-to-hostname-when-copied-from-NTS-KE-serve.patch
 
 # Forwarding not needed
 systemd-use-wrapper.patch

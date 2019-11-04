@@ -1,0 +1,32 @@
+From 7fb3de6ee9a88cda7910f697a6002dc3e78f5a7b Mon Sep 17 00:00:00 2001
+From: Hal Murray <hmurray@megapathdsl.net>
+Date: Tue, 29 Oct 2019 01:44:57 -0700
+Subject: [PATCH] Append NUL to hostname when copied from NTS-KE server.
+
+Provoked by Netnod's server announcement.
+I guess that option doesn't get used much.
+---
+ ntpd/nts_client.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/ntpd/nts_client.c b/ntpd/nts_client.c
+index a7c527283..2ea772288 100644
+--- a/ntpd/nts_client.c
++++ b/ntpd/nts_client.c
+@@ -601,11 +601,12 @@ bool nts_client_process_response_core(uint8_t *buff, int transferred, struct pee
+ 			peer->nts_state.count++;
+ 			break;
+ 		    case nts_server_negotiation:
+-			if (MAX_SERVER < length) {
++			if (MAX_SERVER < (length+1)) {
+ 				msyslog(LOG_ERR, "NTSc: server string too long %d.", length);
+ 				return false;
+ 			}
+ 			next_bytes(&buf, (uint8_t *)server, length);
++			server[length] = '\0';
+ 			/* save port in case port specified before server */
+ 			port = SRCPORT(&sockaddr);
+ 			if (!nts_server_lookup(server, &sockaddr))
+-- 
+2.17.1
+
