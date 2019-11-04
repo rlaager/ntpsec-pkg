@@ -2,3 +2,7 @@
 include:
   - https://salsa.debian.org/salsa-ci-team/pipeline/raw/master/salsa-ci.yml
   - https://salsa.debian.org/salsa-ci-team/pipeline/raw/master/pipeline-jobs.yml
+
+variables:
+  # This job fails on the waf output.
+  SALSA_CI_DISABLE_BLHC: 1
