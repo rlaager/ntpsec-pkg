@@ -1,3 +1,13 @@
+ntpsec (1.1.7+dfsg1-2) UNRELEASED; urgency=medium
+
+  * Set maxclock in the default config
+  * Split nts config across lines
+  * Fix ntpmon/ntptrace version string expansion (Closes: 944084)
+  * Move packaging git to Salsa
+  * Backport NTS-KE hostname fix
+
+ -- Richard Laager <rlaager@wiktel.com>  Mon, 04 Nov 2019 01:52:22 -0600
+
 ntpsec (1.1.7+dfsg1-1) unstable; urgency=medium
 
   * New upstream version (Closes: 931327)
