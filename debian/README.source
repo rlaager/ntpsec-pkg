@@ -1,0 +1,43 @@
+This package is maintained using git and git-buildpackage.  The repository is
+kept on Debian Salsa: https://salsa.debian.org/debian/ntpsec
+
+Branches
+--------
+
+This package's branches are named for the distribution.  The default branch is
+thus named "unstable".  Stable updates for Buster are in "buster" and security
+updates for Buster are in "buster-security".
+
+The "master" branch is upstream's git master branch.
+
+The "pristine-tar" branch is used by pristine-tar and contains the data
+necessary to reconstruct the orig tarball.
+
+The "upstream" branch is used by pristine-tar and contains the unpacked
+contents of the orig tarball.  It is branched off the master branch, so the
+delta from master (at the branch point) to upstream contains generated files
+that exist in the tarball but not git.
+
+
+New Upstream Releases
+---------------------
+
+Upstream uses waf, so the orig tarball has to be repacked.  For a generic
+discussion of why, see: https://wiki.debian.org/UnpackWaf
+
+Here are the commands for a new upstream version (e.g. 1.1.2):
+  
+git checkout sid
+
+uscan --noconf --verbose --rename --destdir="$(pwd)" --check-dirname-level=0 \
+    --force-download --download-version 1.1.2 "$(pwd)/debian"
+
+mv ntpsec_1.1.2.tar.gz.asc ntpsec_1.1.2+dfsg1.orig.tar.gz \
+    ntpsec_1.1.2.orig.tar.gz ..
+
+# This assumes you have an "upstream" remote already.  If not, add it with:
+# git remote add upstream https://gitlab.com/NTPsec/ntpsec.git
+git fetch upstream
+
+gbp import-orig --upstream-vcs-tag=NTPsec_1_1_2 \
+    ../ntpsec_1.1.2+dfsg1.orig.tar.gz
